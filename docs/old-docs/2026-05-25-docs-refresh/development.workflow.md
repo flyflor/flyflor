@@ -1095,7 +1095,7 @@ Merge closure:
 - accepted commit: `603e1b1`
 - code stats: 8 files changed, 634 insertions
 - sidecar: `scripts/browser.cdp.sidecar.ts`
-- installer: `scripts/install.xtools.browser-cdp.sh`
+- installer: `scripts/install.xtools.browser.cdp.sh`
 - manifest destination: `~/.flyflor/.config/tools/external.tools.jsonc`
 - project override destination: `./.flyflor/tools/external.tools.jsonc`
 

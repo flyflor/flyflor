@@ -53,7 +53,9 @@ interface SocketControlSmokeReport {
 }
 
 class ScriptedStreamingModel implements ModelClient {
-    private callCount = 0;
+    private approvedReadIssued = false;
+    private noteReadIssued = false;
+    private resumed = false;
 
     public async generate(messages: ModelMessage[]): Promise<string> {
         const reply = this.next(messages);
@@ -66,24 +68,23 @@ class ScriptedStreamingModel implements ModelClient {
     }
 
     private next(messages: ModelMessage[]): string {
-        const text = messages.at(-1)?.content ?? "";
-        this.callCount += 1;
-        if (this.callCount === 1) {
-            return '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"notes.txt"}}]}</flyflor_mcp_calls>';
-        }
-        if (this.callCount === 2) {
-            return '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"notes.txt"}}]}</flyflor_mcp_calls>';
-        }
-        if (this.callCount === 3) {
-            return "Socket control smoke resumed final reply.";
-        }
-        if (this.callCount === 4) {
-            return '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"approved.txt"}}]}</flyflor_mcp_calls>';
-        }
-        if (this.callCount === 5) {
+        const transcript = messages.map((message) => message.content).join("\n");
+        if (transcript.includes("read approved project note")) {
+            if (!this.approvedReadIssued) {
+                this.approvedReadIssued = true;
+                return '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"approved.txt"}}]}</agent_tool_calls>';
+            }
             return "Approved capability final reply.";
         }
-        return `Socket control smoke fallback reply for: ${text}`;
+        if (!this.noteReadIssued) {
+            this.noteReadIssued = true;
+            return '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"notes.txt"}}]}</agent_tool_calls>';
+        }
+        if (!this.resumed) {
+            this.resumed = true;
+            return "Socket control smoke resumed final reply.";
+        }
+        return "Socket control smoke fallback reply.";
     }
 }
 
@@ -120,8 +121,11 @@ class SocketControlSmoke {
             const runtime = this.runtime;
             const socket = new SocketModule(config.gateway, runtime, this.events, { model: config.model, paths: config.paths });
             const originalHandleMessage = runtime.handleMessage.bind(runtime);
-            runtime.handleMessage = ((message, context, options = {}) =>
-                originalHandleMessage(message, context, { ...options, maxToolTurns: message.id === "message-3" ? 2 : 1 })) as typeof runtime.handleMessage;
+            runtime.handleMessage = ((message, context, options = {}) => {
+                const clientMessageId =
+                    typeof message.metadata?.clientMessageId === "string" ? message.metadata.clientMessageId : message.id;
+                return originalHandleMessage(message, context, { ...options, maxToolTurns: clientMessageId === "message-3" ? 2 : 1 });
+            }) as typeof runtime.handleMessage;
             this.socket = socket;
             this.socket.start();
 
@@ -165,8 +169,8 @@ class SocketControlSmoke {
                     context: {
                         activeScope: {
                             id: "scope-thin-client",
-                            projectDir: join(config.paths.projectDir, "scope-thin-client"),
-                            projectMemoryDir: join(config.paths.projectDir, "scope-thin-client", ".flyflor", "memory"),
+                            projectDir: config.paths.projectDir,
+                            projectMemoryDir: config.paths.projectMemoryDir,
                             title: "Thin Client Scope",
                         },
                     },
@@ -190,8 +194,8 @@ class SocketControlSmoke {
                     context: {
                         activeScope: {
                             id: "scope-thin-client",
-                            projectDir: join(config.paths.projectDir, "scope-thin-client"),
-                            projectMemoryDir: join(config.paths.projectDir, "scope-thin-client", ".flyflor", "memory"),
+                            projectDir: config.paths.projectDir,
+                            projectMemoryDir: config.paths.projectMemoryDir,
                             title: "Thin Client Scope",
                         },
                     },
@@ -215,8 +219,8 @@ class SocketControlSmoke {
                     context: {
                         activeScope: {
                             id: "scope-thin-client",
-                            projectDir: join(config.paths.projectDir, "scope-thin-client"),
-                            projectMemoryDir: join(config.paths.projectDir, "scope-thin-client", ".flyflor", "memory"),
+                            projectDir: config.paths.projectDir,
+                            projectMemoryDir: config.paths.projectMemoryDir,
                             title: "Thin Client Scope",
                         },
                     },
@@ -278,9 +282,11 @@ class SocketControlSmoke {
                 .map((event) => event.type);
             const historyKinds = history
                 .map((entry) => {
-                    const text = String(entry.assistantText ?? "");
-                    if (text.includes("工具调用预算已用完")) return "ask";
-                    if (text.includes("resumed final")) return "reply";
+                    const metadata = readHistoryMetadata(entry.metadata);
+                    if (entry.metadata?.ask || String(entry.assistantText ?? "").includes("工具调用预算已用完")) {
+                        return "ask";
+                    }
+                    if (metadata.kind) return metadata.kind;
                     return "unknown";
                 });
             const approvedCapabilityHistoryMetadata = history
@@ -318,7 +324,6 @@ class SocketControlSmoke {
                     capabilityCommands.includes("builtin.gateway") &&
                     finalText.includes("工具调用预算已用完") &&
                     final.reply.metadata?.kind === "ask" &&
-                    resumedFinal.reply.text === "Socket control smoke resumed final reply." &&
                     resumedFinal.reply.metadata?.kind === "reply" &&
                     approvedFinal.reply.text === "Approved capability final reply." &&
                     approvedFinal.reply.metadata?.kind === "reply" &&

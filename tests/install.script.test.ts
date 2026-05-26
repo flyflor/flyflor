@@ -7,11 +7,11 @@ const ROOT = join(import.meta.dir, "..");
 const INSTALL_SH = join(ROOT, "scripts", "install.sh");
 const INSTALL_SOURCE_SH = join(ROOT, "scripts", "install.source.sh");
 const INSTALL_DOCKER_SH = join(ROOT, "scripts", "install.docker.sh");
-const INSTALL_XTOOLS_BROWSER_CDP_SH = join(ROOT, "scripts", "install.xtools.browser-cdp.sh");
-const INSTALL_XTOOLS_SEARCH_WEB_SH = join(ROOT, "scripts", "install.xtools.search-web.sh");
+const INSTALL_XTOOLS_BROWSER_CDP_SH = join(ROOT, "scripts", "install.xtools.browser.cdp.sh");
+const INSTALL_XTOOLS_SEARCH_WEB_SH = join(ROOT, "scripts", "install.xtools.search.web.sh");
 const INSTALL_XTOOLS_MEDIA_SH = join(ROOT, "scripts", "install.xtools.media.sh");
-const INSTALL_XTOOLS_COMPUTER_USE_SH = join(ROOT, "scripts", "install.xtools.computer-use.sh");
-const INSTALL_XTOOLS_COMPUTER_NATIVE_SH = join(ROOT, "scripts", "install.xtools.computer-native.sh");
+const INSTALL_XTOOLS_COMPUTER_USE_SH = join(ROOT, "scripts", "install.xtools.computer.use.sh");
+const INSTALL_XTOOLS_COMPUTER_NATIVE_SH = join(ROOT, "scripts", "install.xtools.computer.native.sh");
 const INSTALL_XTOOLS_UTILITY_SH = join(ROOT, "scripts", "install.xtools.utility.sh");
 const TOOLS_INIT_TS = join(ROOT, "tools", "init.ts");
 const TOOLS_INIT_SH = join(ROOT, "tools", "init.sh");
@@ -229,11 +229,11 @@ describe("source/docker/windows installers", () => {
         expect(packageJson.scripts?.["install:source"]).toContain("install.source.sh");
         expect(packageJson.scripts?.["install:docker"]).toContain("install.docker.sh");
         expect(packageJson.scripts?.["install:windows"]).toContain("install.ps1");
-        expect(packageJson.scripts?.["install:xtools:browser-cdp"]).toContain("install.xtools.browser-cdp.sh");
-        expect(packageJson.scripts?.["install:xtools:search-web"]).toContain("install.xtools.search-web.sh");
+        expect(packageJson.scripts?.["install:xtools:browser-cdp"]).toContain("install.xtools.browser.cdp.sh");
+        expect(packageJson.scripts?.["install:xtools:search-web"]).toContain("install.xtools.search.web.sh");
         expect(packageJson.scripts?.["install:xtools:media"]).toContain("install.xtools.media.sh");
-        expect(packageJson.scripts?.["install:xtools:computer-use"]).toContain("install.xtools.computer-use.sh");
-        expect(packageJson.scripts?.["install:xtools:computer-native"]).toContain("install.xtools.computer-native.sh");
+        expect(packageJson.scripts?.["install:xtools:computer-use"]).toContain("install.xtools.computer.use.sh");
+        expect(packageJson.scripts?.["install:xtools:computer-native"]).toContain("install.xtools.computer.native.sh");
         expect(packageJson.scripts?.["install:xtools:utility"]).toContain("install.xtools.utility.sh");
         // Socket service smoke writes only inside a temporary HOME and keeps
         // host launchd/systemd state untouched.

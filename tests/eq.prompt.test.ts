@@ -21,22 +21,22 @@ afterEach(async () => {
     await Promise.all(tempRoots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
 });
 
-describe("EQ-01 slice B: buildPrompt injects [eq-context] from brain.memory_eq_state", () => {
+describe("EQ-01 slice B: buildPrompt injects [tone-context] from brain.memory_eq_state", () => {
     const scopedContext = () => runtimeContext("scope-eq");
 
-    test("没有 EQ state → 不注入 [eq-context]", async () => {
+    test("没有 EQ state → 不注入 [tone-context]", async () => {
         const config = await makeConfig();
         const memory = new MemoryModule(config, new RecordingSink());
         await memory.warmup();
         try {
             const prompt = await memory.buildPrompt(gatewayMessage("hi"), runtimeContext());
-            expect(prompt).not.toContain("[eq-context]");
+            expect(prompt).not.toContain("[tone-context]");
         } finally {
             memory.dispose();
         }
     });
 
-    test("有非平复 EQ state → 注入 [eq-context]，含 label + 衰减后数值", async () => {
+    test("有非平复 EQ state → 注入 [tone-context]，含 label + 衰减后数值", async () => {
         const config = await makeConfig();
         const memory = new MemoryModule(config, new RecordingSink());
         await memory.warmup();
@@ -62,7 +62,7 @@ describe("EQ-01 slice B: buildPrompt injects [eq-context] from brain.memory_eq_s
                 ],
             );
             const prompt = await memory.buildPrompt(gatewayMessage("第二轮"), scopedContext());
-            expect(prompt).toContain("[eq-context]");
+            expect(prompt).toContain("[tone-context]");
             expect(prompt).toContain("label=joy");
             // 立即 buildPrompt（dt≈0），valence 应接近原值
             expect(prompt).toMatch(/valence=0\.\d{2}/);
@@ -111,13 +111,13 @@ describe("EQ-01 slice B: buildPrompt injects [eq-context] from brain.memory_eq_s
                 db.close();
             }
             const prompt = await memory.buildPrompt(gatewayMessage("第二轮"), scopedContext());
-            expect(prompt).not.toContain("[eq-context]");
+            expect(prompt).not.toContain("[tone-context]");
         } finally {
             memory.dispose();
         }
     });
 
-    test("EQ-02: confidence < 0.3 → 注入 [eq-context] 但不附 directive 行", async () => {
+    test("EQ-02: confidence < 0.3 → 注入 [tone-context] 但不附 directive 行", async () => {
         const config = await makeConfig();
         const memory = new MemoryModule(config, new RecordingSink());
         await memory.warmup();
@@ -143,7 +143,7 @@ describe("EQ-01 slice B: buildPrompt injects [eq-context] from brain.memory_eq_s
                 ],
             );
             const prompt = await memory.buildPrompt(gatewayMessage("第二轮"), scopedContext());
-            expect(prompt).toContain("[eq-context]");
+            expect(prompt).toContain("[tone-context]");
             expect(prompt).toContain("label=anger");
             expect(prompt).not.toContain("directive=");
         } finally {

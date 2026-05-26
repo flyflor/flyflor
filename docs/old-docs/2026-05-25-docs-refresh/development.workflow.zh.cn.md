@@ -964,7 +964,7 @@ Lane 归属：
 - 已接受提交：`603e1b1`
 - 代码统计：8 files changed，634 insertions
 - sidecar：`scripts/browser.cdp.sidecar.ts`
-- 安装脚本：`scripts/install.xtools.browser-cdp.sh`
+- 安装脚本：`scripts/install.xtools.browser.cdp.sh`
 - 全局 manifest 目标：`~/.flyflor/.config/tools/external.tools.jsonc`
 - 项目 manifest 覆盖目标：`./.flyflor/tools/external.tools.jsonc`
 

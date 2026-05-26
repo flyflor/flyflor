@@ -848,7 +848,7 @@
   范围：search-web-sidecar
   摘要：新增 `web.search`、`web.fetch`、`web.extract`、`web.download` process-json sidecar；支持 Brave、Tavily、SerpAPI、Bing、generic provider，provider 聚合、URL 去重、warnings、Top N 补抓、TTL 缓存和项目目录内下载；`external.tools.jsonc` 支持向 sidecar 透传 opaque config。
   原因：搜索能力必须成为外挂工具层的一等能力，同时内核不能 import provider SDK 或 sidecar 实现；失败必须显式返回非零并写 stderr，不能被 hidden fallback 吞掉。
-  效率：当前 lane diff 约 12 files changed，新增 `scripts/web.search.sidecar.ts`、`scripts/install.xtools.search-web.sh`、`tests/web.search.sidecar.test.ts`，核心注册表只增加 web 工具与 executor config 透传。
+  效率：当前 lane diff 约 12 files changed，新增 `scripts/web.search.sidecar.ts`、`scripts/install.xtools.search.web.sh`、`tests/web.search.sidecar.test.ts`，核心注册表只增加 web 工具与 executor config 透传。
   验证：`bun test tests/web.search.sidecar.test.ts tests/external.tools.test.ts tests/executive.manifest.test.ts tests/install.script.test.ts`；`bun run check`；`git diff --check`。
 - 状态：已完成
   执行者：main-codex
