@@ -61,7 +61,12 @@ Socket contract 包括：
 - `history.list`
 - `history.snapshot`
 - `ask.list`
+- `ask.detail.get`
+- `ask.snapshot`
 - `blackboard.detail.get`
+- `fork.memory.get`
+- `fork.memory.snapshot`
+- `task.plan.decide`
 
 Error 示例包括 `invalid-envelope` 和 `gateway.message.send payload requires text`。
 
@@ -71,7 +76,7 @@ Apifox scenario names 包括 `ServerHello`、`ClientHello`、`GatewayStatusGet`�
 
 ## Event Subscription
 
-订阅使用 control classes，不使用旧 gateway class name：
+订阅使用稳定 RuntimeEvent types。使用 classes 时必须匹配 runtime classifier；executive loop pause/resume 属于 ASK class：
 
 ```json
 {
@@ -79,13 +84,13 @@ Apifox scenario names 包括 `ServerHello`、`ClientHello`、`GatewayStatusGet`�
   "id": "subscribe-1",
   "type": "event.subscribe",
   "payload": {
-    "classes": ["control"],
+    "classes": ["ask"],
     "types": ["executive.loop.paused", "executive.loop.resumed"]
   }
 }
 ```
 
-使用 `"classes": ["control"]`；不要使用旧 gateway event class。
+对 ASK/executive-loop pause events 使用 `"classes": ["ask"]`，也可以省略 `classes` 只按精确 `types` 订阅。不要使用旧 gateway event class。
 
 ## Detail Query Envelope Matrix
 
@@ -100,12 +105,15 @@ Read-model queries 由 `src/socket/query` 服务。它们检查 ledger/detail st
 | `blackboard.list` / `blackboard.detail.get` | Blackboard detail and worker output |
 | `crystal.list` | Crystal/Gem read model |
 | `fork.list` / `fork.detail.get` | ContextFork records |
+| `fork.memory.get` | recent ContextFork panel projection |
 | `replay.list` / `replay.detail.get` | Replay records |
 | `scope.list` / `scope.detail.get` | Scope records |
 | `task.list` / `task.detail.get` | Task plans |
 | `thought.detail.get` | Thought/detail projection |
 
 Detail payloads 使用 `payload.data`。
+
+`task.plan.decide` 不是 read-model query；它是用于确认、补充或放弃待确认计划的显式 control write command。
 
 历史对话列表获取使用 `history.list`；detail lookup 使用 `history.snapshot` 和上面的 detail request family。
 

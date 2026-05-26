@@ -118,7 +118,7 @@ describe("documentation references", () => {
         expect(doc).toContain("turn.final");
         expect(doc).toContain("invalid-envelope");
         expect(doc).toContain("gateway.message.send payload requires text");
-        expect(doc).toContain('"classes": ["control"]');
+        expect(doc).toContain('"classes": ["ask"]');
         expect(doc).not.toContain('"classes": ["gateway"]');
         expect(doc).toContain("ws-actor");
         expect(doc).toContain("历史对话列表获取");

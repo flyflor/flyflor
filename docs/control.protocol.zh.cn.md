@@ -23,7 +23,8 @@ Client-to-server messages 包括：
 - `event.subscribe`
 - `event.unsubscribe`
 - `history.list`
-- `history.snapshot`
+- `fork.memory.get`
+- `task.plan.decide`
 - ASK、Blackboard、Crystal、Fork、Replay、Scope、Task 和 Thought records 的 detail queries
 
 Server-to-client messages 包括：
@@ -36,6 +37,7 @@ Server-to-client messages 包括：
 - `turn.final`
 - `turn.error`
 - `event.publish`
+- `history.snapshot`、`ask.snapshot`、`fork.snapshot`、`fork.memory.snapshot`、`task.snapshot` 和 `execution.job.snapshot` 等 query snapshots
 
 ## Context Input
 
@@ -62,6 +64,8 @@ Conversation、user、thread 和 connection fields 是 routing/audit metadata。
 连接级 snapshot、turn 级 snapshot、事件流必须保持区分。Status snapshot 不是 replay record，ledger query 也不是 prompt context。
 
 实时面板应该通过 `event.subscribe` 订阅；detail 面板应该通过 snapshot query 刷新。Event subscription selectors 对稳定 event classes 和 `RuntimeEventType` values 闭合。未知 class 或 type 返回 `invalid-payload`，且不得修改 peer subscription state。
+
+`task.plan.decide` 是计划决策的显式 socket control write command。它有意与 `src/socket/query` read-model surface 分开。
 
 ## Error
 

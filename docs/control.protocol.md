@@ -23,7 +23,8 @@ Client-to-server messages include:
 - `event.subscribe`
 - `event.unsubscribe`
 - `history.list`
-- `history.snapshot`
+- `fork.memory.get`
+- `task.plan.decide`
 - detail queries for ASK, Blackboard, Crystal, Fork, Replay, Scope, Task and Thought records
 
 Server-to-client messages include:
@@ -36,6 +37,7 @@ Server-to-client messages include:
 - `turn.final`
 - `turn.error`
 - `event.publish`
+- query snapshots such as `history.snapshot`, `ask.snapshot`, `fork.snapshot`, `fork.memory.snapshot`, `task.snapshot` and `execution.job.snapshot`
 
 ## Context Input
 
@@ -62,6 +64,8 @@ Conversation, user, thread and connection fields are routing/audit metadata. The
 连接级 snapshot、turn 级 snapshot、事件流 must stay distinct. A status snapshot is not a replay record, and a ledger query is not a prompt context.
 
 Realtime panels should subscribe with `event.subscribe`; detail panels should refresh through snapshot queries. Event subscription selectors are closed over stable event classes and `RuntimeEventType` values. Unknown classes or types return `invalid-payload` and must not mutate peer subscription state.
+
+`task.plan.decide` is the explicit socket control write command for plan decisions. It is intentionally separate from the `src/socket/query` read-model surface.
 
 ## Rust 最小接线清单
 
