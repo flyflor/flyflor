@@ -1,11 +1,25 @@
 import { describe, expect, test } from "bun:test";
 import { SocketModule } from "../src/socket/module.ts";
 import type { GatewayConfig, ModelConfig } from "../src/config/index.ts";
-import { Channel, type EventSink, type RuntimeEvent } from "../src/protocol/index.ts";
+import {
+    Channel,
+    GatewayControlMessageType,
+    RuntimeEventType,
+    type EventSink,
+    type RuntimeEvent,
+} from "../src/protocol/index.ts";
 import type { GatewayControlPeer } from "../src/socket/control.ts";
 
 class NullSink implements EventSink {
     public publish(_event: RuntimeEvent): void {}
+}
+
+class CollectSink implements EventSink {
+    public readonly events: RuntimeEvent[] = [];
+
+    public publish(event: RuntimeEvent): void {
+        this.events.push(event);
+    }
 }
 
 class FakeUpgradeServer {
@@ -104,16 +118,58 @@ describe("SocketModule minimal vascular surface", () => {
             },
         });
     });
+
+    test("control hub can publish yolo audit events through the socket event bridge", async () => {
+        const events = new CollectSink();
+        const socketModule = createSocketModule({ events });
+        const dispatches: Array<{ options?: { sandboxMode?: string } }> = [];
+        (
+            socketModule as unknown as {
+                runtime: {
+                    handleMessage(
+                        message: unknown,
+                        context: unknown,
+                        options?: { sandboxMode?: string },
+                    ): Promise<{ messageId: string; route: unknown; text: string }>;
+                };
+            }
+        ).runtime = {
+            handleMessage: async (message: { id: string; route: unknown }, _context, options) => {
+                dispatches.push({ options });
+                return { messageId: message.id, route: message.route, text: "ok" };
+            },
+        };
+        socketModule.start();
+        const url = `ws://127.0.0.1:${socketModule.getStatusSnapshot().port}/ws`;
+        const socket = new WebSocket(url);
+        const messages: Array<Record<string, unknown>> = [];
+        socket.addEventListener("message", (message) => {
+            messages.push(JSON.parse(String(message.data)) as Record<string, unknown>);
+        });
+
+        await waitForOpen(socket);
+        socket.send(JSON.stringify(envelope(GatewayControlMessageType.GatewayMessageSend, {
+            metadata: { tui: { yolo: true } },
+            text: "run with yolo",
+        })));
+        await waitForMessage(messages, GatewayControlMessageType.TurnFinal);
+        socket.close();
+        socketModule.stop();
+
+        expect(dispatches[0]?.options?.sandboxMode).toBe("yolo");
+        expect(events.events.map((event) => event.type)).toContain(RuntimeEventType.SandboxYoloEntered);
+        expect(events.events.map((event) => event.type)).toContain(RuntimeEventType.SandboxYoloExited);
+    });
 });
 
-function createSocketModule(options: { model?: ModelConfig } = {}): SocketModule {
+function createSocketModule(options: { events?: EventSink; model?: ModelConfig } = {}): SocketModule {
     return new SocketModule(
         gatewayConfig(),
         {
             warmup: async () => undefined,
         } as never,
-        new NullSink(),
-        options,
+        options.events ?? new NullSink(),
+        { model: options.model },
     );
 }
 
@@ -153,4 +209,32 @@ async function openHandleRequest(
             handleRequest(request: Request, server?: Bun.Server<GatewayControlPeer>): Promise<Response | undefined>;
         }
     ).handleRequest(request, server);
+}
+
+function envelope(type: string, payload: Record<string, unknown>): Record<string, unknown> {
+    return {
+        protocol: "flyflor.ws.v1",
+        id: `test-${crypto.randomUUID()}`,
+        type,
+        at: new Date().toISOString(),
+        requestId: `request-${crypto.randomUUID()}`,
+        payload,
+    };
+}
+
+async function waitForOpen(socket: WebSocket): Promise<void> {
+    if (socket.readyState === WebSocket.OPEN) return;
+    await new Promise<void>((resolve, reject) => {
+        socket.addEventListener("open", () => resolve(), { once: true });
+        socket.addEventListener("error", () => reject(new Error("websocket failed to open")), { once: true });
+    });
+}
+
+async function waitForMessage(messages: readonly Record<string, unknown>[], type: string): Promise<void> {
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+        if (messages.some((message) => message.type === type)) return;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error(`Timed out waiting for ${type}`);
 }

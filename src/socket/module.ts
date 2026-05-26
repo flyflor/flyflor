@@ -60,7 +60,10 @@ export class SocketModule extends Socket {
             config: this.config,
             createContextFork: (record, source) => this.runtime.createContextFork(record, source),
             dispatch: (message, options) => this.dispatch(message, options),
-            events: { subscribe: (sink: EventSink) => this.subscribeEvents(sink) } as never,
+            events: {
+                publish: (runtimeEvent) => this.events.publish(runtimeEvent),
+                subscribe: (sink: EventSink) => this.subscribeEvents(sink),
+            },
             paths: this.paths,
             queries: this.queryComponent,
             status: () => this.getStatusSnapshot(),

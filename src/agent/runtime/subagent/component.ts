@@ -220,8 +220,7 @@ export class RuntimeSubagentBatchComponent extends Runtime {
     ): Promise<SubagentChildResult> {
         const id = task.id ?? `child-${index + 1}`;
         const childJobId = job.children[index]?.childJobId;
-        const allowlistError = this.allowlistError(task.toolAllowlist);
-        const catalog = allowlistError ? [] : this.narrowCatalog(input.parent.catalog, task.toolAllowlist);
+        const catalog = this.narrowCatalog(input.parent.catalog, task.toolAllowlist);
         const childRequestId = `${input.parent.requestId}:subagent:${batchId}:${id}`;
         const allowedTools = catalog.map((entry) => `${entry.server}.${entry.tool.name}`);
         const model = this.modelSummary(input.parent.model);
@@ -245,7 +244,7 @@ export class RuntimeSubagentBatchComponent extends Runtime {
             ),
         );
         if (catalog.length === 0) {
-            const error = allowlistError ?? "No tools are available for this child task after narrowing.";
+            const error = "No tools are available for this child task after narrowing.";
             if (childJobId) {
                 this.jobs.completeChild(job.jobId, {
                     childJobId,
@@ -464,7 +463,9 @@ export class RuntimeSubagentBatchComponent extends Runtime {
         const available = parentCatalog.filter((entry) => this.entryKey(entry) !== SUBAGENT_BATCH_KEY);
         if (!allowlist || allowlist.length === 0) return available;
         const allowed = new Set(allowlist.map((entry) => this.normalizeToolKey(entry)).filter((entry) => entry.length > 0));
-        return available.filter((entry) => allowed.has(this.entryKey(entry)));
+        const selected = available.filter((entry) => allowed.has(this.entryKey(entry)));
+        const workspaceDiscovery = available.filter((entry) => this.isWorkspaceDiscoveryEntry(entry));
+        return this.uniqueCatalog([...selected, ...workspaceDiscovery]);
     }
 
     private isReadOnlyEntry(entry: McpToolCatalogEntry): boolean {
@@ -534,19 +535,12 @@ export class RuntimeSubagentBatchComponent extends Runtime {
         return { ok: true, value: out };
     }
 
-    private allowlistError(
-        allowlist: readonly string[] | undefined,
-    ): string | undefined {
-        if (!allowlist || allowlist.length === 0) return undefined;
-        const requested = allowlist.map((entry) => this.normalizeToolKey(entry)).filter((entry) => entry.length > 0);
-        if (requested.includes("workspace.list")) {
-            return "workspace.list is not available; use workspace.tree or workspace.glob.";
-        }
-        return undefined;
-    }
-
     private canonicalCall(call: McpToolCallRequest): McpToolCallRequest & { key: string } {
         const key = this.toolKey(call);
+        if (key === "shell.run") {
+            const workspaceCall = this.shellLsAsWorkspaceTree(call);
+            if (workspaceCall) return workspaceCall;
+        }
         const dot = key.indexOf(".");
         return {
             ...call,
@@ -557,7 +551,7 @@ export class RuntimeSubagentBatchComponent extends Runtime {
     }
 
     private entryKey(entry: McpToolCatalogEntry): string {
-        return this.normalizeToolKey(`${entry.server}.${entry.tool.name}`);
+        return `${entry.server}.${entry.tool.name}`.trim();
     }
 
     private toolKey(call: Pick<McpToolCallRequest, "server" | "tool">): string {
@@ -565,7 +559,43 @@ export class RuntimeSubagentBatchComponent extends Runtime {
     }
 
     private normalizeToolKey(value: string): string {
-        return value.trim();
+        const key = value.trim();
+        return key === "workspace.list" ? "workspace.tree" : key;
+    }
+
+    private isWorkspaceDiscoveryEntry(entry: McpToolCatalogEntry): boolean {
+        if (entry.server !== "workspace") return false;
+        return ["tree", "read", "glob", "stat", "search"].includes(entry.tool.name);
+    }
+
+    private uniqueCatalog(entries: readonly McpToolCatalogEntry[]): McpToolCatalogEntry[] {
+        const seen = new Set<string>();
+        const out: McpToolCatalogEntry[] = [];
+        for (const entry of entries) {
+            const key = this.entryKey(entry);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push(entry);
+        }
+        return out;
+    }
+
+    private shellLsAsWorkspaceTree(call: McpToolCallRequest): (McpToolCallRequest & { key: string }) | undefined {
+        const command = typeof call.input.command === "string" ? call.input.command.trim() : "";
+        if (command !== "ls") return undefined;
+        const args = Array.isArray(call.input.args) ? call.input.args.filter((item) => typeof item === "string") : [];
+        const explicitPath = args.find((arg) => !arg.startsWith("-"));
+        const path = explicitPath ?? (typeof call.input.cwd === "string" && call.input.cwd.trim() ? call.input.cwd.trim() : ".");
+        return {
+            server: "workspace",
+            tool: "tree",
+            key: "workspace.tree",
+            input: {
+                path,
+                maxDepth: 2,
+                maxEntries: 400,
+            },
+        };
     }
 
     private auditToolSummary(

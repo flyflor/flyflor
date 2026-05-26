@@ -59,7 +59,7 @@ import {
     type RuntimeContext,
     type RuntimeEvent,
 } from "../protocol/contracts/index.ts";
-import { event, RuntimeEventType, type EventSink, type RuntimeEventBus } from "../events/index.ts";
+import { event, RuntimeEventType, type EventSink } from "../events/index.ts";
 import type { FlyflorPaths } from "../config/index.ts";
 import { buildBuiltinExternalKitCatalog, loadExternalKitCatalogSnapshot } from "./kit/index.ts";
 import type { SocketQueryComponentPort } from "./query/index.ts";
@@ -125,6 +125,10 @@ export type SocketControlMessageDispatcher = (
     options?: SocketControlDispatchOptions,
 ) => Promise<GatewayReply>;
 
+export interface SocketControlEventBus extends EventSink {
+    subscribe(sink: EventSink): () => void;
+}
+
 export interface SocketControlHubOptions {
     config: GatewayConfig;
     /**
@@ -136,7 +140,7 @@ export interface SocketControlHubOptions {
         source?: { assistantText?: string; eventId?: string; userText?: string },
     ) => Promise<ContextForkRecord>;
     dispatch: SocketControlMessageDispatcher;
-    events: RuntimeEventBus;
+    events: SocketControlEventBus;
     paths?: FlyflorPaths;
     queries?: SocketQueryComponentPort;
     status: () => SocketControlTransportStatusSnapshot;

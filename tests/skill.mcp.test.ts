@@ -2332,7 +2332,9 @@ describe("Skill and MCP capability config", () => {
         ]);
         const startEvents = sink.events.filter((event) => event.type === RuntimeEventType.SubagentChildStart);
         expect(startEvents).toHaveLength(2);
-        expect(startEvents[0]?.payload?.allowedTools).toEqual(["workspace.read"]);
+        expect(startEvents[0]?.payload?.allowedTools).toEqual(
+            expect.arrayContaining(["workspace.read", "workspace.tree", "workspace.glob", "workspace.stat", "workspace.search"]),
+        );
         expect(startEvents[0]?.payload).toEqual(
             expect.objectContaining({
                 childRequestId: expect.stringContaining(":subagent:"),
@@ -2525,11 +2527,15 @@ describe("Skill and MCP capability config", () => {
         expect(model.messages[2]?.[0]?.content).toContain('"tool": "tree"');
         const childStarts = sink.events.filter((event) => event.type === RuntimeEventType.SubagentChildStart);
         expect(childStarts).toHaveLength(2);
-        expect(childStarts[0]?.payload?.allowedTools).toEqual(["workspace.tree"]);
-        expect(childStarts[1]?.payload?.allowedTools).toEqual(["workspace.read"]);
+        expect(childStarts[0]?.payload?.allowedTools).toEqual(
+            expect.arrayContaining(["workspace.tree", "workspace.read", "workspace.glob", "workspace.stat", "workspace.search"]),
+        );
+        expect(childStarts[1]?.payload?.allowedTools).toEqual(
+            expect.arrayContaining(["workspace.tree", "workspace.read", "workspace.glob", "workspace.stat", "workspace.search"]),
+        );
     });
 
-    test("subagent.batch normalizes child tool allowlist aliases and rejects missing workspace.list with alternatives", async () => {
+    test("subagent.batch normalizes child tool aliases and keeps workspace discovery visible", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-subagent-tool-alias-"));
         const paths = testPaths(root);
         await installTestTemplates(paths);
@@ -2541,7 +2547,7 @@ describe("Skill and MCP capability config", () => {
             '<agent_tool_calls>{"calls":[{"name":"workspace.tree","arguments":{"path":"."}}]}</agent_tool_calls>',
             '<agent_tool_calls>{"tool_calls":[{"type":"function","function":{"name":"workspace.read","arguments":"{\\"path\\":\\"README.md\\"}"}}]}</agent_tool_calls>',
             '<agent_tool_calls>{"calls":[{"tool":"workspace.glob","input":{"pattern":"*.md"}}]}</agent_tool_calls>',
-            "[]",
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"list","input":{"path":"."}}]}</agent_tool_calls>',
             "Alias final.",
             "[]",
         ]);
@@ -2561,20 +2567,53 @@ describe("Skill and MCP capability config", () => {
             expect.objectContaining({ id: "tree", ok: true, status: "completed", toolCalls: 1 }),
             expect.objectContaining({ id: "read", ok: true, status: "completed", toolCalls: 1 }),
             expect.objectContaining({ id: "glob", ok: true, status: "completed", toolCalls: 1 }),
-            expect.objectContaining({
-                id: "list",
-                ok: false,
-                status: "failed",
-                error: expect.stringContaining("workspace.list is not available; use workspace.tree or workspace.glob"),
-            }),
+            expect.objectContaining({ id: "list", ok: true, status: "completed", toolCalls: 1 }),
         ]);
         const childStarts = sink.events.filter((event) => event.type === RuntimeEventType.SubagentChildStart);
-        expect(childStarts.map((event) => event.payload?.allowedTools)).toEqual([
-            ["workspace.tree"],
-            ["workspace.read"],
-            ["workspace.glob"],
-            [],
+        for (const childStart of childStarts) {
+            expect(childStart.payload?.allowedTools).toEqual(
+                expect.arrayContaining(["workspace.tree", "workspace.read", "workspace.glob", "workspace.stat", "workspace.search"]),
+            );
+        }
+    });
+
+    test("subagent.batch converts helper ls probes into workspace tree instead of parent ASK", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-subagent-shell-ls-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "README.md"), "shell ls compatibility\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<agent_tool_calls>{"calls":[{"server":"subagent","tool":"batch","input":{"tasks":[{"id":"config","goal":"inspect config","toolAllowlist":["workspace.read"]}],"maxToolTurns":1}}]}</agent_tool_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"shell","tool":"run","input":{"command":"ls","args":["-la"],"cwd":"."}}]}</agent_tool_calls>',
+            "Shell ls final.",
+            "[]",
         ]);
+        const sink = new CapturingSink();
+        const runtime = new RuntimeModule(baseConfig, model, sink);
+
+        const reply = await runtime.handleMessage(gatewayMessage("read the project"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.metadata?.kind).not.toBe("ask");
+        expect(reply.metadata?.subagentBatches).toEqual([
+            expect.objectContaining({
+                needsUser: false,
+                children: [
+                    expect.objectContaining({
+                        id: "config",
+                        ok: true,
+                        status: "completed",
+                        toolCalls: 1,
+                    }),
+                ],
+            }),
+        ]);
+        const childEnd = sink.events.find((event) => event.type === RuntimeEventType.SubagentChildEnd);
+        expect(childEnd?.payload?.tool).toEqual(expect.objectContaining({ server: "workspace", tool: "tree" }));
     });
 
     test("subagent.batch read-only child budget limit returns partial progress without parent ASK", async () => {
