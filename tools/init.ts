@@ -7,6 +7,7 @@ type InstallMode = "real" | "mock";
 
 const PACKAGE_IDS = [
     "browser-cdp",
+    "browser-use",
     "search-web",
     "media",
     "computer-native",
@@ -107,6 +108,20 @@ class XToolsInitializer {
                         "browser.screenshot",
                     ],
                 },
+                "browser.use": {
+                    command: this.packageCommand(options.targetDir, "browser-use", options.runnerName),
+                    args: ["xtool-sidecar", "browser.use"],
+                    cwd: "app",
+                    config: {
+                        backend: "delegate",
+                        delegateCommand: "",
+                        delegateArgs: [],
+                        cdpUrl: options.cdpUrl,
+                    },
+                    timeoutMs: 30000,
+                    maxOutputBytes: 262144,
+                    tools: [],
+                },
                 "computer.native": {
                     command: this.packageCommand(options.targetDir, "computer-native", options.runnerName),
                     args: ["xtool-sidecar", "computer.native"],
@@ -191,6 +206,7 @@ class XToolsInitializer {
                         "browser.open",
                         "browser.snapshot",
                         "browser.screenshot",
+                        "browser.use",
                         "browser.click",
                         "browser.type",
                         "browser.navigate",

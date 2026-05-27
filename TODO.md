@@ -970,3 +970,17 @@ Kernel V2 acceptance focus：
 - [x] 收紧默认真实 xtools manifest：保留 `browser.open` / `browser.snapshot` / `browser.screenshot`、`screen.screenshot` / `computer.window` 与本地 utility 工具，默认不暴露 click/type/mouse/keyboard/control 类高风险动作。
 - [x] `smoke:live:closure` 增加真实工具面断言：安全 Browser/Computer probe 为 available，危险控制工具、providerless web/media/LSP/task 为 unavailable，utility 工具仍 available。
 - [x] 复跑真实闭环与最终门禁：`bun run smoke:live:closure`、`bun run docs:check`、`bun run test:kernel`、`bun run test`、`git diff --check`。
+
+## 2026-05-27 Browser Use 外挂工具第一阶段
+
+- [x] 参考 `reference/hermes-agent` 的 browser/computer use 分层，新增 `browser.use` 高层 process-json sidecar，保持内核只登记 descriptor 和子进程 runner。
+- [x] `browser.use` 支持 delegate 后端与 CDP 后端，默认真实 manifest 仅写 sidecar 配置且 `tools: []`，不自动暴露给模型，不影响 ASK / plan / yolo 执行面。
+- [x] 外部工具 registry、socket kit catalog、mock xtools、POSIX/PowerShell/TypeScript 初始化器都加入 `browser-use` 包与 `browser.use` descriptor。
+- [x] 运行 focused 验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts tests/gateway.ws.test.ts tests/install.script.test.ts --timeout 30000`；`bun test tests/runtime.mcp.tool.plan.test.ts tests/computer.use.sidecar.test.ts tests/browser.cdp.sidecar.test.ts tests/executive.tool.runtime.test.ts --timeout 30000`；`bun run check`；`git diff --check`。
+- [ ] 后续补齐真实 Browser Use provider/delegate 安装说明与真实浏览器高权限 smoke，仍需保持默认不暴露控制动作。
+
+## 2026-05-27 Browser Use 文档对齐
+
+- [x] 新增 `docs/external/browser.use.md` 与 `docs/external/browser.use.zh.cn.md`，记录 `browser.use` owner 边界、process-json 执行契约、默认不暴露策略、ASK/权限边界与聚焦验证文件。
+- [x] push 前复跑 `docs:check`、focused 工具层测试、`bun run check`、`bun run test`、`git diff --check`，确认新增文档不要求改写既有 docs index。
+- [x] 真实 provider 闭环复验：`bun run provider:ready -- --require-ready` 与 `bun run smoke:live:closure` 均通过；`browser.use` 在真实默认工具面保持 unavailable，phantom permission user events 为 0。

@@ -103,6 +103,7 @@ const EXTERNAL_TOOL_SPECS: readonly ExternalToolSpec[] = [
     browserTool("browser.open", "Open a URL in the external browser sidecar.", false, ["url"]),
     browserTool("browser.snapshot", "Read the external browser accessibility snapshot.", true),
     browserTool("browser.screenshot", "Capture the external browser viewport.", true),
+    browserUseTool(),
     browserTool("browser.click", "Click a target in the external browser.", false, ["target"]),
     browserTool("browser.type", "Type text into the external browser.", false, ["target", "text"]),
     browserTool("browser.navigate", "Navigate the external browser.", false, ["url"]),
@@ -516,6 +517,52 @@ function browserTool(name: string, description: string, readOnly: boolean, requi
         resultLimit: readOnly ? 16_000 : 4_000,
         scope: [ToolScope.Local, ToolScope.Debug],
         tags: ["external-tool", "sidecar", "browser", "approval:computer"],
+    };
+}
+
+function browserUseTool(): ExternalToolSpec {
+    return {
+        category: ToolCategory.Computer,
+        computer: {
+            action: ComputerControlAction.Browser,
+            observationOnly: false,
+            requiresFocusTarget: true,
+        },
+        concurrencySafe: false,
+        description: "Drive a browser through a high-level open/snapshot/action/verify browser-use sidecar.",
+        exclusive: true,
+        inputSchema: {
+            type: "object",
+            required: ["action"],
+            properties: {
+                action: {
+                    type: "string",
+                    enum: [
+                        "open",
+                        "navigate",
+                        "snapshot",
+                        "screenshot",
+                        "click",
+                        "type",
+                        "evaluate",
+                        "wait",
+                    ],
+                },
+                format: { type: "string" },
+                ms: { type: "number" },
+                script: { type: "string" },
+                seconds: { type: "number" },
+                target: { type: "string" },
+                text: { type: "string" },
+                url: { type: "string" },
+            },
+        },
+        name: "browser.use",
+        permission: ToolPermission.Computer,
+        readOnly: false,
+        resultLimit: 24_000,
+        scope: [ToolScope.Local, ToolScope.Debug],
+        tags: ["external-tool", "sidecar", "browser", "browser-use", "approval:computer"],
     };
 }
 

@@ -63,7 +63,7 @@ esac
 TARGET_COMMAND_PREFIX="$(printf '%s' "$TARGET" | sed 's#^\./##')"
 
 mkdir -p "$TARGET/packages"
-for package in browser-cdp search-web media computer-native computer-use utility mock; do
+for package in browser-cdp browser-use search-web media computer-native computer-use utility mock; do
     PACKAGE_DIR="$TARGET/packages/$package"
     PACKAGE_RUNNER="./$TARGET_COMMAND_PREFIX/packages/$package/bin/$PACKAGE_BINARY_NAME"
     mkdir -p "$PACKAGE_DIR/bin"
@@ -89,6 +89,7 @@ EOF
 done
 
 BROWSER_CDP_RUNNER="./$TARGET_COMMAND_PREFIX/packages/browser-cdp/bin/$PACKAGE_BINARY_NAME"
+BROWSER_USE_RUNNER="./$TARGET_COMMAND_PREFIX/packages/browser-use/bin/$PACKAGE_BINARY_NAME"
 SEARCH_WEB_RUNNER="./$TARGET_COMMAND_PREFIX/packages/search-web/bin/$PACKAGE_BINARY_NAME"
 MEDIA_RUNNER="./$TARGET_COMMAND_PREFIX/packages/media/bin/$PACKAGE_BINARY_NAME"
 COMPUTER_NATIVE_RUNNER="./$TARGET_COMMAND_PREFIX/packages/computer-native/bin/$PACKAGE_BINARY_NAME"
@@ -109,7 +110,7 @@ if [ "$MODE" = "mock" ]; then
             "timeoutMs": 2000,
             "maxOutputBytes": 65536,
             "tools": [
-                "browser.open", "browser.snapshot", "browser.screenshot", "browser.click", "browser.type", "browser.navigate", "browser.evaluate",
+                "browser.open", "browser.snapshot", "browser.screenshot", "browser.use", "browser.click", "browser.type", "browser.navigate", "browser.evaluate",
                 "screen.screenshot", "computer.use", "computer.mouse", "computer.keyboard", "computer.window",
                 "vision.analyze", "vision.ocr", "audio.transcribe", "audio.speak",
                 "web.search", "web.fetch", "web.extract", "web.download",
@@ -132,6 +133,15 @@ else
             "timeoutMs": 8000,
             "maxOutputBytes": 65536,
             "tools": ["browser.open", "browser.snapshot", "browser.screenshot"]
+        },
+        "browser.use": {
+            "command": "$BROWSER_USE_RUNNER",
+            "args": ["xtool-sidecar", "browser.use"],
+            "cwd": "app",
+            "config": { "backend": "delegate", "delegateCommand": "", "delegateArgs": [], "cdpUrl": "$CDP_URL" },
+            "timeoutMs": 30000,
+            "maxOutputBytes": 262144,
+            "tools": []
         },
         "computer.native": {
             "command": "$COMPUTER_NATIVE_RUNNER",

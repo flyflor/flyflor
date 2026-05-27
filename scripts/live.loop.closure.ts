@@ -449,7 +449,7 @@ function collectFailedChecks(input: {
         ["external tool descriptors are visible", input.externalTools.length >= 10],
         ["real sidecar descriptors are configured when installed", externalWithSidecar.length > 0],
         ["browser live probe surface is read-only/open only", available("browser.open") && available("browser.snapshot") && available("browser.screenshot")],
-        ["browser control tools are not exposed by default", unavailable("browser.click") && unavailable("browser.type") && unavailable("browser.navigate") && unavailable("browser.evaluate")],
+        ["browser control tools are not exposed by default", unavailable("browser.click") && unavailable("browser.type") && unavailable("browser.navigate") && unavailable("browser.evaluate") && unavailable("browser.use")],
         ["computer native live probe surface is read-only only", available("screen.screenshot") && available("computer.window")],
         ["computer control tools are not exposed by default", unavailable("computer.mouse") && unavailable("computer.keyboard") && unavailable("computer.use")],
         ["providerless search/media/lsp/task tools are unavailable", unavailable("web.search") && unavailable("vision.ocr") && unavailable("audio.speak") && unavailable("lsp.symbols") && unavailable("task.background")],

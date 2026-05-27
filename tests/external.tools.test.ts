@@ -21,6 +21,7 @@ const EXPECTED_EXTERNAL_TOOLS = [
     "browser.open",
     "browser.snapshot",
     "browser.screenshot",
+    "browser.use",
     "browser.click",
     "browser.type",
     "browser.navigate",
@@ -76,6 +77,22 @@ describe("external tool descriptor discovery", () => {
                 },
             },
             tags: expect.arrayContaining(["computer-use", "approval:computer"]),
+        });
+        expect(externalToolSpecs().find((entry) => entry.name === "browser.use")).toMatchObject({
+            computer: {
+                action: "browser",
+                observationOnly: false,
+                requiresFocusTarget: true,
+            },
+            inputSchema: {
+                required: ["action"],
+                properties: {
+                    action: {
+                        enum: expect.arrayContaining(["open", "snapshot", "click", "type"]),
+                    },
+                },
+            },
+            tags: expect.arrayContaining(["browser-use", "approval:computer"]),
         });
         expect(externalToolSpecs().find((entry) => entry.name === "screen.screenshot")?.computer).toMatchObject({
             action: "screen",
@@ -346,6 +363,62 @@ describe("external tool descriptor discovery", () => {
                 command: "bun",
                 args: ["scripts/browser.cdp.sidecar.ts"],
                 env: { FLYFLOR_BROWSER_CDP_URL: "http://127.0.0.1:9222" },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("accepts Browser use sidecar manifest for high-level browser control only", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-browser-use-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectToolDir!, { recursive: true });
+            await writeFile(
+                externalToolManifestPath(paths),
+                JSON.stringify({
+                    schemaVersion: 1,
+                    sidecars: {
+                        "browser.use": {
+                            command: "bun",
+                            args: ["scripts/browser.use.sidecar.ts"],
+                            config: {
+                                backend: "cdp",
+                                cdpUrl: "http://127.0.0.1:9222",
+                                delegateCommand: "",
+                                delegateArgs: [],
+                            },
+                            maxOutputBytes: 262144,
+                            timeoutMs: 30000,
+                            tools: ["browser.use"],
+                        },
+                    },
+                }),
+            );
+
+            const tools = await loadExternalTools(paths);
+            const available = tools.filter((entry) => entry.available).map((entry) => entry.tool.descriptor.name);
+            expect(available).toEqual(["browser.use"]);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "browser.click")?.available).toBe(false);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "browser.use")?.tool).toMatchObject({
+                descriptor: {
+                    exclusive: true,
+                    permission: ToolPermission.Computer,
+                    computer: {
+                        action: "browser",
+                        observationOnly: false,
+                        requiresFocusTarget: true,
+                    },
+                    sourceId: "external:browser.use",
+                    tags: expect.arrayContaining(["browser-use", "sidecar:browser.use", "approval:computer"]),
+                },
+                executor: {
+                    kind: "process-json",
+                    command: "bun",
+                    args: ["scripts/browser.use.sidecar.ts"],
+                    timeoutMs: 30000,
+                    maxOutputBytes: 262144,
+                },
             });
         } finally {
             await rm(root, { recursive: true, force: true });

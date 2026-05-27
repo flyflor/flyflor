@@ -1,4 +1,5 @@
 import { runBrowserCdpSidecar } from "../../../scripts/browser.cdp.sidecar.ts";
+import { runBrowserUseSidecar } from "../../../scripts/browser.use.sidecar.ts";
 import { runComputerNativeSidecar } from "../../../scripts/computer.native.sidecar.ts";
 import { runComputerUseSidecar } from "../../../scripts/computer.use.sidecar.ts";
 import { runMediaSidecar } from "../../../scripts/media.sidecar.ts";
@@ -10,6 +11,7 @@ type SidecarRunner = () => Promise<void>;
 
 const SIDECAR_RUNNERS = new Map<string, SidecarRunner>([
     ["browser.cdp", runBrowserCdpSidecar],
+    ["browser.use", runBrowserUseSidecar],
     ["computer.native", runComputerNativeSidecar],
     ["computer.use", runComputerUseSidecar],
     ["media.local", runMediaSidecar],

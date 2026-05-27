@@ -1015,3 +1015,35 @@
   原因：真实高权限闭环需要看到外部工具能力，但默认工具面不能把鼠标、键盘、浏览器执行等控制动作交给模型；缺 provider 的工具必须结构化 unavailable，不能黑盒吞错。
   验证：`bun test tests/install.script.test.ts tests/external.tools.test.ts --timeout 30000`; `bun run check`; `bun run install:xtools:utility`; `bun run smoke:live:closure`; `bun run docs:check`; `bun run test:kernel`; `bun run test`; `git diff --check`。
   风险：`tools/packages` 是本地 ignored payload，不作为提交内容；真实 smoke 仍依赖 home DeepSeek provider 当前可用。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-xtools-v1
+  摘要：新增 `browser.use` 高层 browser-use 外挂工具：`scripts/browser.use.sidecar.ts` 通过 process-json 子进程提供 delegate/CDP 后端，`src/executive/external/tools.ts` 登记 descriptor，`src/executive/sidecar/runner.ts` 登记 bundled runner，`tools/init.*` 与 mock/install wrapper 增加 `browser-use` 包。默认真实 manifest 只写 `browser.use` sidecar 配置和 `tools: []`，不会自动暴露控制工具。
+  原因：用户要求补齐 Browser Use / Computer Use 工具层，并参考 Hermes 的高层 browser/computer use 思路；Flyflor 需要保持外挂、相对路径、跨平台初始化、子进程执行、ASK/plan/yolo 不受影响。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts tests/gateway.ws.test.ts tests/install.script.test.ts --timeout 30000`; `bun test tests/runtime.mcp.tool.plan.test.ts tests/computer.use.sidecar.test.ts tests/browser.cdp.sidecar.test.ts tests/executive.tool.runtime.test.ts --timeout 30000`; `bun run check`; `git diff --check`。
+  风险：本阶段只完成高层 `browser.use` descriptor/sidecar/installer 骨架和 CDP/delegate 可测路径；真实 Browser Use 云/本地 provider 安装与真实浏览器 high-privilege smoke 仍是后续项。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-docs-alignment
+  摘要：新增 `docs/external/browser.use.md` 与 `docs/external/browser.use.zh.cn.md`，只做文档追加，不改写既有 active docs；文档明确 owner、执行契约、默认不暴露控制面、ASK/权限边界与验证入口。
+  原因：合并工具层代码时需要同步文档口径，同时遵守“只做添加；若需修改先移动 old-docs 再重写”的约束。
+  验证：待 push 前复跑 docs 与工具层门禁。
+  风险：新文档放在 `docs/external/` 子目录，避免触发 active top-level docs index 改写；后续若要进入主阅读顺序，需要按 old-docs 规则重写索引。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-final-gates
+  摘要：修正模型面 prompt 中新增 browser/computer facade 说明，避免使用内部大写缩写；复跑 focused、docs、typecheck、全量离线测试和 diff 空白检查。
+  原因：全量测试发现 prompt lint 禁止模型面模板出现内部缩写，必须保持提示词分层对模型友好。
+  验证：`bun test tests/prompt.lint.test.ts tests/prompt.templates.docs.test.ts --timeout 30000`; `bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts tests/gateway.ws.test.ts tests/install.script.test.ts --timeout 30000`; `bun test tests/runtime.mcp.tool.plan.test.ts tests/computer.use.sidecar.test.ts tests/browser.cdp.sidecar.test.ts tests/executive.tool.runtime.test.ts --timeout 30000`; `bun run docs:check`; `bun run check`; `bun run test`（1059 pass, 0 fail）; `git diff --check`。
+  风险：真实 Browser Use provider/delegate 安装与真实浏览器高权限 smoke 仍保留为后续项，默认 manifest 继续不暴露 `browser.use` 控制面。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-live-closure
+  摘要：使用 home DeepSeek provider 跑真实闭环 smoke，覆盖普通 turn、工具执行、预算/权限 ASK、拒绝恢复、结构化授权恢复、subagent batch、history 与 execution job 查询；默认工具面中 `browser.use` 保持 unavailable。
+  原因：单元测试不足以证明闭环质量，push 前需要真实 LLM 场景确认 ASK/tool/subagent/history/brain.db 没有回归。
+  验证：`bun run provider:ready -- --require-ready`; `bun run smoke:live:closure`，结果 `ok: true`、`failedChecks: []`、`phantomPermissionUserEvents: 0`、`askAnswerPairs: 1`、`executionJobCount: 11`。
+  风险：live smoke 依赖当前 home provider；docker provider 不作为本轮阻塞。

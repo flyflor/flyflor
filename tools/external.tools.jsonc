@@ -10,6 +10,20 @@
             "maxOutputBytes": 65536,
             "tools": ["browser.open", "browser.snapshot", "browser.screenshot"]
         },
+        "browser.use": {
+            "command": "./tools/packages/browser-use/bin/flyflor",
+            "args": ["xtool-sidecar", "browser.use"],
+            "cwd": "app",
+            "config": {
+                "backend": "delegate",
+                "delegateCommand": "",
+                "delegateArgs": [],
+                "cdpUrl": "http://127.0.0.1:9222"
+            },
+            "timeoutMs": 30000,
+            "maxOutputBytes": 262144,
+            "tools": []
+        },
         "computer.native": {
             "command": "./tools/packages/computer-native/bin/flyflor",
             "args": ["xtool-sidecar", "computer.native"],

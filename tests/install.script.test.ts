@@ -8,6 +8,7 @@ const INSTALL_SH = join(ROOT, "scripts", "install.sh");
 const INSTALL_SOURCE_SH = join(ROOT, "scripts", "install.source.sh");
 const INSTALL_DOCKER_SH = join(ROOT, "scripts", "install.docker.sh");
 const INSTALL_XTOOLS_BROWSER_CDP_SH = join(ROOT, "scripts", "install.xtools.browser.cdp.sh");
+const INSTALL_XTOOLS_BROWSER_USE_SH = join(ROOT, "scripts", "install.xtools.browser.use.sh");
 const INSTALL_XTOOLS_SEARCH_WEB_SH = join(ROOT, "scripts", "install.xtools.search.web.sh");
 const INSTALL_XTOOLS_MEDIA_SH = join(ROOT, "scripts", "install.xtools.media.sh");
 const INSTALL_XTOOLS_COMPUTER_USE_SH = join(ROOT, "scripts", "install.xtools.computer.use.sh");
@@ -230,6 +231,7 @@ describe("source/docker/windows installers", () => {
         expect(packageJson.scripts?.["install:docker"]).toContain("install.docker.sh");
         expect(packageJson.scripts?.["install:windows"]).toContain("install.ps1");
         expect(packageJson.scripts?.["install:xtools:browser-cdp"]).toContain("install.xtools.browser.cdp.sh");
+        expect(packageJson.scripts?.["install:xtools:browser-use"]).toContain("install.xtools.browser.use.sh");
         expect(packageJson.scripts?.["install:xtools:search-web"]).toContain("install.xtools.search.web.sh");
         expect(packageJson.scripts?.["install:xtools:media"]).toContain("install.xtools.media.sh");
         expect(packageJson.scripts?.["install:xtools:computer-use"]).toContain("install.xtools.computer.use.sh");
@@ -282,6 +284,38 @@ describe("source/docker/windows installers", () => {
         expect(manifest).not.toContain('"browser.click"');
         expect(manifest).not.toContain('"browser.type"');
         expect(manifest).not.toContain('"browser.evaluate"');
+        expect(manifest).not.toContain("playwright");
+        await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
+    });
+
+    test("Browser use xtools installer writes only the external tools manifest", async () => {
+        await expect(
+            Bun.spawn(["sh", "-n", INSTALL_XTOOLS_BROWSER_USE_SH], { stderr: "pipe" }).exited,
+        ).resolves.toBe(0);
+
+        const sandbox = await createInstallSandbox();
+        const project = await createXtoolsProject(sandbox);
+        const target = join(project, "tools");
+        const proc = Bun.spawn(["sh", INSTALL_XTOOLS_BROWSER_USE_SH], {
+            cwd: project,
+            env: sandbox.env({
+                FLYFLOR_BROWSER_CDP_URL: "http://127.0.0.1:9333",
+            }),
+            stdout: "pipe",
+            stderr: "pipe",
+        });
+        const exit = await proc.exited;
+        const stderr = await new Response(proc.stderr).text();
+        expect(stderr).toBe("");
+        expect(exit).toBe(0);
+
+        const manifest = await readFile(join(target, "external.tools.jsonc"), "utf8");
+        expect(manifest).toContain('"browser.use"');
+        expect(manifest).toContain('"command": "./tools/packages/browser-use/bin/flyflor"');
+        expect(manifest).toContain('"args": ["xtool-sidecar", "browser.use"]');
+        await expect(stat(join(target, "packages", "browser-use", "bin", "flyflor"))).resolves.toBeTruthy();
+        expect(manifest).toContain('"delegateCommand": ""');
+        expect((JSON.parse(manifest) as { sidecars: { "browser.use": { tools: string[] } } }).sidecars["browser.use"].tools).not.toContain("browser.use");
         expect(manifest).not.toContain("playwright");
         await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
     });
@@ -402,9 +436,10 @@ describe("source/docker/windows installers", () => {
 
         const manifest = await readFile(join(target, "external.tools.jsonc"), "utf8");
         await expect(stat(join(target, "packages", "computer-use", "bin", "flyflor"))).resolves.toBeTruthy();
-        expect(manifest).not.toContain('"computer.use"');
-        expect(manifest).not.toContain('"args": ["xtool-sidecar", "computer.use"]');
-        expect(manifest).not.toContain('"delegateCommand": ""');
+        const parsed = JSON.parse(manifest) as { sidecars: Record<string, { tools?: string[]; args?: string[] }> };
+        expect(parsed.sidecars["computer.use"]).toBeUndefined();
+        expect(Object.values(parsed.sidecars).flatMap((entry) => entry.tools ?? [])).not.toContain("computer.use");
+        expect(Object.values(parsed.sidecars).some((entry) => entry.args?.join(" ") === "xtool-sidecar computer.use")).toBe(false);
         expect(manifest).not.toContain("playwright");
         await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
     });

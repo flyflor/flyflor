@@ -34,6 +34,7 @@
         "install:source": "sh scripts/install.source.sh",
         "install:windows": "powershell -ExecutionPolicy Bypass -File scripts/install.ps1",
         "install:xtools:browser-cdp": "sh scripts/install.xtools.browser.cdp.sh",
+        "install:xtools:browser-use": "sh scripts/install.xtools.browser.use.sh",
         "install:xtools:search-web": "sh scripts/install.xtools.search.web.sh",
         "install:xtools:media": "sh scripts/install.xtools.media.sh",
         "install:xtools:computer-use": "sh scripts/install.xtools.computer.use.sh",

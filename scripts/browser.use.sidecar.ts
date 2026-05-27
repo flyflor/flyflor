@@ -1,0 +1,551 @@
+#!/usr/bin/env bun
+
+import { access } from "node:fs/promises";
+import { delimiter, isAbsolute, join } from "node:path";
+
+type JsonObject = Record<string, unknown>;
+type BrowserUseAction =
+    | "open"
+    | "navigate"
+    | "snapshot"
+    | "screenshot"
+    | "click"
+    | "type"
+    | "evaluate"
+    | "wait";
+
+interface SidecarRequest {
+    readonly config?: unknown;
+    readonly input?: unknown;
+    readonly tool?: unknown;
+}
+
+interface BrowserUseInvocation {
+    readonly action: BrowserUseAction;
+    readonly config: JsonObject;
+    readonly input: JsonObject;
+}
+
+interface CdpTarget {
+    readonly id?: string;
+    readonly type?: string;
+    readonly url?: string;
+    readonly webSocketDebuggerUrl?: string;
+}
+
+interface CdpResponse {
+    readonly id?: number;
+    readonly result?: unknown;
+    readonly error?: { message?: string; data?: string };
+}
+
+const BROWSER_USE_TOOL = "browser.use";
+const ACTIONS = new Set<BrowserUseAction>([
+    "open",
+    "navigate",
+    "snapshot",
+    "screenshot",
+    "click",
+    "type",
+    "evaluate",
+    "wait",
+]);
+const READ_ACTIONS = new Set<BrowserUseAction>(["snapshot", "screenshot", "wait"]);
+const DEFAULT_CDP_URL = "http://127.0.0.1:9222";
+const DEFAULT_TIMEOUT_MS = 8_000;
+const DEFAULT_MAX_OUTPUT_BYTES = 512 * 1024;
+const BLOCKED_URL_PROTOCOLS = new Set(["javascript:", "data:", "vbscript:"]);
+
+export async function runBrowserUseSidecar(): Promise<void> {
+    try {
+        const raw = await new Response(Bun.stdin.stream()).text();
+        const request = parseRequest(raw);
+        const tool = requiredString(request.tool, "request.tool");
+        if (tool !== BROWSER_USE_TOOL) {
+            throw new BrowserUseError("unsupported", `unsupported browser-use tool: ${tool}`);
+        }
+        const input = objectInput(request.input);
+        const action = readAction(input.action);
+        validateAction(action, input);
+        const result = await new BrowserUseSidecar().invoke({
+            action,
+            config: objectInput(request.config),
+            input,
+        });
+        process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
+    } catch (err) {
+        const failure = failureFromError(err);
+        const line = `${JSON.stringify(failure)}\n`;
+        process.stdout.write(line);
+        process.stderr.write(line);
+        process.exit(1);
+    }
+}
+
+class BrowserUseSidecar {
+    public async invoke(invocation: BrowserUseInvocation): Promise<JsonObject> {
+        const backend = this.backend(invocation.config);
+        const result = backend.kind === "cdp"
+            ? await this.invokeCdp(backend, invocation)
+            : await this.invokeDelegate(backend, invocation);
+        return {
+            action: invocation.action,
+            backend: backend.kind,
+            readOnly: READ_ACTIONS.has(invocation.action),
+            result,
+        };
+    }
+
+    private backend(config: JsonObject):
+        | { kind: "cdp"; endpoint: string }
+        | { kind: "delegate"; command: string; args: readonly string[]; timeoutMs: number; maxOutputBytes: number } {
+        const backend = readString(config.backend) ?? "delegate";
+        if (backend === "cdp") {
+            return {
+                kind: "cdp",
+                endpoint: readString(config.cdpUrl) ?? Bun.env.FLYFLOR_BROWSER_CDP_URL ?? DEFAULT_CDP_URL,
+            };
+        }
+        if (backend === "delegate") {
+            const command = readString(config.delegateCommand);
+            if (!command) {
+                throw new BrowserUseError(
+                    "unavailable",
+                    "browser.use requires config.delegateCommand or config.backend='cdp'",
+                );
+            }
+            return {
+                kind: "delegate",
+                command,
+                args: stringArray(config.delegateArgs),
+                timeoutMs: positiveInt(config.timeoutMs) ?? DEFAULT_TIMEOUT_MS,
+                maxOutputBytes: positiveInt(config.maxOutputBytes) ?? DEFAULT_MAX_OUTPUT_BYTES,
+            };
+        }
+        throw new BrowserUseError("unsupported", `unsupported browser.use backend: ${backend}`);
+    }
+
+    private async invokeDelegate(
+        backend: { command: string; args: readonly string[]; timeoutMs: number; maxOutputBytes: number },
+        invocation: BrowserUseInvocation,
+    ): Promise<JsonObject> {
+        return runProcessJson(backend.command, backend.args, invocation, backend.timeoutMs, backend.maxOutputBytes);
+    }
+
+    private async invokeCdp(
+        backend: { endpoint: string },
+        invocation: BrowserUseInvocation,
+    ): Promise<JsonObject> {
+        const client = new BrowserUseCdpClient(backend.endpoint);
+        switch (invocation.action) {
+            case "open": {
+                const target = await client.open(requiredUrl(invocation.input.url, "input.url"));
+                return { targetId: target.id, url: target.url };
+            }
+            case "navigate":
+                return { response: await client.sendToPage("Page.navigate", { url: requiredUrl(invocation.input.url, "input.url") }) };
+            case "snapshot":
+                return { snapshot: await client.sendToPage("Accessibility.getFullAXTree", {}) };
+            case "screenshot": {
+                const result = asObject(
+                    await client.sendToPage("Page.captureScreenshot", {
+                        format: readString(invocation.input.format) ?? "png",
+                        fromSurface: true,
+                    }),
+                    "Page.captureScreenshot result",
+                );
+                return { data: result.data, format: readString(invocation.input.format) ?? "png" };
+            }
+            case "click":
+                return {
+                    response: await client.callFunction(
+                        `(selector) => {
+                            const element = document.querySelector(selector);
+                            if (!element) throw new Error("target not found: " + selector);
+                            element.click();
+                            return true;
+                        }`,
+                        [requiredString(invocation.input.target, "input.target")],
+                    ),
+                };
+            case "type":
+                return {
+                    response: await client.callFunction(
+                        `(selector, text) => {
+                            const element = document.querySelector(selector);
+                            if (!element) throw new Error("target not found: " + selector);
+                            element.focus();
+                            if ("value" in element) {
+                                element.value = text;
+                                element.dispatchEvent(new Event("input", { bubbles: true }));
+                                element.dispatchEvent(new Event("change", { bubbles: true }));
+                            } else {
+                                element.textContent = text;
+                            }
+                            return true;
+                        }`,
+                        [
+                            requiredString(invocation.input.target, "input.target"),
+                            requiredString(invocation.input.text, "input.text"),
+                        ],
+                    ),
+                };
+            case "evaluate":
+                return {
+                    response: await client.sendToPage("Runtime.evaluate", {
+                        expression: requiredString(invocation.input.script, "input.script"),
+                        awaitPromise: true,
+                        returnByValue: true,
+                    }),
+                };
+            case "wait": {
+                const ms = Math.min(Math.max(numberInput(invocation.input.ms) ?? secondsToMs(invocation.input.seconds) ?? 1000, 0), 30_000);
+                await Bun.sleep(ms);
+                return { waitedMs: ms };
+            }
+        }
+    }
+}
+
+class BrowserUseCdpClient {
+    public constructor(private readonly endpoint: string) {}
+
+    public async open(url: string): Promise<CdpTarget> {
+        const target = await this.fetchJson<CdpTarget>(`/json/new?${encodeURIComponent(url)}`, { method: "PUT" }).catch(
+            () => this.fetchJson<CdpTarget>(`/json/new?${encodeURIComponent(url)}`),
+        );
+        if (!target.webSocketDebuggerUrl) {
+            throw new BrowserUseError("failed", "CDP target did not include webSocketDebuggerUrl");
+        }
+        return target;
+    }
+
+    public async sendToPage(method: string, params: JsonObject): Promise<unknown> {
+        const target = await this.pageTarget();
+        if (!target.webSocketDebuggerUrl) {
+            throw new BrowserUseError("failed", "CDP page target did not include webSocketDebuggerUrl");
+        }
+        return new CdpSocket(target.webSocketDebuggerUrl).send(method, params);
+    }
+
+    public async callFunction(source: string, args: unknown[]): Promise<unknown> {
+        return this.sendToPage("Runtime.callFunctionOn", {
+            functionDeclaration: source,
+            arguments: args.map((value) => ({ value })),
+            awaitPromise: true,
+            returnByValue: true,
+        });
+    }
+
+    private async pageTarget(): Promise<CdpTarget> {
+        const targets = await this.fetchJson<CdpTarget[]>("/json/list");
+        const target = targets.find((entry) => entry.type === "page" && entry.webSocketDebuggerUrl);
+        if (!target) {
+            throw new BrowserUseError("unavailable", "no debuggable browser page target found");
+        }
+        return target;
+    }
+
+    private async fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+        const response = await fetch(new URL(path, normalizedBaseUrl(this.endpoint)), init);
+        if (!response.ok) {
+            throw new BrowserUseError("failed", `CDP HTTP ${response.status} for ${path}`);
+        }
+        return (await response.json()) as T;
+    }
+}
+
+class CdpSocket {
+    private nextId = 1;
+
+    public constructor(private readonly url: string) {}
+
+    public async send(method: string, params: JsonObject): Promise<unknown> {
+        const id = this.nextId++;
+        const ws = new WebSocket(this.url);
+        await waitForOpen(ws);
+        const response = waitForResponse(ws, id);
+        ws.send(JSON.stringify({ id, method, params }));
+        try {
+            return await response;
+        } finally {
+            ws.close();
+        }
+    }
+}
+
+async function runProcessJson(
+    command: string,
+    args: readonly string[],
+    payload: unknown,
+    timeoutMs: number,
+    maxOutputBytes: number,
+): Promise<JsonObject> {
+    const resolved = await resolveCommand(command);
+    if (!resolved) {
+        throw new BrowserUseError("unavailable", `browser.use command is unavailable: ${command}`);
+    }
+    const proc = Bun.spawn({
+        cmd: [resolved, ...args],
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+    });
+    const stdin = proc.stdin as { write(chunk: Uint8Array): unknown; end(): void };
+    stdin.write(new TextEncoder().encode(`${JSON.stringify(payload)}\n`));
+    stdin.end();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+        timedOut = true;
+        proc.kill("SIGKILL");
+    }, timeoutMs);
+    if (typeof (timer as { unref?: () => void }).unref === "function") {
+        (timer as { unref: () => void }).unref();
+    }
+    const [exitCode, stdout, stderr] = await Promise.all([
+        proc.exited,
+        collectBounded(proc.stdout, maxOutputBytes),
+        collectBounded(proc.stderr, maxOutputBytes),
+    ]);
+    clearTimeout(timer);
+    if (timedOut) {
+        throw new BrowserUseError("failed", "browser.use delegate timed out", { command, timedOut: true });
+    }
+    if (exitCode !== 0) {
+        throw new BrowserUseError("failed", "browser.use delegate failed", {
+            command,
+            exitCode,
+            stderr: stderr.text,
+            truncated: stdout.truncated || stderr.truncated,
+        });
+    }
+    return {
+        exitCode,
+        response: parseFirstJsonLine(stdout.text, "browser.use delegate"),
+        stderr: stderr.text,
+        truncated: stdout.truncated || stderr.truncated,
+    };
+}
+
+async function resolveCommand(command: string): Promise<string | undefined> {
+    if (isAbsolute(command) || command.startsWith(".")) {
+        const path = isAbsolute(command) ? command : join(process.cwd(), command);
+        return (await pathExists(path)) ? path : undefined;
+    }
+    for (const dir of pathEntries()) {
+        const path = join(dir, command);
+        if (await pathExists(path)) return path;
+    }
+    return undefined;
+}
+
+function pathEntries(): string[] {
+    return (process.env.PATH ?? "").split(delimiter).map((entry) => entry.trim()).filter(Boolean);
+}
+
+async function pathExists(path: string): Promise<boolean> {
+    try {
+        await access(path);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function validateAction(action: BrowserUseAction, input: JsonObject): void {
+    if (action === "open" || action === "navigate") {
+        requiredUrl(input.url, "input.url");
+    }
+    if (action === "click") {
+        requiredString(input.target, "input.target");
+    }
+    if (action === "type") {
+        requiredString(input.target, "input.target");
+        requiredString(input.text, "input.text");
+    }
+    if (action === "evaluate") {
+        requiredString(input.script, "input.script");
+    }
+}
+
+function waitForOpen(ws: WebSocket): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const timer = timeout(() => reject(new BrowserUseError("unavailable", "CDP WebSocket open timed out")));
+        ws.onopen = () => {
+            clearTimeout(timer);
+            resolve();
+        };
+        ws.onerror = () => {
+            clearTimeout(timer);
+            reject(new BrowserUseError("unavailable", "CDP WebSocket failed to open"));
+        };
+    });
+}
+
+function waitForResponse(ws: WebSocket, id: number): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+        const timer = timeout(() => reject(new BrowserUseError("failed", "CDP command timed out")));
+        ws.onmessage = (event) => {
+            const response = JSON.parse(String(event.data)) as CdpResponse;
+            if (response.id !== id) {
+                return;
+            }
+            clearTimeout(timer);
+            if (response.error) {
+                reject(new BrowserUseError("failed", response.error.data ?? response.error.message ?? "CDP command failed"));
+                return;
+            }
+            resolve(response.result ?? {});
+        };
+        ws.onerror = () => {
+            clearTimeout(timer);
+            reject(new BrowserUseError("failed", "CDP WebSocket command failed"));
+        };
+    });
+}
+
+async function collectBounded(stream: ReadableStream<Uint8Array> | null, maxBytes: number): Promise<{ text: string; truncated: boolean }> {
+    const reader = stream?.getReader();
+    if (!reader) return { text: "", truncated: false };
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    let truncated = false;
+    while (true) {
+        const item = await reader.read();
+        if (item.done) break;
+        total += item.value.byteLength;
+        if (total <= maxBytes) {
+            chunks.push(item.value);
+        } else {
+            const remaining = Math.max(0, maxBytes - (total - item.value.byteLength));
+            if (remaining > 0) chunks.push(item.value.slice(0, remaining));
+            truncated = true;
+        }
+    }
+    return { text: new TextDecoder().decode(concat(chunks)), truncated };
+}
+
+function concat(chunks: readonly Uint8Array[]): Uint8Array {
+    const size = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+    const out = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+        out.set(chunk, offset);
+        offset += chunk.byteLength;
+    }
+    return out;
+}
+
+function parseFirstJsonLine(value: string, label: string): unknown {
+    const line = value.split(/\r?\n/u).find((entry) => entry.trim().length > 0);
+    if (!line) {
+        return {};
+    }
+    try {
+        return JSON.parse(line);
+    } catch {
+        throw new BrowserUseError("failed", `${label} returned non-json output`, { output: line.slice(0, 500) });
+    }
+}
+
+function parseRequest(raw: string): SidecarRequest {
+    if (raw.trim().length === 0) {
+        throw new BrowserUseError("failed", "empty process-json request");
+    }
+    return JSON.parse(raw) as SidecarRequest;
+}
+
+function readAction(value: unknown): BrowserUseAction {
+    const action = requiredString(value, "input.action") as BrowserUseAction;
+    if (!ACTIONS.has(action)) {
+        throw new BrowserUseError("unsupported", `unsupported browser.use action: ${action}`);
+    }
+    return action;
+}
+
+function objectInput(value: unknown): JsonObject {
+    if (value === undefined) return {};
+    return asObject(value, "request object field");
+}
+
+function asObject(value: unknown, path: string): JsonObject {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        throw new BrowserUseError("failed", `${path} must be an object`);
+    }
+    return value as JsonObject;
+}
+
+function stringArray(value: unknown): readonly string[] {
+    if (value === undefined) return [];
+    if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
+        throw new BrowserUseError("failed", "array field must be string[]");
+    }
+    return value;
+}
+
+function requiredUrl(value: unknown, path: string): string {
+    const raw = requiredString(value, path);
+    const url = new URL(raw);
+    if (BLOCKED_URL_PROTOCOLS.has(url.protocol.toLowerCase())) {
+        throw new BrowserUseError("blocked", `${path} uses blocked protocol: ${url.protocol}`);
+    }
+    return url.toString();
+}
+
+function secondsToMs(value: unknown): number | undefined {
+    const seconds = numberInput(value);
+    return seconds === undefined ? undefined : Math.round(seconds * 1000);
+}
+
+function numberInput(value: unknown): number | undefined {
+    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function positiveInt(value: unknown): number | undefined {
+    return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+function readString(value: unknown): string | undefined {
+    return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function requiredString(value: unknown, path: string): string {
+    const string = readString(value);
+    if (!string) {
+        throw new BrowserUseError("failed", `${path} must be a non-empty string`);
+    }
+    return string;
+}
+
+function normalizedBaseUrl(value: string): string {
+    return value.endsWith("/") ? value : `${value}/`;
+}
+
+function timeout(callback: () => void): Timer {
+    const timer = setTimeout(callback, DEFAULT_TIMEOUT_MS);
+    if (typeof (timer as { unref?: () => void }).unref === "function") {
+        (timer as { unref: () => void }).unref();
+    }
+    return timer;
+}
+
+class BrowserUseError extends Error {
+    public constructor(
+        public readonly code: "blocked" | "failed" | "unavailable" | "unsupported",
+        message: string,
+        public readonly details: JsonObject = {},
+    ) {
+        super(message);
+    }
+}
+
+function failureFromError(err: unknown): JsonObject {
+    if (err instanceof BrowserUseError) {
+        return { ok: false, code: err.code, error: err.message, details: err.details };
+    }
+    return { ok: false, code: "failed", error: err instanceof Error ? err.message : String(err) };
+}
+
+if (import.meta.main) {
+    await runBrowserUseSidecar();
+}

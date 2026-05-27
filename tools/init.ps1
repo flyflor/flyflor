@@ -45,7 +45,7 @@ if ($Real) {
 
 $PackageRoot = Join-Path $Target "packages"
 New-Item -ItemType Directory -Force -Path $PackageRoot | Out-Null
-foreach ($Package in @("browser-cdp", "search-web", "media", "computer-native", "computer-use", "utility", "mock")) {
+foreach ($Package in @("browser-cdp", "browser-use", "search-web", "media", "computer-native", "computer-use", "utility", "mock")) {
     $PackageDir = Join-Path $PackageRoot $Package
     $PackageBin = Join-Path $PackageDir "bin"
     New-Item -ItemType Directory -Force -Path $PackageBin | Out-Null
@@ -69,6 +69,7 @@ Runtime discovery stays in ../../external.tools.jsonc. The command registered th
 }
 
 $BrowserCdpRunner = "./$($Target.TrimStart('.', '/', '\').Replace('\', '/'))/packages/browser-cdp/bin/$PackageBinaryName"
+$BrowserUseRunner = "./$($Target.TrimStart('.', '/', '\').Replace('\', '/'))/packages/browser-use/bin/$PackageBinaryName"
 $SearchWebRunner = "./$($Target.TrimStart('.', '/', '\').Replace('\', '/'))/packages/search-web/bin/$PackageBinaryName"
 $MediaRunner = "./$($Target.TrimStart('.', '/', '\').Replace('\', '/'))/packages/media/bin/$PackageBinaryName"
 $ComputerNativeRunner = "./$($Target.TrimStart('.', '/', '\').Replace('\', '/'))/packages/computer-native/bin/$PackageBinaryName"
@@ -88,7 +89,7 @@ if ($Mode -eq "mock") {
                 timeoutMs = 2000
                 maxOutputBytes = 65536
                 tools = @(
-                    "browser.open", "browser.snapshot", "browser.screenshot", "browser.click", "browser.type", "browser.navigate", "browser.evaluate",
+                    "browser.open", "browser.snapshot", "browser.screenshot", "browser.use", "browser.click", "browser.type", "browser.navigate", "browser.evaluate",
                     "screen.screenshot", "computer.use", "computer.mouse", "computer.keyboard", "computer.window",
                     "vision.analyze", "vision.ocr", "audio.transcribe", "audio.speak",
                     "web.search", "web.fetch", "web.extract", "web.download",
@@ -109,6 +110,15 @@ if ($Mode -eq "mock") {
                 timeoutMs = 8000
                 maxOutputBytes = 65536
                 tools = @("browser.open", "browser.snapshot", "browser.screenshot")
+            }
+            "browser.use" = @{
+                command = $BrowserUseRunner
+                args = @("xtool-sidecar", "browser.use")
+                cwd = "app"
+                config = @{ backend = "delegate"; delegateCommand = ""; delegateArgs = @(); cdpUrl = $CdpUrl }
+                timeoutMs = 30000
+                maxOutputBytes = 262144
+                tools = @()
             }
             "computer.native" = @{
                 command = $ComputerNativeRunner
