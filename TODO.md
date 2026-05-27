@@ -1064,3 +1064,9 @@ Kernel V2 acceptance focus：
 - [x] 新增 `computer.use` 只读 action 回归，验证 `wait` 带 `captureAfter: true` 不额外触发 capture 子进程。
 - [x] 修复 `computer.use` captureAfter gate：所有 `READ_ACTIONS` 都直接返回原结果，只有变更动作触发后置观察。
 - [x] 复跑 focused computer-use/browser-use/browser-cdp tests、computer-use live smoke、check、docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Computer Use Scroll Direction Schema
+
+- [x] 新增 `computer.use` scroll invalid direction 回归，确认错误在 sidecar 校验层返回而不是落到 delegate unavailable。
+- [x] 将 `computer.use` descriptor 的 `direction` 对齐为 `up/down/left/right` enum，并在 sidecar 中复用同一枚举校验。
+- [x] 复跑 focused computer-use/external descriptor tests、computer-use live smoke、check、docs、真实闭环与 `git diff --check`。

@@ -636,7 +636,7 @@ function computerUseTool(): ExternalToolSpec {
                 button: { type: "string", enum: ["left", "right", "middle"] },
                 captureAfter: { type: "boolean" },
                 coordinate: coordinateSchema,
-                direction: { type: "string" },
+                direction: { type: "string", enum: ["up", "down", "left", "right"] },
                 element: { type: "number" },
                 fromCoordinate: coordinateSchema,
                 fromElement: { type: "number" },

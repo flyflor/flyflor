@@ -74,6 +74,7 @@ describe("external tool descriptor discovery", () => {
                         enum: expect.arrayContaining(["capture", "click", "type", "focus_app"]),
                     },
                     captureAfter: { type: "boolean" },
+                    direction: { enum: ["up", "down", "left", "right"] },
                 },
             },
             tags: expect.arrayContaining(["computer-use", "approval:computer"]),

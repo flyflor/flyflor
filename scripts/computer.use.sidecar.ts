@@ -243,7 +243,7 @@ function cuaPayload(invocation: ComputerUseInvocation): JsonObject {
         to_y: toCoordinate?.[1],
         keys: readString(input.keys),
         value: readString(input.value),
-        direction: readString(input.direction),
+        direction: readScrollDirection(input.direction),
         amount: numberInput(input.amount),
         x: coordinateTarget?.[0],
         y: coordinateTarget?.[1],
@@ -350,7 +350,7 @@ function validateAction(action: ComputerUseAction, input: JsonObject): void {
         requiredString(input.value, "input.value");
     }
     if (action === "scroll") {
-        requiredString(input.direction, "input.direction");
+        readScrollDirection(input.direction, true);
     }
     if (action === "focus_app") {
         requiredString(input.app, "input.app");
@@ -535,6 +535,16 @@ function readCaptureMode(value: unknown): "som" | "vision" | "ax" | undefined {
         return mode;
     }
     throw new ComputerUseError("failed", "computer.use mode must be som, vision, or ax");
+}
+
+function readScrollDirection(value: unknown, required = false): "up" | "down" | "left" | "right" | undefined {
+    if (value === undefined && !required) return undefined;
+    const direction = required ? requiredString(value, "input.direction") : readString(value);
+    if (direction === undefined) return undefined;
+    if (direction === "up" || direction === "down" || direction === "left" || direction === "right") {
+        return direction;
+    }
+    throw new ComputerUseError("failed", "computer.use direction must be up, down, left, or right");
 }
 
 function coordinate(value: unknown): [number, number] | undefined {

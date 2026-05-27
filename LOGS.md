@@ -1263,3 +1263,27 @@
   原因：确保追加 TODO/LOGS 后仍无空白错误。
   验证：`git diff --check`。
   风险：无代码风险，仅验证记录追加。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：computer-use-scroll-direction-schema
+  摘要：`computer.use` scroll direction 从自由字符串收紧为 `up/down/left/right` enum；descriptor 与 sidecar 校验同步，invalid direction 在 delegate spawn 前返回结构化失败。
+  原因：Hermes computer-use schema 将 scroll direction 定义为枚举；Flyflor 模型可见 schema 和 sidecar runtime 必须一致，避免模型发出不可执行方向后才由 delegate 暴露错误。
+  验证：已跑 `bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（27 pass, 0 fail）；待跑 computer live、check/docs/真实闭环/diff。
+  风险：只收紧 `computer.use` scroll direction schema/validation；不改变默认 manifest 暴露面、ASK、plan、yolo 或动态预算逻辑。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-scroll-direction-schema-verification
+  摘要：完成 `computer.use` scroll direction schema/runtime parity；模型可见 descriptor 与 sidecar 校验都只接受 `up/down/left/right`，非法方向在 delegate spawn 前结构化失败。
+  原因：保持提示词工具 schema 和 process-json runtime 同步，减少模型不可执行动作进入外部 delegate 的概率。
+  验证：`bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（27 pass, 0 fail）；`bun run smoke:computer-use:live`（ok true, skipped true, reason cua-command-not-found）；`bun run check`; `bun run docs:check`; `bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；待最终 `git diff --check`。
+  风险：只收紧 `computer.use` scroll direction schema/validation；不改变默认 manifest 暴露面、ASK、plan、yolo 或动态预算逻辑。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-scroll-direction-schema-final-diff-check
+  摘要：提交前完成最终 whitespace diff gate。
+  原因：确保追加 TODO/LOGS 后仍无空白错误。
+  验证：`git diff --check`。
+  风险：无代码风险，仅验证记录追加。
