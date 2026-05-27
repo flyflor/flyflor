@@ -240,6 +240,44 @@ describe("high-level browser.use process-json sidecar", () => {
         }
     });
 
+    test("drives Hermes-style console expression through the CDP backend", async () => {
+        const server = new MockCdpServer();
+        try {
+            const response = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "console", expression: "console.warn('flyflor'); document.title", clear: true },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+
+            expect(response).toMatchObject({ ok: true, action: "console", backend: "cdp", readOnly: false });
+            expect(server.commands).toEqual([
+                expect.objectContaining({
+                    method: "Runtime.evaluate",
+                    params: expect.objectContaining({
+                        awaitPromise: true,
+                        returnByValue: true,
+                        expression: expect.stringContaining("flyflor"),
+                    }),
+                }),
+            ]);
+            expect((server.commands[0] as { params: { expression: string } }).params.expression).toContain("__flyflorConsoleBuffer");
+        } finally {
+            server.stop();
+        }
+    });
+
+    test("rejects invalid console clear values before invoking CDP", async () => {
+        const response = await invokeSidecar({
+            tool: "browser.use",
+            input: { action: "console", clear: "yes" },
+            config: { backend: "cdp", cdpUrl: "http://127.0.0.1:1" },
+        }, { expectExit: 1 });
+
+        expect(response.body.ok).toBe(false);
+        expect(response.body.code).toBe("failed");
+        expect(String(response.body.error)).toContain("input.clear must be a boolean");
+    });
+
     test("reports malformed CDP WebSocket frames as structured failures", async () => {
         const server = new MockCdpServer(() => "not-json");
         try {

@@ -105,6 +105,15 @@ class BrowserUseLiveSmoke {
             this.expectOk(back, "back");
             checks.push("back");
 
+            const consoleResult = await this.invoker.call({
+                tool: "browser.use",
+                config,
+                input: { action: "console", expression: "console.warn('flyflor-live-console'); document.title", clear: true },
+            });
+            this.expectOk(consoleResult, "console");
+            this.expectConsole(consoleResult);
+            checks.push("console-expression");
+
             const screenshot = await this.invoker.call({
                 tool: "browser.use",
                 config,
@@ -177,6 +186,17 @@ class BrowserUseLiveSmoke {
         const images = payload?.images;
         if (payload?.ok !== true || payload.count !== 1 || !Array.isArray(images)) {
             throw new Error(`get_images returned unexpected payload: ${JSON.stringify(value).slice(0, 1000)}`);
+        }
+    }
+
+    private expectConsole(value: JsonObject): void {
+        const response = ((value.result as JsonObject | undefined)?.response as JsonObject | undefined)?.result as JsonObject | undefined;
+        const payload = response?.value as JsonObject | undefined;
+        const messages = payload?.messages;
+        const evaluation = payload?.evaluation as JsonObject | undefined;
+        const result = evaluation?.result as JsonObject | undefined;
+        if (payload?.ok !== true || !Array.isArray(messages) || messages.length < 1 || result?.value !== "Flyflor Browser Use Live Smoke") {
+            throw new Error(`console returned unexpected payload: ${JSON.stringify(value).slice(0, 1000)}`);
         }
     }
 

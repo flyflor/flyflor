@@ -1599,3 +1599,19 @@
   原因：补齐真实浏览器交互闭环里的历史返回与图片枚举能力，同时保持 kernel 不 import 浏览器 runtime，只拥有 descriptor、gateway/event/audit、visibility、approval、quota 和 dispatch。
   验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（35 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true，覆盖 get-images/navigate-second/back）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1095 pass, 0 fail）；待最终 `git diff --check`。
   风险：只影响 opt-in `browser.use` action surface；默认 manifest 暴露策略、高权限 ASK/plan/yolo、动态预算和子进程 JSON 边界不变。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-hermes-console
+  摘要：准备为 `browser.use` 增加 Hermes 风格 `console` action，支持页面上下文 `expression` 和读取后 `clear`。
+  原因：Hermes browser 工具包含 console/error inspection；Flyflor 高层 browser sidecar 需要把这一类调试观察能力纳入 process-json 外挂面，而不是让 kernel 直接持有浏览器 runtime。
+  验证：待跑 focused browser-use/external tests、browser-use live smoke、check/docs、真实闭环与 diff。
+  风险：`expression` 可执行页面 JavaScript，因此 action 仍按高权限 opt-in browser control 处理；默认 manifest 暴露策略、ASK/plan/yolo、动态预算和 kernel import 边界不变。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-hermes-console
+  摘要：`browser.use` 现在支持 Hermes 风格 `console` action；CDP backend 在页面内安装轻量 console buffer，支持 `expression` 执行、`clear` 清理、消息与表达式结果结构化返回，delegate backend 继续收到同一份 process-json invocation。
+  原因：补齐真实浏览器调试/观察闭环里的 console/error inspection 能力，同时保持 kernel 不 import 浏览器 runtime，只拥有 descriptor、gateway/event/audit、visibility、approval、quota 和 dispatch。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（37 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`; `bun run smoke:browser-use:live`（ok true，覆盖 console-expression）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1097 pass, 0 fail）；待最终 `git diff --check`。
+  风险：`console.expression` 可执行页面 JavaScript，仍只在 opt-in `browser.use` 高权限面暴露；默认 manifest 暴露策略、高权限 ASK/plan/yolo、动态预算和子进程 JSON 边界不变。

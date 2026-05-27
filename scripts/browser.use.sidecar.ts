@@ -17,6 +17,7 @@ type BrowserUseAction =
     | "back"
     | "press"
     | "get_images"
+    | "console"
     | "wait";
 
 interface SidecarRequest {
@@ -57,6 +58,7 @@ const ACTIONS = new Set<BrowserUseAction>([
     "back",
     "press",
     "get_images",
+    "console",
     "wait",
 ]);
 const READ_ACTIONS = new Set<BrowserUseAction>(["snapshot", "screenshot", "get_images", "wait"]);
@@ -263,6 +265,14 @@ class BrowserUseSidecar {
                 return {
                     response: await client.sendToPage("Runtime.evaluate", {
                         expression: getImagesExpression(boundedInt(invocation.input.maxImages, 1, 1000) ?? 200),
+                        awaitPromise: true,
+                        returnByValue: true,
+                    }),
+                };
+            case "console":
+                return {
+                    response: await client.sendToPage("Runtime.evaluate", {
+                        expression: consoleExpression(readString(invocation.input.expression), invocation.input.clear === true),
                         awaitPromise: true,
                         returnByValue: true,
                     }),
@@ -515,6 +525,14 @@ async function validateAction(action: BrowserUseAction, input: JsonObject): Prom
     if (action === "get_images" && input.maxImages !== undefined) {
         boundedInt(input.maxImages, 1, 1000);
     }
+    if (action === "console") {
+        if (input.clear !== undefined && typeof input.clear !== "boolean") {
+            throw new BrowserUseError("failed", "input.clear must be a boolean");
+        }
+        if (input.expression !== undefined) {
+            requiredString(input.expression, "input.expression");
+        }
+    }
 }
 
 function waitForOpen(ws: WebSocket): Promise<void> {
@@ -706,6 +724,66 @@ function getImagesExpression(maxImages: number): string {
             .filter((img) => img.src && !img.src.startsWith("data:"))
             .slice(0, ${maxImages});
         return { ok: true, count: images.length, images };
+    })()`;
+}
+
+function consoleExpression(expression: string | undefined, clear: boolean): string {
+    const source = expression === undefined ? "undefined" : JSON.stringify(expression);
+    return `(() => {
+        const key = "__flyflorConsoleBuffer";
+        const serialize = (value) => {
+            if (value instanceof Error) {
+                return { type: "error", name: value.name, message: value.message, stack: value.stack || "" };
+            }
+            if (value === undefined) return { type: "undefined" };
+            const type = typeof value;
+            if (value === null || type === "string" || type === "number" || type === "boolean") {
+                return { type, value };
+            }
+            try {
+                return { type, value: JSON.parse(JSON.stringify(value)) };
+            } catch {
+                return { type, value: String(value) };
+            }
+        };
+        const format = (args) => args.map((arg) => {
+            const serialized = serialize(arg);
+            if ("value" in serialized && typeof serialized.value === "string") return serialized.value;
+            if ("message" in serialized) return serialized.message;
+            return JSON.stringify(serialized.value ?? serialized.type);
+        }).join(" ");
+        const target = window;
+        if (!target[key]) {
+            const messages = [];
+            const original = {};
+            for (const level of ["log", "info", "warn", "error", "debug"]) {
+                original[level] = console[level]?.bind(console);
+                console[level] = (...args) => {
+                    messages.push({ level, text: format(args), args: args.map(serialize), timestamp: Date.now() });
+                    original[level]?.(...args);
+                };
+            }
+            window.addEventListener("error", (event) => {
+                messages.push({ level: "error", text: event.message || "window.error", args: [serialize(event.error || event.message)], timestamp: Date.now() });
+            });
+            window.addEventListener("unhandledrejection", (event) => {
+                messages.push({ level: "error", text: "Unhandled promise rejection", args: [serialize(event.reason)], timestamp: Date.now() });
+            });
+            target[key] = { messages, original };
+        }
+        const state = target[key];
+        const expressionSource = ${source};
+        let evaluation;
+        if (expressionSource !== undefined) {
+            try {
+                evaluation = { ok: true, result: serialize((0, eval)(expressionSource)) };
+            } catch (err) {
+                evaluation = { ok: false, error: serialize(err) };
+            }
+        }
+        const messages = state.messages.slice();
+        if (${clear ? "true" : "false"}) state.messages.length = 0;
+        return { ok: true, count: messages.length, messages, evaluation, cleared: ${clear ? "true" : "false"} };
     })()`;
 }
 
