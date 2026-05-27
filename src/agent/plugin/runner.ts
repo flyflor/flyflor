@@ -376,7 +376,7 @@ function defaultSpawn(input: {
     const child = Bun.spawn({
         cmd: input.cmd,
         cwd: input.cwd,
-        env: input.env,
+        env: processLookupEnv(input.env),
         stdin: "pipe",
         stdout: "pipe",
         stderr: "pipe",
@@ -397,4 +397,19 @@ function defaultSpawn(input: {
             child.kill(signal as never);
         },
     };
+}
+
+function processLookupEnv(env: Record<string, string>): Record<string, string> {
+    const next = { ...env };
+    if (next.PATH === undefined && typeof Bun.env.PATH === "string") {
+        next.PATH = Bun.env.PATH;
+    }
+    if (process.platform === "win32") {
+        for (const key of ["Path", "PATHEXT", "SystemRoot", "WINDIR"] as const) {
+            if (next[key] === undefined && typeof Bun.env[key] === "string") {
+                next[key] = Bun.env[key];
+            }
+        }
+    }
+    return next;
 }

@@ -1004,3 +1004,10 @@ Kernel V2 acceptance focus：
 - [x] `computer.use` CUA backend payload 增加 snake_case 归一化字段：capture mode/max elements、drag source/target、button/modifiers、seconds、raise window 等。
 - [x] 新增 `docs/external/computer.use.md` 与 `docs/external/computer.use.zh.cn.md`，不改写 active docs index。
 - [x] 复跑 computer/browser focused tests、external registry/socket tests、docs/check/diff 门禁。
+
+## 2026-05-27 Browser/Computer Use Opt-In 运行时闭环
+
+- [x] 新增显式 opt-in runtime 测试，覆盖 `browser.use` / `computer.use` 从 external manifest、Tool Plan、本地 computer-capable surface 到 `RuntimeMcpToolExecutor` process-json 执行的闭环。
+- [x] 修复 `PluginRunner` 执行 PATH 命令时缺少最小查找环境的问题；只透传 PATH/PATHEXT/SystemRoot/WINDIR，不继承全量环境变量。
+- [x] 新增 `docs/external/use.runtime.closure.md` 与 `docs/external/use.runtime.closure.zh.cn.md`，记录默认不暴露、显式启用、运行时闭环和安全边界。
+- [x] 复跑 focused tests、`bun run docs:check`、`bun run check`、真实闭环 smoke、全量测试与 `git diff --check`。

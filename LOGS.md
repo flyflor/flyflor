@@ -1095,3 +1095,19 @@
   原因：确认高层 computer-use schema 扩展仍保持子进程外挂、默认不暴露控制面，并且不影响 ASK/plan/yolo 预算边界。
   验证：`bun test tests/computer.use.sidecar.test.ts tests/browser.use.sidecar.test.ts tests/browser.cdp.sidecar.test.ts tests/external.tools.test.ts tests/gateway.ws.test.ts tests/runtime.mcp.tool.plan.test.ts --timeout 30000`（103 pass, 0 fail）；`bun run docs:check`; `bun run check`; `git diff --check`。
   风险：真实 CUA/desktop delegate 仍由用户显式安装配置；本轮只补 schema/payload/validation，不把 `computer.use` 加入默认真实工具面。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-computer-use-opt-in-runtime-closure
+  摘要：新增 `tests/external.use.runtime.test.ts`，用显式 external manifest 启用 `browser.use` / `computer.use`，验证 `loadExternalTools`、Tool Plan、本地 computer-capable surface、`RuntimeMcpToolExecutor`、process-json sidecar 和 delegate response 全链路连通；新增 `docs/external/use.runtime.closure.md` 与中文镜像。
+  原因：此前只证明默认不暴露和 sidecar 直跑，缺少“显式启用后内核执行器真的能跑 sidecar”的闭环证据。
+  验证：`bun test tests/external.use.runtime.test.ts --timeout 30000`; focused 工具层套件；`bun run docs:check`; `bun run check`; `bun run provider:ready -- --require-ready`; `bun run smoke:live:closure`; `bun run test`。
+  风险：测试使用 `scripts/mock.sidecar.ts` 作为确定性 delegate，不执行真实浏览器/桌面控制；真实高权限 delegate 仍需用户显式安装与授权。
+
+- 状态：完成
+  执行者：main-codex
+  范围：plugin-runner-path-env
+  摘要：`src/agent/plugin/runner.ts` 在默认 spawn 时补充最小命令查找环境：PATH；Windows 下补充 Path、PATHEXT、SystemRoot、WINDIR。
+  原因：external descriptor 稳定性检查允许 PATH 命令，但 process-json 执行阶段给子进程传空 env，导致 `bun` 这类 PATH 命令在真实执行时失败。
+  验证：`bun test tests/external.use.runtime.test.ts --timeout 30000`; focused 工具层套件；`bun run docs:check`; `bun run check`; `bun run provider:ready -- --require-ready`; `bun run smoke:live:closure`; `bun run test`。
+  风险：该修复不继承全量环境变量，只补命令查找所需最小环境，避免把密钥扩散到 sidecar。
