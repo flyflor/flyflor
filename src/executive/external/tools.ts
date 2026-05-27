@@ -597,7 +597,9 @@ function computerTool(
 function computerUseTool(): ExternalToolSpec {
     const coordinateSchema = {
         type: "array",
-        items: { type: "number" },
+        items: { type: "integer" },
+        minItems: 2,
+        maxItems: 2,
     };
     return {
         category: ToolCategory.Computer,
@@ -637,18 +639,18 @@ function computerUseTool(): ExternalToolSpec {
                 captureAfter: { type: "boolean" },
                 coordinate: coordinateSchema,
                 direction: { type: "string", enum: ["up", "down", "left", "right"] },
-                element: { type: "number" },
+                element: { type: "integer", minimum: 1 },
                 fromCoordinate: coordinateSchema,
-                fromElement: { type: "number" },
+                fromElement: { type: "integer", minimum: 1 },
                 keys: { type: "string" },
-                maxElements: { type: "number" },
+                maxElements: { type: "integer", minimum: 1, maximum: 1000 },
                 mode: { type: "string", enum: ["som", "vision", "ax"] },
                 modifiers: { type: "array", items: { type: "string", enum: ["cmd", "shift", "option", "alt", "ctrl", "fn"] } },
                 raiseWindow: { type: "boolean" },
                 seconds: { type: "number" },
                 text: { type: "string" },
                 toCoordinate: coordinateSchema,
-                toElement: { type: "number" },
+                toElement: { type: "integer", minimum: 1 },
                 value: { type: "string" },
             },
         },

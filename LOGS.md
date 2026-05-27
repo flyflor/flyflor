@@ -1327,3 +1327,27 @@
   原因：确保追加 TODO/LOGS 后仍无空白错误。
   验证：`git diff --check`。
   风险：无代码风险，仅验证记录追加。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：computer-use-target-integer-schema
+  摘要：准备对齐 Hermes computer-use target schema：模型可见 descriptor 与 sidecar runtime 都应把 element、drag target、coordinate items 作为整数目标处理。
+  原因：桌面控制目标小数没有可执行语义；若 descriptor 暴露为 number 或 sidecar 透传小数，会把工具闭环错误推迟到外部 delegate，降低 ASK/tool loop 可观察性。
+  验证：待跑 focused computer-use/external descriptor tests、computer live、check/docs、真实闭环与 diff。
+  风险：只收紧 `computer.use` target 字段 schema/validation；不改变默认 manifest 暴露面、ASK、plan、yolo 或动态预算逻辑。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-target-integer-schema-verification
+  摘要：完成 `computer.use` target schema/runtime parity；descriptor 将 `element/fromElement/toElement/maxElements` 和坐标数组 items 暴露为 integer，sidecar 在 delegate spawn 前拒绝小数 element 与小数 coordinate item。
+  原因：对齐 Hermes computer-use 的目标字段语义，把不可执行桌面目标提前转成结构化工具失败，保持外部工具血管可观察。
+  验证：`bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（30 pass, 0 fail）；`bun run smoke:computer-use:live`（ok true, skipped true, reason cua-command-not-found）；`bun run check`; `bun run docs:check`; `bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1075 pass, 0 fail）；待最终 `git diff --check`。
+  风险：只收紧 `computer.use` target 字段 schema/validation 并新增追加文档；不改变默认 manifest 暴露面、ASK、plan、yolo 或动态预算逻辑。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-target-integer-schema-final-diff-check
+  摘要：提交前完成最终 whitespace diff gate；未跟踪 `.github/` 与 `.workmux.yaml` 不属于本轮工具层改动，未纳入提交。
+  原因：确保追加 TODO/LOGS 后仍无空白错误，并避免混入无 owner 的运行态/工作流文件。
+  验证：`git diff --check`。
+  风险：无代码风险，仅验证记录追加。

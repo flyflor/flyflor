@@ -218,18 +218,21 @@ function cuaToolFor(action: ComputerUseAction): string {
 
 function cuaPayload(invocation: ComputerUseInvocation): JsonObject {
     const input = invocation.input;
-    const coordinateTarget = coordinate(input.coordinate);
-    const fromCoordinate = coordinate(input.fromCoordinate) ?? coordinate(input.from_coordinate);
-    const toCoordinate = coordinate(input.toCoordinate) ?? coordinate(input.to_coordinate);
+    const coordinateTarget = coordinate(input.coordinate, "input.coordinate");
+    const fromCoordinate = coordinate(input.fromCoordinate, "input.fromCoordinate") ??
+        coordinate(input.from_coordinate, "input.from_coordinate");
+    const toCoordinate = coordinate(input.toCoordinate, "input.toCoordinate") ??
+        coordinate(input.to_coordinate, "input.to_coordinate");
     const payload: JsonObject = {
         action: invocation.action,
         app: readString(input.app),
         button: readButton(input.button),
         capture_after: input.captureAfter === true,
         click_count: invocation.action === "double_click" ? 2 : 1,
-        element: numberInput(input.element),
-        element_index: numberInput(input.element),
-        from_element: numberInput(input.fromElement) ?? numberInput(input.from_element),
+        element: positiveIntegerInput(input.element, "input.element"),
+        element_index: positiveIntegerInput(input.element, "input.element"),
+        from_element: positiveIntegerInput(input.fromElement, "input.fromElement") ??
+            positiveIntegerInput(input.from_element, "input.from_element"),
         from_x: fromCoordinate?.[0],
         from_y: fromCoordinate?.[1],
         max_elements: boundedInt(input.maxElements ?? input.max_elements, 1, 1000),
@@ -238,7 +241,8 @@ function cuaPayload(invocation: ComputerUseInvocation): JsonObject {
         raise_window: input.raiseWindow === true || input.raise_window === true,
         seconds: boundedNumber(input.seconds, 0, 30),
         text: readString(input.text),
-        to_element: numberInput(input.toElement) ?? numberInput(input.to_element),
+        to_element: positiveIntegerInput(input.toElement, "input.toElement") ??
+            positiveIntegerInput(input.to_element, "input.to_element"),
         to_x: toCoordinate?.[0],
         to_y: toCoordinate?.[1],
         keys: readString(input.keys),
@@ -368,13 +372,20 @@ function requiresPoint(action: ComputerUseAction): boolean {
 }
 
 function hasPointTarget(input: JsonObject): boolean {
-    return input.element !== undefined || coordinate(input.coordinate) !== undefined;
+    return positiveIntegerInput(input.element, "input.element") !== undefined ||
+        coordinate(input.coordinate, "input.coordinate") !== undefined;
 }
 
 function hasDragTarget(input: JsonObject): boolean {
     return (
-        ((input.fromElement !== undefined || input.from_element !== undefined) && (input.toElement !== undefined || input.to_element !== undefined)) ||
-        ((coordinate(input.fromCoordinate) ?? coordinate(input.from_coordinate)) !== undefined && (coordinate(input.toCoordinate) ?? coordinate(input.to_coordinate)) !== undefined)
+        ((positiveIntegerInput(input.fromElement, "input.fromElement") ??
+            positiveIntegerInput(input.from_element, "input.from_element")) !== undefined &&
+            (positiveIntegerInput(input.toElement, "input.toElement") ??
+                positiveIntegerInput(input.to_element, "input.to_element")) !== undefined) ||
+        ((coordinate(input.fromCoordinate, "input.fromCoordinate") ??
+            coordinate(input.from_coordinate, "input.from_coordinate")) !== undefined &&
+            (coordinate(input.toCoordinate, "input.toCoordinate") ??
+                coordinate(input.to_coordinate, "input.to_coordinate")) !== undefined)
     );
 }
 
@@ -550,11 +561,12 @@ function readScrollDirection(value: unknown, required = false): "up" | "down" | 
     throw new ComputerUseError("failed", "computer.use direction must be up, down, left, or right");
 }
 
-function coordinate(value: unknown): [number, number] | undefined {
-    if (!Array.isArray(value) || value.length !== 2) return undefined;
-    const x = numberInput(value[0]);
-    const y = numberInput(value[1]);
-    return x === undefined || y === undefined ? undefined : [x, y];
+function coordinate(value: unknown, path: string): [number, number] | undefined {
+    if (value === undefined) return undefined;
+    if (!Array.isArray(value) || value.length !== 2) {
+        throw new ComputerUseError("failed", `${path} must be a two-item integer coordinate`);
+    }
+    return [integerInput(value[0], `${path}[0]`), integerInput(value[1], `${path}[1]`)];
 }
 
 function numberInput(value: unknown): number | undefined {
@@ -575,6 +587,22 @@ function boundedInt(value: unknown, min: number, max: number): number | undefine
     if (number === undefined) return undefined;
     if (!Number.isInteger(number)) {
         throw new ComputerUseError("failed", "integer field must be an integer");
+    }
+    return number;
+}
+
+function integerInput(value: unknown, path: string): number {
+    if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value)) {
+        throw new ComputerUseError("failed", `${path} must be an integer`);
+    }
+    return value;
+}
+
+function positiveIntegerInput(value: unknown, path: string): number | undefined {
+    if (value === undefined) return undefined;
+    const number = integerInput(value, path);
+    if (number < 1) {
+        throw new ComputerUseError("failed", `${path} must be >= 1`);
     }
     return number;
 }

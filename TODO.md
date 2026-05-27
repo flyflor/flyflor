@@ -1082,3 +1082,9 @@ Kernel V2 acceptance focus：
 - [x] 真实 `smoke:live:closure` 在 citizen permission resume 后暴露 `<agent_tool_calls>` 非严格 JSON parse failure。
 - [x] 收紧 `mcp.context` 中英文提示词，明确 tool call block 内只能使用严格 JSON，并优先使用 `input` object 形态。
 - [x] 复跑 prompt lint、docs/check、真实闭环与全量门禁。
+
+## 2026-05-27 Computer Use Target Integer Schema
+
+- [x] 对齐 Hermes computer-use target schema：`element/fromElement/toElement`、`maxElements`、坐标数组 items 在模型可见 descriptor 中使用 integer 语义。
+- [x] sidecar 在 delegate spawn 前拒绝小数 element / drag target / coordinate item，避免不可执行目标进入外部后端。
+- [x] 新增 focused 回归与追加文档，复跑 computer-use/external descriptor tests、live smoke、check、docs、真实闭环与 `git diff --check`。

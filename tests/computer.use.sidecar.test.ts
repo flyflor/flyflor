@@ -66,6 +66,30 @@ describe("high-level computer.use process-json sidecar", () => {
         expect(String(response.body.error)).toContain("integer field must be an integer");
     });
 
+    test("rejects fractional element targets before spawning a delegate", async () => {
+        const response = await invokeSidecar({
+            tool: "computer.use",
+            input: { action: "click", element: 2.5 },
+            config: { delegateCommand: "./missing-computer-use-delegate" },
+        }, { expectExit: 1 });
+
+        expect(response.body.ok).toBe(false);
+        expect(response.body.code).toBe("failed");
+        expect(String(response.body.error)).toContain("input.element must be an integer");
+    });
+
+    test("rejects fractional coordinate targets before spawning a delegate", async () => {
+        const response = await invokeSidecar({
+            tool: "computer.use",
+            input: { action: "click", coordinate: [10, 20.5] },
+            config: { delegateCommand: "./missing-computer-use-delegate" },
+        }, { expectExit: 1 });
+
+        expect(response.body.ok).toBe(false);
+        expect(response.body.code).toBe("failed");
+        expect(String(response.body.error)).toContain("input.coordinate[1] must be an integer");
+    });
+
     test("blocks dangerous typed shell input without invoking a delegate", async () => {
         const response = await invokeSidecar({
             tool: "computer.use",
