@@ -144,14 +144,15 @@ export class ExternalToolStabilityComponent {
                     state: "outside-root-denied",
                 };
             }
+            const resolvedCandidate = await this.findExistingExecutable(resolved);
             return {
                 base: cwd,
                 command,
                 mode: "relative",
                 portable: true,
-                resolved,
+                resolved: resolvedCandidate ?? resolved,
                 rootSafe: true,
-                state: (await this.exists(resolved)) ? "resolved" : "unresolved",
+                state: resolvedCandidate ? "resolved" : "unresolved",
             };
         }
         const resolved = await this.findOnPath(command);
@@ -236,6 +237,14 @@ export class ExternalToolStabilityComponent {
     private async findOnPath(command: string): Promise<string | undefined> {
         for (const dir of this.pathEntries()) {
             const candidate = join(dir, command);
+            const resolved = await this.findExistingExecutable(candidate);
+            if (resolved) return resolved;
+        }
+        return undefined;
+    }
+
+    private async findExistingExecutable(path: string): Promise<string | undefined> {
+        for (const candidate of this.pathWithExecutableExtensions(path)) {
             if (await this.exists(candidate)) return candidate;
         }
         return undefined;
@@ -246,6 +255,30 @@ export class ExternalToolStabilityComponent {
             .split(delimiter)
             .map((entry) => entry.trim())
             .filter((entry) => entry.length > 0);
+    }
+
+    private pathWithExecutableExtensions(path: string): readonly string[] {
+        const extensions = this.executableExtensions();
+        if (extensions.length === 0 || extensions.some((extension) => path.toLowerCase().endsWith(extension.toLowerCase()))) {
+            return [path];
+        }
+        return [path, ...extensions.map((extension) => `${path}${extension}`)];
+    }
+
+    private executableExtensions(): readonly string[] {
+        const raw = process.env.PATHEXT;
+        if (!raw && process.platform !== "win32") {
+            return [];
+        }
+        const entries = raw?.split(/[;:]/u) ?? [".COM", ".EXE", ".BAT", ".CMD"];
+        const normalized = entries
+            .map((entry) => entry.trim())
+            .filter((entry) => entry.length > 0)
+            .flatMap((entry) => {
+                const extension = entry.startsWith(".") ? entry : `.${entry}`;
+                return [extension, extension.toLowerCase()];
+            });
+        return [...new Set(normalized)];
     }
 
     private async exists(path: string): Promise<boolean> {

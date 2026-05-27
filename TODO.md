@@ -1112,3 +1112,9 @@ Kernel V2 acceptance focus：
 - [x] 在 `external.tools.jsonc` normalization 层同步限制 `timeoutMs` 与 `maxOutputBytes`，避免坏 manifest 先进入模型可见 catalog。
 - [x] 保持 sidecar 执行期资源边界不变；manifest 层失败必须发生在 command resolution / executor 暴露之前。
 - [x] 新增 focused 回归与追加文档，复跑 external-tools tests、check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 External Stability PATHEXT Portability
+
+- [x] 让 external manifest stability preflight 与 sidecar delegate execution 使用一致的 PATHEXT executable suffix 解析，避免 Windows package entry 被 catalog 层误判 unavailable。
+- [x] 新增 app-relative 与 PATH command focused 回归，确认 `.cmd` 等后缀在模型可见前可被解析。
+- [x] 归档旧路径可移植性文档后重写 active 文档，复跑 external-tools tests、docs/check、真实闭环与 `git diff --check`。

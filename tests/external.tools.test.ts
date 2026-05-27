@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import {
     Channel,
@@ -280,6 +280,85 @@ describe("external tool descriptor discovery", () => {
         } finally {
             await rm(root, { recursive: true, force: true });
         }
+    });
+
+    test("accepts app-relative sidecar commands with PATHEXT executable suffixes", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-v2-app-pathext-"));
+        const paths = testPaths(root);
+        await withEnv({ PATHEXT: ".cmd" }, async () => {
+            try {
+                await mkdir(join(root, "project", "tools", "packages", "mock", "bin"), { recursive: true });
+                await writeFile(join(root, "project", "tools", "packages", "mock", "bin", "flyflor.cmd"), "@echo off\n", "utf8");
+                await mkdir(paths.projectToolDir!, { recursive: true });
+                await writeFile(
+                    externalToolManifestPath(paths),
+                    JSON.stringify({
+                        schemaVersion: 2,
+                        sidecars: {
+                            "mock.xtools": {
+                                command: "./tools/packages/mock/bin/flyflor",
+                                args: ["xtool-sidecar", "mock.xtools"],
+                                cwd: "app",
+                                tools: ["web.search"],
+                            },
+                        },
+                    }),
+                );
+
+                const tools = await loadExternalTools(paths);
+                const webSearch = tools.find((entry) => entry.tool.descriptor.name === "web.search");
+                expect(webSearch?.available).toBe(true);
+                expect(webSearch?.stability.path).toMatchObject({
+                    mode: "relative",
+                    portable: true,
+                    rootSafe: true,
+                    state: "resolved",
+                });
+                expect(webSearch?.stability.path.resolved).toEndWith("flyflor.cmd");
+            } finally {
+                await rm(root, { recursive: true, force: true });
+            }
+        });
+    });
+
+    test("accepts PATH sidecar commands with PATHEXT executable suffixes", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-path-pathext-"));
+        const paths = testPaths(root);
+        const bin = join(root, "bin");
+        await withEnv({ PATH: `${bin}${delimiter}${process.env.PATH ?? ""}`, PATHEXT: ".cmd" }, async () => {
+            try {
+                await mkdir(bin, { recursive: true });
+                await writeFile(join(bin, "xtool.cmd"), "@echo off\n", "utf8");
+                await mkdir(paths.projectToolDir!, { recursive: true });
+                await writeFile(
+                    externalToolManifestPath(paths),
+                    JSON.stringify({
+                        schemaVersion: 2,
+                        sidecars: {
+                            "mock.xtools": {
+                                command: "xtool",
+                                args: ["xtool-sidecar", "mock.xtools"],
+                                cwd: "app",
+                                tools: ["web.search"],
+                            },
+                        },
+                    }),
+                );
+
+                const tools = await loadExternalTools(paths);
+                const webSearch = tools.find((entry) => entry.tool.descriptor.name === "web.search");
+                expect(webSearch?.available).toBe(true);
+                expect(webSearch?.stability.path).toMatchObject({
+                    mode: "path",
+                    portable: true,
+                    rootSafe: true,
+                    state: "resolved",
+                });
+                expect(webSearch?.stability.path.resolved).toEndWith("xtool.cmd");
+            } finally {
+                await rm(root, { recursive: true, force: true });
+            }
+        });
     });
 
     test("rejects absolute sidecar commands so registries stay portable", async () => {
@@ -822,6 +901,25 @@ function hiddenReasons(
     return plan.hiddenCapabilities
         .filter((entry) => entry.name === name)
         .flatMap((entry) => [...entry.reasons]);
+}
+
+async function withEnv(env: Record<string, string>, run: () => Promise<void>): Promise<void> {
+    const previous = new Map<string, string | undefined>();
+    for (const [key, value] of Object.entries(env)) {
+        previous.set(key, process.env[key]);
+        process.env[key] = value;
+    }
+    try {
+        await run();
+    } finally {
+        for (const [key, value] of previous) {
+            if (value === undefined) {
+                delete process.env[key];
+            } else {
+                process.env[key] = value;
+            }
+        }
+    }
 }
 
 function testPaths(root: string): FlyflorPaths {

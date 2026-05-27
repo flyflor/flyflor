@@ -1471,3 +1471,27 @@
   原因：防止坏 external sidecar manifest 先进入模型可见 catalog，再在执行期才暴露资源配置错误。
   验证：`bun test tests/external.tools.test.ts --timeout 30000`（19 pass, 0 fail）；`bun run check`; `bun run docs:check`; `bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；待全量测试与最终 `git diff --check`。
   风险：只影响 external manifest preflight；不改变 ASK、plan、yolo、动态预算、默认工具暴露或 kernel import 边界。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：external-stability-pathext-portability
+  摘要：准备让 external manifest stability preflight 也支持 PATHEXT executable suffix，和 `browser.use` / `computer.use` sidecar delegate resolution 对齐。
+  原因：执行期已支持 `.cmd` / `.exe` 等跨平台入口，但 catalog/stability 层仍只检查原始 command；Windows package entry 可能被误判 unavailable，导致外挂工具在模型可见前被隐藏。
+  验证：待跑 focused external-tools tests、docs/check、真实闭环与 diff。
+  风险：只影响 external sidecar availability preflight；不改变 ASK、plan、yolo、动态预算、默认工具暴露或 kernel import browser/desktop runtime 边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：external-stability-pathext-portability-verification
+  摘要：完成 external manifest stability preflight 的 PATHEXT executable suffix 支持；app-relative 与 PATH command 均可解析到 `.cmd` 等平台入口后再决定 catalog 可见性。
+  原因：让模型可见前的 availability 判断与 sidecar 执行期 command resolution 对齐，避免 Windows package entry 被误判 unavailable。
+  验证：`bun test tests/external.tools.test.ts --timeout 30000`（21 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`; `bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；待最终 `git diff --check`。
+  风险：只影响 external sidecar availability preflight；不改变 ASK、plan、yolo、动态预算、默认工具暴露或 kernel import browser/desktop runtime 边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：external-stability-pathext-portability-final-gates
+  摘要：完成全量测试 gate，确认 PATHEXT stability preflight 与文档归档不会破坏现有内核、ASK、TUI read-model 和工具闭环。
+  原因：本切片影响模型可见 catalog 前的 external sidecar availability 判断，需要覆盖全量工具/ASK/socket 回归。
+  验证：`bun run test`（1088 pass, 0 fail）；待最终 `git diff --check`。
+  风险：无新增运行态风险；未跟踪 `.github/` 与 `.workmux.yaml` 仍不属于本轮改动，未纳入提交。
