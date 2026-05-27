@@ -1142,3 +1142,9 @@ Kernel V2 acceptance focus：
 - [x] `computer.use` 模型可见 descriptor 暴露 Hermes 风格 snake_case target aliases：`capture_after`、`from_element`、`to_element`、`from_coordinate`、`to_coordinate`、`max_elements`、`raise_window`。
 - [x] sidecar 对 `capture_after` 的语义与 `captureAfter` 对齐，不能只在 descriptor 中展示但执行期忽略。
 - [x] 新增 focused descriptor/sidecar 回归与追加文档，复跑 external/computer-use tests、check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Browser Use Hermes Actions
+
+- [x] 为 `browser.use` 增加 Hermes 风格 `scroll` 和 `press` action，仍只通过 process-json sidecar/CDP/delegate 执行。
+- [x] 模型可见 descriptor 暴露 `direction`、`amount`、`key`/`keys`，并保持高权限 browser control opt-in。
+- [x] 新增 focused browser-use/external descriptor 回归与追加文档，复跑 browser-use tests、check/docs、真实闭环与 `git diff --check`。

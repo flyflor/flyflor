@@ -13,6 +13,8 @@ type BrowserUseAction =
     | "click"
     | "type"
     | "evaluate"
+    | "scroll"
+    | "press"
     | "wait";
 
 interface SidecarRequest {
@@ -49,6 +51,8 @@ const ACTIONS = new Set<BrowserUseAction>([
     "click",
     "type",
     "evaluate",
+    "scroll",
+    "press",
     "wait",
 ]);
 const READ_ACTIONS = new Set<BrowserUseAction>(["snapshot", "screenshot", "wait"]);
@@ -229,6 +233,26 @@ class BrowserUseSidecar {
                         returnByValue: true,
                     }),
                 };
+            case "scroll":
+                return {
+                    response: await client.sendToPage("Runtime.evaluate", {
+                        expression: scrollExpression(
+                            readScrollDirection(invocation.input.direction),
+                            boundedInt(invocation.input.amount, 1, 1000) ?? 3,
+                        ),
+                        awaitPromise: true,
+                        returnByValue: true,
+                    }),
+                };
+            case "press": {
+                const key = requiredString(invocation.input.key ?? invocation.input.keys, "input.key");
+                return {
+                    response: [
+                        await client.sendToPage("Input.dispatchKeyEvent", keyEvent("keyDown", key)),
+                        await client.sendToPage("Input.dispatchKeyEvent", keyEvent("keyUp", key)),
+                    ],
+                };
+            }
             case "wait": {
                 const ms = Math.min(Math.max(numberInput(invocation.input.ms) ?? secondsToMs(invocation.input.seconds) ?? 1000, 0), 30_000);
                 await Bun.sleep(ms);
@@ -446,6 +470,15 @@ async function validateAction(action: BrowserUseAction, input: JsonObject): Prom
     if (action === "evaluate") {
         requiredString(input.script, "input.script");
     }
+    if (action === "scroll") {
+        readScrollDirection(input.direction);
+        if (input.amount !== undefined) {
+            boundedInt(input.amount, 1, 1000);
+        }
+    }
+    if (action === "press") {
+        requiredString(input.key ?? input.keys, "input.key");
+    }
 }
 
 function waitForOpen(ws: WebSocket): Promise<void> {
@@ -591,6 +624,38 @@ function secondsToMs(value: unknown): number | undefined {
 
 function numberInput(value: unknown): number | undefined {
     return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function boundedInt(value: unknown, min: number, max: number): number | undefined {
+    const number = numberInput(value);
+    if (number === undefined) return undefined;
+    if (!Number.isInteger(number) || number < min || number > max) {
+        throw new BrowserUseError("failed", `integer field must be between ${min} and ${max}`);
+    }
+    return number;
+}
+
+function readScrollDirection(value: unknown): "up" | "down" | "left" | "right" {
+    const direction = requiredString(value, "input.direction");
+    if (direction === "up" || direction === "down" || direction === "left" || direction === "right") {
+        return direction;
+    }
+    throw new BrowserUseError("failed", "browser.use direction must be up, down, left, or right");
+}
+
+function scrollExpression(direction: "up" | "down" | "left" | "right", amount: number): string {
+    const pixels = amount * 120;
+    const dx = direction === "left" ? -pixels : direction === "right" ? pixels : 0;
+    const dy = direction === "up" ? -pixels : direction === "down" ? pixels : 0;
+    return `(() => { window.scrollBy(${JSON.stringify({ left: dx, top: dy, behavior: "instant" })}); return { ok: true, left: window.scrollX, top: window.scrollY }; })()`;
+}
+
+function keyEvent(type: "keyDown" | "keyUp", key: string): JsonObject {
+    return {
+        type,
+        key,
+        text: type === "keyDown" && key.length === 1 ? key : undefined,
+    };
 }
 
 function boundedPositiveInt(value: unknown, path: string, fallback: number, max: number): number {

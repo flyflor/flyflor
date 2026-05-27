@@ -1567,3 +1567,19 @@
   原因：真实模型参考 Hermes schema 时应看到可执行的字段名；执行期不能只支持 camelCase，也不能拒绝 Hermes 常见的 element-to-coordinate drag 组合。
   验证：`bun test tests/external.tools.test.ts tests/computer.use.sidecar.test.ts --timeout 30000`（37 pass, 0 fail）；`bun run docs:check`；`bun run check`；`bun run smoke:computer-use:live`（structured skip: cua-command-not-found）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1092 pass, 0 fail）；待最终 `git diff --check`。
   风险：只增加结构化 aliases 和校验兼容性；不新增默认可见工具，不改变 opt-in、ASK、plan、yolo、动态预算或子进程授权面。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-hermes-actions
+  摘要：准备为 `browser.use` 增加 Hermes 风格 `scroll` 与 `press` action，并在 descriptor 中暴露对应结构化字段。
+  原因：Hermes browser 工具包含页面滚动和按键动作；Flyflor 高层 `browser.use` 当前只能 click/type/evaluate/wait，真实浏览器交互闭环还缺两类基础动作。
+  验证：待跑 focused browser-use/external tests、check/docs、真实闭环与 diff。
+  风险：仅增加 opt-in `browser.use` sidecar action；默认 manifest 仍不暴露高层 browser control，不改变 ASK、plan、yolo、动态预算或 kernel import 边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-hermes-actions
+  摘要：`browser.use` 现在支持 Hermes 风格 `scroll` 与 `press` action；descriptor 暴露 `direction`、`amount`、`key`/`keys`，sidecar 通过 CDP 或 delegate process-json 执行。
+  原因：补齐真实浏览器交互闭环里的页面滚动与按键动作，同时保持 kernel 只拥有 descriptor/gateway/event/audit/visibility/approval/quota/dispatch，不引入浏览器 runtime。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（33 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1093 pass, 0 fail）；待最终 `git diff --check`。
+  风险：只影响 opt-in `browser.use` action surface；默认 manifest 暴露策略、高权限 ASK/plan/yolo、动态预算和子进程 JSON 边界不变。

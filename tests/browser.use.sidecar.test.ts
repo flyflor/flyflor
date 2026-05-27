@@ -115,6 +115,49 @@ describe("high-level browser.use process-json sidecar", () => {
         }
     });
 
+    test("drives Hermes-style scroll and press actions through the CDP backend", async () => {
+        const server = new MockCdpServer();
+        try {
+            const scroll = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "scroll", direction: "down", amount: 2 },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+            const press = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "press", key: "Enter" },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+
+            expect(scroll).toMatchObject({ ok: true, action: "scroll", backend: "cdp", readOnly: false });
+            expect(press).toMatchObject({ ok: true, action: "press", backend: "cdp", readOnly: false });
+            expect(server.commands.map((entry) => (entry as { method: string }).method)).toEqual([
+                "Runtime.evaluate",
+                "Input.dispatchKeyEvent",
+                "Input.dispatchKeyEvent",
+            ]);
+            expect(server.commands[0]).toEqual(
+                expect.objectContaining({
+                    params: expect.objectContaining({
+                        expression: expect.stringContaining('"top":240'),
+                    }),
+                }),
+            );
+            expect(server.commands[1]).toEqual(
+                expect.objectContaining({
+                    params: expect.objectContaining({ key: "Enter", type: "keyDown" }),
+                }),
+            );
+            expect(server.commands[2]).toEqual(
+                expect.objectContaining({
+                    params: expect.objectContaining({ key: "Enter", type: "keyUp" }),
+                }),
+            );
+        } finally {
+            server.stop();
+        }
+    });
+
     test("reports malformed CDP WebSocket frames as structured failures", async () => {
         const server = new MockCdpServer(() => "not-json");
         try {

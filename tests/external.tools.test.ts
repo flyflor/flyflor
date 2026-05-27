@@ -104,8 +104,11 @@ describe("external tool descriptor discovery", () => {
                 required: ["action"],
                 properties: {
                     action: {
-                        enum: expect.arrayContaining(["open", "snapshot", "click", "type"]),
+                        enum: expect.arrayContaining(["open", "snapshot", "click", "type", "scroll", "press"]),
                     },
+                    amount: { type: "integer", minimum: 1, maximum: 1000 },
+                    direction: { type: "string", enum: ["up", "down", "left", "right"] },
+                    key: { type: "string" },
                 },
             },
             tags: expect.arrayContaining(["browser-use", "approval:computer"]),
