@@ -1727,3 +1727,19 @@
   原因：减少真实模型发出最短 scroll 调用时的不必要工具失败，同时保持 delegate backend 原始 process-json input 与内核边界不变。
   验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（46 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true，覆盖真实 Chrome CDP browser.use 闭环）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1109 pass, 0 fail）；`git diff --check`。
   风险：只放宽 opt-in `browser.use` 的结构化 scroll 默认值；默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit 与 process-json 子进程边界不变。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-snake-case-observation-fields
+  摘要：准备让 `browser.use` 的观察预算字段接受 `capture_mode`、`max_elements`、`max_images` aliases，并在模型可见 descriptor 中显式暴露。
+  原因：`computer.use` 已对齐 Hermes 风格 snake_case 字段；真实模型也常用 snake_case 表达观察预算，当前 `browser.use` 会忽略这些字段并退回默认 snapshot/image/capture 行为。
+  验证：待跑 focused browser-use/external descriptor tests、check/docs、真实闭环与 diff。
+  风险：只增加结构化字段 aliases；不改变默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit 或 kernel import 边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-snake-case-observation-fields
+  摘要：`browser.use` descriptor 暴露 `capture_mode`、`max_elements`、`max_images`；CDP backend 在 snapshot/get_images/captureAfter 路径消费 snake_case aliases，delegate backend 继续接收原始 process-json input。
+  原因：降低真实模型用 snake_case 表达观察预算时的工具调用摩擦，并保持工具层外挂、process-json 与内核边界不变。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（47 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true，覆盖真实 Chrome CDP browser.use 闭环）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1110 pass, 0 fail）。
+  风险：只增加可见 schema aliases 与 CDP sidecar 字段读取；默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit、Memory/Scope/Crystal 主链不变。

@@ -1202,3 +1202,9 @@ Kernel V2 acceptance focus：
 - [x] `browser.use` 的 `scroll` 允许省略 `direction`，CDP backend 按 Hermes handler 语义默认 `down`。
 - [x] CDP backend 在省略 `amount` 时继续默认 `3`，非法 direction/amount 仍在 sidecar 校验层失败。
 - [x] 新增 focused browser-use 回归与追加文档，复跑 check/docs、真实 browser smoke、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Browser Use Snake Case Observation Fields
+
+- [x] `browser.use` descriptor 暴露 `capture_mode`、`max_elements`、`max_images` 观察预算 aliases。
+- [x] CDP backend 对 `capture_mode`、`max_elements`、`max_images` 的语义分别与 `captureMode`、`maxElements`、`maxImages` 对齐。
+- [x] 新增 focused browser-use/external descriptor 回归与追加文档，已复跑 check/docs、真实闭环与 `git diff --check`。

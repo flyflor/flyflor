@@ -553,6 +553,60 @@ console.log(JSON.stringify({
         }
     });
 
+    test("accepts snake_case observation budget aliases", async () => {
+        const server = new MockCdpServer((command) => ({
+            id: command.id,
+            result: command.method === "Page.captureScreenshot"
+                ? { data: "aGVsbG8=", format: "png" }
+                : {
+                    result: {
+                        type: "object",
+                        value: { ok: true, count: 1, images: [{ src: "https://example.test/a.png" }] },
+                    },
+                },
+        }));
+        try {
+            const snapshot = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "snapshot", max_elements: 9 },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+            const images = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "get_images", max_images: 5 },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+            const capture = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "click", target: "#continue", capture_after: true, capture_mode: "screenshot" },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+
+            expect(snapshot).toMatchObject({ ok: true, action: "snapshot", backend: "cdp", readOnly: true });
+            expect(images).toMatchObject({ ok: true, action: "get_images", backend: "cdp", readOnly: true });
+            expect(capture).toMatchObject({
+                ok: true,
+                action: "click",
+                backend: "cdp",
+                captureAfter: {
+                    action: "screenshot",
+                    backend: "cdp",
+                    readOnly: true,
+                },
+            });
+            expect((server.commands[0] as { params: { expression: string } }).params.expression).toContain(".slice(0, 9)");
+            expect((server.commands[1] as { params: { expression: string } }).params.expression).toContain(".slice(0, 5)");
+            expect(server.commands.map((entry) => (entry as { method: string }).method)).toEqual([
+                "Runtime.evaluate",
+                "Runtime.evaluate",
+                "Runtime.evaluate",
+                "Page.captureScreenshot",
+            ]);
+        } finally {
+            server.stop();
+        }
+    });
+
     test("runs the requested action through a delegate", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-browser-use-"));
         const delegate = join(root, "delegate.ts");

@@ -110,7 +110,7 @@ class BrowserUseSidecar {
         if (!captureAfterRequested(invocation.input) || READ_ACTIONS.has(invocation.action)) {
             return response;
         }
-        const captureAction = readString(invocation.input.captureMode) === "screenshot" ? "screenshot" : "snapshot";
+        const captureAction = readString(invocation.input.captureMode ?? invocation.input.capture_mode) === "screenshot" ? "screenshot" : "snapshot";
         const captureInput = captureAfterInput(invocation.input, captureAction);
         const capture = await this.invokeBackend(backend, {
             ...invocation,
@@ -192,7 +192,7 @@ class BrowserUseSidecar {
                     ? { snapshot: await client.sendToPage("Accessibility.getFullAXTree", {}), full: true }
                     : {
                         snapshot: await client.sendToPage("Runtime.evaluate", {
-                            expression: snapshotExpression(boundedInt(invocation.input.maxElements, 1, 1000) ?? 200),
+                            expression: snapshotExpression(boundedInt(invocation.input.maxElements ?? invocation.input.max_elements, 1, 1000) ?? 200),
                             awaitPromise: true,
                             returnByValue: true,
                         }),
@@ -273,7 +273,7 @@ class BrowserUseSidecar {
             case "get_images":
                 return {
                     response: await client.sendToPage("Runtime.evaluate", {
-                        expression: getImagesExpression(boundedInt(invocation.input.maxImages, 1, 1000) ?? 200),
+                        expression: getImagesExpression(boundedInt(invocation.input.maxImages ?? invocation.input.max_images, 1, 1000) ?? 200),
                         awaitPromise: true,
                         returnByValue: true,
                     }),
@@ -559,11 +559,14 @@ async function validateAction(action: BrowserUseAction, input: JsonObject): Prom
     if (input.captureMode !== undefined && readString(input.captureMode) !== "snapshot" && readString(input.captureMode) !== "screenshot") {
         throw new BrowserUseError("failed", "input.captureMode must be 'snapshot' or 'screenshot'");
     }
+    if (input.capture_mode !== undefined && readString(input.capture_mode) !== "snapshot" && readString(input.capture_mode) !== "screenshot") {
+        throw new BrowserUseError("failed", "input.capture_mode must be 'snapshot' or 'screenshot'");
+    }
     if (input.full !== undefined && typeof input.full !== "boolean") {
         throw new BrowserUseError("failed", "input.full must be a boolean");
     }
-    if (input.maxElements !== undefined) {
-        boundedInt(input.maxElements, 1, 1000);
+    if (input.maxElements !== undefined || input.max_elements !== undefined) {
+        boundedInt(input.maxElements ?? input.max_elements, 1, 1000);
     }
     if (action === "open" || action === "navigate") {
         await requiredUrl(input.url, "input.url");
@@ -589,8 +592,8 @@ async function validateAction(action: BrowserUseAction, input: JsonObject): Prom
     if (action === "press") {
         requiredString(input.key ?? input.keys, "input.key");
     }
-    if (action === "get_images" && input.maxImages !== undefined) {
-        boundedInt(input.maxImages, 1, 1000);
+    if (action === "get_images" && (input.maxImages !== undefined || input.max_images !== undefined)) {
+        boundedInt(input.maxImages ?? input.max_images, 1, 1000);
     }
     if (action === "snapshot") {
         // full/maxElements are validated above because mutating actions may
@@ -629,7 +632,7 @@ function captureAfterInput(input: JsonObject, action: BrowserUseAction): JsonObj
         Object.entries({
             action: "snapshot",
             full: typeof input.full === "boolean" ? input.full : undefined,
-            maxElements: boundedInt(input.maxElements, 1, 1000),
+            maxElements: boundedInt(input.maxElements ?? input.max_elements, 1, 1000),
         }).filter(([, value]) => value !== undefined),
     );
 }
