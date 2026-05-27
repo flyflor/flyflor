@@ -314,6 +314,33 @@ describe("high-level browser.use process-json sidecar", () => {
         }
     });
 
+    test("normalizes browser press key aliases for the CDP backend", async () => {
+        const server = new MockCdpServer();
+        try {
+            const enter = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "press", key: "return" },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+            const arrow = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "press", keys: "arrow-down" },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+
+            expect(enter).toMatchObject({ ok: true, action: "press", backend: "cdp", readOnly: false });
+            expect(arrow).toMatchObject({ ok: true, action: "press", backend: "cdp", readOnly: false });
+            expect(server.commands).toEqual([
+                expect.objectContaining({ method: "Input.dispatchKeyEvent", params: expect.objectContaining({ key: "Enter", type: "keyDown" }) }),
+                expect.objectContaining({ method: "Input.dispatchKeyEvent", params: expect.objectContaining({ key: "Enter", type: "keyUp" }) }),
+                expect.objectContaining({ method: "Input.dispatchKeyEvent", params: expect.objectContaining({ key: "ArrowDown", type: "keyDown" }) }),
+                expect.objectContaining({ method: "Input.dispatchKeyEvent", params: expect.objectContaining({ key: "ArrowDown", type: "keyUp" }) }),
+            ]);
+        } finally {
+            server.stop();
+        }
+    });
+
     test("rejects invalid browser scroll direction before invoking CDP", async () => {
         const response = await invokeSidecar({
             tool: "browser.use",

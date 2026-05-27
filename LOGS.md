@@ -1847,3 +1847,25 @@
   范围：computer-use-cua-key-hotkey
   摘要：最终 whitespace 检查通过。
   验证：`git diff --check`。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-press-key-aliases
+  摘要：准备让 `browser.use press` 的 CDP backend 对常见键名 alias 做 Hermes 风格归一化，例如 `enter/return`、`esc/escape`、`arrow-down` 等映射到 CDP 期望 key。
+  原因：Hermes browser_press 面向模型暴露的是浏览器键名语义，真实模型常用小写或短 alias；当前 Flyflor CDP backend 原样透传，可能导致 `Input.dispatchKeyEvent` 收到不可执行 key。
+  验证：待跑 focused browser-use tests、check/docs、真实闭环与 diff。
+  风险：只影响 opt-in `browser.use` CDP backend 的按键字段；delegate backend 保持原始 process-json input，默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit、Memory/Scope/Crystal 主链不变。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-press-key-aliases
+  摘要：`browser.use press` 的 CDP backend 现在会在 `Input.dispatchKeyEvent` 前归一化常见模型键名 alias：`enter/return`、`esc/escape`、`arrow-down/down`、`page-up/page-down`、`space`、`f1` 到 `f24` 等都会映射到 CDP 兼容 key。
+  原因：对齐 Hermes browser_press 面向模型的键名语义，减少真实模型用小写或短 alias 时产生的无意义浏览器按键失败。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（50 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true，覆盖真实 Chrome CDP browser.use 闭环）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 7）；`bun run test`（1115 pass, 0 fail）；待最终 `git diff --check`。
+  风险：只影响 opt-in `browser.use` CDP backend 的按键字段；delegate backend 保持原始 process-json input，默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit、Memory/Scope/Crystal 主链和 kernel import 边界不变。
+
+- 状态：补充验证
+  执行者：main-codex
+  范围：browser-use-press-key-aliases
+  摘要：最终 whitespace 检查通过。
+  验证：`git diff --check`。

@@ -265,7 +265,7 @@ class BrowserUseSidecar {
             case "back":
                 return { response: await client.goBack() };
             case "press": {
-                const key = requiredString(invocation.input.key ?? invocation.input.keys, "input.key");
+                const key = normalizeBrowserPressKey(requiredString(invocation.input.key ?? invocation.input.keys, "input.key"));
                 return {
                     response: [
                         await client.sendToPage("Input.dispatchKeyEvent", keyEvent("keyDown", key)),
@@ -830,6 +830,40 @@ function scrollExpression(direction: "up" | "down" | "left" | "right", amount: n
     const dx = direction === "left" ? -pixels : direction === "right" ? pixels : 0;
     const dy = direction === "up" ? -pixels : direction === "down" ? pixels : 0;
     return `(() => { window.scrollBy(${JSON.stringify({ left: dx, top: dy, behavior: "instant" })}); return { ok: true, left: window.scrollX, top: window.scrollY }; })()`;
+}
+
+function normalizeBrowserPressKey(value: string): string {
+    const raw = value.trim();
+    const compact = raw.toLowerCase().replace(/[\s_-]+/gu, "");
+    const aliases: Record<string, string> = {
+        arrowdown: "ArrowDown",
+        arrowleft: "ArrowLeft",
+        arrowright: "ArrowRight",
+        arrowup: "ArrowUp",
+        backspace: "Backspace",
+        del: "Delete",
+        delete: "Delete",
+        down: "ArrowDown",
+        end: "End",
+        enter: "Enter",
+        esc: "Escape",
+        escape: "Escape",
+        home: "Home",
+        left: "ArrowLeft",
+        pagedown: "PageDown",
+        pageup: "PageUp",
+        return: "Enter",
+        right: "ArrowRight",
+        space: " ",
+        spacebar: " ",
+        tab: "Tab",
+        up: "ArrowUp",
+    };
+    const functionKey = /^f([1-9]|1\d|2[0-4])$/u.exec(compact);
+    if (functionKey) {
+        return `F${functionKey[1]}`;
+    }
+    return aliases[compact] ?? raw;
 }
 
 function keyEvent(type: "keyDown" | "keyUp", key: string): JsonObject {
