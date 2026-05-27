@@ -142,6 +142,58 @@ describe("high-level browser.use process-json sidecar", () => {
         }
     });
 
+    test("builds a compact snapshot with Hermes-style refs and accepts ref targets", async () => {
+        const server = new MockCdpServer();
+        try {
+            const snapshot = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "snapshot", maxElements: 12 },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+            const click = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "click", ref: "@e1" },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+            const type = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "type", target: "@e2", text: "flyflor" },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+
+            expect(snapshot).toMatchObject({ ok: true, action: "snapshot", backend: "cdp", readOnly: true, result: { full: false } });
+            expect(click).toMatchObject({ ok: true, action: "click", backend: "cdp", readOnly: false });
+            expect(type).toMatchObject({ ok: true, action: "type", backend: "cdp", readOnly: false });
+            expect(server.commands.map((entry) => (entry as { method: string }).method)).toEqual([
+                "Runtime.evaluate",
+                "Runtime.evaluate",
+                "Runtime.evaluate",
+            ]);
+            expect((server.commands[0] as { params: { expression: string } }).params.expression).toContain("data-flyflor-ref");
+            expect((server.commands[0] as { params: { expression: string } }).params.expression).toContain(".slice(0, 12)");
+            expect((server.commands[1] as { params: { expression: string } }).params.expression).toContain('const selector = "[data-flyflor-ref=\\"e1\\"]"');
+            expect((server.commands[2] as { params: { expression: string } }).params.expression).toContain('const selector = "[data-flyflor-ref=\\"e2\\"]"');
+        } finally {
+            server.stop();
+        }
+    });
+
+    test("keeps full browser snapshots on the Accessibility tree path", async () => {
+        const server = new MockCdpServer();
+        try {
+            const response = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "snapshot", full: true },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+
+            expect(response).toMatchObject({ ok: true, action: "snapshot", backend: "cdp", readOnly: true, result: { full: true } });
+            expect(server.commands.map((entry) => (entry as { method: string }).method)).toEqual(["Accessibility.getFullAXTree"]);
+        } finally {
+            server.stop();
+        }
+    });
+
     test("drives Hermes-style scroll and press actions through the CDP backend", async () => {
         const server = new MockCdpServer();
         try {
@@ -428,7 +480,7 @@ console.log(JSON.stringify({
             });
             expect(server.commands.map((entry) => (entry as { method: string }).method)).toEqual([
                 "Runtime.evaluate",
-                "Accessibility.getFullAXTree",
+                "Runtime.evaluate",
             ]);
         } finally {
             server.stop();

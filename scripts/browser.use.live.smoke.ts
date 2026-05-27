@@ -62,23 +62,28 @@ class BrowserUseLiveSmoke {
             this.expectOk(wait, "wait");
             checks.push("wait");
 
+            const snapshot = await this.invoker.call({ tool: "browser.use", config, input: { action: "snapshot", maxElements: 10 } });
+            this.expectOk(snapshot, "snapshot");
+            this.expectSnapshotRefs(snapshot);
+            checks.push("snapshot-refs");
+
             const type = await this.invoker.call({
                 tool: "browser.use",
                 config,
-                input: { action: "type", selector: "#name", text: TYPE_TEXT, captureAfter: true },
+                input: { action: "type", ref: "@e1", text: TYPE_TEXT, captureAfter: true },
             });
             this.expectOk(type, "type");
             this.expectCaptureAfter(type, "type");
-            checks.push("type-selector-captureAfter");
+            checks.push("type-ref-captureAfter");
 
             const click = await this.invoker.call({
                 tool: "browser.use",
                 config,
-                input: { action: "click", target: "#save", captureAfter: true },
+                input: { action: "click", target: "@e2", captureAfter: true },
             });
             this.expectOk(click, "click");
             this.expectCaptureAfter(click, "click");
-            checks.push("click-captureAfter");
+            checks.push("click-ref-captureAfter");
 
             const evaluate = await this.invoker.call({
                 tool: "browser.use",
@@ -197,6 +202,19 @@ class BrowserUseLiveSmoke {
         const images = payload?.images;
         if (payload?.ok !== true || payload.count !== 1 || !Array.isArray(images)) {
             throw new Error(`get_images returned unexpected payload: ${JSON.stringify(value).slice(0, 1000)}`);
+        }
+    }
+
+    private expectSnapshotRefs(value: JsonObject): void {
+        const response = ((value.result as JsonObject | undefined)?.snapshot as JsonObject | undefined)?.result as JsonObject | undefined;
+        const payload = response?.value as JsonObject | undefined;
+        const elements = payload?.elements;
+        if (payload?.ok !== true || !Array.isArray(elements) || elements.length < 2) {
+            throw new Error(`snapshot returned unexpected ref payload: ${JSON.stringify(value).slice(0, 1000)}`);
+        }
+        const refs = elements.map((entry) => (entry as JsonObject).ref);
+        if (refs[0] !== "@e1" || refs[1] !== "@e2") {
+            throw new Error(`snapshot refs were not stable: ${JSON.stringify(refs)}`);
         }
     }
 

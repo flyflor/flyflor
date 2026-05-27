@@ -1178,3 +1178,9 @@ Kernel V2 acceptance focus：
 - [x] `browser.use` 的 `click` / `type` 支持 `selector` 作为 `target` 的 CSS selector alias，减少真实模型字段口径导致的工具失败。
 - [x] descriptor 暴露 `selector`，但默认 manifest、高权限 ASK/approval、plan、yolo、动态预算与子进程边界不变。
 - [x] 新增 focused browser-use/external descriptor/live smoke 回归与追加文档，复跑 check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Browser Use Hermes Refs
+
+- [x] `browser.use` CDP `snapshot` 默认返回紧凑互动元素 refs，并在页面 DOM 上标记 `data-flyflor-ref`。
+- [x] `browser.use` 的 `click` / `type` 支持 `ref` 与 `@eN` target，同时保留 `full: true` 的 Accessibility full-tree snapshot。
+- [x] 新增 focused browser-use/external descriptor/live smoke 回归与追加文档，复跑 check/docs、真实闭环、全量测试与 `git diff --check`。

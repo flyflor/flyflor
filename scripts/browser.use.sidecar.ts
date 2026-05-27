@@ -190,7 +190,16 @@ class BrowserUseSidecar {
             case "navigate":
                 return { response: await client.sendToPage("Page.navigate", { url: await requiredUrl(invocation.input.url, "input.url") }) };
             case "snapshot":
-                return { snapshot: await client.sendToPage("Accessibility.getFullAXTree", {}) };
+                return invocation.input.full === true
+                    ? { snapshot: await client.sendToPage("Accessibility.getFullAXTree", {}), full: true }
+                    : {
+                        snapshot: await client.sendToPage("Runtime.evaluate", {
+                            expression: snapshotExpression(boundedInt(invocation.input.maxElements, 1, 1000) ?? 200),
+                            awaitPromise: true,
+                            returnByValue: true,
+                        }),
+                        full: false,
+                    };
             case "screenshot": {
                 const result = asObject(
                     await client.sendToPage("Page.captureScreenshot", {
@@ -574,6 +583,14 @@ async function validateAction(action: BrowserUseAction, input: JsonObject): Prom
     if (action === "get_images" && input.maxImages !== undefined) {
         boundedInt(input.maxImages, 1, 1000);
     }
+    if (action === "snapshot") {
+        if (input.full !== undefined && typeof input.full !== "boolean") {
+            throw new BrowserUseError("failed", "input.full must be a boolean");
+        }
+        if (input.maxElements !== undefined) {
+            boundedInt(input.maxElements, 1, 1000);
+        }
+    }
     if (action === "vision") {
         requiredString(input.question, "input.question");
         if (input.annotate !== undefined && typeof input.annotate !== "boolean") {
@@ -782,6 +799,71 @@ function getImagesExpression(maxImages: number): string {
     })()`;
 }
 
+function snapshotExpression(maxElements: number): string {
+    return `(() => {
+        const textOf = (element) => (element.innerText || element.textContent || element.getAttribute("aria-label") || element.getAttribute("title") || "").replace(/\\s+/g, " ").trim().slice(0, 160);
+        const roleOf = (element) => element.getAttribute("role") || "";
+        const visible = (element) => {
+            const style = window.getComputedStyle(element);
+            const rect = element.getBoundingClientRect();
+            return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
+        };
+        const selector = [
+            "a[href]",
+            "button",
+            "input",
+            "select",
+            "textarea",
+            "[contenteditable=true]",
+            "[role=button]",
+            "[role=link]",
+            "[role=textbox]",
+            "[role=checkbox]",
+            "[role=radio]",
+            "[role=combobox]",
+            "[role=switch]",
+            "[role=menuitem]",
+            "[role=tab]",
+            "[tabindex]:not([tabindex='-1'])",
+        ].join(",");
+        document.querySelectorAll("[data-flyflor-ref]").forEach((element) => element.removeAttribute("data-flyflor-ref"));
+        const elements = Array.from(document.querySelectorAll(selector))
+            .filter(visible)
+            .slice(0, ${maxElements})
+            .map((element, index) => {
+                const id = "e" + (index + 1);
+                element.setAttribute("data-flyflor-ref", id);
+                const rect = element.getBoundingClientRect();
+                return {
+                    ref: "@" + id,
+                    tag: element.tagName.toLowerCase(),
+                    role: roleOf(element),
+                    text: textOf(element),
+                    ariaLabel: element.getAttribute("aria-label") || "",
+                    title: element.getAttribute("title") || "",
+                    href: element instanceof HTMLAnchorElement ? element.href : "",
+                    type: element instanceof HTMLInputElement ? element.type : "",
+                    placeholder: element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement ? element.placeholder : "",
+                    disabled: "disabled" in element ? Boolean(element.disabled) : false,
+                    bounds: {
+                        x: Math.round(rect.x),
+                        y: Math.round(rect.y),
+                        width: Math.round(rect.width),
+                        height: Math.round(rect.height),
+                    },
+                };
+            });
+        return {
+            ok: true,
+            title: document.title || "",
+            url: location.href,
+            count: elements.length,
+            maxElements: ${maxElements},
+            elements,
+        };
+    })()`;
+}
+
 function consoleExpression(expression: string | undefined, clear: boolean): string {
     const source = expression === undefined ? "undefined" : JSON.stringify(expression);
     return `(() => {
@@ -869,11 +951,17 @@ function requiredString(value: unknown, path: string): string {
 }
 
 function requiredTarget(input: JsonObject): string {
-    const target = readString(input.target) ?? readString(input.selector);
+    const target = readString(input.target) ?? readString(input.selector) ?? readString(input.ref);
     if (!target) {
-        throw new BrowserUseError("failed", "input.target or input.selector must be a non-empty string");
+        throw new BrowserUseError("failed", "input.target, input.selector, or input.ref must be a non-empty string");
     }
-    return target;
+    return refTargetSelector(target);
+}
+
+function refTargetSelector(value: string): string {
+    const ref = /^@?(e\d+)$/u.exec(value.trim());
+    if (!ref) return value;
+    return `[data-flyflor-ref="${ref[1]}"]`;
 }
 
 function normalizedBaseUrl(value: string): string {

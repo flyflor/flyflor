@@ -1663,3 +1663,19 @@
   原因：减少真实模型以 `selector` 命名 DOM 目标时的工具校验失败，同时保持高权限 browser control opt-in 与子进程边界。
   验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（41 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`; `bun run smoke:browser-use:live`（ok true，覆盖 type-selector-captureAfter）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun test tests/naming.boundaries.test.ts --timeout 30000`（30 pass, 0 fail）；`bun run test`（1102 pass, 0 fail）；待最终 `git diff --check`。
   风险：只增加字段 alias；不新增 action，不改变默认 manifest 暴露策略、高权限 ASK/plan/yolo、动态预算或 kernel import 边界。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-hermes-refs
+  摘要：准备让 CDP `browser.use snapshot` 默认生成 Hermes 风格 `@eN` refs，并让 `click` / `type` 能用 ref 定位。
+  原因：Hermes browser 工作流是 snapshot -> ref -> click/type；Flyflor 只支持 CSS selector 会让真实模型的 ref 闭环断开。
+  验证：待跑 focused browser-use/external descriptor tests、browser-use live smoke、check/docs、真实闭环、全量测试与 diff。
+  风险：refs 只作为 browser sidecar 页面局部 hint；kernel 不存 ref map、不 import browser runtime，不改变默认 manifest、高权限 ASK/plan/yolo、动态预算或子进程边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-hermes-refs
+  摘要：`browser.use snapshot` 默认返回 Hermes 风格 `@eN` 互动元素 refs，并在页面 DOM 上写入 `data-flyflor-ref`；`click` / `type` 支持 `ref` 和 `@eN` target，`full: true` 保留旧 Accessibility full-tree snapshot。
+  原因：补齐真实模型常用的 snapshot -> ref -> action 浏览器闭环，同时保持 refs 只属于 browser sidecar 页面局部 hint，kernel 不存 ref map、不 import browser runtime。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（43 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true，覆盖 snapshot-refs/type-ref/click-ref）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun test tests/naming.boundaries.test.ts --timeout 30000`（30 pass, 0 fail）；待最终 docs/test/diff 门禁。
+  风险：只扩展 opt-in `browser.use` CDP action target 语义；默认 manifest、高权限 ASK/plan/yolo、动态预算和 process-json 子进程边界不变。
