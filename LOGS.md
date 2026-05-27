@@ -1215,3 +1215,27 @@
   原因：确保追加 TODO/LOGS 后仍无空白错误。
   验证：`git diff --check`。
   风险：无代码风险，仅验证记录追加。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-cdp-malformed-frame
+  摘要：原子 `browser.cdp` sidecar 的 CDP WebSocket response reader 增加非 JSON 帧快速失败路径，并补回归测试锁住“原子浏览器工具不能靠 timeout 暴露协议错误”。
+  原因：`browser.cdp` 是 `browser.use` 的底层原子能力，同样需要把外部协议异常转为明确 process-json failure，保持工具层血管可观察。
+  验证：已跑 `bun test tests/browser.cdp.sidecar.test.ts --timeout 30000`（8 pass, 0 fail）；待跑 browser-use focused、browser live、check/docs/真实闭环/diff。
+  风险：只修改原子 `browser.cdp` CDP response parsing 和 focused mock test，不改变默认 manifest 暴露面、ASK、plan、yolo 或动态预算逻辑。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-cdp-malformed-frame-verification
+  摘要：完成原子 `browser.cdp` CDP 非 JSON response frame 的结构化失败闭环；mock CDP 不再等待 timeout，高层 `browser.use` focused tests 与真实 Chrome browser-use smoke 仍通过。
+  原因：原子 browser sidecar 是高层 browser-use 的底座，必须同样把外部协议异常快速转成 process-json failure，保持工具层事件/审计链路可解释。
+  验证：`bun test tests/browser.cdp.sidecar.test.ts tests/browser.use.sidecar.test.ts --timeout 30000`（16 pass, 0 fail）；`bun run smoke:browser-use:live`（ok true, macos-google-chrome）；`bun run check`; `bun run docs:check`; `bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；待最终 `git diff --check`。
+  风险：只修改原子 `browser.cdp` CDP response reader 与 focused mock test；不改变默认 manifest 暴露面、ASK、plan、yolo 或动态预算逻辑。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-cdp-malformed-frame-final-diff-check
+  摘要：提交前完成最终 whitespace diff gate。
+  原因：确保追加 TODO/LOGS 后仍无空白错误。
+  验证：`git diff --check`。
+  风险：无代码风险，仅验证记录追加。

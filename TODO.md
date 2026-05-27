@@ -1052,3 +1052,9 @@ Kernel V2 acceptance focus：
 - [x] 新增 `browser.use` CDP WebSocket 非 JSON 帧回归，要求立即返回结构化 `failed`，不能等待超时。
 - [x] 修复 `browser.use` CDP response reader，在帧解析失败时携带截断 frame 进入 sidecar failure details。
 - [x] 复跑 focused browser-use sidecar、check、docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Browser CDP 原子协议失败闭环
+
+- [x] 新增原子 `browser.cdp` CDP WebSocket 非 JSON 帧回归，要求立即返回 process-json failure，不能等待超时。
+- [x] 修复 `browser.cdp` response reader，在帧解析失败时写出明确错误并保留截断 frame。
+- [x] 复跑 focused browser-cdp/browser-use sidecar、browser live smoke、check、docs、真实闭环与 `git diff --check`。

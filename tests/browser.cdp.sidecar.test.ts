@@ -55,6 +55,22 @@ describe("Browser CDP process-json sidecar", () => {
         }
     });
 
+    test("reports malformed CDP WebSocket frames without waiting for timeout", async () => {
+        const server = new MockCdpServer(() => "not-json");
+        try {
+            const response = await invokeSidecar({
+                tool: "browser.evaluate",
+                input: { script: "1 + 1", cdpUrl: server.url },
+            }, { expectExit: 1 });
+
+            expect(response.body.ok).toBe(false);
+            expect(String(response.body.error)).toContain("CDP WebSocket returned non-json response");
+            expect(response.stderr).toContain("CDP WebSocket returned non-json response");
+        } finally {
+            server.stop();
+        }
+    });
+
     test("sends browser.click as a Runtime.evaluate DOM action", async () => {
         const server = new MockCdpServer();
         try {
@@ -178,12 +194,34 @@ async function invokeSidecar(
     };
 }
 
+type MockCdpCommand = { id: number; method: string; params?: unknown };
+
 class MockCdpServer {
     public readonly commands: unknown[] = [];
     public readonly httpRequests: string[] = [];
     private readonly server: Bun.Server<{ id: string }>;
 
-    public constructor() {
+    public constructor(
+        private readonly respond: (command: MockCdpCommand) => string | Record<string, unknown> = (command) => ({
+            id: command.id,
+            result: {
+                result: command.params && typeof command.params === "object" && "expression" in command.params && String((command.params as { expression?: unknown }).expression).includes("#continue")
+                    ? {
+                        type: "object",
+                        value: { ok: true },
+                    }
+                    : command.params && typeof command.params === "object" && "expression" in command.params && String((command.params as { expression?: unknown }).expression).includes("#missing")
+                        ? {
+                            type: "object",
+                            value: { ok: false, error: "target not found: #missing" },
+                        }
+                        : {
+                            type: "number",
+                            value: 2,
+                        },
+            },
+        }),
+    ) {
         this.server = Bun.serve<{ id: string }>({
             port: 0,
             fetch: (request, server) => {
@@ -215,29 +253,10 @@ class MockCdpServer {
             },
             websocket: {
                 message: (socket, raw) => {
-                    const command = JSON.parse(String(raw)) as { id: number; method: string; params?: unknown };
+                    const command = JSON.parse(String(raw)) as MockCdpCommand;
                     this.commands.push(command);
-                    socket.send(
-                        JSON.stringify({
-                            id: command.id,
-                            result: {
-                                result: command.params && typeof command.params === "object" && "expression" in command.params && String((command.params as { expression?: unknown }).expression).includes("#continue")
-                                    ? {
-                                        type: "object",
-                                        value: { ok: true },
-                                    }
-                                    : command.params && typeof command.params === "object" && "expression" in command.params && String((command.params as { expression?: unknown }).expression).includes("#missing")
-                                        ? {
-                                            type: "object",
-                                            value: { ok: false, error: "target not found: #missing" },
-                                        }
-                                        : {
-                                            type: "number",
-                                            value: 2,
-                                        },
-                            },
-                        }),
-                    );
+                    const response = this.respond(command);
+                    socket.send(typeof response === "string" ? response : JSON.stringify(response));
                 },
             },
         });
