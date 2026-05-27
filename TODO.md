@@ -1214,3 +1214,8 @@ Kernel V2 acceptance focus：
 - [x] `browser.use evaluate` 接受 descriptor 已暴露的 `expression` 字段作为 `script` 的结构化 alias。
 - [x] CDP backend 使用 `script ?? expression` 执行，不改变 delegate backend 的原始 process-json input。
 - [x] 新增 focused browser-use 回归与追加文档，已复跑 check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Execution Job Detail Query Cache Evidence
+
+- [x] 状态校正：上方 `2026-05-25 执行层 ASK 与相对路径第一阶段` 中 Phase 7 与 Phase 10-13 的旧未完成行保留为历史原文；后续 `2026-05-26 执行层 ASK / Job / 工具稳定性完整封口` 与 `2026-05-27 ASK 公民权限与工具闭环` 已完成 socket job query、工具稳定性状态机、ASK 联动和 Crystal evidence 闭环。
+- [x] 本轮追加 `execution.job.detail.get` 重复查询 cache 回归，证明 execution job detail read-model 在短 TTL 内不会重复打 DB/read gateway。

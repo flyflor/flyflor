@@ -1572,6 +1572,7 @@ describe("SocketControlHub", () => {
         let historyReads = 0;
         let askReads = 0;
         let jobReads = 0;
+        let jobDetailReads = 0;
         const bus = new GlobalEventBus();
         const hub = createHub({
             createContextFork: async (record) => record,
@@ -1603,6 +1604,18 @@ describe("SocketControlHub", () => {
                         toolCounts: {},
                         toolExecutions: [],
                     }];
+                },
+                executionJobDetail: (input) => {
+                    expect(input).toEqual({ jobId: "job-1" });
+                    jobDetailReads += 1;
+                    return {
+                        children: [],
+                        events: [],
+                        jobId: `job-detail-${jobDetailReads}`,
+                        status: "completed",
+                        toolCounts: {},
+                        toolExecutions: [],
+                    };
                 },
                 historyList: () => {
                     historyReads += 1;
@@ -1640,11 +1653,14 @@ describe("SocketControlHub", () => {
         await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.AskList, { status: "all" })));
         await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.ExecutionJobList, { status: "all" })));
         await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.ExecutionJobList, { status: "all" })));
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.ExecutionJobDetailGet, { jobId: "job-1" })));
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.ExecutionJobDetailGet, { jobId: "job-1" })));
 
         expect(statusReads).toBe(1);
         expect(historyReads).toBe(1);
         expect(askReads).toBe(1);
         expect(jobReads).toBe(1);
+        expect(jobDetailReads).toBe(1);
         expect(sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.GatewayStatusSnapshot).slice(-2))
             .toMatchObject([
                 { payload: { cache: { hit: false }, status: { cache: { hits: 0, misses: 1 } } } },
@@ -1660,10 +1676,15 @@ describe("SocketControlHub", () => {
                 { payload: { cache: { hit: false }, data: [{ event: { id: "ask-1" } }] } },
                 { payload: { cache: { hit: true }, data: [{ event: { id: "ask-1" } }] } },
             ]);
-        expect(sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.ExecutionJobSnapshot).slice(-2))
+        expect(sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.ExecutionJobSnapshot).slice(-4, -2))
             .toMatchObject([
                 { payload: { cache: { hit: false }, data: [{ jobId: "job-1" }] } },
                 { payload: { cache: { hit: true }, data: [{ jobId: "job-1" }] } },
+            ]);
+        expect(sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.ExecutionJobSnapshot).slice(-2))
+            .toMatchObject([
+                { payload: { cache: { hit: false }, data: { jobId: "job-detail-1" } } },
+                { payload: { cache: { hit: true }, data: { jobId: "job-detail-1" } } },
             ]);
 
         bus.publish({

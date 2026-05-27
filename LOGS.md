@@ -1765,3 +1765,19 @@
   范围：browser-use-evaluate-expression-alias
   摘要：最终 whitespace 检查通过。
   验证：`git diff --check`。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：execution-job-detail-query-cache-evidence
+  摘要：补充 `execution.job.detail.get` 重复查询 read-cache 回归，并修正旧 TODO 中 Phase 7/10-13 与后续完成记录冲突的状态。
+  原因：工具/子进程/子代理失败 detail 必须能通过 socket read-model 稳定读取；旧问题提到 detail get 重复请求，现有测试只覆盖 `execution.job.list` 缓存，缺少 detail get 的显式证据。
+  验证：待跑 focused gateway ws tests、check/docs、真实闭环与 diff。
+  风险：只补测试证据与 TODO 状态，不改变 socket runtime path、Memory/Scope/Crystal 主链、工具执行或默认 manifest。
+
+- 状态：完成
+  执行者：main-codex
+  范围：execution-job-detail-query-cache-evidence
+  摘要：`tests/gateway.ws.test.ts` 现在覆盖 `execution.job.detail.get` 短 TTL read-cache，连续两次读取同一 job detail 只触发一次 reader 查询，并在 `execution.job.snapshot` 中分别暴露 `cache.hit=false/true`；`TODO.md` 以追加方式记录旧 Phase 7/10-13 状态校正，保留历史原文不改写。
+  原因：为工具/子进程/子代理失败 detail 的 socket read-model 去重提供显式回归证据，同时遵守文档 append-only 约束。
+  验证：`bun test tests/gateway.ws.test.ts tests/protocol.control.test.ts --timeout 30000`（79 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run test`（1111 pass, 0 fail）；`bun run provider:ready -- --require-ready`（ok true, home deepseek/deepseek-v4-flash）；`bun run smoke:live:closure` 第二轮通过（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11；第一轮预算 ASK 场景遇到一次 provider 空响应并作为外部瞬态记录）；`git diff --check`。
+  风险：只新增测试与 append-only 文档记录；不改变 socket runtime path、Memory/Scope/Crystal 主链、工具执行、默认 manifest、ASK/plan/yolo 或动态预算。
