@@ -1743,3 +1743,25 @@
   原因：降低真实模型用 snake_case 表达观察预算时的工具调用摩擦，并保持工具层外挂、process-json 与内核边界不变。
   验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（47 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true，覆盖真实 Chrome CDP browser.use 闭环）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1110 pass, 0 fail）。
   风险：只增加可见 schema aliases 与 CDP sidecar 字段读取；默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit、Memory/Scope/Crystal 主链不变。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-evaluate-expression-alias
+  摘要：准备让 `browser.use evaluate` 接受 descriptor 已暴露的 `expression` 字段作为 `script` alias。
+  原因：模型可见 schema 同时暴露 `script` 和 `expression`，但执行期只接受 `script`；真实模型按 `expression` 发 evaluate 时会在 sidecar 校验层失败。
+  验证：待跑 focused browser-use tests、check/docs、真实 browser smoke、真实闭环与 diff。
+  风险：只修正 opt-in `browser.use` 的 CDP evaluate 字段读取；不改变默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit 或 kernel import 边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-evaluate-expression-alias
+  摘要：`browser.use evaluate` 现在接受 `expression` 作为 `script` alias；CDP backend 用 `script ?? expression` 构造 `Runtime.evaluate`，delegate backend 继续接收原始 process-json input。
+  原因：消除模型可见 schema 与执行期字段读取不一致，减少真实模型用 `expression` 发 evaluate 时的无意义工具失败。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（48 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true，覆盖真实 Chrome CDP browser.use 闭环）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1111 pass, 0 fail）；待最终 `git diff --check`。
+  风险：只修正 opt-in `browser.use` CDP evaluate 字段读取；默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit、Memory/Scope/Crystal 主链不变。
+
+- 状态：补充验证
+  执行者：main-codex
+  范围：browser-use-evaluate-expression-alias
+  摘要：最终 whitespace 检查通过。
+  验证：`git diff --check`。

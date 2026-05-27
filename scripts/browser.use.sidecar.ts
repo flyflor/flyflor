@@ -243,7 +243,7 @@ class BrowserUseSidecar {
             case "evaluate":
                 return {
                     response: await client.sendToPage("Runtime.evaluate", {
-                        expression: requiredString(invocation.input.script, "input.script"),
+                        expression: requiredString(invocation.input.script ?? invocation.input.expression, "input.script"),
                         awaitPromise: true,
                         returnByValue: true,
                     }),
@@ -579,7 +579,7 @@ async function validateAction(action: BrowserUseAction, input: JsonObject): Prom
         requiredString(input.text, "input.text");
     }
     if (action === "evaluate") {
-        requiredString(input.script, "input.script");
+        requiredString(input.script ?? input.expression, "input.script");
     }
     if (action === "scroll") {
         if (input.direction !== undefined) {

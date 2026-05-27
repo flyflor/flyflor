@@ -1208,3 +1208,9 @@ Kernel V2 acceptance focus：
 - [x] `browser.use` descriptor 暴露 `capture_mode`、`max_elements`、`max_images` 观察预算 aliases。
 - [x] CDP backend 对 `capture_mode`、`max_elements`、`max_images` 的语义分别与 `captureMode`、`maxElements`、`maxImages` 对齐。
 - [x] 新增 focused browser-use/external descriptor 回归与追加文档，已复跑 check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Browser Use Evaluate Expression Alias
+
+- [x] `browser.use evaluate` 接受 descriptor 已暴露的 `expression` 字段作为 `script` 的结构化 alias。
+- [x] CDP backend 使用 `script ?? expression` 执行，不改变 delegate backend 的原始 process-json input。
+- [x] 新增 focused browser-use 回归与追加文档，已复跑 check/docs、真实闭环与 `git diff --check`。

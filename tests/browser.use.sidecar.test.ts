@@ -142,6 +142,32 @@ describe("high-level browser.use process-json sidecar", () => {
         }
     });
 
+    test("accepts expression as a browser evaluate alias", async () => {
+        const server = new MockCdpServer();
+        try {
+            const response = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "evaluate", expression: "document.title" },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+
+            expect(response).toMatchObject({ ok: true, action: "evaluate", backend: "cdp", readOnly: false });
+            expect(server.commands).toEqual([
+                {
+                    id: 1,
+                    method: "Runtime.evaluate",
+                    params: {
+                        expression: "document.title",
+                        awaitPromise: true,
+                        returnByValue: true,
+                    },
+                },
+            ]);
+        } finally {
+            server.stop();
+        }
+    });
+
     test("builds a compact snapshot with Hermes-style refs and accepts ref targets", async () => {
         const server = new MockCdpServer();
         try {
