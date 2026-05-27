@@ -54,6 +54,36 @@ describe("high-level browser.use process-json sidecar", () => {
         expect(String(response.body.error)).toContain("command is unavailable");
     });
 
+    test("rejects oversized delegate resource config before spawning", async () => {
+        const response = await invokeSidecar({
+            tool: "browser.use",
+            input: { action: "snapshot" },
+            config: {
+                delegateCommand: "./missing-browser-use-delegate",
+                timeoutMs: 120_001,
+            },
+        }, { expectExit: 1 });
+
+        expect(response.body.ok).toBe(false);
+        expect(response.body.code).toBe("failed");
+        expect(String(response.body.error)).toContain("config.timeoutMs must be an integer between 1 and 120000");
+    });
+
+    test("rejects oversized delegate output caps before spawning", async () => {
+        const response = await invokeSidecar({
+            tool: "browser.use",
+            input: { action: "snapshot" },
+            config: {
+                delegateCommand: "./missing-browser-use-delegate",
+                maxOutputBytes: 2 * 1024 * 1024 + 1,
+            },
+        }, { expectExit: 1 });
+
+        expect(response.body.ok).toBe(false);
+        expect(response.body.code).toBe("failed");
+        expect(String(response.body.error)).toContain("config.maxOutputBytes must be an integer between 1 and 2097152");
+    });
+
     test("drives browser actions through the CDP backend", async () => {
         const server = new MockCdpServer();
         try {

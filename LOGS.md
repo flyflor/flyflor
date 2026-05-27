@@ -1415,3 +1415,27 @@
   原因：确认 `old-docs/external/` 归档不会破坏文档索引/引用约束。
   验证：`bun run docs:check`（26 pass, 0 fail）；`git diff --check`。
   风险：仅验证记录追加。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：use-sidecar-resource-bounds
+  摘要：准备为 `browser.use` 与 `computer.use` 的 delegate/CUA config 增加 `timeoutMs` 与 `maxOutputBytes` 硬上限。
+  原因：当前 sidecar 虽有 timeout/output 截断，但只要配置是正整数就接受；错误 manifest 可静默拉长子进程执行窗口或扩大输出缓存，和动态额限边界不够贴合。
+  验证：待跑 focused browser-use/computer-use tests、check/docs、真实闭环与 diff。
+  风险：只影响 sidecar config preflight；不改变 ASK、plan、yolo、动态预算、默认工具暴露或 kernel 依赖边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：use-sidecar-resource-bounds-verification
+  摘要：完成 `browser.use` 与 `computer.use` delegate/CUA 资源硬上限；`timeoutMs` 限制为 `1..120000`，`maxOutputBytes` 限制为 `1..2097152`，非法配置在 command resolution / delegate spawn 前结构化失败。
+  原因：防止外部 sidecar manifest 静默扩大单次子进程执行窗口或输出缓存，保持工具层预算边界与内核动态额限解耦。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/computer.use.sidecar.test.ts --timeout 30000`（26 pass, 0 fail）；`bun run check`; `bun run docs:check`; `bun run smoke:browser-use:live`（ok true）；`bun run smoke:computer-use:live`（ok true, skipped cua-command-not-found）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；待全量测试与最终 `git diff --check`。
+  风险：只影响 sidecar config preflight；不改变 ASK、plan、yolo、动态预算、默认工具暴露或 kernel 依赖边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：use-sidecar-resource-bounds-final-gates
+  摘要：提交前完成全量测试与 whitespace diff gate。
+  原因：确认新增资源边界、focused 回归和追加文档没有破坏现有工具闭环。
+  验证：`bun run test`（1084 pass, 0 fail）；`git diff --check`。
+  风险：无新增运行态风险；未跟踪 `.github/` 与 `.workmux.yaml` 仍不属于本轮改动，未纳入提交。

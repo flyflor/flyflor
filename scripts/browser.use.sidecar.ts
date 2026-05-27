@@ -55,6 +55,8 @@ const READ_ACTIONS = new Set<BrowserUseAction>(["snapshot", "screenshot", "wait"
 const DEFAULT_CDP_URL = "http://127.0.0.1:9222";
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 512 * 1024;
+const MAX_TIMEOUT_MS = 120_000;
+const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 const BROWSER_URL_SAFETY = new BrowserUrlSafetyPolicy();
 
 export async function runBrowserUseSidecar(): Promise<void> {
@@ -138,8 +140,8 @@ class BrowserUseSidecar {
                 kind: "delegate",
                 command,
                 args: stringArray(config.delegateArgs),
-                timeoutMs: positiveInt(config.timeoutMs) ?? DEFAULT_TIMEOUT_MS,
-                maxOutputBytes: positiveInt(config.maxOutputBytes) ?? DEFAULT_MAX_OUTPUT_BYTES,
+                timeoutMs: boundedPositiveInt(config.timeoutMs, "config.timeoutMs", DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS),
+                maxOutputBytes: boundedPositiveInt(config.maxOutputBytes, "config.maxOutputBytes", DEFAULT_MAX_OUTPUT_BYTES, MAX_OUTPUT_BYTES),
             };
         }
         throw new BrowserUseError("unsupported", `unsupported browser.use backend: ${backend}`);
@@ -591,8 +593,12 @@ function numberInput(value: unknown): number | undefined {
     return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function positiveInt(value: unknown): number | undefined {
-    return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
+function boundedPositiveInt(value: unknown, path: string, fallback: number, max: number): number {
+    if (value === undefined) return fallback;
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > max) {
+        throw new BrowserUseError("failed", `${path} must be an integer between 1 and ${max}`);
+    }
+    return value;
 }
 
 function readString(value: unknown): string | undefined {

@@ -52,6 +52,8 @@ const ACTIONS = new Set<ComputerUseAction>([
 const READ_ACTIONS = new Set<ComputerUseAction>(["capture", "wait", "list_apps"]);
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 512 * 1024;
+const MAX_TIMEOUT_MS = 120_000;
+const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 const BLOCKED_KEY_COMBOS = [
     ["cmd", "shift", "backspace"],
     ["cmd", "option", "backspace"],
@@ -117,8 +119,8 @@ class ComputerUseSidecar {
 
     private backend(config: JsonObject): { kind: "cua"; command: string; args: readonly string[]; timeoutMs: number; maxOutputBytes: number } | { kind: "delegate"; command: string; args: readonly string[]; timeoutMs: number; maxOutputBytes: number } {
         const backend = readString(config.backend) ?? "delegate";
-        const timeoutMs = positiveInt(config.timeoutMs) ?? DEFAULT_TIMEOUT_MS;
-        const maxOutputBytes = positiveInt(config.maxOutputBytes) ?? DEFAULT_MAX_OUTPUT_BYTES;
+        const timeoutMs = boundedPositiveInt(config.timeoutMs, "config.timeoutMs", DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
+        const maxOutputBytes = boundedPositiveInt(config.maxOutputBytes, "config.maxOutputBytes", DEFAULT_MAX_OUTPUT_BYTES, MAX_OUTPUT_BYTES);
         if (backend === "cua") {
             return {
                 kind: "cua",
@@ -607,8 +609,12 @@ function positiveIntegerInput(value: unknown, path: string): number | undefined 
     return number;
 }
 
-function positiveInt(value: unknown): number | undefined {
-    return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
+function boundedPositiveInt(value: unknown, path: string, fallback: number, max: number): number {
+    if (value === undefined) return fallback;
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > max) {
+        throw new ComputerUseError("failed", `${path} must be an integer between 1 and ${max}`);
+    }
+    return value;
 }
 
 function readString(value: unknown): string | undefined {

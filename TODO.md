@@ -1100,3 +1100,9 @@ Kernel V2 acceptance focus：
 - [x] 对齐 Hermes `is_always_blocked_url`：普通 hostname 若解析到 metadata/link-local 凭据地址，`browser.use` 与原子 `browser.cdp` 必须在 backend/delegate 前阻断。
 - [x] 将 URL 安全地板收敛到 browser sidecar owner helper，避免 kernel 引入 browser/desktop runtime，同时减少两个 sidecar 的安全常量漂移。
 - [x] 新增 focused DNS 回归并更新追加文档，复跑 browser-use/browser-cdp/browser-url-safety tests、check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Use Sidecar Resource Bounds
+
+- [x] 为 `browser.use` 与 `computer.use` delegate/CUA 资源配置增加硬上限，避免 `timeoutMs` 或 `maxOutputBytes` 静默扩大单次子进程执行窗口。
+- [x] 保持 ASK、plan、yolo、动态预算和默认工具暴露不变；非法资源配置在 command resolution / delegate spawn 前结构化失败。
+- [x] 新增 focused 回归与追加文档，复跑 browser-use/computer-use tests、check/docs、真实闭环与 `git diff --check`。
