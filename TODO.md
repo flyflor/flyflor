@@ -977,7 +977,7 @@ Kernel V2 acceptance focus：
 - [x] `browser.use` 支持 delegate 后端与 CDP 后端，默认真实 manifest 仅写 sidecar 配置且 `tools: []`，不自动暴露给模型，不影响 ASK / plan / yolo 执行面。
 - [x] 外部工具 registry、socket kit catalog、mock xtools、POSIX/PowerShell/TypeScript 初始化器都加入 `browser-use` 包与 `browser.use` descriptor。
 - [x] 运行 focused 验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts tests/gateway.ws.test.ts tests/install.script.test.ts --timeout 30000`；`bun test tests/runtime.mcp.tool.plan.test.ts tests/computer.use.sidecar.test.ts tests/browser.cdp.sidecar.test.ts tests/executive.tool.runtime.test.ts --timeout 30000`；`bun run check`；`git diff --check`。
-- [ ] 后续补齐真实 Browser Use provider/delegate 安装说明与真实浏览器高权限 smoke，仍需保持默认不暴露控制动作。
+- [x] 后续补齐真实 Browser Use provider/delegate 安装说明与真实浏览器高权限 smoke，仍需保持默认不暴露控制动作。
 
 ## 2026-05-27 Browser Use 文档对齐
 

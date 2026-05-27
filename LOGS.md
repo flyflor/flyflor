@@ -1439,3 +1439,19 @@
   原因：确认新增资源边界、focused 回归和追加文档没有破坏现有工具闭环。
   验证：`bun run test`（1084 pass, 0 fail）；`git diff --check`。
   风险：无新增运行态风险；未跟踪 `.github/` 与 `.workmux.yaml` 仍不属于本轮改动，未纳入提交。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-install-and-smoke-docs
+  摘要：补齐 `browser.use` 安装、CDP backend、delegate backend、真实 browser smoke 与默认 `tools: []` opt-in 边界文档，并收束历史 Browser Use TODO。
+  原因：代码层已有真实 `smoke:browser-use:live`，但历史 TODO 仍要求 provider/delegate 安装说明与默认不暴露控制动作的文档闭环。
+  验证：待跑 docs/check、browser live smoke 与 diff。
+  风险：仅新增文档与 TODO 状态更新；不改变运行态代码、ASK、plan、yolo、动态预算或默认工具暴露。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-install-and-smoke-docs-verification
+  摘要：完成 `browser.use` 安装与 opt-in 文档闭环；新增中英文文档覆盖 `install:xtools:browser-use`、CDP backend、delegate backend、真实 browser smoke、默认 `tools: []` 与 kernel 不 import browser runtime 的边界。
+  原因：收束历史 TODO 中 Browser Use provider/delegate 安装说明和真实高权限 smoke 要求。
+  验证：`bun run docs:check`（26 pass, 0 fail）；`bun run smoke:browser-use:live`（ok true）；`git diff --check`。
+  风险：仅新增文档与 TODO 状态更新；不改变运行态代码、ASK、plan、yolo、动态预算或默认工具暴露。
