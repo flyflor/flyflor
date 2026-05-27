@@ -1058,3 +1058,9 @@ Kernel V2 acceptance focus：
 - [x] 新增原子 `browser.cdp` CDP WebSocket 非 JSON 帧回归，要求立即返回 process-json failure，不能等待超时。
 - [x] 修复 `browser.cdp` response reader，在帧解析失败时写出明确错误并保留截断 frame。
 - [x] 复跑 focused browser-cdp/browser-use sidecar、browser live smoke、check、docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Computer Use 只读 CaptureAfter 闭环
+
+- [x] 新增 `computer.use` 只读 action 回归，验证 `wait` 带 `captureAfter: true` 不额外触发 capture 子进程。
+- [x] 修复 `computer.use` captureAfter gate：所有 `READ_ACTIONS` 都直接返回原结果，只有变更动作触发后置观察。
+- [x] 复跑 focused computer-use/browser-use/browser-cdp tests、computer-use live smoke、check、docs、真实闭环与 `git diff --check`。

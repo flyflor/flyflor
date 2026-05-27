@@ -1239,3 +1239,27 @@
   原因：确保追加 TODO/LOGS 后仍无空白错误。
   验证：`git diff --check`。
   风险：无代码风险，仅验证记录追加。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：computer-use-readonly-capture-after
+  摘要：`computer.use` 修正 `captureAfter` gate：`capture`、`wait`、`list_apps` 等只读动作不再额外触发后置 capture；新增 delegate 回归确认只读 wait 只产生一次子进程调用。
+  原因：后置 capture 是 action/verify 语义，应服务变更动作；只读动作追加 capture 会制造无意义子进程与预算消耗，和 READ_ACTIONS 标记不一致。
+  验证：已跑 `bun test tests/computer.use.sidecar.test.ts --timeout 30000`（9 pass, 0 fail）；待跑 browser focused、computer live、check/docs/真实闭环/diff。
+  风险：只改变 `computer.use` 高层 sidecar 的 read-only `captureAfter` 行为，不改变默认 manifest 暴露面、ASK、plan、yolo 或动态预算逻辑。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-readonly-capture-after-verification
+  摘要：完成 `computer.use` 只读动作 captureAfter 语义收口；`wait` 带 `captureAfter: true` 不再额外触发 capture 子进程，变更动作后置观察保持不变。
+  原因：只读动作不应制造额外子进程、预算消耗或误导性的 action/verify 语义；这与 READ_ACTIONS、提示词边界和 Hermes-style capture/action/verify 分层一致。
+  验证：`bun test tests/computer.use.sidecar.test.ts tests/browser.use.sidecar.test.ts tests/browser.cdp.sidecar.test.ts --timeout 30000`（25 pass, 0 fail）；`bun run smoke:computer-use:live`（ok true, skipped true, reason cua-command-not-found）；`bun run check`; `bun run docs:check`; `bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；待最终 `git diff --check`。
+  风险：只修改 `computer.use` read-only captureAfter gate 与 focused test；不改变默认 manifest 暴露面、ASK、plan、yolo 或动态预算逻辑。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-readonly-capture-after-final-diff-check
+  摘要：提交前完成最终 whitespace diff gate。
+  原因：确保追加 TODO/LOGS 后仍无空白错误。
+  验证：`git diff --check`。
+  风险：无代码风险，仅验证记录追加。

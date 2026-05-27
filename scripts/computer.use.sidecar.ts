@@ -101,7 +101,7 @@ class ComputerUseSidecar {
         const result = backend.kind === "cua"
             ? await this.invokeCua(backend, invocation)
             : await this.invokeDelegate(backend, invocation);
-        if (invocation.input.captureAfter !== true || invocation.action === "capture") {
+        if (invocation.input.captureAfter !== true || READ_ACTIONS.has(invocation.action)) {
             return result;
         }
         const captureInvocation = {

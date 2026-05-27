@@ -201,6 +201,45 @@ console.log(JSON.stringify({ receivedAction: request.action, readOnly: request.a
         }
     });
 
+    test("does not run captureAfter for read-only actions", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-readonly-"));
+        const delegate = join(root, "delegate.ts");
+        const log = join(root, "delegate.log");
+        await writeFile(
+            delegate,
+            `import { appendFile } from "node:fs/promises";
+const raw = await new Response(Bun.stdin.stream()).text();
+await appendFile("${log}", raw);
+const request = JSON.parse(raw);
+console.log(JSON.stringify({ receivedAction: request.action, readOnly: request.action === "wait" }));
+`,
+        );
+        await chmod(delegate, 0o755);
+        try {
+            const response = await invokeSidecarBody({
+                tool: "computer.use",
+                input: { action: "wait", seconds: 0, captureAfter: true },
+                config: { delegateCommand: "bun", delegateArgs: [delegate] },
+                projectDir: root,
+            });
+
+            expect(response).toMatchObject({
+                action: "wait",
+                backend: "delegate",
+                readOnly: true,
+                result: { response: { receivedAction: "wait", readOnly: true } },
+            });
+            expect(response.captureAfter).toBeUndefined();
+            const calls = (await readFile(log, "utf8")).trim().split("\n").map((line) => {
+                const entry = JSON.parse(line) as { action: string };
+                return entry.action;
+            });
+            expect(calls).toEqual(["wait"]);
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("resolves PATH delegates through PATHEXT-style extensions", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-pathext-"));
         const delegate = join(root, "delegate.cmd");
