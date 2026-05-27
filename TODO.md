@@ -1243,3 +1243,9 @@ Kernel V2 acceptance focus：
 - [x] `browser.use press` CDP backend 对常见键名 alias 做 Hermes 风格归一化：`enter/return`、`esc/escape`、`arrow-down` 等映射到 CDP 期望 key。
 - [x] delegate backend 继续收到原始 process-json invocation，不把 CDP alias 写回通用输入。
 - [x] 新增 focused browser-use press alias 回归与追加文档，复跑 browser-use tests、check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Browser Use Press Modifier Combos
+
+- [x] `browser.use press` CDP backend 将 `cmd+k`、`cmd+shift+k`、`ctrl+alt+t` 等模型常用 shortcut 解析为真实 modifier keyDown/main key/keyUp/modifier keyUp 序列。
+- [x] modifier alias 对齐 Hermes/CUA 语义：`command/cmd/meta`、`control/ctrl`、`option/alt`、`shift`。
+- [x] delegate backend 继续收到原始 process-json invocation，不把 CDP modifier 解析写回通用输入。

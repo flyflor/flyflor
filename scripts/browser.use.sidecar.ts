@@ -265,12 +265,9 @@ class BrowserUseSidecar {
             case "back":
                 return { response: await client.goBack() };
             case "press": {
-                const key = normalizeBrowserPressKey(requiredString(invocation.input.key ?? invocation.input.keys, "input.key"));
+                const keyCombo = parseBrowserPressCombo(requiredString(invocation.input.key ?? invocation.input.keys, "input.key"));
                 return {
-                    response: [
-                        await client.sendToPage("Input.dispatchKeyEvent", keyEvent("keyDown", key)),
-                        await client.sendToPage("Input.dispatchKeyEvent", keyEvent("keyUp", key)),
-                    ],
+                    response: await dispatchBrowserPressCombo(client, keyCombo),
                 };
             }
             case "get_images":
@@ -832,6 +829,77 @@ function scrollExpression(direction: "up" | "down" | "left" | "right", amount: n
     return `(() => { window.scrollBy(${JSON.stringify({ left: dx, top: dy, behavior: "instant" })}); return { ok: true, left: window.scrollX, top: window.scrollY }; })()`;
 }
 
+async function dispatchBrowserPressCombo(client: BrowserUseCdpClient, combo: BrowserPressCombo): Promise<unknown[]> {
+    const responses: unknown[] = [];
+    let mask = 0;
+    for (const modifier of combo.modifiers) {
+        mask |= modifier.mask;
+        responses.push(await client.sendToPage("Input.dispatchKeyEvent", modifierKeyEvent("keyDown", modifier, mask)));
+    }
+    responses.push(await client.sendToPage("Input.dispatchKeyEvent", keyEvent("keyDown", combo.key, mask)));
+    responses.push(await client.sendToPage("Input.dispatchKeyEvent", keyEvent("keyUp", combo.key, mask)));
+    for (const modifier of [...combo.modifiers].reverse()) {
+        responses.push(await client.sendToPage("Input.dispatchKeyEvent", modifierKeyEvent("keyUp", modifier, mask)));
+        mask &= ~modifier.mask;
+    }
+    return responses;
+}
+
+interface BrowserPressCombo {
+    readonly key: string;
+    readonly modifiers: readonly BrowserPressModifier[];
+}
+
+interface BrowserPressModifier {
+    readonly key: "Alt" | "Control" | "Meta" | "Shift";
+    readonly code: "AltLeft" | "ControlLeft" | "MetaLeft" | "ShiftLeft";
+    readonly mask: number;
+}
+
+function parseBrowserPressCombo(value: string): BrowserPressCombo {
+    const parts = value.split(/\s*\+\s*/u).map((entry) => entry.trim()).filter((entry) => entry.length > 0);
+    const rawKey = parts.pop() ?? value;
+    const modifiers = uniqueBrowserPressModifiers(parts.map(normalizeBrowserPressModifier).filter((entry): entry is BrowserPressModifier => entry !== undefined));
+    return { key: normalizeBrowserPressKey(rawKey), modifiers };
+}
+
+function uniqueBrowserPressModifiers(modifiers: readonly BrowserPressModifier[]): readonly BrowserPressModifier[] {
+    const seen = new Set<string>();
+    return modifiers.filter((modifier) => {
+        if (seen.has(modifier.key)) return false;
+        seen.add(modifier.key);
+        return true;
+    });
+}
+
+function normalizeBrowserPressModifier(value: string): BrowserPressModifier | undefined {
+    const compact = value.toLowerCase().replace(/[\s_-]+/gu, "");
+    switch (compact) {
+        case "alt":
+        case "option":
+        case "opt":
+        case "⌥":
+            return { key: "Alt", code: "AltLeft", mask: 1 };
+        case "control":
+        case "ctrl":
+        case "ctl":
+        case "⌃":
+            return { key: "Control", code: "ControlLeft", mask: 2 };
+        case "cmd":
+        case "command":
+        case "meta":
+        case "super":
+        case "win":
+        case "⌘":
+            return { key: "Meta", code: "MetaLeft", mask: 4 };
+        case "shift":
+        case "⇧":
+            return { key: "Shift", code: "ShiftLeft", mask: 8 };
+        default:
+            return undefined;
+    }
+}
+
 function normalizeBrowserPressKey(value: string): string {
     const raw = value.trim();
     const compact = raw.toLowerCase().replace(/[\s_-]+/gu, "");
@@ -866,11 +934,21 @@ function normalizeBrowserPressKey(value: string): string {
     return aliases[compact] ?? raw;
 }
 
-function keyEvent(type: "keyDown" | "keyUp", key: string): JsonObject {
+function keyEvent(type: "keyDown" | "keyUp", key: string, modifiers = 0): JsonObject {
     return {
         type,
         key,
-        text: type === "keyDown" && key.length === 1 ? key : undefined,
+        modifiers: modifiers > 0 ? modifiers : undefined,
+        text: type === "keyDown" && modifiers === 0 && key.length === 1 ? key : undefined,
+    };
+}
+
+function modifierKeyEvent(type: "keyDown" | "keyUp", modifier: BrowserPressModifier, modifiers: number): JsonObject {
+    return {
+        type,
+        key: modifier.key,
+        code: modifier.code,
+        modifiers,
     };
 }
 

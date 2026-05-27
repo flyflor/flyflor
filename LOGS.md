@@ -1869,3 +1869,17 @@
   范围：browser-use-press-key-aliases
   摘要：最终 whitespace 检查通过。
   验证：`git diff --check`。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-press-modifier-combos
+  摘要：`browser.use press` 的 CDP backend 现在会将 `cmd+k`、`cmd+shift+k`、`ctrl+alt+t` 等 shortcut 字符串解析为 CDP modifier keyDown/main key keyDown/keyUp/modifier keyUp 序列；delegate backend 继续保留原始 process-json input。
+  原因：真实模型常把 browser press 用作快捷键入口；原先 CDP backend 会把整段 `cmd+k` 当单个 key 透传，无法稳定触发浏览器快捷键。
+  验证：待跑 focused browser-use tests、check/docs、真实 browser smoke、真实闭环与 `git diff --check`。
+  风险：只影响 opt-in `browser.use` CDP backend 的 press 行为；manifest visibility、ASK/plan/yolo、动态预算、approval/quota/audit、delegate backend 和 kernel import 边界不变。
+
+- 状态：补充验证
+  执行者：main-codex
+  范围：browser-use-press-modifier-combos
+  摘要：完成 focused、docs、check、真实 browser smoke、真实 LLM closure 和 whitespace 验证。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（51 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11）；`git diff --check`。

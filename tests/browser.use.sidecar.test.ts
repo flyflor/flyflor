@@ -341,6 +341,48 @@ describe("high-level browser.use process-json sidecar", () => {
         }
     });
 
+    test("dispatches browser press modifier combos for the CDP backend", async () => {
+        const server = new MockCdpServer();
+        try {
+            const response = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "press", key: "cmd+shift+k" },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+
+            expect(response).toMatchObject({ ok: true, action: "press", backend: "cdp", readOnly: false });
+            expect(server.commands).toEqual([
+                expect.objectContaining({
+                    method: "Input.dispatchKeyEvent",
+                    params: expect.objectContaining({ code: "MetaLeft", key: "Meta", modifiers: 4, type: "keyDown" }),
+                }),
+                expect.objectContaining({
+                    method: "Input.dispatchKeyEvent",
+                    params: expect.objectContaining({ code: "ShiftLeft", key: "Shift", modifiers: 12, type: "keyDown" }),
+                }),
+                expect.objectContaining({
+                    method: "Input.dispatchKeyEvent",
+                    params: expect.objectContaining({ key: "k", modifiers: 12, type: "keyDown" }),
+                }),
+                expect.objectContaining({
+                    method: "Input.dispatchKeyEvent",
+                    params: expect.objectContaining({ key: "k", modifiers: 12, type: "keyUp" }),
+                }),
+                expect.objectContaining({
+                    method: "Input.dispatchKeyEvent",
+                    params: expect.objectContaining({ code: "ShiftLeft", key: "Shift", modifiers: 12, type: "keyUp" }),
+                }),
+                expect.objectContaining({
+                    method: "Input.dispatchKeyEvent",
+                    params: expect.objectContaining({ code: "MetaLeft", key: "Meta", modifiers: 4, type: "keyUp" }),
+                }),
+            ]);
+            expect((server.commands[2] as { params: { text?: unknown } }).params.text).toBeUndefined();
+        } finally {
+            server.stop();
+        }
+    });
+
     test("rejects invalid browser scroll direction before invoking CDP", async () => {
         const response = await invokeSidecar({
             tool: "browser.use",
