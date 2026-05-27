@@ -1124,3 +1124,15 @@ Kernel V2 acceptance focus：
 - [x] 区分 `.flyflor/tools.jsonc` user manifest tools 与 `tools/external.tools.jsonc` external sidecars 的 `cwd: "project"` anchor。
 - [x] 保持 external sidecar 兼容语义不变；user manifest process-json tool 必须从真实 `paths.projectDir` 启动。
 - [x] 新增 focused 回归与追加文档，复跑 user-tool cwd tests、check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 User Tool Resource Bounds
+
+- [x] 在 `.flyflor/tools.jsonc` user manifest normalization 层限制 process-json executor 的 `timeoutMs` 与 `maxOutputBytes`。
+- [x] 与 external sidecar 资源边界保持一致，避免本地 user tool manifest 静默扩大单次子进程执行窗口或输出缓存。
+- [x] 新增 focused 回归与追加文档，复跑 executive manifest tests、check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Tool Call Parse Failure Closure
+
+- [x] malformed `<agent_tool_calls>` 严格 JSON 失败必须进入结构化 tool failure + Executive ASK，不允许冒泡成 `turn.error`。
+- [x] 失败路径必须保留 socket/TUI/history/brain 可见的 execution metadata，且不能猜测或修复工具调用意图。
+- [x] 新增 focused runtime 回归与追加文档，复跑 MCP runtime tests、check/docs、真实闭环与 `git diff --check`。

@@ -5,6 +5,7 @@ import {
     CapabilityExecutionKind,
     ExecutiveLoopGuardReason,
 } from "../../../protocol/contracts/index.ts";
+import { extractStructuredBlocks, StructuredBlockProtocol } from "../../../protocol/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../../events/index.ts";
 import {
     callMcpTool,
@@ -145,6 +146,8 @@ export class RuntimeMcpToolExecutor {
                 onExecutionAskRequired: (execution, context) =>
                     this.executionAskRequired(execution, context),
                 onLoopGuardBlocked: (call, decision) => this.loopGuardExecution(call, decision, input.toolExecution.requestId),
+                onParseFailure: (raw, error, context) =>
+                    this.toolCallParseFailure(raw, error, context, input.toolExecution),
                 parse: (raw) => {
                     const parsed = input.parse(raw);
                     return {
@@ -161,6 +164,84 @@ export class RuntimeMcpToolExecutor {
             rawText: result.rawText,
             mcpToolCalls: result.executions,
         };
+    }
+
+    private toolCallParseFailure(
+        raw: string,
+        error: unknown,
+        context: {
+            budget: ExecutiveToolRuntimeBudgetSnapshot;
+            loopGuardSnapshot: ExecutiveLoopGuardSnapshot;
+            stepCount: number;
+        },
+        input: RuntimeMcpToolExecutorInput,
+    ): {
+        askRequired: ExecutiveToolRuntimeAskRequired;
+        execution: McpToolCallExecution & { call: McpToolCallRequest & { key: string } };
+        rawText: string;
+    } {
+        const message = this.parseFailureMessage(error);
+        const execution = this.toolCallParseFailureExecution(raw, message);
+        return {
+            askRequired: {
+                askId: crypto.randomUUID(),
+                budget: context.budget,
+                crystalCandidate: {
+                    kind: "executive-loop-pause",
+                    reason: "tool-call-parse-failure",
+                    summary: message,
+                },
+                loopGuardSnapshot: context.loopGuardSnapshot,
+                message,
+                pause: {
+                    mode: "pause",
+                    options: [{ mode: "continue" }, { mode: "narrow" }, { mode: "stop" }],
+                },
+                resume: { mode: "continue", requestId: input.requestId },
+                stepCount: context.stepCount,
+                stop: "ask",
+            },
+            execution,
+            rawText: this.visibleTextForToolCallParseFailure(raw),
+        };
+    }
+
+    private toolCallParseFailureExecution(
+        raw: string,
+        message: string,
+    ): McpToolCallExecution & { call: McpToolCallRequest & { key: string } } {
+        const call = {
+            server: "protocol",
+            tool: "agent_tool_calls.parse",
+            input: {
+                protocol: "agent_tool_calls",
+                rawPreview: raw.slice(0, 500),
+            },
+            key: "protocol.agent_tool_calls.parse",
+        };
+        return {
+            call,
+            ok: false,
+            error: message,
+            result: {
+                isError: true,
+                raw: {
+                    kind: "tool-call-parse-failure",
+                    message,
+                    protocol: "agent_tool_calls",
+                    rawPreview: raw.slice(0, 1000),
+                },
+            },
+        };
+    }
+
+    private parseFailureMessage(error: unknown): string {
+        const detail = error instanceof Error ? error.message : String(error);
+        return `Malformed agent_tool_calls JSON blocked tool execution: ${detail}`;
+    }
+
+    private visibleTextForToolCallParseFailure(raw: string): string {
+        return extractStructuredBlocks(raw, StructuredBlockProtocol.McpCalls).text;
     }
 
     public async executeCalls(

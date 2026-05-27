@@ -70,6 +70,9 @@ export interface ToolManifestExecutor {
 
 type StringEnumShape = Readonly<Record<string, string>>;
 
+const USER_TOOL_MAX_TIMEOUT_MS = 120_000;
+const USER_TOOL_MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
+
 /**
  * Owns user tool manifest parsing before descriptors enter Runtime catalogs.
  * Absence uses conventions; explicit malformed values fail fast at the
@@ -188,8 +191,8 @@ export class ToolManifestComponent extends CapabilityComponent {
             cwd: this.optionalCwd(executor.cwd, `${path}.cwd`) ?? "project",
             env: this.optionalStringRecord(executor.env, `${path}.env`),
             kind: "process-json",
-            maxOutputBytes: this.optionalPositiveInt(executor.maxOutputBytes, `${path}.maxOutputBytes`) ?? 64 * 1024,
-            timeoutMs: this.optionalPositiveInt(executor.timeoutMs, `${path}.timeoutMs`) ?? 8_000,
+            maxOutputBytes: this.optionalBoundedPositiveInt(executor.maxOutputBytes, `${path}.maxOutputBytes`, USER_TOOL_MAX_OUTPUT_BYTES) ?? 64 * 1024,
+            timeoutMs: this.optionalBoundedPositiveInt(executor.timeoutMs, `${path}.timeoutMs`, USER_TOOL_MAX_TIMEOUT_MS) ?? 8_000,
         };
     }
 
@@ -306,6 +309,17 @@ export class ToolManifestComponent extends CapabilityComponent {
             throw new Error(`${path} must be a positive integer.`);
         }
         return value;
+    }
+
+    private optionalBoundedPositiveInt(value: unknown, path: string, max: number): number | undefined {
+        const number = this.optionalPositiveInt(value, path);
+        if (number === undefined) {
+            return undefined;
+        }
+        if (number > max) {
+            throw new Error(`${path} must be <= ${max}.`);
+        }
+        return number;
     }
 
     private optionalString(value: unknown, path: string): string | undefined {

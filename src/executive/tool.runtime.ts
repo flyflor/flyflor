@@ -74,6 +74,15 @@ export interface ExecutiveToolRuntimeCallbacks<TCall extends ExecutiveToolCall, 
         },
     ): ExecutiveToolRuntimeAskRequired | undefined;
     onLoopGuardBlocked?(call: TCall, decision: ExecutiveLoopGuardDecision): TExecution;
+    onParseFailure?(
+        raw: string,
+        error: unknown,
+        context: {
+            budget: ExecutiveToolRuntimeBudgetSnapshot;
+            loopGuardSnapshot: ExecutiveLoopGuardSnapshot;
+            stepCount: number;
+        },
+    ): { askRequired: ExecutiveToolRuntimeAskRequired; execution?: TExecution; rawText?: string } | undefined;
     parse(raw: string): { calls: TCall[]; text: string };
     renderResults(executions: TExecution[]): string;
     toolDescriptor(call: TCall): ExecutiveToolRuntimeDescriptor | undefined;
@@ -155,7 +164,28 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
 
         for (let turn = 0; turn < maxTurns; turn += 1) {
             const raw = await input.callbacks.generate(transcript, turn);
-            const parsed = input.callbacks.parse(raw);
+            let parsed: { calls: TCall[]; text: string };
+            try {
+                parsed = input.callbacks.parse(raw);
+            } catch (error) {
+                const parseFailure = input.callbacks.onParseFailure?.(raw, error, {
+                    budget: budget.snapshot(),
+                    loopGuardSnapshot: loopGuard.snapshot(),
+                    stepCount: turn + 1,
+                });
+                if (!parseFailure) {
+                    throw error;
+                }
+                if (parseFailure.execution) {
+                    allExecutions.push(parseFailure.execution);
+                    input.callbacks.onExecution?.(parseFailure.execution, { loopGuardBlocked: false });
+                }
+                return {
+                    askRequired: parseFailure.askRequired,
+                    rawText: parseFailure.rawText ?? raw,
+                    executions: allExecutions,
+                };
+            }
             if (parsed.calls.length === 0) {
                 return { rawText: parsed.text || raw, executions: allExecutions };
             }

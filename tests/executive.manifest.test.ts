@@ -187,6 +187,34 @@ describe("Executive user tool manifest", () => {
                 file: { tools: { "local.echo": { executor: { kind: "process-json", command: "bun", config: [] } } } },
                 message: "tools.local.echo.executor.config must be an object.",
             },
+            {
+                file: {
+                    tools: {
+                        "local.echo": {
+                            executor: {
+                                kind: "process-json",
+                                command: "bun",
+                                maxOutputBytes: 2 * 1024 * 1024 + 1,
+                            },
+                        },
+                    },
+                },
+                message: "tools.local.echo.executor.maxOutputBytes must be <= 2097152.",
+            },
+            {
+                file: {
+                    tools: {
+                        "local.echo": {
+                            executor: {
+                                kind: "process-json",
+                                command: "bun",
+                                timeoutMs: 120_001,
+                            },
+                        },
+                    },
+                },
+                message: "tools.local.echo.executor.timeoutMs must be <= 120000.",
+            },
         ];
 
         for (const manifest of invalidManifests) {

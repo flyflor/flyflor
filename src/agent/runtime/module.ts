@@ -83,6 +83,7 @@ import {
     type McpToolCallExecution,
     type McpToolCatalogEntry,
     type McpToolCallRequest,
+    type ParsedMcpToolCalls,
     type McpPromptDefinition,
     type McpResourceDefinition,
     type McpPromptGetResult,
@@ -2968,7 +2969,12 @@ export class RuntimeModule extends RuntimeBoundary {
                           reason: turn === 0 ? "main-turn.generate" : "executive.tool-loop.generate",
                           source: "runtime.executive-loop",
                       });
-                const parsedCalls = parseMcpToolCalls(raw);
+                let parsedCalls: ParsedMcpToolCalls;
+                try {
+                    parsedCalls = parseMcpToolCalls(raw);
+                } catch {
+                    return raw;
+                }
                 if (turn === 0 && parsedCalls.calls.length === 0) {
                     const forced = await this.decideInitialToolNeed(raw, modelTranscript, mcp, options);
                     if (forced) return forced;

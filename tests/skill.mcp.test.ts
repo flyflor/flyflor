@@ -1064,6 +1064,65 @@ describe("Skill and MCP capability config", () => {
         );
     });
 
+    test("runtime pauses with ASK when model emits malformed MCP tool-call JSON", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-mcp-malformed-json-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{path:"README.md"}}]}</agent_tool_calls>',
+        ]);
+        const sink = new CapturingSink();
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mcpToolApproval: ToolApprovalMode.Allow,
+                    mode: SandboxMode.Off,
+                },
+            },
+            model,
+            sink,
+        );
+
+        const reply = await runtime.handleMessage(gatewayMessage("read README through a malformed tool block"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.metadata?.kind).toBe("ask");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({
+                error: expect.stringContaining("Malformed agent_tool_calls JSON"),
+                ok: false,
+                server: "protocol",
+                tool: "agent_tool_calls.parse",
+            }),
+        ]);
+        expect(sink.events).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    type: RuntimeEventType.McpToolCallExecuted,
+                    payload: expect.objectContaining({
+                        ok: false,
+                        server: "protocol",
+                        status: "failed",
+                        tool: "agent_tool_calls.parse",
+                    }),
+                }),
+                expect.objectContaining({
+                    type: RuntimeEventType.ToolAskRequired,
+                    payload: expect.objectContaining({ reason: "executive-loop-paused" }),
+                }),
+                expect.objectContaining({
+                    type: RuntimeEventType.ExecutiveLoopPaused,
+                    payload: expect.objectContaining({ askId: expect.any(String) }),
+                }),
+            ]),
+        );
+    });
+
     test("runtime skips MCP execution when approval is denied", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-mcp-deny-"));
         const paths = testPaths(root);
@@ -3426,7 +3485,7 @@ describe("Skill and MCP capability config", () => {
         );
     });
 
-    test("runtime rejects unrecognized tool call shapes instead of silently dropping them", async () => {
+    test("runtime pauses on unrecognized tool call shapes instead of silently dropping them", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-bad-shape-"));
         const paths = testPaths(root);
         await installTestTemplates(paths);
@@ -3438,15 +3497,25 @@ describe("Skill and MCP capability config", () => {
         ]);
         const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
 
-        await expect(
-            runtime.handleMessage(gatewayMessage("bad call shape"), {
-                requestId: crypto.randomUUID(),
-                now: new Date().toISOString(),
+        const reply = await runtime.handleMessage(gatewayMessage("bad call shape"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.metadata?.kind).toBe("ask");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({
+                error: expect.stringContaining(
+                    "Invalid MCP tool call at mcpCalls[0].calls[0]: missing server/tool identity.",
+                ),
+                ok: false,
+                server: "protocol",
+                tool: "agent_tool_calls.parse",
             }),
-        ).rejects.toThrow("Invalid MCP tool call at mcpCalls[0].calls[0]: missing server/tool identity.");
+        ]);
     });
 
-    test("runtime rejects malformed string arguments with a structured MCP call path", async () => {
+    test("runtime pauses on malformed string arguments with a structured MCP call path", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-bad-args-"));
         const paths = testPaths(root);
         await installTestTemplates(paths);
@@ -3457,14 +3526,22 @@ describe("Skill and MCP capability config", () => {
         ]);
         const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
 
-        await expect(
-            runtime.handleMessage(gatewayMessage("bad call args"), {
-                requestId: crypto.randomUUID(),
-                now: new Date().toISOString(),
+        const reply = await runtime.handleMessage(gatewayMessage("bad call args"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.metadata?.kind).toBe("ask");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({
+                error: expect.stringContaining(
+                    "Invalid MCP tool call at mcpCalls[0].tool_calls[0].function.arguments: expected valid JSON object.",
+                ),
+                ok: false,
+                server: "protocol",
+                tool: "agent_tool_calls.parse",
             }),
-        ).rejects.toThrow(
-            "Invalid MCP tool call at mcpCalls[0].tool_calls[0].function.arguments: expected valid JSON object.",
-        );
+        ]);
     });
 
     test("workspace read can inspect paths outside the project root without write approval", async () => {

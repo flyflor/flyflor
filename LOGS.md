@@ -1519,3 +1519,35 @@
   原因：本切片调整 process-json 子进程工作目录，需要覆盖 runtime、sandbox、ASK 和 external use 相关回归。
   验证：`bun run test`（1090 pass, 0 fail）；待最终 `git diff --check`。
   风险：无新增运行态风险；未跟踪 `.github/` 与 `.workmux.yaml` 仍不属于本轮改动，未纳入提交。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：user-tool-resource-bounds
+  摘要：准备在 `.flyflor/tools.jsonc` user manifest normalization 层限制 process-json executor `timeoutMs` 与 `maxOutputBytes`。
+  原因：external sidecar manifest 已经有资源上限，但 user manifest executor 仍只校验正整数；坏配置可能静默扩大单次子进程执行窗口或输出缓存，削弱动态额限和工具预算边界。
+  验证：待跑 focused executive manifest tests、check/docs、真实闭环与 diff。
+  风险：只影响 user manifest preflight；不改变 ASK、plan、yolo、动态预算、external sidecar protocol 或 kernel import 边界。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：tool-call-parse-failure-closure
+  摘要：准备把 malformed `<agent_tool_calls>` 严格 JSON 失败从 turn crash 改为结构化 `protocol/agent_tool_calls.parse` tool failure，并由 Executive ASK 暂停。
+  原因：真实 DeepSeek `smoke:live:closure` 在 budget resume 场景输出 malformed tool-call block，当前 parse exception 直接冒泡成 `turn.error`，TUI/history/brain 看不到工具失败细节。
+  验证：待跑 focused MCP runtime test、check/docs、真实闭环与 diff。
+  风险：只处理完整协议块内 JSON parse/shape 失败；不猜测工具意图，不新增执行权限，不改变 ASK/plan/yolo 授权面。
+
+- 状态：完成
+  执行者：main-codex
+  范围：user-tool-resource-bounds
+  摘要：`.flyflor/tools.jsonc` process-json executor 现在拒绝超过 `120000`ms timeout 与 `2097152` bytes output cap 的 user manifest 配置，并补充中英文追加文档。
+  原因：user manifest 与 external sidecar 共享子进程资源边界，避免本地工具配置静默扩大单次执行窗口。
+  验证：`bun test tests/executive.manifest.test.ts tests/runtime.user.tool.cwd.test.ts --timeout 30000`；`bun run docs:check`；`bun run check`；`bun run smoke:live:closure`；`bun run test`（1091 pass, 0 fail）；`git diff --check`。
+  风险：只影响 manifest preflight；默认值不变，ASK、plan、yolo、动态预算和 external sidecar protocol 不变。
+
+- 状态：完成
+  执行者：main-codex
+  范围：tool-call-parse-failure-closure
+  摘要：Executive loop 增加 parse failure 暂停出口；MCP runtime 将 malformed `<agent_tool_calls>` JSON/shape/string arguments 归档为 `protocol/agent_tool_calls.parse` 失败执行并触发结构化 Executive ASK。
+  原因：真实 LLM 闭环必须把 malformed tool-call block 暴露给 socket/TUI/history/brain，而不是变成黑盒 `turn.error`。
+  验证：`bun test tests/skill.mcp.test.ts --timeout 30000 -t "unrecognized tool call shapes|malformed string arguments|malformed MCP tool-call JSON"`；`bun run docs:check`；`bun run check`；`bun run smoke:live:closure`；`bun run test`（1091 pass, 0 fail）；`git diff --check`。
+  风险：不猜测、不修复、不执行 malformed 调用；只把协议失败纳入工具失败与 ASK 闭环。
