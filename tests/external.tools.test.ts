@@ -109,6 +109,7 @@ describe("external tool descriptor discovery", () => {
                     annotate: { type: "boolean" },
                     amount: { type: "integer", minimum: 1, maximum: 1000 },
                     clear: { type: "boolean" },
+                    capture_after: { type: "boolean" },
                     direction: { type: "string", enum: ["up", "down", "left", "right"] },
                     expression: { type: "string" },
                     full: { type: "boolean" },

@@ -107,13 +107,11 @@ class BrowserUseSidecar {
             readOnly: READ_ACTIONS.has(invocation.action),
             result,
         };
-        if (invocation.input.captureAfter !== true || READ_ACTIONS.has(invocation.action)) {
+        if (!captureAfterRequested(invocation.input) || READ_ACTIONS.has(invocation.action)) {
             return response;
         }
         const captureAction = readString(invocation.input.captureMode) === "screenshot" ? "screenshot" : "snapshot";
-        const captureInput: JsonObject = captureAction === "screenshot"
-            ? { action: "screenshot", format: readString(invocation.input.format) }
-            : { action: "snapshot" };
+        const captureInput = captureAfterInput(invocation.input, captureAction);
         const capture = await this.invokeBackend(backend, {
             ...invocation,
             action: captureAction,
@@ -555,8 +553,17 @@ async function validateAction(action: BrowserUseAction, input: JsonObject): Prom
     if (input.captureAfter !== undefined && typeof input.captureAfter !== "boolean") {
         throw new BrowserUseError("failed", "input.captureAfter must be a boolean");
     }
+    if (input.capture_after !== undefined && typeof input.capture_after !== "boolean") {
+        throw new BrowserUseError("failed", "input.capture_after must be a boolean");
+    }
     if (input.captureMode !== undefined && readString(input.captureMode) !== "snapshot" && readString(input.captureMode) !== "screenshot") {
         throw new BrowserUseError("failed", "input.captureMode must be 'snapshot' or 'screenshot'");
+    }
+    if (input.full !== undefined && typeof input.full !== "boolean") {
+        throw new BrowserUseError("failed", "input.full must be a boolean");
+    }
+    if (input.maxElements !== undefined) {
+        boundedInt(input.maxElements, 1, 1000);
     }
     if (action === "open" || action === "navigate") {
         await requiredUrl(input.url, "input.url");
@@ -584,12 +591,8 @@ async function validateAction(action: BrowserUseAction, input: JsonObject): Prom
         boundedInt(input.maxImages, 1, 1000);
     }
     if (action === "snapshot") {
-        if (input.full !== undefined && typeof input.full !== "boolean") {
-            throw new BrowserUseError("failed", "input.full must be a boolean");
-        }
-        if (input.maxElements !== undefined) {
-            boundedInt(input.maxElements, 1, 1000);
-        }
+        // full/maxElements are validated above because mutating actions may
+        // pass them to control the follow-up snapshot via captureAfter.
     }
     if (action === "vision") {
         requiredString(input.question, "input.question");
@@ -605,6 +608,28 @@ async function validateAction(action: BrowserUseAction, input: JsonObject): Prom
             requiredString(input.expression, "input.expression");
         }
     }
+}
+
+function captureAfterRequested(input: JsonObject): boolean {
+    return input.captureAfter === true || input.capture_after === true;
+}
+
+function captureAfterInput(input: JsonObject, action: BrowserUseAction): JsonObject {
+    if (action === "screenshot") {
+        return Object.fromEntries(
+            Object.entries({
+                action: "screenshot",
+                format: readString(input.format),
+            }).filter(([, value]) => value !== undefined),
+        );
+    }
+    return Object.fromEntries(
+        Object.entries({
+            action: "snapshot",
+            full: typeof input.full === "boolean" ? input.full : undefined,
+            maxElements: boundedInt(input.maxElements, 1, 1000),
+        }).filter(([, value]) => value !== undefined),
+    );
 }
 
 function waitForOpen(ws: WebSocket): Promise<void> {

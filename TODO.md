@@ -1184,3 +1184,9 @@ Kernel V2 acceptance focus：
 - [x] `browser.use` CDP `snapshot` 默认返回紧凑互动元素 refs，并在页面 DOM 上标记 `data-flyflor-ref`。
 - [x] `browser.use` 的 `click` / `type` 支持 `ref` 与 `@eN` target，同时保留 `full: true` 的 Accessibility full-tree snapshot。
 - [x] 新增 focused browser-use/external descriptor/live smoke 回归与追加文档，复跑 check/docs、真实闭环、全量测试与 `git diff --check`。
+
+## 2026-05-27 Browser Use Capture-After Context
+
+- [x] `browser.use` 支持 `capture_after` 作为 `captureAfter` 的结构化别名，避免真实模型字段口径导致执行后回看丢失。
+- [x] 后置 snapshot 保留 `full` 与 `maxElements` 观察上下文，保障 refs 小闭环执行后仍按同一观察预算回看。
+- [x] 新增 focused browser-use/external descriptor 回归与追加文档，复跑 check/docs、真实闭环与 `git diff --check`。

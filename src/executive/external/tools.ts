@@ -570,6 +570,7 @@ function browserUseTool(): ExternalToolSpec {
                 annotate: { type: "boolean" },
                 amount: { type: "integer", minimum: 1, maximum: 1000 },
                 captureAfter: { type: "boolean" },
+                capture_after: { type: "boolean" },
                 captureMode: { type: "string", enum: ["snapshot", "screenshot"] },
                 clear: { type: "boolean" },
                 direction: { type: "string", enum: ["up", "down", "left", "right"] },

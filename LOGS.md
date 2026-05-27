@@ -1679,3 +1679,19 @@
   原因：补齐真实模型常用的 snapshot -> ref -> action 浏览器闭环，同时保持 refs 只属于 browser sidecar 页面局部 hint，kernel 不存 ref map、不 import browser runtime。
   验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（43 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true，覆盖 snapshot-refs/type-ref/click-ref）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun test tests/naming.boundaries.test.ts --timeout 30000`（30 pass, 0 fail）；待最终 docs/test/diff 门禁。
   风险：只扩展 opt-in `browser.use` CDP action target 语义；默认 manifest、高权限 ASK/plan/yolo、动态预算和 process-json 子进程边界不变。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-capture-after-context
+  摘要：准备让 `browser.use` 的后置 snapshot 保留 `full` 与 `maxElements`，并接受 `capture_after` 结构化别名。
+  原因：真实模型在 Hermes 风格 snapshot -> ref -> action 小闭环中常需要执行后回看；如果 follow-up snapshot 丢掉观察预算，会扩大上下文并削弱 refs 回看稳定性。
+  验证：待跑 focused browser-use/external descriptor tests、check/docs、真实闭环与 diff。
+  风险：只影响 opt-in `browser.use` 的结构化 follow-up capture；不改变默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota 或 kernel import 边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-capture-after-context
+  摘要：`browser.use` 现在接受 `capture_after` 作为 `captureAfter` 的结构化别名；后置 snapshot 会保留 `full` 与 `maxElements`，确保 ref 操作后的回看仍按同一观察预算运行。
+  原因：补齐 Hermes 风格 snapshot -> ref -> action -> captureAfter 小闭环，避免真实模型字段口径或默认 snapshot cap 让执行后观察变形。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（44 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true，覆盖 ref/captureAfter/vision/console/screenshot）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；待最终 `git diff --check`。
+  风险：只影响 opt-in `browser.use` 的结构化 follow-up capture；默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit 与 process-json 子进程边界不变。

@@ -463,7 +463,7 @@ console.log(JSON.stringify({
         try {
             const response = await invokeSidecarBody({
                 tool: "browser.use",
-                input: { action: "type", target: "#search", text: "flyflor", captureAfter: true },
+                input: { action: "type", target: "#search", text: "flyflor", captureAfter: true, maxElements: 7 },
                 config: { backend: "cdp", cdpUrl: server.url },
             });
 
@@ -481,6 +481,37 @@ console.log(JSON.stringify({
             expect(server.commands.map((entry) => (entry as { method: string }).method)).toEqual([
                 "Runtime.evaluate",
                 "Runtime.evaluate",
+            ]);
+            expect((server.commands[1] as { params: { expression: string } }).params.expression).toContain(".slice(0, 7)");
+        } finally {
+            server.stop();
+        }
+    });
+
+    test("accepts snake_case capture_after and preserves full snapshot context", async () => {
+        const server = new MockCdpServer();
+        try {
+            const response = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "click", target: "#continue", capture_after: true, full: true },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+
+            expect(response).toMatchObject({
+                ok: true,
+                action: "click",
+                backend: "cdp",
+                readOnly: false,
+                captureAfter: {
+                    action: "snapshot",
+                    backend: "cdp",
+                    readOnly: true,
+                    result: { full: true },
+                },
+            });
+            expect(server.commands.map((entry) => (entry as { method: string }).method)).toEqual([
+                "Runtime.evaluate",
+                "Accessibility.getFullAXTree",
             ]);
         } finally {
             server.stop();
