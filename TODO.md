@@ -997,3 +997,10 @@ Kernel V2 acceptance focus：
 - [x] 原子 `browser.open` / `browser.navigate` 增加危险协议拦截，拒绝 `javascript:`、`data:`、`vbscript:`。
 - [x] 新增 `docs/external/browser.cdp.md` 与 `docs/external/browser.cdp.zh.cn.md`，不改写 active docs index。
 - [x] 复跑 Browser CDP、Browser Use、external registry/socket、docs/check/diff 门禁。
+
+## 2026-05-27 Computer Use Hermes Schema 对齐
+
+- [x] `computer.use` action schema 增加 `middle_click`，并补齐 Hermes-style `mode`、`maxElements`、`button`、`modifiers`、`seconds`、`raiseWindow` 字段。
+- [x] `computer.use` CUA backend payload 增加 snake_case 归一化字段：capture mode/max elements、drag source/target、button/modifiers、seconds、raise window 等。
+- [x] 新增 `docs/external/computer.use.md` 与 `docs/external/computer.use.zh.cn.md`，不改写 active docs index。
+- [x] 复跑 computer/browser focused tests、external registry/socket tests、docs/check/diff 门禁。

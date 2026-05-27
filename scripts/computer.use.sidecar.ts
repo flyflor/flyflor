@@ -9,6 +9,7 @@ type ComputerUseAction =
     | "click"
     | "double_click"
     | "right_click"
+    | "middle_click"
     | "drag"
     | "scroll"
     | "type"
@@ -38,6 +39,7 @@ const ACTIONS = new Set<ComputerUseAction>([
     "click",
     "double_click",
     "right_click",
+    "middle_click",
     "drag",
     "scroll",
     "type",
@@ -193,6 +195,8 @@ function cuaToolFor(action: ComputerUseAction): string {
             return "double_click";
         case "right_click":
             return "right_click";
+        case "middle_click":
+            return "middle_click";
         case "drag":
             return "drag";
         case "scroll":
@@ -214,18 +218,35 @@ function cuaToolFor(action: ComputerUseAction): string {
 
 function cuaPayload(invocation: ComputerUseInvocation): JsonObject {
     const input = invocation.input;
+    const coordinateTarget = coordinate(input.coordinate);
+    const fromCoordinate = coordinate(input.fromCoordinate) ?? coordinate(input.from_coordinate);
+    const toCoordinate = coordinate(input.toCoordinate) ?? coordinate(input.to_coordinate);
     const payload: JsonObject = {
         action: invocation.action,
         app: readString(input.app),
+        button: readButton(input.button),
         capture_after: input.captureAfter === true,
+        click_count: invocation.action === "double_click" ? 2 : 1,
+        element: numberInput(input.element),
         element_index: numberInput(input.element),
-        x: coordinate(input.coordinate)?.[0],
-        y: coordinate(input.coordinate)?.[1],
+        from_element: numberInput(input.fromElement) ?? numberInput(input.from_element),
+        from_x: fromCoordinate?.[0],
+        from_y: fromCoordinate?.[1],
+        max_elements: boundedInt(input.maxElements ?? input.max_elements, 1, 1000),
+        mode: readCaptureMode(input.mode),
+        modifiers: stringArray(input.modifiers),
+        raise_window: input.raiseWindow === true || input.raise_window === true,
+        seconds: boundedNumber(input.seconds, 0, 30),
         text: readString(input.text),
+        to_element: numberInput(input.toElement) ?? numberInput(input.to_element),
+        to_x: toCoordinate?.[0],
+        to_y: toCoordinate?.[1],
         keys: readString(input.keys),
         value: readString(input.value),
         direction: readString(input.direction),
         amount: numberInput(input.amount),
+        x: coordinateTarget?.[0],
+        y: coordinateTarget?.[1],
     };
     return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined));
 }
@@ -287,6 +308,27 @@ function validateAction(action: ComputerUseAction, input: JsonObject): void {
     if (input.captureAfter !== undefined && typeof input.captureAfter !== "boolean") {
         throw new ComputerUseError("failed", "input.captureAfter must be a boolean");
     }
+    if (input.raiseWindow !== undefined && typeof input.raiseWindow !== "boolean") {
+        throw new ComputerUseError("failed", "input.raiseWindow must be a boolean");
+    }
+    if (input.raise_window !== undefined && typeof input.raise_window !== "boolean") {
+        throw new ComputerUseError("failed", "input.raise_window must be a boolean");
+    }
+    if (input.mode !== undefined) {
+        readCaptureMode(input.mode);
+    }
+    if (input.maxElements !== undefined || input.max_elements !== undefined) {
+        boundedInt(input.maxElements ?? input.max_elements, 1, 1000);
+    }
+    if (input.button !== undefined) {
+        readButton(input.button);
+    }
+    if (input.modifiers !== undefined) {
+        readModifiers(input.modifiers);
+    }
+    if (input.seconds !== undefined) {
+        boundedNumber(input.seconds, 0, 30);
+    }
     if (requiresPoint(action) && !hasPointTarget(input)) {
         throw new ComputerUseError("failed", `computer.use ${action} requires input.element or input.coordinate`);
     }
@@ -319,7 +361,7 @@ function validateAction(action: ComputerUseAction, input: JsonObject): void {
 }
 
 function requiresPoint(action: ComputerUseAction): boolean {
-    return action === "click" || action === "double_click" || action === "right_click";
+    return action === "click" || action === "double_click" || action === "right_click" || action === "middle_click";
 }
 
 function hasPointTarget(input: JsonObject): boolean {
@@ -328,8 +370,8 @@ function hasPointTarget(input: JsonObject): boolean {
 
 function hasDragTarget(input: JsonObject): boolean {
     return (
-        (input.fromElement !== undefined && input.toElement !== undefined) ||
-        (coordinate(input.fromCoordinate) !== undefined && coordinate(input.toCoordinate) !== undefined)
+        ((input.fromElement !== undefined || input.from_element !== undefined) && (input.toElement !== undefined || input.to_element !== undefined)) ||
+        ((coordinate(input.fromCoordinate) ?? coordinate(input.from_coordinate)) !== undefined && (coordinate(input.toCoordinate) ?? coordinate(input.to_coordinate)) !== undefined)
     );
 }
 
@@ -438,6 +480,34 @@ function stringArray(value: unknown): readonly string[] {
     return value;
 }
 
+function readModifiers(value: unknown): readonly string[] {
+    const modifiers = stringArray(value);
+    const allowed = new Set(["cmd", "shift", "option", "alt", "ctrl", "fn"]);
+    const invalid = modifiers.find((entry) => !allowed.has(entry));
+    if (invalid) {
+        throw new ComputerUseError("failed", `computer.use modifier is unsupported: ${invalid}`);
+    }
+    return modifiers;
+}
+
+function readButton(value: unknown): "left" | "right" | "middle" | undefined {
+    if (value === undefined) return undefined;
+    const button = readString(value);
+    if (button === "left" || button === "right" || button === "middle") {
+        return button;
+    }
+    throw new ComputerUseError("failed", "computer.use button must be left, right, or middle");
+}
+
+function readCaptureMode(value: unknown): "som" | "vision" | "ax" | undefined {
+    if (value === undefined) return undefined;
+    const mode = readString(value);
+    if (mode === "som" || mode === "vision" || mode === "ax") {
+        return mode;
+    }
+    throw new ComputerUseError("failed", "computer.use mode must be som, vision, or ax");
+}
+
 function coordinate(value: unknown): [number, number] | undefined {
     if (!Array.isArray(value) || value.length !== 2) return undefined;
     const x = numberInput(value[0]);
@@ -447,6 +517,24 @@ function coordinate(value: unknown): [number, number] | undefined {
 
 function numberInput(value: unknown): number | undefined {
     return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function boundedNumber(value: unknown, min: number, max: number): number | undefined {
+    const number = numberInput(value);
+    if (number === undefined) return undefined;
+    if (number < min || number > max) {
+        throw new ComputerUseError("failed", `number field must be between ${min} and ${max}`);
+    }
+    return number;
+}
+
+function boundedInt(value: unknown, min: number, max: number): number | undefined {
+    const number = boundedNumber(value, min, max);
+    if (number === undefined) return undefined;
+    if (!Number.isInteger(number)) {
+        throw new ComputerUseError("failed", "integer field must be an integer");
+    }
+    return number;
 }
 
 function positiveInt(value: unknown): number | undefined {

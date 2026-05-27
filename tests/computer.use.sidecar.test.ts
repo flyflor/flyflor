@@ -54,6 +54,105 @@ describe("high-level computer.use process-json sidecar", () => {
         expect(String(response.body.error)).toContain("blocked pattern");
     });
 
+    test("supports Hermes-style middle click and capture options through the delegate", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-"));
+        const delegate = join(root, "delegate.ts");
+        const log = join(root, "delegate.log");
+        await writeFile(
+            delegate,
+            `import { appendFile } from "node:fs/promises";
+const raw = await new Response(Bun.stdin.stream()).text();
+await appendFile("${log}", raw);
+const request = JSON.parse(raw);
+console.log(JSON.stringify({ receivedAction: request.action, input: request.input }));
+`,
+        );
+        await chmod(delegate, 0o755);
+        try {
+            const response = await invokeSidecarBody({
+                tool: "computer.use",
+                input: {
+                    action: "middle_click",
+                    element: 7,
+                    button: "middle",
+                    modifiers: ["cmd"],
+                    mode: "som",
+                    maxElements: 200,
+                },
+                config: { delegateCommand: "bun", delegateArgs: [delegate] },
+                projectDir: root,
+            });
+
+            expect(response.action).toBe("middle_click");
+            expect(response.readOnly).toBe(false);
+            expect(response.result).toMatchObject({
+                response: {
+                    receivedAction: "middle_click",
+                    input: expect.objectContaining({
+                        button: "middle",
+                        element: 7,
+                        maxElements: 200,
+                        mode: "som",
+                        modifiers: ["cmd"],
+                    }),
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test.skipIf(process.platform !== "darwin")("normalizes CUA backend payload fields", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-cua-"));
+        const delegate = join(root, "delegate.ts");
+        await writeFile(
+            delegate,
+            `const raw = await new Response(Bun.stdin.stream()).text();
+const request = JSON.parse(raw);
+console.log(JSON.stringify({ backendTool: request.backendTool, backendPayload: request.backendPayload, argv: Bun.argv.slice(2) }));
+`,
+        );
+        await chmod(delegate, 0o755);
+        try {
+            const response = await invokeSidecarBody({
+                tool: "computer.use",
+                input: {
+                    action: "drag",
+                    fromElement: 1,
+                    toElement: 2,
+                    button: "left",
+                    modifiers: ["shift"],
+                    captureAfter: false,
+                },
+                config: { backend: "cua", cuaCommand: "bun", cuaArgs: [delegate] },
+                projectDir: root,
+            });
+
+            expect(response).toMatchObject({
+                action: "drag",
+                backend: "cua",
+                backendTool: "drag",
+                result: {
+                    response: {
+                        backendTool: "drag",
+                        backendPayload: {
+                            action: "drag",
+                            button: "left",
+                            capture_after: false,
+                            click_count: 1,
+                            from_element: 1,
+                            modifiers: ["shift"],
+                            raise_window: false,
+                            to_element: 2,
+                        },
+                    },
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("runs the requested action then captureAfter through the delegate", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-"));
         const delegate = join(root, "delegate.ts");

@@ -1079,3 +1079,19 @@
   原因：确认原子 sidecar 修复没有破坏默认不可见控制面、ASK/plan/yolo 预算边界和血管层只读 catalog。
   验证：`bun test tests/browser.cdp.sidecar.test.ts tests/browser.use.sidecar.test.ts tests/external.tools.test.ts tests/gateway.ws.test.ts tests/runtime.mcp.tool.plan.test.ts --timeout 30000`（96 pass, 0 fail）；`bun run docs:check`; `bun run check`; `git diff --check`。
   风险：真实 CDP endpoint 仍由用户环境提供，sidecar 不安装浏览器 runtime；默认真实 manifest 仍只暴露 read-only/open Browser CDP probe。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：computer-use-hermes-schema-parity
+  摘要：`computer.use` 补齐 Hermes-style compact action schema：新增 `middle_click`，补充 capture/targeting/modifier/focus 字段，并把 CUA backend payload 归一化为 delegate 友好的 snake_case 字段；新增 Computer Use 外挂说明文档。
+  原因：高层 computer-use 工具需要更接近参考实现的 capture/action/verify 和 SOM 元素工作流，同时保持内核不引入桌面 runtime。
+  验证：已跑 `bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（24 pass, 0 fail）；待补全 focused/docs/check。
+  风险：真实桌面控制仍依赖显式 delegate/CUA backend 配置，默认 manifest 不暴露 `computer.use`。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-hermes-schema-parity-verification
+  摘要：完成 Computer Use Hermes-style schema parity 验证，覆盖 `middle_click`、capture mode/max elements、modifiers、CUA payload snake_case 归一化、browser/computer focused tests、socket catalog 与工具可见性 gate。
+  原因：确认高层 computer-use schema 扩展仍保持子进程外挂、默认不暴露控制面，并且不影响 ASK/plan/yolo 预算边界。
+  验证：`bun test tests/computer.use.sidecar.test.ts tests/browser.use.sidecar.test.ts tests/browser.cdp.sidecar.test.ts tests/external.tools.test.ts tests/gateway.ws.test.ts tests/runtime.mcp.tool.plan.test.ts --timeout 30000`（103 pass, 0 fail）；`bun run docs:check`; `bun run check`; `git diff --check`。
+  风险：真实 CUA/desktop delegate 仍由用户显式安装配置；本轮只补 schema/payload/validation，不把 `computer.use` 加入默认真实工具面。
