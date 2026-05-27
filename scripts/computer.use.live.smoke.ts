@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
-import { access } from "node:fs/promises";
+import { access, chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { basename, delimiter, isAbsolute, join } from "node:path";
 
 type JsonObject = Record<string, unknown>;
@@ -27,16 +28,16 @@ class ComputerUseLiveSmoke {
     private readonly invoker = new ComputerUseInvoker(SIDECAR);
 
     public async run(): Promise<SmokeResult> {
+        const checks = await this.runDelegateClosure();
         if (process.platform !== "darwin") {
-            return this.skip("cua-backend-macos-only");
+            return this.skip("cua-backend-macos-only", checks);
         }
         const cua = await this.locator.find();
         if (!cua) {
-            return this.skip("cua-command-not-found");
+            return this.skip("cua-command-not-found", checks);
         }
 
         try {
-            const checks: string[] = [];
             const config = { backend: "cua", cuaCommand: cua.command, timeoutMs: 15_000 };
 
             const capture = await this.invoker.call({
@@ -68,7 +69,71 @@ class ComputerUseLiveSmoke {
 
             return { ok: true, command: cua.source, checks };
         } catch (err) {
-            return { ok: false, command: cua.source, failure: failureSummary(err) };
+            return { ok: false, command: cua.source, checks, failure: failureSummary(err) };
+        }
+    }
+
+    private async runDelegateClosure(): Promise<string[]> {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-live-delegate-"));
+        const delegate = join(root, "delegate.ts");
+        await writeFile(
+            delegate,
+            `const raw = await new Response(Bun.stdin.stream()).text();
+const request = JSON.parse(raw);
+const readOnly = ["capture", "wait", "list_apps"].includes(request.action);
+console.log(JSON.stringify({
+  receivedAction: request.action,
+  inputAction: request.input?.action,
+  input: request.input,
+  readOnly,
+}));
+`,
+        );
+        await chmod(delegate, 0o755);
+        try {
+            const checks: string[] = [];
+            const config = { delegateCommand: "bun", delegateArgs: [delegate], timeoutMs: 15_000 };
+
+            const capture = await this.invoker.call({
+                tool: "computer.use",
+                config,
+                input: { action: "screenshot" },
+                projectDir: root,
+            });
+            this.expectDelegateOk(capture, "capture", "screenshot", true);
+            checks.push("delegate-alias-screenshot-capture");
+
+            const key = await this.invoker.call({
+                tool: "computer.use",
+                config,
+                input: { action: "press_key", key: "return" },
+                projectDir: root,
+            });
+            this.expectDelegateOk(key, "key", "press_key", false);
+            checks.push("delegate-alias-press_key");
+
+            const setValue = await this.invoker.call({
+                tool: "computer.use",
+                config,
+                input: { action: "setValue", value: "Blue" },
+                projectDir: root,
+            });
+            this.expectDelegateOk(setValue, "set_value", "setValue", false);
+            checks.push("delegate-alias-setValue");
+
+            const doubleClick = await this.invoker.call({
+                tool: "computer.use",
+                config,
+                input: { action: "doubleClick", element: 1, captureAfter: true },
+                projectDir: root,
+            });
+            this.expectDelegateOk(doubleClick, "double_click", "doubleClick", false);
+            this.expectDelegateCaptureAfter(doubleClick, "double_click");
+            checks.push("delegate-alias-doubleClick-captureAfter");
+
+            return checks;
+        } finally {
+            await rm(root, { recursive: true, force: true });
         }
     }
 
@@ -88,8 +153,29 @@ class ComputerUseLiveSmoke {
         }
     }
 
-    private skip(reason: string): SmokeResult {
-        return REQUIRE_CUA ? { ok: false, skipped: true, reason } : { ok: true, skipped: true, reason };
+    private expectDelegateOk(value: JsonObject, action: string, inputAction: string, readOnly: boolean): void {
+        if (value.ok !== true || value.action !== action || value.backend !== "delegate" || value.readOnly !== readOnly) {
+            throw new Error(`${action} did not return an ok delegate response: ${JSON.stringify(value).slice(0, 1000)}`);
+        }
+        const response = ((value.result as JsonObject | undefined)?.response as JsonObject | undefined) ?? {};
+        if (response.receivedAction !== action || response.inputAction !== inputAction || response.readOnly !== readOnly) {
+            throw new Error(`${action} delegate payload was not canonical while preserving input action: ${JSON.stringify(value).slice(0, 1000)}`);
+        }
+    }
+
+    private expectDelegateCaptureAfter(value: JsonObject, action: string): void {
+        const capture = value.captureAfter as JsonObject | undefined;
+        if (!capture || capture.action !== "capture" || capture.backend !== "delegate" || capture.readOnly !== true) {
+            throw new Error(`${action} did not include a delegate captureAfter response`);
+        }
+        const response = ((capture.result as JsonObject | undefined)?.response as JsonObject | undefined) ?? {};
+        if (response.receivedAction !== "capture" || response.inputAction !== "capture") {
+            throw new Error(`${action} captureAfter did not dispatch canonical capture: ${JSON.stringify(capture).slice(0, 1000)}`);
+        }
+    }
+
+    private skip(reason: string, checks: readonly string[]): SmokeResult {
+        return REQUIRE_CUA ? { ok: false, skipped: true, reason, checks } : { ok: true, skipped: true, reason, checks };
     }
 }
 

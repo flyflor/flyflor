@@ -1943,3 +1943,18 @@
   摘要：`smoke:browser-use:live` 现在在真实 Chrome/Chromium CDP backend 中发送 `browser_navigate`、`observe`、`fill`、`evaluate-js`、`browser_get_images`、`go-back`、`browser_vision` 等 alias，并断言 canonical action 返回。
   原因：把 action alias 从 mock delegate 回归提升到真实浏览器路径，给高权限 `browser.use` 兼容层留下可复现的真实工具证据。
   验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（52 pass, 0 fail）；`bun run smoke:browser-use:live`（ok true，checks 含 alias-browser_navigate、alias-observe-refs、alias-fill-ref-captureAfter、alias-browser_vision-delegate）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:computer-use:live`（ok true，structured skip: cua-command-not-found）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11）；`git diff --check`。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：computer-use-live-delegate-coverage
+  摘要：准备让 `smoke:computer-use:live` 在探测可选 CUA backend 前先运行确定性 external process-json delegate，覆盖 action alias、canonical dispatched action、read-only 与 captureAfter。
+  原因：当前本机缺少 `cua-driver` 时 computer-use live smoke 只有结构化 skip，真实子进程闭环证据不足；delegate live closure 可以在不创建桌面控制权限的前提下验证外部工具血管层。
+  验证：待跑 focused computer-use tests、真实 computer/browser smoke、docs/check、真实闭环与 `git diff --check`。
+  风险：只改变可选 smoke 的验证流程；临时 delegate 位于隔离 temp 目录，不改变 sidecar 权限、默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota/audit、Memory/Scope/Crystal 主链和 kernel import 边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-live-delegate-coverage
+  摘要：`smoke:computer-use:live` 现在先运行隔离 temp delegate，覆盖 `screenshot`、`press_key`、`setValue`、`doubleClick` alias、canonical dispatched action、read-only 与 `captureAfter`；随后再探测可选 CUA backend。
+  原因：即使本机缺少 `cua-driver`，computer-use live smoke 也会留下真实外部子进程闭环证据，而不是只有结构化 skip。
+  验证：`bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（44 pass, 0 fail）；`bun run smoke:computer-use:live`（ok true, skipped true, reason cua-command-not-found, checks 含 delegate-alias-screenshot-capture、delegate-alias-doubleClick-captureAfter）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11）；`git diff --check`。

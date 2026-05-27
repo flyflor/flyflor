@@ -1273,3 +1273,9 @@ Kernel V2 acceptance focus：
 - [x] `smoke:browser-use:live` 在真实 Chrome/Chromium CDP backend 中发送 `browser_navigate`、`observe`、`fill`、`evaluate-js`、`browser_get_images`、`go-back`、`browser_vision` 等 alias。
 - [x] live smoke 断言 alias 输入返回 canonical dispatched action，避免 alias 只停留在 mock delegate 单测。
 - [x] 新增 live alias 覆盖文档并复跑真实 browser smoke。
+
+## 2026-05-27 Computer Use Live Delegate Coverage
+
+- [x] `smoke:computer-use:live` 在探测可选 CUA backend 之前始终运行隔离 temp 目录中的确定性 process-json delegate。
+- [x] delegate live 覆盖 `screenshot`、`press_key`、`setValue`、`doubleClick` action alias、canonical dispatched action、read-only 分类与 mutating `captureAfter`。
+- [x] 缺失 `cua-driver` 时仍保留结构化 skip，但 `checks` 会包含已执行的 delegate 闭环；`--require-cua` 继续在 CUA 缺失时失败。
