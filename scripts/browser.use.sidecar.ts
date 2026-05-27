@@ -252,7 +252,7 @@ class BrowserUseSidecar {
                 return {
                     response: await client.sendToPage("Runtime.evaluate", {
                         expression: scrollExpression(
-                            readScrollDirection(invocation.input.direction),
+                            readScrollDirection(invocation.input.direction) ?? "down",
                             boundedInt(invocation.input.amount, 1, 1000) ?? 3,
                         ),
                         awaitPromise: true,
@@ -579,7 +579,9 @@ async function validateAction(action: BrowserUseAction, input: JsonObject): Prom
         requiredString(input.script, "input.script");
     }
     if (action === "scroll") {
-        readScrollDirection(input.direction);
+        if (input.direction !== undefined) {
+            readScrollDirection(input.direction);
+        }
         if (input.amount !== undefined) {
             boundedInt(input.amount, 1, 1000);
         }
@@ -786,8 +788,10 @@ function boundedInt(value: unknown, min: number, max: number): number | undefine
     return number;
 }
 
-function readScrollDirection(value: unknown): "up" | "down" | "left" | "right" {
-    const direction = requiredString(value, "input.direction");
+function readScrollDirection(value: unknown): "up" | "down" | "left" | "right" | undefined {
+    if (value === undefined) return undefined;
+    const direction = readString(value);
+    if (direction === undefined) return undefined;
     if (direction === "up" || direction === "down" || direction === "left" || direction === "right") {
         return direction;
     }

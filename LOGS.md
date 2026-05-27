@@ -1711,3 +1711,19 @@
   原因：减少真实模型发出最短 scroll 调用时的不必要工具失败，同时保留非法 direction/amount 的 spawn 前结构化校验。
   验证：`bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（40 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:computer-use:live`（structured skip: cua-command-not-found）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；待最终 `bun run test` 与 `git diff --check`。
   风险：只放宽 opt-in `computer.use` 的结构化 scroll 默认值；默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit 与 process-json 子进程边界不变。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-scroll-defaults
+  摘要：准备让 `browser.use scroll` 接受最短 `{"action":"scroll"}` 调用，CDP backend 省略 `direction` 时默认 `down`，省略 `amount` 时保持默认 `3`。
+  原因：Hermes browser handler 在调度层对缺省 direction 使用 `down`；真实模型常发最短 scroll 调用，当前 sidecar 会在进入后端前失败。
+  验证：待跑 focused browser-use tests、check/docs、真实闭环与 diff。
+  风险：只放宽 opt-in `browser.use` 的结构化 scroll 默认值；delegate backend 继续收到原始 process-json input，不改变默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota 或 kernel import 边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-scroll-defaults
+  摘要：`browser.use scroll` 现在允许省略 `direction`，CDP backend 按 Hermes handler 语义默认为 `down`；省略 `amount` 时保持默认 `3`，非法 direction/amount 仍在 sidecar 校验层失败。
+  原因：减少真实模型发出最短 scroll 调用时的不必要工具失败，同时保持 delegate backend 原始 process-json input 与内核边界不变。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（46 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true，覆盖真实 Chrome CDP browser.use 闭环）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1109 pass, 0 fail）；`git diff --check`。
+  风险：只放宽 opt-in `browser.use` 的结构化 scroll 默认值；默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit 与 process-json 子进程边界不变。

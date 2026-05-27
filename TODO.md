@@ -1196,3 +1196,9 @@ Kernel V2 acceptance focus：
 - [x] `computer.use` 的 `scroll` 允许省略 `direction`，按 Hermes 语义默认 `down`。
 - [x] CUA backend payload 在省略 `amount` 时默认 `3`，仍保留非法 direction/amount 的 spawn 前结构化失败。
 - [x] 新增 focused computer-use 回归与追加文档，复跑 check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Browser Use Scroll Defaults
+
+- [x] `browser.use` 的 `scroll` 允许省略 `direction`，CDP backend 按 Hermes handler 语义默认 `down`。
+- [x] CDP backend 在省略 `amount` 时继续默认 `3`，非法 direction/amount 仍在 sidecar 校验层失败。
+- [x] 新增 focused browser-use 回归与追加文档，复跑 check/docs、真实 browser smoke、真实闭环与 `git diff --check`。

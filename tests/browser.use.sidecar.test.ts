@@ -237,6 +237,41 @@ describe("high-level browser.use process-json sidecar", () => {
         }
     });
 
+    test("accepts Hermes browser scroll default direction", async () => {
+        const server = new MockCdpServer();
+        try {
+            const response = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "scroll" },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+
+            expect(response).toMatchObject({ ok: true, action: "scroll", backend: "cdp", readOnly: false });
+            expect(server.commands).toEqual([
+                expect.objectContaining({
+                    method: "Runtime.evaluate",
+                    params: expect.objectContaining({
+                        expression: expect.stringContaining('"top":360'),
+                    }),
+                }),
+            ]);
+        } finally {
+            server.stop();
+        }
+    });
+
+    test("rejects invalid browser scroll direction before invoking CDP", async () => {
+        const response = await invokeSidecar({
+            tool: "browser.use",
+            input: { action: "scroll", direction: "sideways" },
+            config: { backend: "cdp", cdpUrl: "http://127.0.0.1:1" },
+        }, { expectExit: 1 });
+
+        expect(response.body.ok).toBe(false);
+        expect(response.body.code).toBe("failed");
+        expect(String(response.body.error)).toContain("browser.use direction must be up, down, left, or right");
+    });
+
     test("drives Hermes-style back and get_images actions through the CDP backend", async () => {
         const server = new MockCdpServer((command) => {
             if (command.method === "Page.getNavigationHistory") {
