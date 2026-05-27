@@ -1118,3 +1118,9 @@ Kernel V2 acceptance focus：
 - [x] 让 external manifest stability preflight 与 sidecar delegate execution 使用一致的 PATHEXT executable suffix 解析，避免 Windows package entry 被 catalog 层误判 unavailable。
 - [x] 新增 app-relative 与 PATH command focused 回归，确认 `.cmd` 等后缀在模型可见前可被解析。
 - [x] 归档旧路径可移植性文档后重写 active 文档，复跑 external-tools tests、docs/check、真实闭环与 `git diff --check`。
+
+## 2026-05-27 User Tool Project CWD Boundary
+
+- [x] 区分 `.flyflor/tools.jsonc` user manifest tools 与 `tools/external.tools.jsonc` external sidecars 的 `cwd: "project"` anchor。
+- [x] 保持 external sidecar 兼容语义不变；user manifest process-json tool 必须从真实 `paths.projectDir` 启动。
+- [x] 新增 focused 回归与追加文档，复跑 user-tool cwd tests、check/docs、真实闭环与 `git diff --check`。

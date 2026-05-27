@@ -50,7 +50,7 @@ export async function invokeUserTool(input: UserToolInvocationInput): Promise<Pl
         },
         command: executor.command,
         args: executor.args,
-        cwd: userToolWorkingDirectory(input.paths, executor.cwd),
+        cwd: userToolWorkingDirectory(input.paths, executor.cwd, { externalSidecar: input.tool.stability !== undefined }),
         env: executor.env,
         timeoutMs: executor.timeoutMs,
         request: {
@@ -64,9 +64,14 @@ export async function invokeUserTool(input: UserToolInvocationInput): Promise<Pl
     });
 }
 
-export function userToolWorkingDirectory(paths: FlyflorPaths, cwd: "project" | "app" | "config" | "workspace"): string {
+export function userToolWorkingDirectory(
+    paths: FlyflorPaths,
+    cwd: "project" | "app" | "config" | "workspace",
+    options: { externalSidecar?: boolean } = {},
+): string {
     if (cwd === "config") return paths.configDir;
     if (cwd === "workspace") return paths.workspaceDir;
+    if (cwd === "project" && options.externalSidecar !== true) return paths.projectDir;
     return paths.appRoot ?? paths.projectDir;
 }
 

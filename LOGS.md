@@ -1495,3 +1495,27 @@
   原因：本切片影响模型可见 catalog 前的 external sidecar availability 判断，需要覆盖全量工具/ASK/socket 回归。
   验证：`bun run test`（1088 pass, 0 fail）；待最终 `git diff --check`。
   风险：无新增运行态风险；未跟踪 `.github/` 与 `.workmux.yaml` 仍不属于本轮改动，未纳入提交。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：user-tool-project-cwd-boundary
+  摘要：准备区分 user manifest process-json tools 与 external sidecars 的 `cwd: "project"` anchor。
+  原因：`.flyflor/tools.jsonc` 是 workspace-local user tool surface，`cwd: "project"` 应从真实 `paths.projectDir` 启动；external sidecar 的兼容别名仍需保持 app-root 语义，避免破坏已封板的 `external.tools.jsonc` 协议。
+  验证：待跑 focused user-tool cwd tests、check/docs、真实闭环与 diff。
+  风险：只影响 user manifest tool 的 project cwd 解析；external sidecar 通过 stability snapshot 继续走兼容 anchor；不改变 ASK、plan、yolo、动态预算或子进程 JSON 协议。
+
+- 状态：完成
+  执行者：main-codex
+  范围：user-tool-project-cwd-boundary-verification
+  摘要：完成 user manifest process-json tool 与 external sidecar 的 `cwd: "project"` anchor 分离；user tools 从 `paths.projectDir` 启动，external sidecar 仍按 stability snapshot 兼容 app-root anchor。
+  原因：修复 `.flyflor/tools.jsonc` 项目工具在真实 appRoot != projectDir 环境下可能从 app/home 启动的问题，同时不改变已封板 external sidecar package entry 语义。
+  验证：`bun test tests/runtime.user.tool.cwd.test.ts --timeout 30000`（2 pass, 0 fail）；`bun test tests/skill.mcp.test.ts tests/external.use.runtime.test.ts --timeout 30000`（73 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`; `bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；待全量测试与最终 `git diff --check`。
+  风险：只影响 user manifest tool project cwd 解析；不改变 ASK、plan、yolo、动态预算、external sidecar protocol 或 kernel import 边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：user-tool-project-cwd-boundary-final-gates
+  摘要：完成全量测试 gate，确认 user tool project cwd 分离没有破坏 ASK、plan、yolo、external sidecar、TUI read-model 或工具执行闭环。
+  原因：本切片调整 process-json 子进程工作目录，需要覆盖 runtime、sandbox、ASK 和 external use 相关回归。
+  验证：`bun run test`（1090 pass, 0 fail）；待最终 `git diff --check`。
+  风险：无新增运行态风险；未跟踪 `.github/` 与 `.workmux.yaml` 仍不属于本轮改动，未纳入提交。
