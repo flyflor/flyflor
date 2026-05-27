@@ -205,7 +205,7 @@ class BrowserUseSidecar {
                 return {
                     response: await client.evaluateDomAction(
                         `(() => {
-                            const selector = ${JSON.stringify(requiredString(invocation.input.target, "input.target"))};
+                            const selector = ${JSON.stringify(requiredTarget(invocation.input))};
                             const element = document.querySelector(selector);
                             if (!element) return { ok: false, error: "target not found: " + selector };
                             element.click();
@@ -217,7 +217,7 @@ class BrowserUseSidecar {
                 return {
                     response: await client.evaluateDomAction(
                         `(() => {
-                            const selector = ${JSON.stringify(requiredString(invocation.input.target, "input.target"))};
+                            const selector = ${JSON.stringify(requiredTarget(invocation.input))};
                             const text = ${JSON.stringify(requiredString(invocation.input.text, "input.text"))};
                             const element = document.querySelector(selector);
                             if (!element) return { ok: false, error: "target not found: " + selector };
@@ -553,10 +553,10 @@ async function validateAction(action: BrowserUseAction, input: JsonObject): Prom
         await requiredUrl(input.url, "input.url");
     }
     if (action === "click") {
-        requiredString(input.target, "input.target");
+        requiredTarget(input);
     }
     if (action === "type") {
-        requiredString(input.target, "input.target");
+        requiredTarget(input);
         requiredString(input.text, "input.text");
     }
     if (action === "evaluate") {
@@ -866,6 +866,14 @@ function requiredString(value: unknown, path: string): string {
         throw new BrowserUseError("failed", `${path} must be a non-empty string`);
     }
     return string;
+}
+
+function requiredTarget(input: JsonObject): string {
+    const target = readString(input.target) ?? readString(input.selector);
+    if (!target) {
+        throw new BrowserUseError("failed", "input.target or input.selector must be a non-empty string");
+    }
+    return target;
 }
 
 function normalizedBaseUrl(value: string): string {

@@ -1647,3 +1647,19 @@
   原因：补齐真实浏览器视觉理解闭环，同时保持 kernel 不 import vision provider、browser runtime 或 desktop runtime，只拥有 descriptor、gateway/event/audit、visibility、approval、quota 和 dispatch。
   验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（40 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`; `bun run smoke:browser-use:live`（ok true，覆盖 vision-delegate）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun test tests/naming.boundaries.test.ts --timeout 30000`（30 pass, 0 fail）；`bun run test`（1101 pass, 0 fail）；待最终 `git diff --check`。
   风险：`vision` 会读取当前浏览器页面截图，仍只在 opt-in 高权限 `browser.use` 面暴露；默认 manifest 暴露策略、高权限 ASK/plan/yolo、动态预算和子进程 JSON 边界不变。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-selector-alias
+  摘要：准备让 `browser.use` 的 `click` / `type` 接收 `selector` 作为 `target` 的显式 CSS selector alias。
+  原因：真实模型常用 `selector` 字段描述 DOM 目标；当前 CDP backend 只认 `target`，会把可执行意图变成校验失败。
+  验证：待跑 focused browser-use/external descriptor tests、browser-use live smoke、check/docs、真实闭环与 diff。
+  风险：只增加字段 alias，不新增 action，不改变默认 manifest 暴露策略、高权限 ASK/plan/yolo、动态预算或 kernel import 边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-selector-alias
+  摘要：`browser.use` 的 `click` / `type` 现在接收 `selector` 作为 `target` 的 CSS selector alias；CDP backend 使用同一 `document.querySelector` 路径，delegate backend 保持原始 process-json input 转发。
+  原因：减少真实模型以 `selector` 命名 DOM 目标时的工具校验失败，同时保持高权限 browser control opt-in 与子进程边界。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（41 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`; `bun run smoke:browser-use:live`（ok true，覆盖 type-selector-captureAfter）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun test tests/naming.boundaries.test.ts --timeout 30000`（30 pass, 0 fail）；`bun run test`（1102 pass, 0 fail）；待最终 `git diff --check`。
+  风险：只增加字段 alias；不新增 action，不改变默认 manifest 暴露策略、高权限 ASK/plan/yolo、动态预算或 kernel import 边界。

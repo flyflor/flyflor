@@ -65,11 +65,11 @@ class BrowserUseLiveSmoke {
             const type = await this.invoker.call({
                 tool: "browser.use",
                 config,
-                input: { action: "type", target: "#name", text: TYPE_TEXT, captureAfter: true },
+                input: { action: "type", selector: "#name", text: TYPE_TEXT, captureAfter: true },
             });
             this.expectOk(type, "type");
             this.expectCaptureAfter(type, "type");
-            checks.push("type-captureAfter");
+            checks.push("type-selector-captureAfter");
 
             const click = await this.invoker.call({
                 tool: "browser.use",

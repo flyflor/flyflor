@@ -1172,3 +1172,9 @@ Kernel V2 acceptance focus：
 - [x] 为 `browser.use` 增加 Hermes 风格 `vision` action：CDP 只负责截图，视觉分析必须委派给外部 process-json `visionDelegateCommand`。
 - [x] 模型可见 descriptor 暴露 `question` 与 `annotate`，并保持高权限 browser control opt-in、ASK、plan、yolo、动态预算不变。
 - [x] 新增 focused browser-use/external descriptor/live smoke 回归与追加文档，复跑 browser-use tests、check/docs、真实闭环、全量测试与 `git diff --check`。
+
+## 2026-05-27 Browser Use Selector Alias
+
+- [x] `browser.use` 的 `click` / `type` 支持 `selector` 作为 `target` 的 CSS selector alias，减少真实模型字段口径导致的工具失败。
+- [x] descriptor 暴露 `selector`，但默认 manifest、高权限 ASK/approval、plan、yolo、动态预算与子进程边界不变。
+- [x] 新增 focused browser-use/external descriptor/live smoke 回归与追加文档，复跑 check/docs、真实闭环与 `git diff --check`。

@@ -115,6 +115,33 @@ describe("high-level browser.use process-json sidecar", () => {
         }
     });
 
+    test("accepts selector as a browser click/type target alias", async () => {
+        const server = new MockCdpServer();
+        try {
+            const click = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "click", selector: "#continue" },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+            const type = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "type", selector: "#search", text: "flyflor" },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+
+            expect(click).toMatchObject({ ok: true, action: "click", backend: "cdp", readOnly: false });
+            expect(type).toMatchObject({ ok: true, action: "type", backend: "cdp", readOnly: false });
+            expect(server.commands.map((entry) => (entry as { method: string }).method)).toEqual([
+                "Runtime.evaluate",
+                "Runtime.evaluate",
+            ]);
+            expect((server.commands[0] as { params: { expression: string } }).params.expression).toContain('const selector = "#continue"');
+            expect((server.commands[1] as { params: { expression: string } }).params.expression).toContain('const selector = "#search"');
+        } finally {
+            server.stop();
+        }
+    });
+
     test("drives Hermes-style scroll and press actions through the CDP backend", async () => {
         const server = new MockCdpServer();
         try {

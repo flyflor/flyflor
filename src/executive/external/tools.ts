@@ -581,6 +581,7 @@ function browserUseTool(): ExternalToolSpec {
                 ms: { type: "number" },
                 question: { type: "string" },
                 script: { type: "string" },
+                selector: { type: "string" },
                 seconds: { type: "number" },
                 target: { type: "string" },
                 text: { type: "string" },

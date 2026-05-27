@@ -114,6 +114,7 @@ describe("external tool descriptor discovery", () => {
                     key: { type: "string" },
                     maxImages: { type: "integer", minimum: 1, maximum: 1000 },
                     question: { type: "string" },
+                    selector: { type: "string" },
                 },
             },
             tags: expect.arrayContaining(["browser-use", "approval:computer"]),
