@@ -112,6 +112,15 @@ console.log(JSON.stringify({
             this.expectDelegateOk(key, "key", "press_key", false);
             checks.push("delegate-alias-press_key");
 
+            const scroll = await this.invoker.call({
+                tool: "computer.use",
+                config,
+                input: { action: "scroll", direction: "Down" },
+                projectDir: root,
+            });
+            this.expectDelegateOk(scroll, "scroll", "scroll", false);
+            checks.push("delegate-scroll-direction-casing");
+
             const setValue = await this.invoker.call({
                 tool: "computer.use",
                 config,

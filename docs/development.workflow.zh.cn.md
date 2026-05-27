@@ -83,3 +83,29 @@ Socket 工作需要增加与变更 surface 相关的 focused socket/control test
 - `bun run smoke:computer-use:live` 通过，本机缺少 `cua-driver` 时保留结构化 skip，同时含确定性 delegate checks
 - `bun run smoke:live:closure` 通过，`failedChecks: []`、`phantomPermissionUserEvents: 0`、`executionJobCount: 18`
 - `bun run docs:check` 与 `bun run check` 通过
+
+## 2026-05-27 Browser/Computer Use Enum Alias Coverage
+
+已接受的 sidecar 兼容切片：
+
+- owner：`main-codex`
+- scope：`browser.use` 与 `computer.use` process-json sidecar，以及 focused/live 覆盖
+- `browser.use` 接受真实模型常见的 `direction`、`captureMode` / `capture_mode` 大小写口径，例如 `Down` 与 `ScreenShot`
+- `computer.use` 接受真实模型常见的 `direction`、`button`、`mode`、`modifiers` 大小写与 modifier alias，例如 `Down`、`LEFT`、`AX`、`Command`、`Alt`
+- delegate backend 继续收到原始 `input`；归一化值只用于 sidecar 校验和 `captureAfter` 等 backend payload 构造
+- descriptor enum 继续保持 canonical 小写
+- 不改变 ASK、plan、yolo、动态预算、approval/quota/audit、Memory/Scope/Crystal 和 kernel import 边界
+
+验证：
+
+- 待运行 focused browser/computer/external tests、真实 browser/computer smoke、docs/check、真实闭环和 `git diff --check`
+
+## 2026-05-27 Browser/Computer Use Enum Alias Coverage Verification
+
+已接受的验证证据：
+
+- `bun test tests/browser.use.sidecar.test.ts tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000` 通过，77 个测试
+- `bun run smoke:browser-use:live` 通过；`checks` 含 `scroll-direction-casing`
+- `bun run smoke:computer-use:live` 通过；确定性 delegate checks 含 `delegate-scroll-direction-casing`，本机缺少 CUA 时保留结构化 `cua-command-not-found` skip
+- `bun run smoke:live:closure` 通过，`failedChecks: []`、`phantomPermissionUserEvents: 0`、`executionJobCount: 11`
+- `bun run docs:check` 与 `bun run check` 通过

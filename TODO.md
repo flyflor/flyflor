@@ -1285,3 +1285,9 @@ Kernel V2 acceptance focus：
 - [x] `smoke:browser-use:live` 在探测可选 Chrome/Chromium CDP backend 前始终运行隔离 temp 目录中的确定性 process-json delegate。
 - [x] delegate live 覆盖 `browser_navigate`、`observe`、`fill`、`evaluate-js`、`browser_get_images`、`browser_vision` action alias、canonical dispatched action、read-only 分类与 mutating `captureAfter`。
 - [x] 缺失 Chrome/Chromium 时仍保留结构化 skip，但 `checks` 会包含已执行的 delegate 闭环；`--require-browser` 继续在浏览器缺失时失败。
+
+## 2026-05-27 Browser/Computer Use Enum Alias Coverage
+
+- [x] `browser.use` 接受 `direction` 与 `captureMode` / `capture_mode` 的大小写口径差异，例如 `Down` 与 `ScreenShot`。
+- [x] `computer.use` 接受 `direction`、`button`、`mode`、`modifiers` 的大小写/常见 modifier alias，例如 `Down`、`LEFT`、`AX`、`Command`、`Alt`。
+- [x] 真实 browser/computer live smoke 覆盖 enum alias，不改变 delegate 原始 input、ASK/plan/yolo、动态预算或 kernel import 边界。

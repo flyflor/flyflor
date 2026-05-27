@@ -198,6 +198,64 @@ console.log(JSON.stringify({ receivedAction: request.action, input: request.inpu
         }
     });
 
+    test("accepts enum casing aliases for direction button mode and modifiers", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-enum-alias-"));
+        const delegate = join(root, "delegate.ts");
+        const log = join(root, "delegate.log");
+        await writeFile(
+            delegate,
+            `import { appendFile } from "node:fs/promises";
+const raw = await new Response(Bun.stdin.stream()).text();
+await appendFile("${log}", raw);
+const request = JSON.parse(raw);
+console.log(JSON.stringify({ receivedAction: request.action, input: request.input }));
+`,
+        );
+        await chmod(delegate, 0o755);
+        try {
+            const scroll = await invokeSidecarBody({
+                tool: "computer.use",
+                input: { action: "scroll", direction: "Down" },
+                config: { delegateCommand: "bun", delegateArgs: [delegate] },
+                projectDir: root,
+            });
+            const click = await invokeSidecarBody({
+                tool: "computer.use",
+                input: {
+                    action: "click",
+                    element: 2,
+                    button: "LEFT",
+                    modifiers: ["Command", "Alt"],
+                    capture_after: true,
+                    mode: "AX",
+                },
+                config: { delegateCommand: "bun", delegateArgs: [delegate] },
+                projectDir: root,
+            });
+
+            expect(scroll).toMatchObject({
+                action: "scroll",
+                backend: "delegate",
+                result: { response: { receivedAction: "scroll", input: { action: "scroll", direction: "Down" } } },
+            });
+            expect(click).toMatchObject({
+                action: "click",
+                backend: "delegate",
+                captureAfter: {
+                    action: "capture",
+                    result: {
+                        response: {
+                            receivedAction: "capture",
+                            input: { action: "capture", mode: "ax" },
+                        },
+                    },
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("rejects fractional element targets before spawning a delegate", async () => {
         const response = await invokeSidecar({
             tool: "computer.use",

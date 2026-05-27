@@ -136,7 +136,7 @@ class BrowserUseSidecar {
         if (!captureAfterRequested(invocation.input) || READ_ACTIONS.has(invocation.action)) {
             return response;
         }
-        const captureAction = readString(invocation.input.captureMode ?? invocation.input.capture_mode) === "screenshot" ? "screenshot" : "snapshot";
+        const captureAction = readCaptureMode(invocation.input.captureMode ?? invocation.input.capture_mode) === "screenshot" ? "screenshot" : "snapshot";
         const captureInput = captureAfterInput(invocation.input, captureAction);
         const capture = await this.invokeBackend(backend, {
             ...invocation,
@@ -603,11 +603,11 @@ async function validateAction(action: BrowserUseAction, input: JsonObject): Prom
     if (input.capture_after !== undefined && typeof input.capture_after !== "boolean") {
         throw new BrowserUseError("failed", "input.capture_after must be a boolean");
     }
-    if (input.captureMode !== undefined && readString(input.captureMode) !== "snapshot" && readString(input.captureMode) !== "screenshot") {
-        throw new BrowserUseError("failed", "input.captureMode must be 'snapshot' or 'screenshot'");
+    if (input.captureMode !== undefined) {
+        readCaptureMode(input.captureMode, "input.captureMode");
     }
-    if (input.capture_mode !== undefined && readString(input.capture_mode) !== "snapshot" && readString(input.capture_mode) !== "screenshot") {
-        throw new BrowserUseError("failed", "input.capture_mode must be 'snapshot' or 'screenshot'");
+    if (input.capture_mode !== undefined) {
+        readCaptureMode(input.capture_mode, "input.capture_mode");
     }
     if (input.full !== undefined && typeof input.full !== "boolean") {
         throw new BrowserUseError("failed", "input.full must be a boolean");
@@ -853,12 +853,21 @@ function boundedInt(value: unknown, min: number, max: number): number | undefine
 
 function readScrollDirection(value: unknown): "up" | "down" | "left" | "right" | undefined {
     if (value === undefined) return undefined;
-    const direction = readString(value);
+    const direction = readString(value)?.trim().toLowerCase();
     if (direction === undefined) return undefined;
     if (direction === "up" || direction === "down" || direction === "left" || direction === "right") {
         return direction;
     }
     throw new BrowserUseError("failed", "browser.use direction must be up, down, left, or right");
+}
+
+function readCaptureMode(value: unknown, path = "input.captureMode"): "snapshot" | "screenshot" | undefined {
+    if (value === undefined) return undefined;
+    const mode = readString(value)?.trim().toLowerCase();
+    if (mode === "snapshot" || mode === "screenshot") {
+        return mode;
+    }
+    throw new BrowserUseError("failed", `${path} must be 'snapshot' or 'screenshot'`);
 }
 
 function scrollExpression(direction: "up" | "down" | "left" | "right", amount: number): string {

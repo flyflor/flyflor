@@ -68,6 +68,10 @@ class BrowserUseLiveSmoke {
             this.expectOk(wait, "wait");
             checks.push("wait");
 
+            const scroll = await this.invoker.call({ tool: "browser.use", config, input: { action: "scroll", direction: "Down", amount: 1 } });
+            this.expectOk(scroll, "scroll");
+            checks.push("scroll-direction-casing");
+
             const snapshot = await this.invoker.call({ tool: "browser.use", config, input: { action: "observe", maxElements: 10 } });
             this.expectOk(snapshot, "snapshot");
             this.expectSnapshotRefs(snapshot);

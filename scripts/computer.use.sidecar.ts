@@ -614,17 +614,18 @@ function stringArray(value: unknown): readonly string[] {
 
 function readModifiers(value: unknown): readonly string[] {
     const modifiers = stringArray(value);
-    const allowed = new Set(["cmd", "shift", "option", "alt", "ctrl", "fn"]);
-    const invalid = modifiers.find((entry) => !allowed.has(entry));
+    const normalized = modifiers.map(normalizeModifier);
+    const allowed = new Set(["cmd", "shift", "option", "ctrl", "fn"]);
+    const invalid = normalized.find((entry) => !allowed.has(entry));
     if (invalid) {
         throw new ComputerUseError("failed", `computer.use modifier is unsupported: ${invalid}`);
     }
-    return modifiers;
+    return normalized;
 }
 
 function readButton(value: unknown): "left" | "right" | "middle" | undefined {
     if (value === undefined) return undefined;
-    const button = readString(value);
+    const button = readString(value)?.trim().toLowerCase();
     if (button === "left" || button === "right" || button === "middle") {
         return button;
     }
@@ -633,7 +634,7 @@ function readButton(value: unknown): "left" | "right" | "middle" | undefined {
 
 function readCaptureMode(value: unknown): "som" | "vision" | "ax" | undefined {
     if (value === undefined) return undefined;
-    const mode = readString(value);
+    const mode = readString(value)?.trim().toLowerCase();
     if (mode === "som" || mode === "vision" || mode === "ax") {
         return mode;
     }
@@ -642,12 +643,24 @@ function readCaptureMode(value: unknown): "som" | "vision" | "ax" | undefined {
 
 function readScrollDirection(value: unknown, required = false): "up" | "down" | "left" | "right" | undefined {
     if (value === undefined && !required) return undefined;
-    const direction = required ? requiredString(value, "input.direction") : readString(value);
+    const direction = (required ? requiredString(value, "input.direction") : readString(value))?.trim().toLowerCase();
     if (direction === undefined) return undefined;
     if (direction === "up" || direction === "down" || direction === "left" || direction === "right") {
         return direction;
     }
     throw new ComputerUseError("failed", "computer.use direction must be up, down, left, or right");
+}
+
+function normalizeModifier(value: string): string {
+    const compact = value.trim().toLowerCase();
+    const aliases: Record<string, string> = {
+        alt: "option",
+        command: "cmd",
+        control: "ctrl",
+        "⌘": "cmd",
+        "⌥": "option",
+    };
+    return aliases[compact] ?? compact;
 }
 
 function coordinate(value: unknown, path: string): [number, number] | undefined {

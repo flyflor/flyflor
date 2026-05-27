@@ -393,6 +393,37 @@ console.log(JSON.stringify({ receivedAction: request.action, inputAction: reques
         }
     });
 
+    test("normalizes browser enum casing for direction and capture mode", async () => {
+        const server = new MockCdpServer();
+        try {
+            const scroll = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "scroll", direction: "Down", amount: 1 },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+            const click = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "click", target: "#continue", capture_after: true, capture_mode: "ScreenShot" },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+
+            expect(scroll).toMatchObject({ ok: true, action: "scroll", backend: "cdp", readOnly: false });
+            expect(click).toMatchObject({
+                ok: true,
+                action: "click",
+                captureAfter: { action: "screenshot", backend: "cdp", readOnly: true },
+            });
+            expect(server.commands.map((entry) => (entry as { method: string }).method)).toEqual([
+                "Runtime.evaluate",
+                "Runtime.evaluate",
+                "Page.captureScreenshot",
+            ]);
+            expect((server.commands[0] as { params: { expression: string } }).params.expression).toContain('"top":120');
+        } finally {
+            server.stop();
+        }
+    });
+
     test("normalizes browser press key aliases for the CDP backend", async () => {
         const server = new MockCdpServer();
         try {

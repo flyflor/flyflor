@@ -1300,3 +1300,29 @@ Accepted validation evidence:
 - `bun run smoke:computer-use:live` passed with deterministic delegate checks and structured `cua-command-not-found` skip on this machine
 - `bun run smoke:live:closure` passed with `failedChecks: []`, `phantomPermissionUserEvents: 0`, and `executionJobCount: 18`
 - `bun run docs:check` and `bun run check` passed
+
+## 2026-05-27 Browser/Computer Use Enum Alias Coverage
+
+Accepted sidecar compatibility slice:
+
+- owner: `main-codex`
+- scope: `browser.use` and `computer.use` process-json sidecars plus focused/live coverage
+- `browser.use` accepts common real-model casing for `direction` and `captureMode` / `capture_mode`, including `Down` and `ScreenShot`
+- `computer.use` accepts common casing and modifier aliases for `direction`, `button`, `mode`, and `modifiers`, including `Down`, `LEFT`, `AX`, `Command`, and `Alt`
+- delegate backends still receive the original `input`; normalized values are used only for sidecar validation and backend payload construction such as `captureAfter`
+- descriptor enums stay canonical and lowercase
+- ASK, plan, yolo, dynamic budget, approval/quota/audit, Memory/Scope/Crystal, and kernel import boundaries are unchanged
+
+Validation:
+
+- pending focused browser/computer/external tests, live browser/computer smoke, docs/check, live closure, and `git diff --check`
+
+## 2026-05-27 Browser/Computer Use Enum Alias Coverage Verification
+
+Accepted validation evidence:
+
+- `bun test tests/browser.use.sidecar.test.ts tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000` passed with 77 tests
+- `bun run smoke:browser-use:live` passed; `checks` includes `scroll-direction-casing`
+- `bun run smoke:computer-use:live` passed; deterministic delegate checks include `delegate-scroll-direction-casing`, with structured `cua-command-not-found` skip on this machine
+- `bun run smoke:live:closure` passed with `failedChecks: []`, `phantomPermissionUserEvents: 0`, and `executionJobCount: 11`
+- `bun run docs:check` and `bun run check` passed
