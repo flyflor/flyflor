@@ -108,7 +108,7 @@ if ($Mode -eq "mock") {
                 env = @{ FLYFLOR_BROWSER_CDP_URL = $CdpUrl }
                 timeoutMs = 8000
                 maxOutputBytes = 65536
-                tools = @("browser.open", "browser.snapshot", "browser.screenshot", "browser.click", "browser.type", "browser.navigate", "browser.evaluate")
+                tools = @("browser.open", "browser.snapshot", "browser.screenshot")
             }
             "computer.native" = @{
                 command = $ComputerNativeRunner
@@ -117,16 +117,7 @@ if ($Mode -eq "mock") {
                 config = @{ mouseCommand = ""; mouseArgs = @(); keyboardCommand = ""; keyboardArgs = @() }
                 timeoutMs = 10000
                 maxOutputBytes = 65536
-                tools = @("screen.screenshot", "computer.mouse", "computer.keyboard", "computer.window")
-            }
-            "computer.use" = @{
-                command = $ComputerUseRunner
-                args = @("xtool-sidecar", "computer.use")
-                cwd = "app"
-                config = @{ backend = "delegate"; delegateCommand = ""; delegateArgs = @(); cuaCommand = "cua-driver"; cuaArgs = @() }
-                timeoutMs = 20000
-                maxOutputBytes = 524288
-                tools = @("computer.use")
+                tools = @("screen.screenshot", "computer.window")
             }
             "media.local" = @{
                 command = $MediaRunner
@@ -135,7 +126,7 @@ if ($Mode -eq "mock") {
                 config = @{ providerUrl = ""; providerHeaders = @{}; localCommands = @{} }
                 timeoutMs = 30000
                 maxOutputBytes = 262144
-                tools = @("vision.analyze", "vision.ocr", "audio.transcribe", "audio.speak")
+                tools = @()
             }
             "web.search" = @{
                 command = $SearchWebRunner
@@ -144,7 +135,7 @@ if ($Mode -eq "mock") {
                 config = @{ cacheTtlMs = 600000; providers = @() }
                 timeoutMs = 10000
                 maxOutputBytes = 65536
-                tools = @("web.search", "web.fetch", "web.extract", "web.download")
+                tools = @("web.fetch", "web.extract", "web.download")
             }
             "utility.local" = @{
                 command = $UtilityRunner
@@ -153,7 +144,7 @@ if ($Mode -eq "mock") {
                 config = @{ lspCommand = ""; lspArgs = @(); taskCommand = ""; taskArgs = @() }
                 timeoutMs = 30000
                 maxOutputBytes = 262144
-                tools = @("lsp.symbols", "lsp.diagnostics", "task.background", "file.hash", "archive.create", "archive.extract", "data.convert")
+                tools = @("file.hash", "archive.create", "archive.extract", "data.convert")
             }
         }
     }

@@ -1,5 +1,14 @@
 # Flyflor 日志
 
+## 2026-05-27
+
+- 状态：已完成
+  执行者：kernel-ask-permission
+  范围：ask-citizen-permission-tool-event-loop
+  摘要：为 Executive 工具暂停 ASK 增加结构化 citizen-permission answer contract，Runtime 拒绝裸文本继续授权并要求 `metadata.askAnswer`；同时补齐 Executive pause、MCP tool lifecycle 和 `process.run` start/exit 事件。
+  原因：ASK 权限选择必须通过 socket/control metadata 显式回传，不能把 `continue-tools`、`keep-budget`、`keep-subagents` 当作普通用户消息推断；工具、子代理和进程失败也必须在 event 和 job detail 面可见。
+  验证：`bun test tests/skill.mcp.test.ts`; `bun test tests/computer.coding.tools.test.ts tests/ask.presentation.test.ts tests/ask.normalizer.test.ts`; `bun run check`
+
 ## 2026-05-26
 
 - 状态：已完成
@@ -946,3 +955,63 @@
   原因：执行层暂停、子代理阻塞和长任务进度必须可见、可审计、可恢复；`brain.db` 只做 ledger/query/replay/audit/detail，不能存完整 prompt 或大型工具输出。
   效率：保持旧 `parseAgentAsk`、`AgentAskParser`、runtime `renderAskReplyText`/`buildAskMetadata` 兼容导出；新增 job owner 不改变工具 sandbox/approval/audit 边界。
   验证：`bun test tests/ask.parse.test.ts tests/ask.reply.test.ts tests/ask.wire.test.ts tests/ask.normalizer.test.ts tests/ask.presentation.test.ts tests/executive.tool.runtime.test.ts tests/skill.mcp.test.ts tests/external.tools.test.ts tests/install.script.test.ts --timeout 30000`；`bun run check`；`git diff --check`。
+
+## 2026-05-27
+
+- 状态：进行中
+  执行者：kernel-ask-permission
+  范围：ask-citizen-permission-tool-loop
+  摘要：启动内核侧 ASK 公民权限与工具闭环修复，限定修改 Executive ASK、结构化权限答案、tool/subagent/process event 和 execution job detail 可见性。
+  原因：TUI 曾把 `continue-tools keep-budget keep-subagents` 写成普通用户消息，且工具/子进程/ASK loop 失败时处于黑盒状态。
+  验证：待运行 targeted tests 与 `bun run check`。
+
+- 状态：已完成
+  执行者：kernel-ask-permission-review
+  范围：ask-citizen-permission-validation
+  摘要：复核当前 worktree diff，移除误生成的 singular `AGENT.md`，并收紧 citizen-permission ASK 恢复门控：`metadata.askAnswer` 必须携带结构化 choice/value/patch，空对象不会恢复工具执行。
+  原因：公民权限恢复不能只检查 metadata 对象存在；空结构仍缺少用户选择，必须继续返回 ASK。
+  验证：`bun test tests/skill.mcp.test.ts`; `bun test tests/computer.coding.tools.test.ts tests/ask.presentation.test.ts tests/ask.normalizer.test.ts`; `bun run check`; `git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：ask-citizen-permission-final-hardening
+  摘要：按协调红线恢复 `AGENT.md -> AGENTS.md` 软链，并将 citizen-permission ASK 恢复门控从“存在结构化字段”收紧为“结构化答案能解析出有效执行策略”；未知 choice/value 不会恢复工具执行。
+  原因：本轮明确要求保留 `AGENT.md` 兼容入口；同时随机结构化字段不等于公民授权，必须继续 ASK。
+  验证：待重新运行 `bun test tests/skill.mcp.test.ts`、`bun run check` 与 `git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：ask-citizen-permission-final-verification
+  摘要：完成主控补丁后的最终验证，确认空结构、未知 choice 和裸文本都不会恢复 Executive 工具执行；有效结构化 permission choice 才能继续。
+  原因：收紧 ASK 公民授权恢复语义后必须重新验证 focused suite、类型检查和 diff hygiene。
+  验证：`bun test tests/skill.mcp.test.ts`; `bun test tests/computer.coding.tools.test.ts tests/ask.presentation.test.ts tests/ask.normalizer.test.ts`; `bun run check`; `git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：socket-control-smoke-permission-resume
+  摘要：修复 `scripts/socket.control.smoke.ts` 中旧式 ASK 恢复请求，第二轮不再发送普通文本继续语义，而是发送安全授权文本与结构化 `metadata.askAnswer`、`citizenPermission`，对齐公民权限 ASK 契约。
+  原因：内核已经禁止裸文本或空结构恢复 Executive 工具循环；smoke 仍使用旧隐式恢复会反复得到 ASK，导致 socket control 闭环验证失败。
+  验证：`bun run smoke:socket:control`; `bun test tests/gateway.control.smoke.test.ts --timeout 30000`; `bun test tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/tui.chat.history.test.ts tests/context.fork.store.test.ts tests/gateway.dedup.test.ts --timeout 30000`; `bun run check`; `git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：real-llm-loop-closure
+  摘要：新增 `scripts/live.loop.closure.ts` 与 `smoke:live:closure`，在隔离 temp home/workspace 中使用真实 DeepSeek provider 覆盖 baseline turn、workspace/process/git 工具、预算 ASK、普通文本不恢复、结构化公民权限恢复、subagent batch、history replay、execution job ledger、brain.db phantom message guard 和外部 sidecar descriptor 可见性。
+  原因：单元测试不足以证明 flyflor 与 flyflor-cli 的工具调用闭环；必须用真实模型、真实 socket、真实账本和真实工具面验证 ASK loop 不再黑盒卡住。
+  验证：`bun run provider:ready -- --require-ready`; `bun run build:binary`; `bun run install:xtools:utility`; `bun run smoke:live:closure` 输出 `ok: true`，`askAnswerPairs=1`、`executionJobCount=11`、`phantomPermissionUserEvents=0`、`toolExecutionKeys` 包含 `workspace.read`、`workspace.write`、`process.run`、`git.status`、`subagent.batch`；`bun run test:live`; `bun run smoke:socket:live`; `bun run smoke:agent:live`; `bun run smoke:socket:control`; `bun run check`; `bun run test:kernel`; `bun run docs:check`; `bun run test`; `git diff --check`。
+  风险：真实 LLM smoke 依赖当前 home provider 可用性；外部工具 payload 位于 ignored `tools/packages`，不作为提交内容。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：template-install-case-sensitive-prune
+  摘要：修复 `scripts/install.templates.ts` legacy memory template prune，在大小写不敏感文件系统上只删除 readdir 中实际精确匹配的旧文件名，不再误删 canonical `self.md`、`memory.md`、`user.md`。
+  原因：真实 TUI tmux 场景使用隔离 `FLYFLOR_HOME` 安装模板时，macOS 会把 `SELF.md` 删除请求作用到 `self.md`，导致 kernel turn error 并暴露模板安装不可靠。
+  验证：`bun test tests/prompt.templates.docs.test.ts`; `bun run smoke:live:closure`; `bun run test`; `git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：safe-real-xtools-surface
+  摘要：收紧默认真实 xtools manifest 与初始化脚本，只默认开放 Browser 只读/截图探测、Computer 只读窗口/截图探测和本地 Utility 工具；click/type/navigate/evaluate、mouse/keyboard/computer.use、provider/delegate-backed web/media/LSP/task 不再作为默认 available 工具暴露。同步更新 live closure，使真实 LLM 场景校验安全 probe available、危险控制和缺 provider 工具 unavailable。
+  原因：真实高权限闭环需要看到外部工具能力，但默认工具面不能把鼠标、键盘、浏览器执行等控制动作交给模型；缺 provider 的工具必须结构化 unavailable，不能黑盒吞错。
+  验证：`bun test tests/install.script.test.ts tests/external.tools.test.ts --timeout 30000`; `bun run check`; `bun run install:xtools:utility`; `bun run smoke:live:closure`; `bun run docs:check`; `bun run test:kernel`; `bun run test`; `git diff --check`。
+  风险：`tools/packages` 是本地 ignored payload，不作为提交内容；真实 smoke 仍依赖 home DeepSeek provider 当前可用。

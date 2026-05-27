@@ -348,6 +348,7 @@ describe("computer coding tools", () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-computer-process-"));
         const paths = testPaths(root);
         const config = await loadConfigForPaths(paths);
+        const events = new CaptureEventSink();
         const executor = new RuntimeMcpToolExecutor(
             {
                 ...config,
@@ -356,7 +357,7 @@ describe("computer coding tools", () => {
                     shellHookApproval: ToolApprovalMode.Allow,
                 },
             },
-            new NullEventSink(),
+            events,
             new SandboxQuotaTracker(),
         );
         const processToolset = new ProcessToolset(paths);
@@ -389,6 +390,25 @@ describe("computer coding tools", () => {
             exitCode: 7,
             stderr: expect.stringContaining("process-failed"),
         });
+        expect(events.events).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    type: RuntimeEventType.ProcessStart,
+                    payload: expect.objectContaining({
+                        executable: process.execPath,
+                        key: "process.run",
+                    }),
+                }),
+                expect.objectContaining({
+                    type: RuntimeEventType.ProcessExit,
+                    payload: expect.objectContaining({
+                        exitCode: 7,
+                        key: "process.run",
+                        ok: false,
+                    }),
+                }),
+            ]),
+        );
     });
 
     test("process.run success uses executable and argv without shell parsing", async () => {

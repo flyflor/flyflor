@@ -14,6 +14,7 @@ import type {
     TaskPlanRecord,
 } from "../../protocol/contracts/index.ts";
 import {
+    AskAnswerContractKind,
     AskAuthority,
     AskCrystalCandidatePolicy,
     AskReason,
@@ -689,6 +690,26 @@ export class RuntimeModule extends RuntimeBoundary {
         if ("reply" in restored) {
             return restored.reply;
         }
+        const pendingStructuredAsk = this.memory.peekActiveAsk(continuityOwnerKey(restored.message, restored.context)) ?? undefined;
+        if (
+            pendingStructuredAsk &&
+            this.requiresStructuredCitizenAnswer(pendingStructuredAsk.ask) &&
+            !this.hasExecutableCitizenPermissionAnswer(message.metadata)
+        ) {
+            this.events.publish(
+                event(
+                    RuntimeEventType.ToolAskRequired,
+                    {
+                        askId: pendingStructuredAsk.askId,
+                        reason: "structured-answer-required",
+                        requiredMetadata: "askAnswer",
+                        source: pendingStructuredAsk.ask.source,
+                    },
+                    restored.context.requestId,
+                ),
+            );
+            return this.replyFromStructuredAskAnswerRequired(restored.message, restored.context, pendingStructuredAsk);
+        }
         const turnOptions = this.applyAskAnswerExecutionStrategy(
             this.applyCompletionBudgetProfile(options, restored.message),
             this.readAskAnswerExecutionStrategy(message.metadata),
@@ -744,6 +765,56 @@ export class RuntimeModule extends RuntimeBoundary {
             );
         }
         return Object.keys(strategy).length > 0 ? strategy : undefined;
+    }
+
+    private hasExecutableCitizenPermissionAnswer(metadata: Record<string, unknown> | undefined): boolean {
+        const raw = metadata?.askAnswer;
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+        const payload = raw as Record<string, unknown>;
+        if (Array.isArray(payload.answers)) {
+            return payload.answers.some((answer) => this.isExecutableCitizenPermissionAnswerItem(answer));
+        }
+        return this.isExecutableCitizenPermissionAnswerItem(payload);
+    }
+
+    private isExecutableCitizenPermissionAnswerItem(answer: unknown): boolean {
+        if (!answer || typeof answer !== "object" || Array.isArray(answer)) return false;
+        const strategy = this.askExecutionStrategyFromAnswer(
+            answer as AgentAskAnswerItem & { executionPatch?: unknown },
+        );
+        return Object.keys(strategy).length > 0;
+    }
+
+    private requiresStructuredCitizenAnswer(ask: AgentAsk): boolean {
+        return (
+            ask.answerContract?.kind === AskAnswerContractKind.CitizenPermission &&
+            ask.answerContract.requiresStructuredAnswer === true
+        );
+    }
+
+    private replyFromStructuredAskAnswerRequired(
+        message: GatewayMessage,
+        context: RuntimeContext,
+        activeAsk: { askId: string; chainDepth: number; ask: AgentAsk },
+    ): GatewayReply {
+        const snapshotId = `behavior-${context.requestId}`;
+        const askMetadata = this.ask.buildMetadata(activeAsk.ask, snapshotId);
+        return {
+            messageId: crypto.randomUUID(),
+            route: message.route,
+            text: this.ask.renderReplyText(activeAsk.ask),
+            metadata: {
+                kind: "ask",
+                behaviorSnapshotId: snapshotId,
+                ask: {
+                    ...askMetadata,
+                    askId: activeAsk.askId,
+                    chainDepth: activeAsk.chainDepth,
+                    structuredAnswerRequired: true,
+                    requiredMetadata: "askAnswer",
+                },
+            },
+        };
     }
 
     private askExecutionStrategyFromAnswer(
@@ -1780,6 +1851,35 @@ export class RuntimeModule extends RuntimeBoundary {
                     context.requestId,
                 ),
             );
+            this.events.publish(
+                event(
+                    RuntimeEventType.ToolAskRequired,
+                    {
+                        askId: generated.askRequired?.askId,
+                        jobId: generated.askRequired?.jobId,
+                        loopGuardReason: generated.askRequired?.loopGuardReason,
+                        reason: "executive-loop-paused",
+                        stepCount: generated.askRequired?.stepCount,
+                        toolBudgetExhausted: generated.askRequired?.toolBudgetExhausted === true,
+                    },
+                    context.requestId,
+                ),
+            );
+            if (generated.askRequired?.toolBudgetExhausted === true) {
+                this.events.publish(
+                    event(
+                        RuntimeEventType.ToolBudgetExhausted,
+                        {
+                            askId: generated.askRequired.askId,
+                            budget: generated.askRequired.budget,
+                            jobId: generated.askRequired.jobId,
+                            reason: generated.askRequired.budgetExhaustedReason,
+                            stepCount: generated.askRequired.stepCount,
+                        },
+                        context.requestId,
+                    ),
+                );
+            }
             return this.replyFromAsk({
                 ask: executiveAsk,
                 message,
@@ -2274,6 +2374,11 @@ export class RuntimeModule extends RuntimeBoundary {
         const prompt = progressSummary ? `${basePrompt}\n\n已记录的工具进度：${progressSummary}` : basePrompt;
         return {
             authority: AskAuthority.Executive,
+            answerContract: {
+                kind: AskAnswerContractKind.CitizenPermission,
+                metadataKey: "askAnswer",
+                requiresStructuredAnswer: true,
+            },
             reason: AskReason.PolicyDecision,
             resumePolicy: askRequired.toolBudgetExhausted === true ? AskResumePolicy.Continue : AskResumePolicy.Replan,
             source: askRequired.toolStability ? AskSource.ToolStability : AskSource.Executive,

@@ -182,13 +182,17 @@ class SocketControlSmoke {
             if (final.reply.metadata?.kind !== "ask") {
                 throw new Error(`Expected first turn to pause as ask, got: ${JSON.stringify(final.reply.metadata ?? null)}`);
             }
+            const behaviorSnapshotId =
+                typeof final.reply.metadata.behaviorSnapshotId === "string"
+                    ? final.reply.metadata.behaviorSnapshotId
+                    : undefined;
 
             send(
                 ws,
                 GatewayControlMessageType.GatewayMessageSend,
                 {
                     id: "message-2",
-                    text: "continue with the same scope",
+                    text: "已提交执行授权策略",
                     conversationKey: "thin-client",
                     user: { id: "smoke-user", displayName: "Smoke User" },
                     context: {
@@ -197,6 +201,37 @@ class SocketControlSmoke {
                             projectDir: config.paths.projectDir,
                             projectMemoryDir: config.paths.projectMemoryDir,
                             title: "Thin Client Scope",
+                        },
+                    },
+                    metadata: {
+                        ...(behaviorSnapshotId
+                            ? { continuation: { mode: "continue", snapshotId: behaviorSnapshotId } }
+                            : {}),
+                        askAnswer: {
+                            answers: [
+                                {
+                                    questionId: "execution-strategy",
+                                    choiceId: "continue-tools",
+                                    value: "continue-tools",
+                                },
+                                {
+                                    questionId: "budget-policy",
+                                    choiceId: "keep-budget",
+                                    value: "keep-budget",
+                                },
+                                {
+                                    questionId: "subagent-policy",
+                                    choiceId: "keep-subagents",
+                                    value: "keep-subagents",
+                                },
+                            ],
+                        },
+                        citizenPermission: {
+                            authority: "user",
+                            capability: "executive-tool-loop",
+                            choices: ["continue-tools", "keep-budget", "keep-subagents"],
+                            kind: "execution-policy",
+                            source: "socket-control-smoke",
                         },
                     },
                 },

@@ -57,6 +57,7 @@
         "smoke:agent:live": "bun test tests/live.agent.test.ts",
         "smoke:socket:ask-loop": "bun run scripts/socket.ask.loop.smoke.ts",
         "smoke:socket:control": "bun run scripts/socket.control.smoke.ts",
+        "smoke:live:closure": "bun run scripts/live.loop.closure.ts",
         "e2e:ws:full": "bun run scripts/socket.full.e2e.ts",
         "smoke:socket:live": "bun run scripts/socket.live.scenario.ts",
         "smoke:socket:service": "bun run scripts/socket.service.smoke.ts",

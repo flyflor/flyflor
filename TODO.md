@@ -18,6 +18,8 @@
 - Kernel `/ws` 已暴露 `server.hello`、`capability.catalog.get` 和 `capability.catalog.snapshot`；`flyflor-cli` bootstrap 已发送 `capability.catalog.get`。
 - Kernel context input 已支持 `toolApprovals.mcpToolCalls` 与 `toolApprovals.userToolCalls`；`flyflor-cli /approve` 已闭合普通 per-turn approval UX，YOLO 仍是独立高权限模式。
 - ASK typed answer continuation 已闭合：用户直接输入 `lint:fix`、`prettier:all` 等答案时，CLI 会附带最近 pending ASK continuation metadata，kernel 保留原始任务和当前答案，不再开新 turn 丢上下文。
+- 2026-05-27 kernel ASK permission 补丁：Executive 工具暂停 ASK 现在声明 `answerContract.kind = "citizen-permission"` 且要求 `metadata.askAnswer`；裸 `continue-tools` / `keep-budget` / `keep-subagents` 文本不会被内核当作继续授权。
+- 2026-05-27 kernel event 补丁：Executive pause 会发布 `tool.ask_required` / `tool.budget.exhausted`，MCP 工具完成会同步发布 `tool.succeeded` / `tool.failed`，`process.run` 会发布 `process.start` / `process.exit`。
 - `/undo` 已从本地 UI 回滚升级为 `gateway.message.undo`：CLI 发送撤销 command，kernel 追加 undo audit event，并把撤销范围内的 event、ASK、continuation 和 ask-answer memory state 标记为 `abandoned`，不删除 `brain.db` 账本。
 - Model/Status 最大上下文窗口已改为动态解析：显式 `contextWindowTokens` 优先，其次 provider `/models` metadata，再退回已知 fallback；CLI 以 gateway 下发值为权威。
 - 下一阶段实现仍必须先补测试，再改协议或 UI；CLI 只能提交用户决策、continuation、undo 和 approval payload，不能本地执行工具或写 `brain.db`。
@@ -946,3 +948,25 @@ Kernel V2 acceptance focus：
 - [x] Phase 6 brain.db job ledger 已完成：Execution Job 生命周期写入 `memory_events.type='execution-job'`，只保存结构化摘要，不保存完整 prompt 或大型工具输出。
 - [ ] Phase 7 socket job query 仍待做。
 - [ ] Phase 10-13 工具稳定性状态机、升级事务、ASK 联动和 Crystal evidence 闭环仍待做。
+
+## 2026-05-27 ASK 公民权限与工具闭环
+
+- [x] 复盘 `brain.db` 与日志，固定 phantom ASK 默认选择、`subagent.batch` parse failure、execution job detail 重复请求证据。
+- [x] 将 Executive 工具阻断 ASK 改为显式公民权限 ASK，禁止裸文本 token 推断执行策略。
+- [x] 确保 tool/subagent/process 失败写入 execution job detail，并通过 socket event 可订阅。
+- [x] 增加 targeted tests 覆盖未结构化授权时不恢复工具执行、ASK 触发不生成普通用户消息。
+- [x] 运行 `bun run check` 与相关 runtime/socket/memory 测试。
+- [x] 修复 `socket.control.smoke` 旧隐式恢复请求，改为显式 `metadata.askAnswer` 公民权限答案后通过 pause-resume-history 闭环验证。
+
+## 2026-05-27 真实 LLM 全链路闭环
+
+- [x] 新增 `smoke:live:closure`，使用真实 DeepSeek provider 与隔离 temp home/workspace 验证 baseline、工具、预算 ASK、结构化公民权限恢复、子代理、history、execution job、brain.db phantom guard 和外部工具可见性。
+- [x] 安装真实 `tools/packages` sidecar payload 到 git ignored 工具目录，并验证 Browser/Computer/Web/Media/Utility descriptor 均能被内核发现为 sidecar-backed capability。
+- [x] 修复 macOS 大小写不敏感文件系统下 `install.templates` 误删 `self.md`、`memory.md`、`user.md` 的问题，新增模板安装回归。
+- [x] 运行真实与确定性验证：`bun run provider:ready -- --require-ready`、`bun run test:live`、`bun run smoke:socket:live`、`bun run smoke:agent:live`、`bun run smoke:socket:control`、`bun run smoke:live:closure`、`bun run check`、`bun run test:kernel`、`bun run docs:check`、`bun run test`、`bun run build:binary`、`git diff --check`。
+
+## 2026-05-27 安全外部工具面与最终闭环复核
+
+- [x] 收紧默认真实 xtools manifest：保留 `browser.open` / `browser.snapshot` / `browser.screenshot`、`screen.screenshot` / `computer.window` 与本地 utility 工具，默认不暴露 click/type/mouse/keyboard/control 类高风险动作。
+- [x] `smoke:live:closure` 增加真实工具面断言：安全 Browser/Computer probe 为 available，危险控制工具、providerless web/media/LSP/task 为 unavailable，utility 工具仍 available。
+- [x] 复跑真实闭环与最终门禁：`bun run smoke:live:closure`、`bun run docs:check`、`bun run test:kernel`、`bun run test`、`git diff --check`。

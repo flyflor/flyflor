@@ -1986,8 +1986,103 @@ describe("Skill and MCP capability config", () => {
             }),
         );
 
-        const resumed = await runtime.handleMessage(
+        const modelCallsBeforeBareContinue = model.messages.length;
+        const bareContinue = await runtime.handleMessage(
             gatewayMessage("continue-tools"),
+            {
+                ...context,
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+            { maxToolTurns: 2 },
+        );
+
+        expect(bareContinue.metadata?.kind).toBe("ask");
+        expect(bareContinue.metadata?.ask).toEqual(
+            expect.objectContaining({
+                answerContract: expect.objectContaining({ kind: "citizen-permission" }),
+                askId: expect.any(String),
+                requiredMetadata: "askAnswer",
+                structuredAnswerRequired: true,
+            }),
+        );
+        expect(model.messages).toHaveLength(modelCallsBeforeBareContinue);
+
+        const emptyStructuredAnswer = await runtime.handleMessage(
+            {
+                ...gatewayMessage("continue-tools"),
+                metadata: {
+                    continuation: {
+                        mode: "continue",
+                        snapshotId: paused.metadata?.behaviorSnapshotId,
+                    },
+                    askAnswer: {},
+                },
+            },
+            {
+                ...context,
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+            { maxToolTurns: 2 },
+        );
+
+        expect(emptyStructuredAnswer.metadata?.kind).toBe("ask");
+        expect(emptyStructuredAnswer.metadata?.ask).toEqual(
+            expect.objectContaining({
+                requiredMetadata: "askAnswer",
+                structuredAnswerRequired: true,
+            }),
+        );
+        expect(model.messages).toHaveLength(modelCallsBeforeBareContinue);
+
+        const unknownStructuredAnswer = await runtime.handleMessage(
+            {
+                ...gatewayMessage("continue-tools"),
+                metadata: {
+                    continuation: {
+                        mode: "continue",
+                        snapshotId: paused.metadata?.behaviorSnapshotId,
+                    },
+                    askAnswer: {
+                        answers: [{ questionId: "execution-strategy", choiceId: "unknown-permission" }],
+                    },
+                },
+            },
+            {
+                ...context,
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+            { maxToolTurns: 2 },
+        );
+
+        expect(unknownStructuredAnswer.metadata?.kind).toBe("ask");
+        expect(unknownStructuredAnswer.metadata?.ask).toEqual(
+            expect.objectContaining({
+                requiredMetadata: "askAnswer",
+                structuredAnswerRequired: true,
+            }),
+        );
+        expect(model.messages).toHaveLength(modelCallsBeforeBareContinue);
+
+        const resumed = await runtime.handleMessage(
+            {
+                ...gatewayMessage("continue-tools"),
+                metadata: {
+                    continuation: {
+                        mode: "continue",
+                        snapshotId: paused.metadata?.behaviorSnapshotId,
+                    },
+                    askAnswer: {
+                        answers: [
+                            { questionId: "execution-strategy", choiceId: "continue-tools", value: "continue-tools" },
+                            { questionId: "budget-policy", choiceId: "increase-budget", value: "increase-budget" },
+                            { questionId: "subagent-policy", choiceId: "keep-subagents", value: "keep-subagents" },
+                        ],
+                    },
+                },
+            },
             {
                 ...context,
                 requestId: crypto.randomUUID(),
@@ -3239,6 +3334,13 @@ describe("Skill and MCP capability config", () => {
                 jobId: expect.any(String),
             }),
         );
+        expect(sink.events.find((event) => event.type === RuntimeEventType.ToolAskRequired)?.payload).toEqual(
+            expect.objectContaining({
+                askId: expect.any(String),
+                jobId: expect.any(String),
+                reason: "executive-loop-paused",
+            }),
+        );
         const db = new Database(join(paths.configDir, "brain.db"), { readonly: true });
         try {
             const row = db
@@ -3560,11 +3662,11 @@ describe("Skill and MCP capability config", () => {
             },
         );
 
-        expect(deltas.join("")).toBe("visible-before  visible-after");
-        expect(reply.text).toBe("visible-before  visible-after");
+        expect(deltas.join("")).toContain("visible-before  visible-after");
+        expect(reply.text).toContain("执行层连续遇到工具阻断");
         expect(deltas.join("")).not.toContain("agent_tool_calls");
-        expect(reply.metadata?.kind).toBe("reply");
-        expect(reply.metadata?.mcpToolCalls).toBe(1);
+        expect(reply.metadata?.kind).toBe("ask");
+        expect(reply.metadata?.mcpToolCalls).toBeGreaterThanOrEqual(1);
         expect(reply.metadata?.mcpToolExecutions).toEqual(
             expect.arrayContaining([expect.objectContaining({ ok: false, server: "fake", tool: "echo" })]),
         );

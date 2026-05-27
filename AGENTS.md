@@ -97,3 +97,11 @@ bun run build:binary
 - 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
 - 搜索 provider 缺失时必须 unavailable 或 failed，禁止假数据兜底。
 - 失败必须结构化暴露，禁止吞错或伪成功。
+
+## loop-kernel-ask-permission 本地附加红线
+
+- 本 worktree 只处理 `flyflor` 内核侧 ASK、公民权限、Executive 工具闭环、tool/subagent/process event 和 `brain.db` ledger 分类。
+- 禁止修改 `flyflor-cli`、`flyflor-front`、`reference` 和无关文档。
+- 公民权限 ASK 必须走结构化 metadata 与 socket/event 血管；禁止把 `continue-tools`、`keep-budget`、`keep-subagents` 等选择写成普通用户消息。
+- 不改变 Memory、Scope、Crystal 主链，除非是 ASK answer ledger 分类所必需。
+- 所有失败必须结构化暴露到 event / execution job detail / audit ledger，禁止吞错或只写 continuation。

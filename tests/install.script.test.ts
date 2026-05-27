@@ -278,7 +278,10 @@ describe("source/docker/windows installers", () => {
         expect(manifest).toContain('"args": ["xtool-sidecar", "browser.cdp"]');
         await expect(stat(join(target, "packages", "browser-cdp", "bin", "flyflor"))).resolves.toBeTruthy();
         expect(manifest).toContain('"FLYFLOR_BROWSER_CDP_URL": "http://127.0.0.1:9333"');
-        expect(manifest).toContain('"browser.evaluate"');
+        expect(manifest).toContain('"browser.screenshot"');
+        expect(manifest).not.toContain('"browser.click"');
+        expect(manifest).not.toContain('"browser.type"');
+        expect(manifest).not.toContain('"browser.evaluate"');
         expect(manifest).not.toContain("playwright");
         await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
     });
@@ -308,6 +311,8 @@ describe("source/docker/windows installers", () => {
         expect(manifest).toContain('"args": ["xtool-sidecar", "web.search"]');
         await expect(stat(join(target, "packages", "search-web", "bin", "flyflor"))).resolves.toBeTruthy();
         expect(manifest).toContain('"providers": []');
+        expect(manifest).toContain('"web.fetch"');
+        expect((JSON.parse(manifest) as { sidecars: { "web.search": { tools: string[] } } }).sidecars["web.search"].tools).not.toContain("web.search");
         expect(manifest).not.toContain("playwright");
         await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
     });
@@ -337,8 +342,8 @@ describe("source/docker/windows installers", () => {
         expect(manifest).toContain('"args": ["xtool-sidecar", "media.local"]');
         await expect(stat(join(target, "packages", "media", "bin", "flyflor"))).resolves.toBeTruthy();
         expect(manifest).toContain('"providerUrl": ""');
-        expect(manifest).toContain('"vision.ocr"');
-        expect(manifest).toContain('"audio.speak"');
+        expect(manifest).not.toContain('"vision.ocr"');
+        expect(manifest).not.toContain('"audio.speak"');
         expect(manifest).not.toContain("whisper");
         await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
     });
@@ -368,7 +373,9 @@ describe("source/docker/windows installers", () => {
         expect(manifest).toContain('"args": ["xtool-sidecar", "computer.native"]');
         await expect(stat(join(target, "packages", "computer-native", "bin", "flyflor"))).resolves.toBeTruthy();
         expect(manifest).toContain('"screen.screenshot"');
-        expect(manifest).toContain('"computer.keyboard"');
+        expect(manifest).toContain('"computer.window"');
+        expect(manifest).not.toContain('"computer.mouse"');
+        expect(manifest).not.toContain('"computer.keyboard"');
         expect(manifest).toContain('"mouseCommand": ""');
         expect(manifest).not.toContain("playwright");
         await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
@@ -394,13 +401,10 @@ describe("source/docker/windows installers", () => {
         expect(exit).toBe(0);
 
         const manifest = await readFile(join(target, "external.tools.jsonc"), "utf8");
-        expect(manifest).toContain('"computer.use"');
-        expect(manifest).toContain('"command": "./tools/packages/computer-use/bin/flyflor"');
-        expect(manifest).toContain('"args": ["xtool-sidecar", "computer.use"]');
         await expect(stat(join(target, "packages", "computer-use", "bin", "flyflor"))).resolves.toBeTruthy();
-        expect(manifest).toContain('"backend": "delegate"');
-        expect(manifest).toContain('"delegateCommand": ""');
-        expect(manifest).toContain('"cuaCommand": "cua-driver"');
+        expect(manifest).not.toContain('"computer.use"');
+        expect(manifest).not.toContain('"args": ["xtool-sidecar", "computer.use"]');
+        expect(manifest).not.toContain('"delegateCommand": ""');
         expect(manifest).not.toContain("playwright");
         await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
     });
@@ -430,8 +434,11 @@ describe("source/docker/windows installers", () => {
         expect(manifest).toContain('"args": ["xtool-sidecar", "utility.local"]');
         await expect(stat(join(target, "packages", "utility", "bin", "flyflor"))).resolves.toBeTruthy();
         expect(manifest).toContain('"file.hash"');
+        expect(manifest).toContain('"data.convert"');
+        expect(manifest).not.toContain('"lsp.symbols"');
+        expect(manifest).not.toContain('"task.background"');
+        expect(manifest).toContain('"file.hash"');
         expect(manifest).toContain('"archive.extract"');
-        expect(manifest).toContain('"task.background"');
         await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
     });
 

@@ -105,10 +105,6 @@ class XToolsInitializer {
                         "browser.open",
                         "browser.snapshot",
                         "browser.screenshot",
-                        "browser.click",
-                        "browser.type",
-                        "browser.navigate",
-                        "browser.evaluate",
                     ],
                 },
                 "computer.native": {
@@ -125,25 +121,8 @@ class XToolsInitializer {
                     maxOutputBytes: 65536,
                     tools: [
                         "screen.screenshot",
-                        "computer.mouse",
-                        "computer.keyboard",
                         "computer.window",
                     ],
-                },
-                "computer.use": {
-                    command: this.packageCommand(options.targetDir, "computer-use", options.runnerName),
-                    args: ["xtool-sidecar", "computer.use"],
-                    cwd: "app",
-                    config: {
-                        backend: "delegate",
-                        delegateCommand: "",
-                        delegateArgs: [],
-                        cuaCommand: "cua-driver",
-                        cuaArgs: [],
-                    },
-                    timeoutMs: 20000,
-                    maxOutputBytes: 524288,
-                    tools: ["computer.use"],
                 },
                 "media.local": {
                     command: this.packageCommand(options.targetDir, "media", options.runnerName),
@@ -156,12 +135,7 @@ class XToolsInitializer {
                     },
                     timeoutMs: 30000,
                     maxOutputBytes: 262144,
-                    tools: [
-                        "vision.analyze",
-                        "vision.ocr",
-                        "audio.transcribe",
-                        "audio.speak",
-                    ],
+                    tools: [],
                 },
                 "web.search": {
                     command: this.packageCommand(options.targetDir, "search-web", options.runnerName),
@@ -174,7 +148,6 @@ class XToolsInitializer {
                     timeoutMs: 10000,
                     maxOutputBytes: 65536,
                     tools: [
-                        "web.search",
                         "web.fetch",
                         "web.extract",
                         "web.download",
@@ -193,9 +166,6 @@ class XToolsInitializer {
                     timeoutMs: 30000,
                     maxOutputBytes: 262144,
                     tools: [
-                        "lsp.symbols",
-                        "lsp.diagnostics",
-                        "task.background",
                         "file.hash",
                         "archive.create",
                         "archive.extract",

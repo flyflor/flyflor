@@ -72,6 +72,19 @@ export const AskCrystalCandidatePolicy = {
 export type AskCrystalCandidatePolicy =
     (typeof AskCrystalCandidatePolicy)[keyof typeof AskCrystalCandidatePolicy];
 
+export const AskAnswerContractKind = {
+    CitizenPermission: "citizen-permission",
+} as const;
+
+export type AskAnswerContractKind = (typeof AskAnswerContractKind)[keyof typeof AskAnswerContractKind];
+
+export interface AgentAskAnswerContract {
+    kind: AskAnswerContractKind;
+    /** Kernel-owned ASK answers with side effects must arrive as structured metadata, never prose inference. */
+    requiresStructuredAnswer?: boolean;
+    metadataKey?: "askAnswer";
+}
+
 export interface AgentAskChoice {
     /** Stable option id for UI selection, audit, and ASK-answer replay. */
     id?: string;
@@ -139,6 +152,8 @@ export interface AgentAsk {
     rationale?: string;
     /** Candidate evidence proposed by high-authority ASK sources. Crystal quality gate still decides promotion. */
     crystalCandidates?: Record<string, unknown>[];
+    /** Owner contract for how the client must answer this ASK. */
+    answerContract?: AgentAskAnswerContract;
     /**
      * Continuation Context hint（LF-R4）。模型同轮显式提供 continuation 的用户可见字段，
      * 避免 runtime 用 ask.prompt 首行做 fallback 截断。runtime 不解析、不推断；

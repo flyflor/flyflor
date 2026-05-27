@@ -38,6 +38,14 @@ This keeps the project portable. The compiled kernel dispatches
 the bundled tool bridge. The initializer copies the project binary into each
 package's `bin/` directory, and the registry loads those package-local binaries.
 
+The real initializer exposes only safe live-probe tools by default: browser
+open/snapshot/screenshot, screen screenshot/window inspection, web
+fetch/extract/download, and local utility file/hash/archive/data conversion.
+Desktop control actions, browser click/type/evaluate/navigation,
+provider-backed search/media, LSP, and background task delegates remain
+descriptor-only until a local operator adds an explicit manifest entry with the
+required delegate/provider config.
+
 ## Packages
 
 `tools/packages/` is for optional local packages and delegates. It stays

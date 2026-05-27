@@ -55,6 +55,7 @@ export class AskPresentationComponent extends MemoryComponent {
             snapshotId,
         };
         if (ask.authority) metadata.authority = ask.authority;
+        if (ask.answerContract) metadata.answerContract = ask.answerContract;
         if (ask.crystalCandidates && ask.crystalCandidates.length > 0) metadata.crystalCandidates = ask.crystalCandidates;
         if (executiveToolLoop) metadata.executiveToolLoop = executiveToolLoop;
         if (ask.rationale) metadata.rationale = ask.rationale;

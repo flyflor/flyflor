@@ -208,6 +208,7 @@ export class RuntimeMcpToolExecutor {
                     call,
                     input.processToolset,
                     catalogKeys.has(key) ? schemaCheck : { ok: false, errors: ["process tool not in catalog"] },
+                    input.requestId,
                     input.approveMcpToolCall,
                     sandboxPolicy,
                 ));
@@ -538,6 +539,7 @@ export class RuntimeMcpToolExecutor {
         call: McpToolCallRequest & { key: string },
         processToolset: ProcessToolset,
         schemaCheck: { ok: boolean; errors: string[] },
+        requestId: string,
         approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>,
         sandboxPolicy: SandboxPolicy = createSandboxPolicy(this.config.sandbox),
     ): Promise<McpToolCallExecution & { call: McpToolCallRequest & { key: string } }> {
@@ -556,9 +558,35 @@ export class RuntimeMcpToolExecutor {
             allowedCommands: [executable],
             approve: approveMcpToolCall ? () => approveMcpToolCall(call) : undefined,
         });
+        const processSpec = {
+            executable,
+            argv: Array.isArray(call.input.argv) ? call.input.argv : [],
+            cwd: typeof call.input.cwd === "string" && call.input.cwd.trim() ? call.input.cwd.trim() : this.config.paths.projectDir,
+        };
+        this.events.publish(
+            event(RuntimeEventType.ProcessStart, {
+                ...processSpec,
+                key: this.callKey(call),
+                server: call.server,
+                tool: call.tool,
+            }, requestId),
+        );
         try {
             const result = await processToolset.execute(call, executor);
             const error = result.isError ? this.processToolError(result.raw) : undefined;
+            const raw = result.raw && typeof result.raw === "object" ? result.raw as Record<string, unknown> : {};
+            this.events.publish(
+                event(RuntimeEventType.ProcessExit, {
+                    ...processSpec,
+                    error,
+                    exitCode: typeof raw.exitCode === "number" ? raw.exitCode : null,
+                    key: this.callKey(call),
+                    ok: !result.isError,
+                    server: call.server,
+                    timedOut: raw.timedOut === true,
+                    tool: call.tool,
+                }, requestId),
+            );
             return {
                 call,
                 ok: !result.isError,
@@ -567,6 +595,18 @@ export class RuntimeMcpToolExecutor {
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
+            this.events.publish(
+                event(RuntimeEventType.ProcessExit, {
+                    ...processSpec,
+                    error: message,
+                    exitCode: null,
+                    key: this.callKey(call),
+                    ok: false,
+                    server: call.server,
+                    timedOut: false,
+                    tool: call.tool,
+                }, requestId),
+            );
             return {
                 call,
                 ok: false,
@@ -959,6 +999,35 @@ export class RuntimeMcpToolExecutor {
                 requestId,
             ),
         );
+        this.events.publish(
+            event(
+                execution.ok ? RuntimeEventType.ToolSucceeded : RuntimeEventType.ToolFailed,
+                {
+                    capabilityKind: this.lifecycleCapabilityKind(execution.call),
+                    error: execution.error,
+                    inputPreview,
+                    key,
+                    ok: execution.ok,
+                    resultTailLines,
+                    sandboxMode,
+                    server: execution.call.server,
+                    status: execution.ok ? "completed" : "failed",
+                    tool: execution.call.tool,
+                    ...(resultDescription
+                        ? {
+                              resultSummary: formatMcpResultSummary(resultDescription.summary, execution.result?.raw),
+                              resultSummaryMeta: resultDescription.summary,
+                          }
+                        : {}),
+                },
+                requestId,
+            ),
+        );
+    }
+
+    private lifecycleCapabilityKind(call: McpToolCallRequest): CapabilityExecutionKind {
+        if (call.server === USER_TOOL_SERVER) return CapabilityExecutionKind.Plugin;
+        return CapabilityExecutionKind.McpTool;
     }
 
     private sandboxPolicyForInput(input: RuntimeMcpToolExecutorInput): SandboxPolicy {

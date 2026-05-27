@@ -86,6 +86,8 @@ async function installTemplateGroup(input: { destination: string; force: boolean
 
 async function pruneLegacyMemoryTemplates(targetHome: string): Promise<void> {
     const memoryTemplateDir = join(targetHome, "templates", "memory");
+    const entries = await readdir(memoryTemplateDir, { withFileTypes: true });
+    const actualFiles = new Set(entries.filter((entry) => entry.isFile()).map((entry) => entry.name));
     const legacyFiles = [
         "MEMORY.md",
         "SELF.md",
@@ -96,6 +98,9 @@ async function pruneLegacyMemoryTemplates(targetHome: string): Promise<void> {
         "soul.zh.cn.md",
     ];
     for (const file of legacyFiles) {
+        if (!actualFiles.has(file)) {
+            continue;
+        }
         const path = join(memoryTemplateDir, file);
         try {
             await rm(path, { force: true });
