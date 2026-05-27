@@ -14,7 +14,9 @@ type BrowserUseAction =
     | "type"
     | "evaluate"
     | "scroll"
+    | "back"
     | "press"
+    | "get_images"
     | "wait";
 
 interface SidecarRequest {
@@ -52,10 +54,12 @@ const ACTIONS = new Set<BrowserUseAction>([
     "type",
     "evaluate",
     "scroll",
+    "back",
     "press",
+    "get_images",
     "wait",
 ]);
-const READ_ACTIONS = new Set<BrowserUseAction>(["snapshot", "screenshot", "wait"]);
+const READ_ACTIONS = new Set<BrowserUseAction>(["snapshot", "screenshot", "get_images", "wait"]);
 const DEFAULT_CDP_URL = "http://127.0.0.1:9222";
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 512 * 1024;
@@ -244,6 +248,8 @@ class BrowserUseSidecar {
                         returnByValue: true,
                     }),
                 };
+            case "back":
+                return { response: await client.goBack() };
             case "press": {
                 const key = requiredString(invocation.input.key ?? invocation.input.keys, "input.key");
                 return {
@@ -253,6 +259,14 @@ class BrowserUseSidecar {
                     ],
                 };
             }
+            case "get_images":
+                return {
+                    response: await client.sendToPage("Runtime.evaluate", {
+                        expression: getImagesExpression(boundedInt(invocation.input.maxImages, 1, 1000) ?? 200),
+                        awaitPromise: true,
+                        returnByValue: true,
+                    }),
+                };
             case "wait": {
                 const ms = Math.min(Math.max(numberInput(invocation.input.ms) ?? secondsToMs(invocation.input.seconds) ?? 1000, 0), 30_000);
                 await Bun.sleep(ms);
@@ -281,6 +295,25 @@ class BrowserUseCdpClient {
             throw new BrowserUseError("failed", "CDP page target did not include webSocketDebuggerUrl");
         }
         return new CdpSocket(target.webSocketDebuggerUrl).send(method, params);
+    }
+
+    public async goBack(): Promise<JsonObject> {
+        const history = asObject(await this.sendToPage("Page.getNavigationHistory", {}), "Page.getNavigationHistory result");
+        const currentIndex = numberInput(history.currentIndex);
+        const entries = Array.isArray(history.entries) ? history.entries : [];
+        if (currentIndex === undefined || currentIndex <= 0) {
+            throw new BrowserUseError("failed", "browser.use back has no previous browser history entry");
+        }
+        const previous = asObject(entries[currentIndex - 1], "Page.getNavigationHistory previous entry");
+        const entryId = numberInput(previous.id);
+        if (entryId === undefined) {
+            throw new BrowserUseError("failed", "browser.use back history entry did not include a numeric id");
+        }
+        return {
+            currentIndex,
+            entryId,
+            response: await this.sendToPage("Page.navigateToHistoryEntry", { entryId }),
+        };
     }
 
     public async evaluateDomAction(expression: string): Promise<unknown> {
@@ -479,6 +512,9 @@ async function validateAction(action: BrowserUseAction, input: JsonObject): Prom
     if (action === "press") {
         requiredString(input.key ?? input.keys, "input.key");
     }
+    if (action === "get_images" && input.maxImages !== undefined) {
+        boundedInt(input.maxImages, 1, 1000);
+    }
 }
 
 function waitForOpen(ws: WebSocket): Promise<void> {
@@ -656,6 +692,21 @@ function keyEvent(type: "keyDown" | "keyUp", key: string): JsonObject {
         key,
         text: type === "keyDown" && key.length === 1 ? key : undefined,
     };
+}
+
+function getImagesExpression(maxImages: number): string {
+    return `(() => {
+        const images = Array.from(document.images)
+            .map((img) => ({
+                src: img.currentSrc || img.src || "",
+                alt: img.alt || "",
+                width: img.naturalWidth || img.width || 0,
+                height: img.naturalHeight || img.height || 0,
+            }))
+            .filter((img) => img.src && !img.src.startsWith("data:"))
+            .slice(0, ${maxImages});
+        return { ok: true, count: images.length, images };
+    })()`;
 }
 
 function boundedPositiveInt(value: unknown, path: string, fallback: number, max: number): number {

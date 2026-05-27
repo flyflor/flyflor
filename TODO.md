@@ -1148,3 +1148,9 @@ Kernel V2 acceptance focus：
 - [x] 为 `browser.use` 增加 Hermes 风格 `scroll` 和 `press` action，仍只通过 process-json sidecar/CDP/delegate 执行。
 - [x] 模型可见 descriptor 暴露 `direction`、`amount`、`key`/`keys`，并保持高权限 browser control opt-in。
 - [x] 新增 focused browser-use/external descriptor 回归与追加文档，复跑 browser-use tests、check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Browser Use Hermes Navigation
+
+- [x] 为 `browser.use` 增加 Hermes 风格 `back` 与 `get_images` action，仍只通过 process-json sidecar/CDP/delegate 执行。
+- [x] 模型可见 descriptor 暴露 `maxImages` 资源上限，并保持高权限 browser control opt-in。
+- [x] 新增 focused browser-use/external descriptor/live smoke 回归与追加文档，复跑 browser-use tests、check/docs、真实闭环与 `git diff --check`。

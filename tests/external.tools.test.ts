@@ -104,11 +104,12 @@ describe("external tool descriptor discovery", () => {
                 required: ["action"],
                 properties: {
                     action: {
-                        enum: expect.arrayContaining(["open", "snapshot", "click", "type", "scroll", "press"]),
+                        enum: expect.arrayContaining(["open", "snapshot", "click", "type", "scroll", "back", "press", "get_images"]),
                     },
                     amount: { type: "integer", minimum: 1, maximum: 1000 },
                     direction: { type: "string", enum: ["up", "down", "left", "right"] },
                     key: { type: "string" },
+                    maxImages: { type: "integer", minimum: 1, maximum: 1000 },
                 },
             },
             tags: expect.arrayContaining(["browser-use", "approval:computer"]),

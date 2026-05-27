@@ -87,6 +87,24 @@ class BrowserUseLiveSmoke {
             this.expectEvaluationValue(evaluate, `saved:${TYPE_TEXT}`);
             checks.push("evaluate-state");
 
+            const images = await this.invoker.call({
+                tool: "browser.use",
+                config,
+                input: { action: "get_images", maxImages: 5 },
+            });
+            this.expectOk(images, "get_images");
+            this.expectImages(images);
+            checks.push("get-images");
+
+            const secondPage = page.url.replace(/\/?$/u, "/second");
+            const navigateSecond = await this.invoker.call({ tool: "browser.use", config, input: { action: "navigate", url: secondPage } });
+            this.expectOk(navigateSecond, "navigate");
+            checks.push("navigate-second");
+
+            const back = await this.invoker.call({ tool: "browser.use", config, input: { action: "back" } });
+            this.expectOk(back, "back");
+            checks.push("back");
+
             const screenshot = await this.invoker.call({
                 tool: "browser.use",
                 config,
@@ -150,6 +168,15 @@ class BrowserUseLiveSmoke {
         const response = ((value.result as JsonObject | undefined)?.response as JsonObject | undefined)?.result as JsonObject | undefined;
         if (response?.value !== expected) {
             throw new Error(`evaluate returned ${JSON.stringify(response?.value)} instead of ${JSON.stringify(expected)}`);
+        }
+    }
+
+    private expectImages(value: JsonObject): void {
+        const response = ((value.result as JsonObject | undefined)?.response as JsonObject | undefined)?.result as JsonObject | undefined;
+        const payload = response?.value as JsonObject | undefined;
+        const images = payload?.images;
+        if (payload?.ok !== true || payload.count !== 1 || !Array.isArray(images)) {
+            throw new Error(`get_images returned unexpected payload: ${JSON.stringify(value).slice(0, 1000)}`);
         }
     }
 
@@ -237,6 +264,7 @@ class LocalPageServer {
 <input id="name" aria-label="Name" />
 <button id="save">Save</button>
 <output id="result" aria-live="polite"></output>
+<img src="/asset.png" alt="Flyflor fixture" width="16" height="16" />
 </main>
 <script>
 document.querySelector("#save").addEventListener("click", () => {

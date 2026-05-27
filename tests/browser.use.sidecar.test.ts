@@ -158,6 +158,88 @@ describe("high-level browser.use process-json sidecar", () => {
         }
     });
 
+    test("drives Hermes-style back and get_images actions through the CDP backend", async () => {
+        const server = new MockCdpServer((command) => {
+            if (command.method === "Page.getNavigationHistory") {
+                return {
+                    id: command.id,
+                    result: {
+                        currentIndex: 1,
+                        entries: [
+                            { id: 10, url: "https://example.test/one" },
+                            { id: 11, url: "https://example.test/two" },
+                        ],
+                    },
+                };
+            }
+            return {
+                id: command.id,
+                result: {
+                    result: {
+                        type: "object",
+                        value: { ok: true, count: 1, images: [{ src: "https://example.test/a.png", alt: "A" }] },
+                    },
+                },
+            };
+        });
+        try {
+            const back = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "back" },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+            const images = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "get_images", maxImages: 7 },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+
+            expect(back).toMatchObject({ ok: true, action: "back", backend: "cdp", readOnly: false });
+            expect(images).toMatchObject({ ok: true, action: "get_images", backend: "cdp", readOnly: true });
+            expect(server.commands.map((entry) => (entry as { method: string }).method)).toEqual([
+                "Page.getNavigationHistory",
+                "Page.navigateToHistoryEntry",
+                "Runtime.evaluate",
+            ]);
+            expect(server.commands[1]).toEqual(
+                expect.objectContaining({
+                    params: { entryId: 10 },
+                }),
+            );
+            expect(server.commands[2]).toEqual(
+                expect.objectContaining({
+                    params: expect.objectContaining({
+                        expression: expect.stringContaining(".slice(0, 7)"),
+                    }),
+                }),
+            );
+        } finally {
+            server.stop();
+        }
+    });
+
+    test("reports browser back without previous history as a structured failure", async () => {
+        const server = new MockCdpServer((command) => ({
+            id: command.id,
+            result: command.method === "Page.getNavigationHistory"
+                ? { currentIndex: 0, entries: [{ id: 10, url: "https://example.test/one" }] }
+                : {},
+        }));
+        try {
+            const response = await invokeSidecar({
+                tool: "browser.use",
+                input: { action: "back" },
+                config: { backend: "cdp", cdpUrl: server.url },
+            }, { expectExit: 1 });
+
+            expect(response.body.ok).toBe(false);
+            expect(response.body.code).toBe("failed");
+            expect(String(response.body.error)).toContain("no previous browser history entry");
+        } finally {
+            server.stop();
+        }
+    });
+
     test("reports malformed CDP WebSocket frames as structured failures", async () => {
         const server = new MockCdpServer(() => "not-json");
         try {

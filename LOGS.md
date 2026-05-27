@@ -1583,3 +1583,19 @@
   原因：补齐真实浏览器交互闭环里的页面滚动与按键动作，同时保持 kernel 只拥有 descriptor/gateway/event/audit/visibility/approval/quota/dispatch，不引入浏览器 runtime。
   验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（33 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1093 pass, 0 fail）；待最终 `git diff --check`。
   风险：只影响 opt-in `browser.use` action surface；默认 manifest 暴露策略、高权限 ASK/plan/yolo、动态预算和子进程 JSON 边界不变。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-hermes-navigation
+  摘要：准备为 `browser.use` 增加 Hermes 风格 `back` 与 `get_images` action，并在 descriptor 中暴露 `maxImages` 资源上限。
+  原因：Hermes browser 工具包含历史返回和页面图片枚举；Flyflor 高层 browser sidecar 需要补齐这两个基础导航/观察动作，同时保持执行外挂化。
+  验证：待跑 focused browser-use/external tests、browser-use live smoke、check/docs、真实闭环与 diff。
+  风险：仅增加 opt-in `browser.use` sidecar action；默认 manifest 暴露策略、高权限 ASK/plan/yolo、动态预算和 kernel import 边界不变。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-hermes-navigation
+  摘要：`browser.use` 现在支持 Hermes 风格 `back` 与 `get_images` action；CDP backend 使用 `Page.getNavigationHistory`/`Page.navigateToHistoryEntry` 和 `Runtime.evaluate`，delegate backend 继续收到同一份 process-json invocation。
+  原因：补齐真实浏览器交互闭环里的历史返回与图片枚举能力，同时保持 kernel 不 import 浏览器 runtime，只拥有 descriptor、gateway/event/audit、visibility、approval、quota 和 dispatch。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（35 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true，覆盖 get-images/navigate-second/back）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1095 pass, 0 fail）；待最终 `git diff --check`。
+  风险：只影响 opt-in `browser.use` action surface；默认 manifest 暴露策略、高权限 ASK/plan/yolo、动态预算和子进程 JSON 边界不变。
