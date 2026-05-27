@@ -54,6 +54,18 @@ describe("high-level computer.use process-json sidecar", () => {
         expect(String(response.body.error)).toContain("direction must be up, down, left, or right");
     });
 
+    test("rejects invalid scroll amounts before spawning a delegate", async () => {
+        const response = await invokeSidecar({
+            tool: "computer.use",
+            input: { action: "scroll", direction: "down", amount: 1.5 },
+            config: { delegateCommand: "./missing-computer-use-delegate" },
+        }, { expectExit: 1 });
+
+        expect(response.body.ok).toBe(false);
+        expect(response.body.code).toBe("failed");
+        expect(String(response.body.error)).toContain("integer field must be an integer");
+    });
+
     test("blocks dangerous typed shell input without invoking a delegate", async () => {
         const response = await invokeSidecar({
             tool: "computer.use",

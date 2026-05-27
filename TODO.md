@@ -1070,3 +1070,15 @@ Kernel V2 acceptance focus：
 - [x] 新增 `computer.use` scroll invalid direction 回归，确认错误在 sidecar 校验层返回而不是落到 delegate unavailable。
 - [x] 将 `computer.use` descriptor 的 `direction` 对齐为 `up/down/left/right` enum，并在 sidecar 中复用同一枚举校验。
 - [x] 复跑 focused computer-use/external descriptor tests、computer-use live smoke、check、docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Computer Use Scroll Amount Schema
+
+- [x] 新增 `computer.use` scroll invalid amount 回归，确认非整数 amount 在 sidecar 校验层返回而不是落到 delegate unavailable。
+- [x] 将 `computer.use` descriptor 的 `amount` 对齐为 `integer`，范围为 `1..1000`，并在 sidecar 中复用同一边界校验。
+- [x] 复跑 focused computer-use/external descriptor tests、computer-use live smoke、check、docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Tool Call Strict JSON Prompt Boundary
+
+- [x] 真实 `smoke:live:closure` 在 citizen permission resume 后暴露 `<agent_tool_calls>` 非严格 JSON parse failure。
+- [x] 收紧 `mcp.context` 中英文提示词，明确 tool call block 内只能使用严格 JSON，并优先使用 `input` object 形态。
+- [x] 复跑 prompt lint、docs/check、真实闭环与全量门禁。

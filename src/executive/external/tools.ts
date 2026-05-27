@@ -631,7 +631,7 @@ function computerUseTool(): ExternalToolSpec {
                         "focus_app",
                     ],
                 },
-                amount: { type: "number" },
+                amount: { type: "integer", minimum: 1, maximum: 1000 },
                 app: { type: "string" },
                 button: { type: "string", enum: ["left", "right", "middle"] },
                 captureAfter: { type: "boolean" },

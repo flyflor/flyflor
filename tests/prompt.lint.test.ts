@@ -235,11 +235,15 @@ describe("lintPromptTemplates", () => {
         expect(canonical).toContain("update it with `workspace.edit`, `workspace.patch`, or `workspace.write`");
         expect(canonical).toContain("Do not replace a requested manifest edit with instructions");
         expect(canonical).toContain("`process.run` starts a local executable");
+        expect(canonical).toContain("must be strict JSON");
+        expect(canonical).toContain("Prefer the `input` object shape");
 
         expect(zh).toContain("`package.json` script");
         expect(zh).toContain("用 `workspace.edit`、`workspace.patch` 或 `workspace.write` 更新它");
         expect(zh).toContain("不要把用户要求的 manifest 编辑替换成让用户自己运行命令的说明");
         expect(zh).toContain("`process.run` 是以 `executable` 加 `argv[]` 启动本机可执行文件");
+        expect(zh).toContain("必须是严格 JSON");
+        expect(zh).toContain("优先使用上面展示的 `input` 对象形态");
     });
 
     test("runtime prompt prose is not embedded in TypeScript source", async () => {

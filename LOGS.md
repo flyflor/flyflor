@@ -1287,3 +1287,43 @@
   原因：确保追加 TODO/LOGS 后仍无空白错误。
   验证：`git diff --check`。
   风险：无代码风险，仅验证记录追加。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：computer-use-scroll-amount-schema
+  摘要：`computer.use` scroll amount 从自由 number 收紧为 `1..1000` integer；descriptor 与 sidecar 校验同步，非法 amount 在 delegate spawn 前返回结构化失败。
+  原因：Hermes computer-use schema 将 scroll amount 定义为整数滚动刻度；Flyflor 模型可见 schema 和 sidecar runtime 必须一致，避免小数或越界值进入外部 delegate。
+  验证：已跑 `bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（28 pass, 0 fail）；待跑 computer live、check/docs/真实闭环/diff。
+  风险：只收紧 `computer.use` scroll amount schema/validation；不改变默认 manifest 暴露面、ASK、plan、yolo 或动态预算逻辑。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：tool-call-strict-json-prompt-boundary
+  摘要：真实 `smoke:live:closure` 在 `live-budget-resume` 阶段暴露模型输出非严格 `<agent_tool_calls>` JSON，导致 runtime 按协议硬失败；已收紧 `mcp.context` 中英文模板，要求 tool call block 内严格 JSON、禁止注释/尾随逗号/Python/JavaScript 对象语法/代码围栏，并优先使用 `input` object。
+  原因：ASK citizen permission resume 后仍要保持工具调用协议稳定，不能让真实模型把恢复执行链路变成 parse error 黑盒。
+  验证：已见失败 `bun run smoke:live:closure`（`live-budget-resume` JSON Parse error）；待跑 prompt lint、docs/check、真实闭环与全量门禁。
+  风险：只修改模型可见工具协议提示词和对应 prompt lint；不放松 runtime 对坏协议块的拒绝策略，不改变 ASK/plan/yolo/dynamic budget 代码路径。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-scroll-amount-schema-verification
+  摘要：完成 `computer.use` scroll amount schema/runtime parity；模型可见 descriptor 与 sidecar 校验都只接受 `1..1000` integer，非法小数在 delegate spawn 前结构化失败。
+  原因：保持 Hermes-style computer-use schema、提示词工具 schema 和 process-json runtime 同步，减少模型不可执行动作进入外部 delegate 的概率。
+  验证：`bun test tests/prompt.lint.test.ts tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（40 pass, 0 fail）；`bun run smoke:computer-use:live`（ok true, skipped true, reason cua-command-not-found）；`bun run check`; `bun run docs:check`; `bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1073 pass, 0 fail）；`cargo fmt --check && cargo check && cargo test` in `flyflor-cli`（183 pass, 0 fail）；待最终 `git diff --check`。
+  风险：只收紧 `computer.use` scroll amount schema/validation；不改变默认 manifest 暴露面、ASK、plan、yolo 或动态预算逻辑。
+
+- 状态：完成
+  执行者：main-codex
+  范围：tool-call-strict-json-prompt-boundary-verification
+  摘要：完成工具调用 strict JSON 提示词边界修复；真实 ASK citizen permission resume 从原先 JSON Parse error 改为继续执行并完成工具循环。
+  原因：真实 LLM 闭环必须能跨过 ASK permission resume，且坏协议块仍由 runtime 硬失败暴露，不能改成静默吞错。
+  验证：`bun run smoke:live:closure`（ok true, failedChecks [], finalKinds.resumed reply, phantomPermissionUserEvents 0, toolExecutionKeys includes workspace.read/workspace.write/subagent.batch）；`bun run docs:check`; `bun run test`; TUI `cargo fmt --check && cargo check && cargo test`。
+  风险：仅修改 `templates/prompts/mcp.context*.md` 与 prompt lint 断言；不修改工具解析器拒绝坏 JSON 的协议约束。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-scroll-amount-and-tool-json-final-diff-check
+  摘要：提交前完成最终 whitespace diff gate。
+  原因：确保追加 TODO/LOGS 后仍无空白错误。
+  验证：`git diff --check`。
+  风险：无代码风险，仅验证记录追加。

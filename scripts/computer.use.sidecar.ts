@@ -244,7 +244,7 @@ function cuaPayload(invocation: ComputerUseInvocation): JsonObject {
         keys: readString(input.keys),
         value: readString(input.value),
         direction: readScrollDirection(input.direction),
-        amount: numberInput(input.amount),
+        amount: invocation.action === "scroll" ? boundedInt(input.amount, 1, 1000) : undefined,
         x: coordinateTarget?.[0],
         y: coordinateTarget?.[1],
     };
@@ -351,6 +351,9 @@ function validateAction(action: ComputerUseAction, input: JsonObject): void {
     }
     if (action === "scroll") {
         readScrollDirection(input.direction, true);
+        if (input.amount !== undefined) {
+            boundedInt(input.amount, 1, 1000);
+        }
     }
     if (action === "focus_app") {
         requiredString(input.app, "input.app");

@@ -17,6 +17,7 @@ How to use this section:
 - To call tools, output ONLY this structured block and stop generating; the runtime will execute the calls and send the results back as a follow-up message before you finalise your reply:
   `<agent_tool_calls>{"calls":[{"server":"server-name","tool":"tool-name","input":{}}]}</agent_tool_calls>`
 - Use exact `server` and `tool` names from the catalog JSON below.
+- The content inside `<agent_tool_calls>` must be strict JSON: double-quote every key and string, do not use comments, trailing commas, Python/JavaScript object syntax, or fenced code blocks. Prefer the `input` object shape shown above; do not put unescaped JSON inside a string unless the catalog explicitly requires it.
 - Never claim a tool ran or fabricate its output. Only state a tool result after the runtime returns it as a tool message in this conversation.
 - If the tool catalog is empty or says tool execution is unavailable, do not emit a call block. Answer with what you have and tell the user tools are unavailable if relevant.
 - When the runtime sends a tool-result message, use those results to answer the original user request. Do not request the same tool again unless it is genuinely needed.
