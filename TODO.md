@@ -990,3 +990,10 @@ Kernel V2 acceptance focus：
 - [x] `browser.use` 增加 `captureAfter` 与 `captureMode` 输入，导航/变更动作完成后可用同一后端补一次 `snapshot` 或 `screenshot`，形成 browser action/verify 小闭环。
 - [x] `browser.use` CDP 后端的 DOM click/type 改为 `Runtime.evaluate` IIFE，并把 DOM 目标缺失作为结构化 `failed` 暴露，避免依赖脆弱的 function-on-object 调用形态。
 - [x] 复跑 browser/computer focused tests、external registry/socket tests、`bun run check`、`bun run docs:check`、`git diff --check`。
+
+## 2026-05-27 Browser CDP 原子工具一致性
+
+- [x] 原子 `browser.cdp` sidecar 的 `browser.click` / `browser.type` 与高层 `browser.use` 对齐，改用 `Runtime.evaluate` DOM action expression，并把 DOM 目标缺失作为失败暴露。
+- [x] 原子 `browser.open` / `browser.navigate` 增加危险协议拦截，拒绝 `javascript:`、`data:`、`vbscript:`。
+- [x] 新增 `docs/external/browser.cdp.md` 与 `docs/external/browser.cdp.zh.cn.md`，不改写 active docs index。
+- [x] 复跑 Browser CDP、Browser Use、external registry/socket、docs/check/diff 门禁。

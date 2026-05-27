@@ -22,6 +22,7 @@ interface CdpResponse {
 
 const DEFAULT_CDP_URL = "http://127.0.0.1:9222";
 const DEFAULT_TIMEOUT_MS = 5_000;
+const BLOCKED_URL_PROTOCOLS = new Set(["javascript:", "data:", "vbscript:"]);
 
 class BrowserCdpClient {
     public constructor(private readonly endpoint: string) {}
@@ -44,10 +45,22 @@ class BrowserCdpClient {
         return new CdpSocket(target.webSocketDebuggerUrl).send(method, params);
     }
 
-    public async evaluateFunction(source: string, args: unknown[]): Promise<unknown> {
-        return this.sendToPage("Runtime.callFunctionOn", {
-            functionDeclaration: source,
-            arguments: args.map((value) => ({ value })),
+    public async evaluateDomAction(expression: string): Promise<unknown> {
+        const response = asObject(await this.evaluateExpression(expression), "Runtime.evaluate result");
+        if (response.exceptionDetails !== undefined) {
+            throw new Error(`browser CDP DOM action raised a runtime exception: ${JSON.stringify(response.exceptionDetails).slice(0, 500)}`);
+        }
+        const result = asObject(response.result, "Runtime.evaluate result.result");
+        const value = result.value;
+        if (typeof value === "object" && value !== null && (value as { ok?: unknown }).ok === false) {
+            throw new Error(String((value as { error?: unknown }).error ?? "browser CDP DOM action failed"));
+        }
+        return response;
+    }
+
+    public async evaluateExpression(expression: string): Promise<unknown> {
+        return this.sendToPage("Runtime.evaluate", {
+            expression,
             awaitPromise: true,
             returnByValue: true,
         });
@@ -92,11 +105,11 @@ export async function runBrowserCdpSidecar(): Promise<void> {
 async function dispatch(client: BrowserCdpClient, tool: string, input: JsonObject): Promise<JsonObject> {
     switch (tool) {
         case "browser.open": {
-            const target = await client.open(requiredString(input.url, "input.url"));
+            const target = await client.open(requiredUrl(input.url, "input.url"));
             return { targetId: target.id, url: target.url };
         }
         case "browser.navigate": {
-            const result = await client.sendToPage("Page.navigate", { url: requiredString(input.url, "input.url") });
+            const result = await client.sendToPage("Page.navigate", { url: requiredUrl(input.url, "input.url") });
             return { result };
         }
         case "browser.snapshot": {
@@ -123,24 +136,26 @@ async function dispatch(client: BrowserCdpClient, tool: string, input: JsonObjec
         }
         case "browser.click": {
             const selector = requiredString(input.target, "input.target");
-            const result = await client.evaluateFunction(
-                `(selector) => {
+            const result = await client.evaluateDomAction(
+                `(() => {
+                    const selector = ${JSON.stringify(selector)};
                     const element = document.querySelector(selector);
-                    if (!element) throw new Error("target not found: " + selector);
+                    if (!element) return { ok: false, error: "target not found: " + selector };
                     element.click();
-                    return true;
-                }`,
-                [selector],
+                    return { ok: true };
+                })()`,
             );
             return { result };
         }
         case "browser.type": {
             const selector = requiredString(input.target, "input.target");
             const text = requiredString(input.text, "input.text");
-            const result = await client.evaluateFunction(
-                `(selector, text) => {
+            const result = await client.evaluateDomAction(
+                `(() => {
+                    const selector = ${JSON.stringify(selector)};
+                    const text = ${JSON.stringify(text)};
                     const element = document.querySelector(selector);
-                    if (!element) throw new Error("target not found: " + selector);
+                    if (!element) return { ok: false, error: "target not found: " + selector };
                     element.focus();
                     if ("value" in element) {
                         element.value = text;
@@ -149,9 +164,8 @@ async function dispatch(client: BrowserCdpClient, tool: string, input: JsonObjec
                     } else {
                         element.textContent = text;
                     }
-                    return true;
-                }`,
-                [selector, text],
+                    return { ok: true };
+                })()`,
             );
             return { result };
         }
@@ -241,6 +255,15 @@ function requiredString(value: unknown, path: string): string {
         throw new Error(`${path} must be a non-empty string`);
     }
     return value;
+}
+
+function requiredUrl(value: unknown, path: string): string {
+    const raw = requiredString(value, path);
+    const url = new URL(raw);
+    if (BLOCKED_URL_PROTOCOLS.has(url.protocol.toLowerCase())) {
+        throw new Error(`${path} uses blocked protocol: ${url.protocol}`);
+    }
+    return url.toString();
 }
 
 function readString(value: unknown): string | undefined {

@@ -55,6 +55,66 @@ describe("Browser CDP process-json sidecar", () => {
         }
     });
 
+    test("sends browser.click as a Runtime.evaluate DOM action", async () => {
+        const server = new MockCdpServer();
+        try {
+            const response = await invokeSidecarBody({
+                tool: "browser.click",
+                input: { target: "#continue", cdpUrl: server.url },
+            });
+
+            expect(response).toMatchObject({
+                ok: true,
+                result: {
+                    result: {
+                        type: "object",
+                        value: { ok: true },
+                    },
+                },
+            });
+            expect(server.commands).toEqual([
+                {
+                    id: 1,
+                    method: "Runtime.evaluate",
+                    params: expect.objectContaining({
+                        expression: expect.stringContaining('const selector = "#continue"'),
+                        awaitPromise: true,
+                        returnByValue: true,
+                    }),
+                },
+            ]);
+        } finally {
+            server.stop();
+        }
+    });
+
+    test("reports missing DOM targets as failed browser.click calls", async () => {
+        const server = new MockCdpServer();
+        try {
+            const response = await invokeSidecar({
+                tool: "browser.click",
+                input: { target: "#missing", cdpUrl: server.url },
+            }, { expectExit: 1 });
+
+            expect(response.body.ok).toBe(false);
+            expect(String(response.body.error)).toContain("target not found: #missing");
+            expect(response.stderr).toContain("target not found: #missing");
+        } finally {
+            server.stop();
+        }
+    });
+
+    test("blocks unsafe browser navigation protocols before CDP calls", async () => {
+        const response = await invokeSidecar({
+            tool: "browser.navigate",
+            input: { url: "javascript:alert(1)", cdpUrl: "http://127.0.0.1:1" },
+        }, { expectExit: 1 });
+
+        expect(response.body.ok).toBe(false);
+        expect(String(response.body.error)).toContain("blocked protocol");
+        expect(response.stderr).toContain("blocked protocol");
+    });
+
     test("rejects non-browser tools without semantic fallback", async () => {
         const response = await invokeSidecar({
             tool: "web.fetch",
@@ -161,10 +221,20 @@ class MockCdpServer {
                         JSON.stringify({
                             id: command.id,
                             result: {
-                                result: {
-                                    type: "number",
-                                    value: 2,
-                                },
+                                result: command.params && typeof command.params === "object" && "expression" in command.params && String((command.params as { expression?: unknown }).expression).includes("#continue")
+                                    ? {
+                                        type: "object",
+                                        value: { ok: true },
+                                    }
+                                    : command.params && typeof command.params === "object" && "expression" in command.params && String((command.params as { expression?: unknown }).expression).includes("#missing")
+                                        ? {
+                                            type: "object",
+                                            value: { ok: false, error: "target not found: #missing" },
+                                        }
+                                        : {
+                                            type: "number",
+                                            value: 2,
+                                        },
                             },
                         }),
                     );

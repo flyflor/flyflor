@@ -1063,3 +1063,19 @@
   原因：确认本轮增强没有破坏 ASK/plan/yolo 可见性和血管层 catalog 边界。
   验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts tests/gateway.ws.test.ts tests/runtime.mcp.tool.plan.test.ts tests/computer.use.sidecar.test.ts tests/browser.cdp.sidecar.test.ts --timeout 30000`（98 pass, 0 fail）；`bun run docs:check`; `bun run check`; `git diff --check`。
   风险：真实浏览器高权限 CDP 点击仍依赖用户显式启用 `browser.use` 或配置相应 manifest，默认工具面保持不暴露控制能力。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-cdp-atomic-consistency
+  摘要：原子 `browser.cdp` sidecar 与高层 `browser.use` 安全语义对齐：DOM click/type 改为 `Runtime.evaluate`，缺失目标结构化失败，open/navigate 拦截危险协议；新增 Browser CDP 外挂说明文档。
+  原因：工具层需要保持原子工具与高层 facade 语义一致，避免高层路径已修复但原子路径仍脆弱。
+  验证：已跑 `bun test tests/browser.cdp.sidecar.test.ts --timeout 30000`（7 pass, 0 fail）；待补全 focused/docs/check。
+  风险：`browser.evaluate` 仍保留为显式代码执行工具，依赖 Executive approval/quota/audit 控制可见性。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-cdp-atomic-consistency-verification
+  摘要：完成原子 Browser CDP 与高层 Browser Use 的一致性验证，覆盖危险协议拦截、DOM action failed 语义、sidecar registry、socket catalog 和工具可见性 gate。
+  原因：确认原子 sidecar 修复没有破坏默认不可见控制面、ASK/plan/yolo 预算边界和血管层只读 catalog。
+  验证：`bun test tests/browser.cdp.sidecar.test.ts tests/browser.use.sidecar.test.ts tests/external.tools.test.ts tests/gateway.ws.test.ts tests/runtime.mcp.tool.plan.test.ts --timeout 30000`（96 pass, 0 fail）；`bun run docs:check`; `bun run check`; `git diff --check`。
+  风险：真实 CDP endpoint 仍由用户环境提供，sidecar 不安装浏览器 runtime；默认真实 manifest 仍只暴露 read-only/open Browser CDP probe。
