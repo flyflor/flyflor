@@ -1261,3 +1261,9 @@ Kernel V2 acceptance focus：
 - [x] `computer.use` sidecar 接受常见模型 action alias：`doubleClick`、`double-click`、`type-text`、`press_key`、`setValue`、`listApps`、`focusApp`、`screenshot` 等。
 - [x] alias 只归一化 top-level dispatched action，保留原始 `input.action` 供 delegate/audit 查看。
 - [x] 新增 focused action alias 回归与追加文档。
+
+## 2026-05-27 Browser Use Action Aliases
+
+- [x] `browser.use` sidecar 接受 Hermes tool-name 与模型 action alias：`browser_navigate`、`browser_snapshot`、`browser_type`、`fill`、`evaluate-js`、`browser_get_images`、`press_key`、`observe`、`browser_vision` 等。
+- [x] alias 只归一化 top-level dispatched action，保留原始 `input.action` 供 delegate/audit 查看。
+- [x] 新增 focused browser-use action alias 回归与追加文档。

@@ -63,6 +63,32 @@ const ACTIONS = new Set<BrowserUseAction>([
     "console",
     "wait",
 ]);
+const ACTION_ALIASES: Record<string, BrowserUseAction> = {
+    analyze_screenshot: "vision",
+    browser_back: "back",
+    browser_click: "click",
+    browser_console: "console",
+    browser_eval: "evaluate",
+    browser_evaluate: "evaluate",
+    browser_get_images: "get_images",
+    browser_navigate: "navigate",
+    browser_press: "press",
+    browser_screenshot: "screenshot",
+    browser_scroll: "scroll",
+    browser_snapshot: "snapshot",
+    browser_type: "type",
+    browser_vision: "vision",
+    eval: "evaluate",
+    evaluate_js: "evaluate",
+    fill: "type",
+    getimages: "get_images",
+    go_back: "back",
+    goto: "navigate",
+    images: "get_images",
+    observe: "snapshot",
+    press_key: "press",
+    visit: "navigate",
+};
 const READ_ACTIONS = new Set<BrowserUseAction>(["snapshot", "screenshot", "get_images", "vision", "wait"]);
 const DEFAULT_CDP_URL = "http://127.0.0.1:9222";
 const DEFAULT_TIMEOUT_MS = 8_000;
@@ -756,11 +782,24 @@ function parseRequest(raw: string): SidecarRequest {
 }
 
 function readAction(value: unknown): BrowserUseAction {
-    const action = requiredString(value, "input.action") as BrowserUseAction;
+    const raw = requiredString(value, "input.action");
+    const action = normalizeAction(raw);
     if (!ACTIONS.has(action)) {
-        throw new BrowserUseError("unsupported", `unsupported browser.use action: ${action}`);
+        throw new BrowserUseError("unsupported", `unsupported browser.use action: ${raw}`);
     }
     return action;
+}
+
+function normalizeAction(value: string): BrowserUseAction {
+    const snake = value
+        .trim()
+        .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
+        .replace(/[\s-]+/gu, "_")
+        .toLowerCase();
+    if (ACTIONS.has(snake as BrowserUseAction)) {
+        return snake as BrowserUseAction;
+    }
+    return ACTION_ALIASES[snake] ?? ACTION_ALIASES[snake.replace(/_/gu, "")] ?? (snake as BrowserUseAction);
 }
 
 function objectInput(value: unknown): JsonObject {

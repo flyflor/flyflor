@@ -1913,3 +1913,18 @@
   摘要：`computer.use` sidecar 现在接受 `doubleClick`、`double-click`、`type-text`、`press_key`、`setValue`、`listApps`、`focusApp`、`screenshot` 等 action alias，并归一化为 canonical dispatched action。
   原因：真实模型偶发 camelCase/hyphen/backend-shaped action 时仍能进入同一结构化校验和子进程执行路径，减少无意义入口失败。
   验证：`bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（44 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:computer-use:live`（ok true，structured skip: cua-command-not-found）；`bun run smoke:browser-use:live`（ok true）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11）；`git diff --check`。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-action-aliases
+  摘要：准备让 `browser.use` sidecar 接受 Hermes browser tool-name 与真实模型常见 action alias，例如 `browser_navigate`、`browser_snapshot`、`browser_type`、`fill`、`evaluate-js`、`press_key`、`observe` 和 `browser_vision`。
+  原因：模型可见 schema 仍应提示紧凑 action，但真实模型可能把 Hermes 独立工具名或常见别名写进 compact `browser.use` action，当前会在 sidecar 入口失败。
+  验证：待跑 focused browser-use tests、check/docs、真实 browser/computer smoke、真实闭环与 `git diff --check`。
+  风险：只影响 opt-in `browser.use` action 读取边界；原始 `input.action` 保留在 process-json payload 中，默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota/audit、Memory/Scope/Crystal 主链和 kernel import 边界不变。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-action-aliases
+  摘要：`browser.use` sidecar 现在接受 `browser_navigate`、`browser_snapshot`、`browser_type`、`fill`、`evaluate-js`、`browser_get_images`、`press_key`、`observe`、`browser_vision` 等 action alias，并归一化为 canonical dispatched action。
+  原因：真实模型把 Hermes 独立浏览器工具名或常见 action 别名写进 compact `browser.use` 时，仍能进入同一结构化校验和子进程执行路径。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（52 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true）；`bun run smoke:computer-use:live`（ok true，structured skip: cua-command-not-found）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11）；`git diff --check`。

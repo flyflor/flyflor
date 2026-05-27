@@ -112,6 +112,85 @@ describe("high-level browser.use process-json sidecar", () => {
         expect(String(outputCap.body.error)).toContain("config.maxOutputBytes must be an integer between 1 and 2097152");
     });
 
+    test("normalizes Hermes-style browser action aliases before delegate dispatch", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-browser-use-action-alias-"));
+        const delegate = join(root, "delegate.ts");
+        await writeFile(
+            delegate,
+            `const raw = await new Response(Bun.stdin.stream()).text();
+const request = JSON.parse(raw);
+console.log(JSON.stringify({ receivedAction: request.action, inputAction: request.input.action, input: request.input }));
+`,
+        );
+        await chmod(delegate, 0o755);
+        try {
+            const navigate = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "browser_navigate", url: "https://example.com" },
+                config: { delegateCommand: "bun", delegateArgs: [delegate] },
+            });
+            const fill = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "fill", target: "#q", text: "hello" },
+                config: { delegateCommand: "bun", delegateArgs: [delegate] },
+            });
+            const evaluate = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "evaluate-js", script: "location.href" },
+                config: { delegateCommand: "bun", delegateArgs: [delegate] },
+            });
+            const observe = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "observe" },
+                config: { delegateCommand: "bun", delegateArgs: [delegate] },
+            });
+
+            expect(navigate).toMatchObject({
+                action: "navigate",
+                result: {
+                    response: {
+                        receivedAction: "navigate",
+                        inputAction: "browser_navigate",
+                        input: { action: "browser_navigate", url: "https://example.com" },
+                    },
+                },
+            });
+            expect(fill).toMatchObject({
+                action: "type",
+                result: {
+                    response: {
+                        receivedAction: "type",
+                        inputAction: "fill",
+                        input: { action: "fill", target: "#q", text: "hello" },
+                    },
+                },
+            });
+            expect(evaluate).toMatchObject({
+                action: "evaluate",
+                result: {
+                    response: {
+                        receivedAction: "evaluate",
+                        inputAction: "evaluate-js",
+                        input: { action: "evaluate-js", script: "location.href" },
+                    },
+                },
+            });
+            expect(observe).toMatchObject({
+                action: "snapshot",
+                readOnly: true,
+                result: {
+                    response: {
+                        receivedAction: "snapshot",
+                        inputAction: "observe",
+                        input: { action: "observe" },
+                    },
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("drives browser actions through the CDP backend", async () => {
         const server = new MockCdpServer();
         try {
