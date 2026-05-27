@@ -1615,3 +1615,19 @@
   原因：补齐真实浏览器调试/观察闭环里的 console/error inspection 能力，同时保持 kernel 不 import 浏览器 runtime，只拥有 descriptor、gateway/event/audit、visibility、approval、quota 和 dispatch。
   验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（37 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`; `bun run smoke:browser-use:live`（ok true，覆盖 console-expression）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1097 pass, 0 fail）；待最终 `git diff --check`。
   风险：`console.expression` 可执行页面 JavaScript，仍只在 opt-in `browser.use` 高权限面暴露；默认 manifest 暴露策略、高权限 ASK/plan/yolo、动态预算和子进程 JSON 边界不变。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：computer-use-capture-after-context
+  摘要：准备让 `computer.use` 后置 capture 保留 `app`、`mode` 与 `maxElements` / `max_elements` 上下文。
+  原因：Hermes backend 在 `capture_after=True` 后会保留 app 上下文；Flyflor 当前后置 capture 只发送 `{ action: "capture" }`，`focus_app` 或 app-scoped action 后可能回看错范围。
+  验证：待跑 focused computer-use tests、computer-use live smoke、check/docs、真实闭环与 diff。
+  风险：只改变 follow-up capture 的结构化 input；不新增权限，不改变 ASK/plan/yolo、动态预算、默认 manifest 暴露策略或 kernel import 边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-capture-after-context
+  摘要：`computer.use` 后置 capture 现在保留 `app`、`mode`、`maxElements` / `max_elements` 上下文；delegate 与 CUA 后端继续只通过 process-json 子进程接收结构化 invocation。
+  原因：对齐 Hermes `capture_after=True` 的 app-scoped 回看语义，避免 `focus_app` 或 app-scoped action 后的 follow-up capture 退回 frontmost app 或 whole screen。
+  验证：`bun test tests/computer.use.sidecar.test.ts --timeout 30000`（17 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`; `bun run smoke:computer-use:live`（structured skip: cua-command-not-found）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun test tests/naming.boundaries.test.ts --timeout 30000`（30 pass, 0 fail）；`bun run test`（1098 pass, 0 fail）；待最终 `git diff --check`。
+  风险：只改变 follow-up capture input 的上下文保留；不新增权限，不改变默认 manifest 暴露策略、高权限 ASK/plan/yolo、动态预算或 kernel import 边界。

@@ -109,7 +109,7 @@ class ComputerUseSidecar {
         const captureInvocation = {
             ...invocation,
             action: "capture" as const,
-            input: { action: "capture" },
+            input: captureAfterInput(invocation.input),
         };
         const capture = backend.kind === "cua"
             ? await this.invokeCua(backend, captureInvocation)
@@ -378,6 +378,18 @@ function requiresPoint(action: ComputerUseAction): boolean {
 
 function captureAfterRequested(input: JsonObject): boolean {
     return input.captureAfter === true || input.capture_after === true;
+}
+
+function captureAfterInput(input: JsonObject): JsonObject {
+    return Object.fromEntries(
+        Object.entries({
+            action: "capture",
+            app: readString(input.app),
+            maxElements: boundedInt(input.maxElements, 1, 1000),
+            max_elements: boundedInt(input.max_elements, 1, 1000),
+            mode: readCaptureMode(input.mode),
+        }).filter(([, value]) => value !== undefined),
+    );
 }
 
 function hasPointTarget(input: JsonObject): boolean {

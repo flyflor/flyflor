@@ -1160,3 +1160,9 @@ Kernel V2 acceptance focus：
 - [x] 为 `browser.use` 增加 Hermes 风格 `console` action，仍只通过 process-json sidecar/CDP/delegate 执行。
 - [x] 模型可见 descriptor 暴露 `expression` 与 `clear`，并保持高权限 browser control opt-in。
 - [x] 新增 focused browser-use/external descriptor/live smoke 回归与追加文档，复跑 browser-use tests、check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Computer Use Capture-After Context
+
+- [x] `computer.use` 后置 capture 保留 `app`、`mode`、`maxElements` / `max_elements` 上下文，避免 `focus_app` 后回看错范围。
+- [x] 保持 delegate/CUA 都只通过 process-json 子进程执行，不新增 kernel browser/desktop runtime import。
+- [x] 新增 focused computer-use 回归与追加文档，复跑 computer-use tests、check/docs、真实闭环与 `git diff --check`。

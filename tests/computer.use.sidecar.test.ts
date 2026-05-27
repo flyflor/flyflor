@@ -334,6 +334,84 @@ console.log(JSON.stringify({ receivedAction: request.action, readOnly: request.a
         }
     });
 
+    test("preserves app capture context for captureAfter follow-ups", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-capture-context-"));
+        const delegate = join(root, "delegate.ts");
+        const log = join(root, "delegate.log");
+        await writeFile(
+            delegate,
+            `import { appendFile } from "node:fs/promises";
+const raw = await new Response(Bun.stdin.stream()).text();
+await appendFile("${log}", raw);
+const request = JSON.parse(raw);
+console.log(JSON.stringify({ receivedAction: request.action, input: request.input }));
+`,
+        );
+        await chmod(delegate, 0o755);
+        try {
+            const response = await invokeSidecarBody({
+                tool: "computer.use",
+                input: {
+                    action: "focus_app",
+                    app: "Safari",
+                    captureAfter: true,
+                    max_elements: 25,
+                    mode: "ax",
+                },
+                config: { delegateCommand: "bun", delegateArgs: [delegate] },
+                projectDir: root,
+            });
+
+            expect(response.action).toBe("focus_app");
+            expect(response.captureAfter).toMatchObject({
+                action: "capture",
+                backend: "delegate",
+                readOnly: true,
+                result: {
+                    response: {
+                        receivedAction: "capture",
+                        input: {
+                            action: "capture",
+                            app: "Safari",
+                            max_elements: 25,
+                            mode: "ax",
+                        },
+                    },
+                },
+            });
+            const calls = (await readFile(log, "utf8"))
+                .trim()
+                .split("\n")
+                .map((line) => {
+                    const entry = JSON.parse(line) as { action: string; input: Record<string, unknown> };
+                    return { action: entry.action, input: entry.input };
+                });
+            expect(calls).toEqual([
+                {
+                    action: "focus_app",
+                    input: {
+                        action: "focus_app",
+                        app: "Safari",
+                        captureAfter: true,
+                        max_elements: 25,
+                        mode: "ax",
+                    },
+                },
+                {
+                    action: "capture",
+                    input: {
+                        action: "capture",
+                        app: "Safari",
+                        max_elements: 25,
+                        mode: "ax",
+                    },
+                },
+            ]);
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("does not run captureAfter for read-only actions", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-readonly-"));
         const delegate = join(root, "delegate.ts");
