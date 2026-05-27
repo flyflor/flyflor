@@ -12,6 +12,4 @@
 - `fd00:ec2::254`
 - 这些 metadata 地址的 IPv4-mapped 变体
 
-同样的地板也适用于 hostname 解析结果。如果普通 hostname 解析到上述 metadata 地址或 link-local 网段，`browser.use` 与 `browser.cdp` 会在调用 delegate 或 CDP backend 前失败。非哨兵 hostname 的 DNS 失败不会被当作 always-blocked；不可达主机仍交给普通 backend 失败路径处理。
-
 这不是完整的私网 SSRF 策略，范围有意更窄。localhost、本地文件和普通私网 URL 仍可用于显式高权限本地浏览器工作流；不可协商的 metadata 地板始终阻断，不随 backend 改变。

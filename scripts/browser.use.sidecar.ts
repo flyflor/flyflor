@@ -2,6 +2,7 @@
 
 import { access } from "node:fs/promises";
 import { delimiter, isAbsolute, join } from "node:path";
+import { BrowserUrlSafetyError, BrowserUrlSafetyPolicy } from "./browser.url.safety.ts";
 
 type JsonObject = Record<string, unknown>;
 type BrowserUseAction =
@@ -54,19 +55,7 @@ const READ_ACTIONS = new Set<BrowserUseAction>(["snapshot", "screenshot", "wait"
 const DEFAULT_CDP_URL = "http://127.0.0.1:9222";
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 512 * 1024;
-const BLOCKED_URL_PROTOCOLS = new Set(["javascript:", "data:", "vbscript:"]);
-const ALWAYS_BLOCKED_BROWSER_HOSTNAMES = new Set(["metadata.google.internal", "metadata.goog"]);
-const ALWAYS_BLOCKED_BROWSER_IPS = new Set([
-    "100.100.100.200",
-    "169.254.169.253",
-    "169.254.169.254",
-    "169.254.170.2",
-    "fd00:ec2::254",
-    "::ffff:100.100.100.200",
-    "::ffff:169.254.169.253",
-    "::ffff:169.254.169.254",
-    "::ffff:169.254.170.2",
-]);
+const BROWSER_URL_SAFETY = new BrowserUrlSafetyPolicy();
 
 export async function runBrowserUseSidecar(): Promise<void> {
     try {
@@ -78,7 +67,7 @@ export async function runBrowserUseSidecar(): Promise<void> {
         }
         const input = objectInput(request.input);
         const action = readAction(input.action);
-        validateAction(action, input);
+        await validateAction(action, input);
         const result = await new BrowserUseSidecar().invoke({
             action,
             config: objectInput(request.config),
@@ -181,11 +170,11 @@ class BrowserUseSidecar {
         const client = new BrowserUseCdpClient(backend.endpoint);
         switch (invocation.action) {
             case "open": {
-                const target = await client.open(requiredUrl(invocation.input.url, "input.url"));
+                const target = await client.open(await requiredUrl(invocation.input.url, "input.url"));
                 return { targetId: target.id, url: target.url };
             }
             case "navigate":
-                return { response: await client.sendToPage("Page.navigate", { url: requiredUrl(invocation.input.url, "input.url") }) };
+                return { response: await client.sendToPage("Page.navigate", { url: await requiredUrl(invocation.input.url, "input.url") }) };
             case "snapshot":
                 return { snapshot: await client.sendToPage("Accessibility.getFullAXTree", {}) };
             case "screenshot": {
@@ -435,7 +424,7 @@ async function pathExists(path: string): Promise<boolean> {
     }
 }
 
-function validateAction(action: BrowserUseAction, input: JsonObject): void {
+async function validateAction(action: BrowserUseAction, input: JsonObject): Promise<void> {
     if (input.captureAfter !== undefined && typeof input.captureAfter !== "boolean") {
         throw new BrowserUseError("failed", "input.captureAfter must be a boolean");
     }
@@ -443,7 +432,7 @@ function validateAction(action: BrowserUseAction, input: JsonObject): void {
         throw new BrowserUseError("failed", "input.captureMode must be 'snapshot' or 'screenshot'");
     }
     if (action === "open" || action === "navigate") {
-        requiredUrl(input.url, "input.url");
+        await requiredUrl(input.url, "input.url");
     }
     if (action === "click") {
         requiredString(input.target, "input.target");
@@ -582,31 +571,15 @@ function stringArray(value: unknown): readonly string[] {
     return value;
 }
 
-function requiredUrl(value: unknown, path: string): string {
-    const raw = requiredString(value, path);
-    const url = new URL(raw);
-    if (BLOCKED_URL_PROTOCOLS.has(url.protocol.toLowerCase())) {
-        throw new BrowserUseError("blocked", `${path} uses blocked protocol: ${url.protocol}`);
+async function requiredUrl(value: unknown, path: string): Promise<string> {
+    try {
+        return await BROWSER_URL_SAFETY.requiredUrl(value, path);
+    } catch (err) {
+        if (err instanceof BrowserUrlSafetyError) {
+            throw new BrowserUseError("blocked", err.message);
+        }
+        throw err;
     }
-    const blocked = alwaysBlockedBrowserUrlReason(url);
-    if (blocked) {
-        throw new BrowserUseError("blocked", `${path} targets always-blocked browser URL: ${blocked}`);
-    }
-    return url.toString();
-}
-
-function alwaysBlockedBrowserUrlReason(url: URL): string | undefined {
-    const host = normalizeBrowserHost(url.hostname);
-    if (!host) return undefined;
-    if (ALWAYS_BLOCKED_BROWSER_HOSTNAMES.has(host)) return host;
-    if (ALWAYS_BLOCKED_BROWSER_IPS.has(host)) return host;
-    if (host.startsWith("169.254.")) return "169.254.0.0/16";
-    if (host.startsWith("::ffff:169.254.")) return "::ffff:169.254.0.0/112";
-    return undefined;
-}
-
-function normalizeBrowserHost(value: string): string {
-    return value.trim().toLowerCase().replace(/^\[/u, "").replace(/\]$/u, "").replace(/\.$/u, "");
 }
 
 function secondsToMs(value: unknown): number | undefined {

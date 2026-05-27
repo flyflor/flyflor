@@ -1094,3 +1094,9 @@ Kernel V2 acceptance focus：
 - [x] 参考 Hermes `url_safety.py`，为 `browser.use` 与原子 `browser.cdp` 增加 cloud metadata / link-local URL 地板拦截。
 - [x] 保持本地开发与真实 browser smoke 可用：不扩大到 localhost/file/private 全量 SSRF 策略，只阻断不可协商 metadata 端点。
 - [x] 新增 focused 回归与追加文档，复跑 browser-use/browser-cdp tests、browser live smoke、check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Browser URL DNS Safety Floor
+
+- [x] 对齐 Hermes `is_always_blocked_url`：普通 hostname 若解析到 metadata/link-local 凭据地址，`browser.use` 与原子 `browser.cdp` 必须在 backend/delegate 前阻断。
+- [x] 将 URL 安全地板收敛到 browser sidecar owner helper，避免 kernel 引入 browser/desktop runtime，同时减少两个 sidecar 的安全常量漂移。
+- [x] 新增 focused DNS 回归并更新追加文档，复跑 browser-use/browser-cdp/browser-url-safety tests、check/docs、真实闭环与 `git diff --check`。

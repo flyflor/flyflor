@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 
+import { BrowserUrlSafetyPolicy } from "./browser.url.safety.ts";
+
 type JsonObject = Record<string, unknown>;
 
 interface SidecarRequest {
@@ -22,19 +24,7 @@ interface CdpResponse {
 
 const DEFAULT_CDP_URL = "http://127.0.0.1:9222";
 const DEFAULT_TIMEOUT_MS = 5_000;
-const BLOCKED_URL_PROTOCOLS = new Set(["javascript:", "data:", "vbscript:"]);
-const ALWAYS_BLOCKED_BROWSER_HOSTNAMES = new Set(["metadata.google.internal", "metadata.goog"]);
-const ALWAYS_BLOCKED_BROWSER_IPS = new Set([
-    "100.100.100.200",
-    "169.254.169.253",
-    "169.254.169.254",
-    "169.254.170.2",
-    "fd00:ec2::254",
-    "::ffff:100.100.100.200",
-    "::ffff:169.254.169.253",
-    "::ffff:169.254.169.254",
-    "::ffff:169.254.170.2",
-]);
+const BROWSER_URL_SAFETY = new BrowserUrlSafetyPolicy();
 
 class BrowserCdpClient {
     public constructor(private readonly endpoint: string) {}
@@ -117,11 +107,11 @@ export async function runBrowserCdpSidecar(): Promise<void> {
 async function dispatch(client: BrowserCdpClient, tool: string, input: JsonObject): Promise<JsonObject> {
     switch (tool) {
         case "browser.open": {
-            const target = await client.open(requiredUrl(input.url, "input.url"));
+            const target = await client.open(await requiredUrl(input.url, "input.url"));
             return { targetId: target.id, url: target.url };
         }
         case "browser.navigate": {
-            const result = await client.sendToPage("Page.navigate", { url: requiredUrl(input.url, "input.url") });
+            const result = await client.sendToPage("Page.navigate", { url: await requiredUrl(input.url, "input.url") });
             return { result };
         }
         case "browser.snapshot": {
@@ -277,31 +267,8 @@ function requiredString(value: unknown, path: string): string {
     return value;
 }
 
-function requiredUrl(value: unknown, path: string): string {
-    const raw = requiredString(value, path);
-    const url = new URL(raw);
-    if (BLOCKED_URL_PROTOCOLS.has(url.protocol.toLowerCase())) {
-        throw new Error(`${path} uses blocked protocol: ${url.protocol}`);
-    }
-    const blocked = alwaysBlockedBrowserUrlReason(url);
-    if (blocked) {
-        throw new Error(`${path} targets always-blocked browser URL: ${blocked}`);
-    }
-    return url.toString();
-}
-
-function alwaysBlockedBrowserUrlReason(url: URL): string | undefined {
-    const host = normalizeBrowserHost(url.hostname);
-    if (!host) return undefined;
-    if (ALWAYS_BLOCKED_BROWSER_HOSTNAMES.has(host)) return host;
-    if (ALWAYS_BLOCKED_BROWSER_IPS.has(host)) return host;
-    if (host.startsWith("169.254.")) return "169.254.0.0/16";
-    if (host.startsWith("::ffff:169.254.")) return "::ffff:169.254.0.0/112";
-    return undefined;
-}
-
-function normalizeBrowserHost(value: string): string {
-    return value.trim().toLowerCase().replace(/^\[/u, "").replace(/\]$/u, "").replace(/\.$/u, "");
+async function requiredUrl(value: unknown, path: string): Promise<string> {
+    return BROWSER_URL_SAFETY.requiredUrl(value, path);
 }
 
 function readString(value: unknown): string | undefined {

@@ -12,6 +12,4 @@ The browser sidecars reject cloud metadata and link-local credential endpoints b
 - `fd00:ec2::254`
 - IPv4-mapped variants of those metadata addresses
 
-The same floor applies after hostname resolution. If an ordinary hostname resolves to one of the metadata addresses or link-local networks above, `browser.use` and `browser.cdp` fail before invoking the delegate or CDP backend. DNS failures for non-sentinel hostnames are not treated as always-blocked; the ordinary backend failure path remains responsible for unreachable hosts.
-
 This is intentionally narrower than a full private-network SSRF policy. Localhost, local files, and ordinary private-network URLs remain available to explicit high-privilege local browser workflows; the non-negotiable metadata floor stays blocked regardless of backend.

@@ -1375,3 +1375,43 @@
   原因：确保追加 TODO/LOGS 与新增文档后仍无空白错误，并避免混入无 owner 的工作流/运行态文件。
   验证：`git diff --check`。
   风险：无代码风险，仅验证记录追加。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-url-dns-safety-floor
+  摘要：准备补齐 Hermes-style URL safety 的 DNS 解析地板：hostname 解析到 metadata/link-local 凭据地址时也应在 sidecar 层阻断。
+  原因：上一轮 browser URL floor 只覆盖字面 hostname/IP；Hermes `is_always_blocked_url` 还会检查解析结果，防止普通 hostname 指向 metadata 凭据面。
+  验证：已跑 focused `bun test tests/browser.url.safety.test.ts tests/browser.use.sidecar.test.ts tests/browser.cdp.sidecar.test.ts --timeout 30000`（21 pass, 0 fail）；待跑 check/docs、真实闭环与 diff。
+  风险：只移动 browser sidecar URL 安全地板到 `scripts/browser.url.safety.ts` 并补 DNS 检查；不改变 ASK、plan、yolo、动态预算、默认工具暴露或 kernel 依赖边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-url-dns-safety-floor-verification
+  摘要：完成 browser URL DNS safety floor；`browser.use` 与原子 `browser.cdp` 现在共享 `BrowserUrlSafetyPolicy`，普通 hostname 解析到 metadata/link-local 凭据地址时会在 backend/delegate 前阻断。
+  原因：对齐 Hermes `is_always_blocked_url` 的解析结果检查，同时让 browser sidecar owner 持有 URL 安全地板，kernel 不引入 browser/desktop runtime。
+  验证：`bun test tests/browser.url.safety.test.ts tests/browser.use.sidecar.test.ts tests/browser.cdp.sidecar.test.ts --timeout 30000`（21 pass, 0 fail）；`bun run check`; `bun run docs:check`; `bun run smoke:browser-use:live`（ok true）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；待全量测试与最终 `git diff --check`。
+  风险：只影响 browser sidecar URL preflight；不改变 ASK、plan、yolo、动态预算、默认工具暴露或 kernel 依赖边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-url-dns-safety-floor-final-gates
+  摘要：提交前完成全量测试与 whitespace diff gate。
+  原因：确认新增 `browser.url.safety` helper、sidecar async URL preflight、文档与控制文件追加没有破坏现有工具闭环。
+  验证：`bun run test`（1080 pass, 0 fail）；`git diff --check`。
+  风险：无新增运行态风险；未跟踪 `.github/` 与 `.workmux.yaml` 仍不属于本轮改动，未纳入提交。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-url-dns-safety-doc-archive
+  摘要：将 DNS 扩展前的 browser URL safety 文档快照追加归档到 `old-docs/external/`，active 文档保留重写后的 DNS safety 说明。
+  原因：遵守“文档只追加；需要修改则先移动/归档到 old-docs 再重写”的约定。
+  验证：待复跑 docs/check 与最终 `git diff --check`。
+  风险：仅文档归档，无运行态风险。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-url-dns-safety-doc-archive-verification
+  摘要：完成文档归档后的文档门禁与 whitespace diff gate。
+  原因：确认 `old-docs/external/` 归档不会破坏文档索引/引用约束。
+  验证：`bun run docs:check`（26 pass, 0 fail）；`git diff --check`。
+  风险：仅验证记录追加。
