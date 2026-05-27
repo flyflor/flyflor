@@ -682,6 +682,7 @@ function computerUseTool(): ExternalToolSpec {
                 fromCoordinate: coordinateSchema,
                 fromElement: { type: "integer", minimum: 1 },
                 max_elements: { type: "integer", minimum: 1, maximum: 1000 },
+                key: { type: "string" },
                 keys: { type: "string" },
                 maxElements: { type: "integer", minimum: 1, maximum: 1000 },
                 mode: { type: "string", enum: ["som", "vision", "ax"] },

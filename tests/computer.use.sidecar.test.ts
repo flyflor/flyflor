@@ -167,6 +167,41 @@ console.log(JSON.stringify({ receivedAction: request.action, input: request.inpu
         expect(String(response.body.error)).toContain("blocked pattern");
     });
 
+    test("accepts input.key as a key action alias through the delegate", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-key-alias-"));
+        const delegate = join(root, "delegate.ts");
+        await writeFile(
+            delegate,
+            `const raw = await new Response(Bun.stdin.stream()).text();
+const request = JSON.parse(raw);
+console.log(JSON.stringify({ receivedAction: request.action, input: request.input }));
+`,
+        );
+        await chmod(delegate, 0o755);
+        try {
+            const response = await invokeSidecarBody({
+                tool: "computer.use",
+                input: { action: "key", key: "return" },
+                config: { delegateCommand: "bun", delegateArgs: [delegate] },
+                projectDir: root,
+            });
+
+            expect(response).toMatchObject({
+                action: "key",
+                backend: "delegate",
+                readOnly: false,
+                result: {
+                    response: {
+                        receivedAction: "key",
+                        input: { action: "key", key: "return" },
+                    },
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("supports Hermes-style middle click and capture options through the delegate", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-"));
         const delegate = join(root, "delegate.ts");
@@ -452,6 +487,12 @@ console.log(JSON.stringify({ backendTool: request.backendTool, backendPayload: r
                 config: { backend: "cua", cuaCommand: "bun", cuaArgs: [delegate] },
                 projectDir: root,
             });
+            const keyAliasHotkey = await invokeSidecarBody({
+                tool: "computer.use",
+                input: { action: "key", key: "control+alt+t" },
+                config: { backend: "cua", cuaCommand: "bun", cuaArgs: [delegate] },
+                projectDir: root,
+            });
 
             expect(plain).toMatchObject({
                 action: "key",
@@ -491,6 +532,25 @@ console.log(JSON.stringify({ backendTool: request.backendTool, backendPayload: r
                 },
             });
             expect((hotkey.result as { response: { backendPayload: Record<string, unknown> } }).response.backendPayload.key).toBeUndefined();
+            expect(keyAliasHotkey).toMatchObject({
+                action: "key",
+                backend: "cua",
+                backendTool: "hotkey",
+                result: {
+                    response: {
+                        backendTool: "hotkey",
+                        backendPayload: {
+                            action: "key",
+                            capture_after: false,
+                            click_count: 1,
+                            keys: ["ctrl", "option", "t"],
+                            raise_window: false,
+                        },
+                        argv: ["mcp-call", "hotkey"],
+                    },
+                },
+            });
+            expect((keyAliasHotkey.result as { response: { backendPayload: Record<string, unknown> } }).response.backendPayload.key).toBeUndefined();
         } finally {
             await rm(root, { recursive: true, force: true });
         }

@@ -1249,3 +1249,9 @@ Kernel V2 acceptance focus：
 - [x] `browser.use press` CDP backend 将 `cmd+k`、`cmd+shift+k`、`ctrl+alt+t` 等模型常用 shortcut 解析为真实 modifier keyDown/main key/keyUp/modifier keyUp 序列。
 - [x] modifier alias 对齐 Hermes/CUA 语义：`command/cmd/meta`、`control/ctrl`、`option/alt`、`shift`。
 - [x] delegate backend 继续收到原始 process-json invocation，不把 CDP modifier 解析写回通用输入。
+
+## 2026-05-27 Computer Use Key Alias
+
+- [x] `computer.use key` 接受 `input.key` 作为 `input.keys` 的模型字段 alias，减少真实模型按键调用的字段口径失败。
+- [x] CUA backend 使用 `keys` 或 `key` 继续分流到 `press_key` / `hotkey`，delegate backend 保留原始 process-json invocation。
+- [x] descriptor 暴露 `key` 字段，并新增 focused 回归与追加文档。

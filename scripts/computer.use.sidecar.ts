@@ -206,7 +206,7 @@ function cuaToolFor(invocation: ComputerUseInvocation): string {
         case "type":
             return "type_text";
         case "key": {
-            const keyCombo = parseKeyCombo(requiredString(invocation.input.keys, "input.keys"));
+            const keyCombo = parseKeyCombo(requiredKeyComboInput(invocation.input));
             return keyCombo.modifiers.length > 0 ? "hotkey" : "press_key";
         }
         case "set_value":
@@ -229,7 +229,7 @@ function cuaPayload(invocation: ComputerUseInvocation): JsonObject {
         coordinate(input.to_coordinate, "input.to_coordinate");
     const isCapture = invocation.action === "capture";
     const isWait = invocation.action === "wait";
-    const keyCombo = invocation.action === "key" ? parseKeyCombo(requiredString(input.keys, "input.keys")) : undefined;
+    const keyCombo = invocation.action === "key" ? parseKeyCombo(requiredKeyComboInput(input)) : undefined;
     const payload: JsonObject = {
         action: invocation.action,
         app: readString(input.app),
@@ -355,7 +355,7 @@ function validateAction(action: ComputerUseAction, input: JsonObject): void {
         }
     }
     if (action === "key") {
-        const keyCombo = parseKeyCombo(requiredString(input.keys, "input.keys"));
+        const keyCombo = parseKeyCombo(requiredKeyComboInput(input));
         const combo = new Set([...keyCombo.modifiers, keyCombo.key]);
         const blocked = BLOCKED_KEY_COMBOS.find((parts) => parts.every((part) => combo.has(part)));
         if (blocked) {
@@ -447,6 +447,10 @@ function parseKeyCombo(value: string): { key: string; modifiers: readonly string
         throw new ComputerUseError("failed", "computer.use key requires a non-modifier key");
     }
     return { key, modifiers: [...new Set(modifiers)] };
+}
+
+function requiredKeyComboInput(input: JsonObject): string {
+    return readString(input.keys) ?? requiredString(input.key, "input.keys or input.key");
 }
 
 function readAction(value: unknown): ComputerUseAction {

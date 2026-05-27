@@ -1883,3 +1883,18 @@
   范围：browser-use-press-modifier-combos
   摘要：完成 focused、docs、check、真实 browser smoke、真实 LLM closure 和 whitespace 验证。
   验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（51 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11）；`git diff --check`。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：computer-use-key-alias
+  摘要：准备让 `computer.use key` 接受 `input.key` 作为 `input.keys` 的模型字段 alias，并让 CUA backend 继续按 Hermes 语义分流 `press_key` / `hotkey`。
+  原因：真实模型常把按键字段写成单数 `key`；当前 sidecar 只接受 `keys`，会在进入 delegate/CUA 前失败，形成无意义工具错误。
+  验证：待跑 focused computer-use/external descriptor tests、check/docs、真实 computer/browser smoke、真实闭环与 `git diff --check`。
+  风险：只影响 opt-in `computer.use key` 输入兼容；delegate backend 保留原始 process-json input，默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota/audit、Memory/Scope/Crystal 主链和 kernel import 边界不变。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-key-alias
+  摘要：`computer.use key` 现在接受 `input.key` 作为 `input.keys` 的模型字段 alias；CUA backend 使用任一字段继续分流到 `press_key` / `hotkey`，descriptor 也显式暴露 `key`。
+  原因：减少真实模型按键调用的字段口径失败，同时保持 delegate 原始 process-json input、默认 manifest 与高权限执行边界不变。
+  验证：`bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（43 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:computer-use:live`（ok true，structured skip: cua-command-not-found）；`bun run smoke:browser-use:live`（ok true）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11）；`git diff --check`。

@@ -82,6 +82,7 @@ describe("external tool descriptor discovery", () => {
                     from_coordinate: { type: "array", items: { type: "integer" }, minItems: 2, maxItems: 2 },
                     from_element: { type: "integer", minimum: 1 },
                     fromElement: { type: "integer", minimum: 1 },
+                    key: { type: "string" },
                     max_elements: { type: "integer", minimum: 1, maximum: 1000 },
                     maxElements: { type: "integer", minimum: 1, maximum: 1000 },
                     raise_window: { type: "boolean" },
