@@ -1825,3 +1825,25 @@
   范围：computer-use-cua-defaults
   摘要：最终 whitespace 检查通过。
   验证：`git diff --check`。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：computer-use-cua-key-hotkey
+  摘要：准备让 `computer.use key` 的 CUA backend 按 Hermes 语义区分普通按键与组合键：普通键走 `press_key`，带 modifier 的组合键走 `hotkey`。
+  原因：Hermes CUA backend 会把 `cmd+s` 解析成 `hotkey` + `keys: ["cmd", "s"]`，当前 Flyflor CUA backend 一律走 `press_key` 并传原始 `keys` 字符串，真实 driver 可能无法执行组合键。
+  验证：待跑 focused computer-use tests、check/docs、真实闭环与 diff。
+  风险：只影响 opt-in `computer.use` CUA backend payload/tool name；delegate backend 保持原始 process-json input，默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit、Memory/Scope/Crystal 主链不变。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-cua-key-hotkey
+  摘要：`computer.use key` 的 CUA backend 现在会把普通按键路由到 `press_key` 并发送 `key` 字段，把带 modifier 的组合键路由到 `hotkey` 并发送 Hermes 风格 `keys: [modifier..., key]`；`command/control/alt` aliases 会归一化成 `cmd/ctrl/option`。
+  原因：对齐 Hermes computer-use CUA backend 的 key/hotkey 分流，避免真实模型发出 `command+shift+s` 这类组合键时被错误送进 `press_key`。
+  验证：`bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（42 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:computer-use:live`（ok true，structured skip: cua-command-not-found）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11）；`bun run test`（1114 pass, 0 fail）；待最终 `git diff --check`。
+  风险：只影响 opt-in `computer.use` CUA backend payload/tool name；delegate backend 保持原始 process-json input，默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit、Memory/Scope/Crystal 主链和 kernel import 边界不变。
+
+- 状态：补充验证
+  执行者：main-codex
+  范围：computer-use-cua-key-hotkey
+  摘要：最终 whitespace 检查通过。
+  验证：`git diff --check`。

@@ -428,6 +428,74 @@ console.log(JSON.stringify({ backendTool: request.backendTool, backendPayload: r
         }
     });
 
+    test.skipIf(process.platform !== "darwin")("maps CUA key actions to press_key or hotkey payloads", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-cua-key-"));
+        const delegate = join(root, "delegate.ts");
+        await writeFile(
+            delegate,
+            `const raw = await new Response(Bun.stdin.stream()).text();
+const request = JSON.parse(raw);
+console.log(JSON.stringify({ backendTool: request.backendTool, backendPayload: request.backendPayload, argv: Bun.argv.slice(2) }));
+`,
+        );
+        await chmod(delegate, 0o755);
+        try {
+            const plain = await invokeSidecarBody({
+                tool: "computer.use",
+                input: { action: "key", keys: "return" },
+                config: { backend: "cua", cuaCommand: "bun", cuaArgs: [delegate] },
+                projectDir: root,
+            });
+            const hotkey = await invokeSidecarBody({
+                tool: "computer.use",
+                input: { action: "key", keys: "command+shift+s" },
+                config: { backend: "cua", cuaCommand: "bun", cuaArgs: [delegate] },
+                projectDir: root,
+            });
+
+            expect(plain).toMatchObject({
+                action: "key",
+                backend: "cua",
+                backendTool: "press_key",
+                result: {
+                    response: {
+                        backendTool: "press_key",
+                        backendPayload: {
+                            action: "key",
+                            capture_after: false,
+                            click_count: 1,
+                            key: "return",
+                            raise_window: false,
+                        },
+                        argv: ["mcp-call", "press_key"],
+                    },
+                },
+            });
+            expect((plain.result as { response: { backendPayload: Record<string, unknown> } }).response.backendPayload.keys).toBeUndefined();
+            expect(hotkey).toMatchObject({
+                action: "key",
+                backend: "cua",
+                backendTool: "hotkey",
+                result: {
+                    response: {
+                        backendTool: "hotkey",
+                        backendPayload: {
+                            action: "key",
+                            capture_after: false,
+                            click_count: 1,
+                            keys: ["cmd", "shift", "s"],
+                            raise_window: false,
+                        },
+                        argv: ["mcp-call", "hotkey"],
+                    },
+                },
+            });
+            expect((hotkey.result as { response: { backendPayload: Record<string, unknown> } }).response.backendPayload.key).toBeUndefined();
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("runs the requested action then captureAfter through the delegate", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-"));
         const delegate = join(root, "delegate.ts");

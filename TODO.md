@@ -1231,3 +1231,9 @@ Kernel V2 acceptance focus：
 - [x] `computer.use` CUA payload 对齐 Hermes 默认值：`capture` 默认 `mode: "som"`、`max_elements: 100`，`wait` 默认 `seconds: 1`。
 - [x] delegate backend 继续收到原始 process-json invocation，不把默认值写回通用输入。
 - [x] 新增 focused CUA payload 回归与追加文档，复跑 computer-use tests、check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Computer Use CUA Key Hotkey
+
+- [x] `computer.use key` 在 CUA backend 中区分普通按键与组合键：无 modifier 走 `press_key`，有 modifier 走 `hotkey`。
+- [x] CUA payload 对普通按键传 `key`，对组合键传 Hermes 风格 `keys: [modifier..., key]`，delegate backend 继续收到原始 invocation。
+- [x] 新增 focused CUA key/hotkey 回归与追加文档，复跑 computer-use tests、check/docs、真实闭环与 `git diff --check`。

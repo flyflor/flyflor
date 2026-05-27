@@ -168,7 +168,7 @@ class ComputerUseSidecar {
         if (process.platform !== "darwin") {
             throw new ComputerUseError("unavailable", "computer.use cua backend is only available on macOS");
         }
-        const tool = cuaToolFor(invocation.action);
+        const tool = cuaToolFor(invocation);
         const payload = cuaPayload(invocation);
         const result = await runProcessJson(
             backend.command,
@@ -187,8 +187,8 @@ class ComputerUseSidecar {
     }
 }
 
-function cuaToolFor(action: ComputerUseAction): string {
-    switch (action) {
+function cuaToolFor(invocation: ComputerUseInvocation): string {
+    switch (invocation.action) {
         case "capture":
             return "get_window_state";
         case "click":
@@ -205,8 +205,10 @@ function cuaToolFor(action: ComputerUseAction): string {
             return "scroll";
         case "type":
             return "type_text";
-        case "key":
-            return "press_key";
+        case "key": {
+            const keyCombo = parseKeyCombo(requiredString(invocation.input.keys, "input.keys"));
+            return keyCombo.modifiers.length > 0 ? "hotkey" : "press_key";
+        }
         case "set_value":
             return "set_value";
         case "wait":
@@ -227,6 +229,7 @@ function cuaPayload(invocation: ComputerUseInvocation): JsonObject {
         coordinate(input.to_coordinate, "input.to_coordinate");
     const isCapture = invocation.action === "capture";
     const isWait = invocation.action === "wait";
+    const keyCombo = invocation.action === "key" ? parseKeyCombo(requiredString(input.keys, "input.keys")) : undefined;
     const payload: JsonObject = {
         action: invocation.action,
         app: readString(input.app),
@@ -249,7 +252,8 @@ function cuaPayload(invocation: ComputerUseInvocation): JsonObject {
             positiveIntegerInput(input.to_element, "input.to_element"),
         to_x: toCoordinate?.[0],
         to_y: toCoordinate?.[1],
-        keys: readString(input.keys),
+        key: keyCombo && keyCombo.modifiers.length === 0 ? keyCombo.key : undefined,
+        keys: keyCombo && keyCombo.modifiers.length > 0 ? [...keyCombo.modifiers, keyCombo.key] : undefined,
         value: readString(input.value),
         direction: invocation.action === "scroll" ? readScrollDirection(input.direction) ?? "down" : readScrollDirection(input.direction),
         amount: invocation.action === "scroll" ? boundedInt(input.amount, 1, 1000) ?? 3 : undefined,
@@ -351,7 +355,8 @@ function validateAction(action: ComputerUseAction, input: JsonObject): void {
         }
     }
     if (action === "key") {
-        const combo = canonicalKeyCombo(requiredString(input.keys, "input.keys"));
+        const keyCombo = parseKeyCombo(requiredString(input.keys, "input.keys"));
+        const combo = new Set([...keyCombo.modifiers, keyCombo.key]);
         const blocked = BLOCKED_KEY_COMBOS.find((parts) => parts.every((part) => combo.has(part)));
         if (blocked) {
             throw new ComputerUseError("blocked", `computer.use blocked key combo: ${blocked.join("+")}`);
@@ -423,9 +428,25 @@ function hasDragDestination(input: JsonObject): boolean {
     );
 }
 
-function canonicalKeyCombo(value: string): Set<string> {
+function parseKeyCombo(value: string): { key: string; modifiers: readonly string[] } {
+    const modifierNames = new Set(["cmd", "command", "shift", "option", "alt", "ctrl", "control", "fn"]);
     const aliases: Record<string, string> = { alt: "option", command: "cmd", control: "ctrl", "⌘": "cmd", "⌥": "option" };
-    return new Set(value.split(/\s*\+\s*/u).map((part) => aliases[part.trim().toLowerCase()] ?? part.trim().toLowerCase()).filter(Boolean));
+    const modifiers: string[] = [];
+    let key = "";
+    for (const raw of value.split(/\s*[+-]\s*/u)) {
+        const part = raw.trim().toLowerCase();
+        if (!part) continue;
+        const normalized = aliases[part] ?? part;
+        if (modifierNames.has(part) || modifierNames.has(normalized)) {
+            modifiers.push(normalized);
+        } else {
+            key = normalized;
+        }
+    }
+    if (!key) {
+        throw new ComputerUseError("failed", "computer.use key requires a non-modifier key");
+    }
+    return { key, modifiers: [...new Set(modifiers)] };
 }
 
 function readAction(value: unknown): ComputerUseAction {
