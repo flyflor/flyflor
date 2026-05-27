@@ -1136,3 +1136,9 @@ Kernel V2 acceptance focus：
 - [x] malformed `<agent_tool_calls>` 严格 JSON 失败必须进入结构化 tool failure + Executive ASK，不允许冒泡成 `turn.error`。
 - [x] 失败路径必须保留 socket/TUI/history/brain 可见的 execution metadata，且不能猜测或修复工具调用意图。
 - [x] 新增 focused runtime 回归与追加文档，复跑 MCP runtime tests、check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Computer Use Hermes Snake Case Descriptor
+
+- [x] `computer.use` 模型可见 descriptor 暴露 Hermes 风格 snake_case target aliases：`capture_after`、`from_element`、`to_element`、`from_coordinate`、`to_coordinate`、`max_elements`、`raise_window`。
+- [x] sidecar 对 `capture_after` 的语义与 `captureAfter` 对齐，不能只在 descriptor 中展示但执行期忽略。
+- [x] 新增 focused descriptor/sidecar 回归与追加文档，复跑 external/computer-use tests、check/docs、真实闭环与 `git diff --check`。

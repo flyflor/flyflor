@@ -1551,3 +1551,19 @@
   原因：真实 LLM 闭环必须把 malformed tool-call block 暴露给 socket/TUI/history/brain，而不是变成黑盒 `turn.error`。
   验证：`bun test tests/skill.mcp.test.ts --timeout 30000 -t "unrecognized tool call shapes|malformed string arguments|malformed MCP tool-call JSON"`；`bun run docs:check`；`bun run check`；`bun run smoke:live:closure`；`bun run test`（1091 pass, 0 fail）；`git diff --check`。
   风险：不猜测、不修复、不执行 malformed 调用；只把协议失败纳入工具失败与 ASK 闭环。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：computer-use-hermes-snake-case-descriptor
+  摘要：准备让 `computer.use` descriptor 暴露 Hermes 风格 snake_case target aliases，并让 sidecar 执行期真正识别 `capture_after`。
+  原因：sidecar 已支持多数字段的 snake_case 输入，但模型可见 schema 只提示 camelCase；真实 LLM 参考 Hermes schema 时可能不会生成已支持的别名。
+  验证：待跑 focused external/computer-use tests、check/docs、真实闭环与 diff。
+  风险：仅增加结构化 schema alias 和 `capture_after` 布尔读取；不新增权限，不改变 opt-in、ASK、plan、yolo、动态预算或子进程边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-hermes-snake-case-descriptor
+  摘要：`computer.use` descriptor 现在暴露 Hermes 风格 snake_case aliases；sidecar 同步识别 `capture_after`，并允许 drag source/destination 混合使用 element 与 coordinate 目标。
+  原因：真实模型参考 Hermes schema 时应看到可执行的字段名；执行期不能只支持 camelCase，也不能拒绝 Hermes 常见的 element-to-coordinate drag 组合。
+  验证：`bun test tests/external.tools.test.ts tests/computer.use.sidecar.test.ts --timeout 30000`（37 pass, 0 fail）；`bun run docs:check`；`bun run check`；`bun run smoke:computer-use:live`（structured skip: cua-command-not-found）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1092 pass, 0 fail）；待最终 `git diff --check`。
+  风险：只增加结构化 aliases 和校验兼容性；不新增默认可见工具，不改变 opt-in、ASK、plan、yolo、动态预算或子进程授权面。

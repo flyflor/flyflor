@@ -103,7 +103,7 @@ class ComputerUseSidecar {
         const result = backend.kind === "cua"
             ? await this.invokeCua(backend, invocation)
             : await this.invokeDelegate(backend, invocation);
-        if (invocation.input.captureAfter !== true || READ_ACTIONS.has(invocation.action)) {
+        if (!captureAfterRequested(invocation.input) || READ_ACTIONS.has(invocation.action)) {
             return result;
         }
         const captureInvocation = {
@@ -229,7 +229,7 @@ function cuaPayload(invocation: ComputerUseInvocation): JsonObject {
         action: invocation.action,
         app: readString(input.app),
         button: readButton(input.button),
-        capture_after: input.captureAfter === true,
+        capture_after: captureAfterRequested(input),
         click_count: invocation.action === "double_click" ? 2 : 1,
         element: positiveIntegerInput(input.element, "input.element"),
         element_index: positiveIntegerInput(input.element, "input.element"),
@@ -314,6 +314,9 @@ function validateAction(action: ComputerUseAction, input: JsonObject): void {
     if (input.captureAfter !== undefined && typeof input.captureAfter !== "boolean") {
         throw new ComputerUseError("failed", "input.captureAfter must be a boolean");
     }
+    if (input.capture_after !== undefined && typeof input.capture_after !== "boolean") {
+        throw new ComputerUseError("failed", "input.capture_after must be a boolean");
+    }
     if (input.raiseWindow !== undefined && typeof input.raiseWindow !== "boolean") {
         throw new ComputerUseError("failed", "input.raiseWindow must be a boolean");
     }
@@ -373,21 +376,34 @@ function requiresPoint(action: ComputerUseAction): boolean {
     return action === "click" || action === "double_click" || action === "right_click" || action === "middle_click";
 }
 
+function captureAfterRequested(input: JsonObject): boolean {
+    return input.captureAfter === true || input.capture_after === true;
+}
+
 function hasPointTarget(input: JsonObject): boolean {
     return positiveIntegerInput(input.element, "input.element") !== undefined ||
         coordinate(input.coordinate, "input.coordinate") !== undefined;
 }
 
 function hasDragTarget(input: JsonObject): boolean {
+    return hasDragSource(input) && hasDragDestination(input);
+}
+
+function hasDragSource(input: JsonObject): boolean {
     return (
-        ((positiveIntegerInput(input.fromElement, "input.fromElement") ??
-            positiveIntegerInput(input.from_element, "input.from_element")) !== undefined &&
-            (positiveIntegerInput(input.toElement, "input.toElement") ??
-                positiveIntegerInput(input.to_element, "input.to_element")) !== undefined) ||
-        ((coordinate(input.fromCoordinate, "input.fromCoordinate") ??
-            coordinate(input.from_coordinate, "input.from_coordinate")) !== undefined &&
-            (coordinate(input.toCoordinate, "input.toCoordinate") ??
-                coordinate(input.to_coordinate, "input.to_coordinate")) !== undefined)
+        (positiveIntegerInput(input.fromElement, "input.fromElement") ??
+            positiveIntegerInput(input.from_element, "input.from_element")) !== undefined ||
+        (coordinate(input.fromCoordinate, "input.fromCoordinate") ??
+            coordinate(input.from_coordinate, "input.from_coordinate")) !== undefined
+    );
+}
+
+function hasDragDestination(input: JsonObject): boolean {
+    return (
+        (positiveIntegerInput(input.toElement, "input.toElement") ??
+            positiveIntegerInput(input.to_element, "input.to_element")) !== undefined ||
+        (coordinate(input.toCoordinate, "input.toCoordinate") ??
+            coordinate(input.to_coordinate, "input.to_coordinate")) !== undefined
     );
 }
 

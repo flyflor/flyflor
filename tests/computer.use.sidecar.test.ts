@@ -180,6 +180,61 @@ console.log(JSON.stringify({ receivedAction: request.action, input: request.inpu
         }
     });
 
+    test("accepts Hermes snake_case target aliases through the delegate", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-snake-case-"));
+        const delegate = join(root, "delegate.ts");
+        await writeFile(
+            delegate,
+            `const raw = await new Response(Bun.stdin.stream()).text();
+const request = JSON.parse(raw);
+console.log(JSON.stringify({ receivedAction: request.action, input: request.input }));
+`,
+        );
+        await chmod(delegate, 0o755);
+        try {
+            const response = await invokeSidecarBody({
+                tool: "computer.use",
+                input: {
+                    action: "drag",
+                    from_element: 4,
+                    to_coordinate: [200, 240],
+                    capture_after: true,
+                    raise_window: false,
+                    max_elements: 50,
+                },
+                config: { delegateCommand: "bun", delegateArgs: [delegate] },
+                projectDir: root,
+            });
+
+            expect(response.action).toBe("drag");
+            expect(response.result).toMatchObject({
+                response: {
+                    receivedAction: "drag",
+                    input: expect.objectContaining({
+                        capture_after: true,
+                        from_element: 4,
+                        max_elements: 50,
+                        raise_window: false,
+                        to_coordinate: [200, 240],
+                    }),
+                },
+            });
+            expect(response.captureAfter).toMatchObject({
+                action: "capture",
+                backend: "delegate",
+                readOnly: true,
+                result: {
+                    response: {
+                        receivedAction: "capture",
+                        input: { action: "capture" },
+                    },
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test.skipIf(process.platform !== "darwin")("normalizes CUA backend payload fields", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-cua-"));
         const delegate = join(root, "delegate.ts");
