@@ -57,3 +57,29 @@ Socket 工作需要增加与变更 surface 相关的 focused socket/control test
 - `docs/development.workflow.md`
 
 除非 coordinator 明确要求，不提交 commit，不 push。
+
+## 2026-05-27 Browser Use Live Delegate Coverage
+
+已接受的 smoke 覆盖加固切片：
+
+- owner：`main-codex`
+- scope：仅 `smoke:browser-use:live`
+- smoke 现在会先运行隔离 process-json delegate，再探测可选 Chrome/Chromium CDP
+- delegate 覆盖 `browser_navigate`、`observe`、`fill`、`evaluate-js`、`browser_get_images`、`browser_vision` 的 canonical dispatch 与原始 input 保留
+- mutating delegate action 继续验证只读 `captureAfter`
+- 缺失 Chrome/Chromium 时仍是结构化 skip，除非传入 `--require-browser`；但 skip report 现在会带上已完成的 delegate checks
+- 不改变 runtime 语义、ASK、plan、yolo、动态预算、approval/quota/audit、Memory/Scope/Crystal 和 kernel import 边界
+
+验证：
+
+- 待运行 focused browser-use tests、真实 browser/computer smoke、docs/check、真实闭环和 `git diff --check`
+
+## 2026-05-27 Browser Use Live Delegate Coverage Verification
+
+已接受的验证证据：
+
+- `bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000` 通过，52 个测试
+- `bun run smoke:browser-use:live` 通过；`checks` 先出现 delegate process-json alias 覆盖，再继续 Chrome/Chromium CDP 覆盖
+- `bun run smoke:computer-use:live` 通过，本机缺少 `cua-driver` 时保留结构化 skip，同时含确定性 delegate checks
+- `bun run smoke:live:closure` 通过，`failedChecks: []`、`phantomPermissionUserEvents: 0`、`executionJobCount: 18`
+- `bun run docs:check` 与 `bun run check` 通过

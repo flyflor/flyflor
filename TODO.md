@@ -1279,3 +1279,9 @@ Kernel V2 acceptance focus：
 - [x] `smoke:computer-use:live` 在探测可选 CUA backend 之前始终运行隔离 temp 目录中的确定性 process-json delegate。
 - [x] delegate live 覆盖 `screenshot`、`press_key`、`setValue`、`doubleClick` action alias、canonical dispatched action、read-only 分类与 mutating `captureAfter`。
 - [x] 缺失 `cua-driver` 时仍保留结构化 skip，但 `checks` 会包含已执行的 delegate 闭环；`--require-cua` 继续在 CUA 缺失时失败。
+
+## 2026-05-27 Browser Use Live Delegate Coverage
+
+- [x] `smoke:browser-use:live` 在探测可选 Chrome/Chromium CDP backend 前始终运行隔离 temp 目录中的确定性 process-json delegate。
+- [x] delegate live 覆盖 `browser_navigate`、`observe`、`fill`、`evaluate-js`、`browser_get_images`、`browser_vision` action alias、canonical dispatched action、read-only 分类与 mutating `captureAfter`。
+- [x] 缺失 Chrome/Chromium 时仍保留结构化 skip，但 `checks` 会包含已执行的 delegate 闭环；`--require-browser` 继续在浏览器缺失时失败。

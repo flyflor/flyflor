@@ -1274,3 +1274,29 @@ Validation:
 - `bun run docs:check`
 - `bun run build:binary`
 - `git diff --check`
+
+## 2026-05-27 Browser Use Live Delegate Coverage
+
+Accepted smoke-coverage hardening slice:
+
+- owner: `main-codex`
+- scope: `smoke:browser-use:live` only
+- the smoke now runs an isolated process-json delegate before probing optional Chrome/Chromium CDP
+- delegate coverage proves canonical dispatch and original input preservation for `browser_navigate`, `observe`, `fill`, `evaluate-js`, `browser_get_images`, and `browser_vision`
+- mutating delegate actions still verify read-only `captureAfter`
+- missing Chrome/Chromium remains a structured skip unless `--require-browser` is passed, but the skip report now carries delegate checks
+- runtime semantics, ASK, plan, yolo, dynamic budget, approval/quota/audit, Memory/Scope/Crystal, and kernel import boundaries are unchanged
+
+Validation:
+
+- pending focused browser-use tests, live browser/computer smoke, docs/check, live closure, and `git diff --check`
+
+## 2026-05-27 Browser Use Live Delegate Coverage Verification
+
+Accepted validation evidence:
+
+- `bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000` passed with 52 tests
+- `bun run smoke:browser-use:live` passed; `checks` begins with delegate process-json alias coverage and then continues through Chrome/Chromium CDP coverage
+- `bun run smoke:computer-use:live` passed with deterministic delegate checks and structured `cua-command-not-found` skip on this machine
+- `bun run smoke:live:closure` passed with `failedChecks: []`, `phantomPermissionUserEvents: 0`, and `executionJobCount: 18`
+- `bun run docs:check` and `bun run check` passed

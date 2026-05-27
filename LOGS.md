@@ -1958,3 +1958,19 @@
   摘要：`smoke:computer-use:live` 现在先运行隔离 temp delegate，覆盖 `screenshot`、`press_key`、`setValue`、`doubleClick` alias、canonical dispatched action、read-only 与 `captureAfter`；随后再探测可选 CUA backend。
   原因：即使本机缺少 `cua-driver`，computer-use live smoke 也会留下真实外部子进程闭环证据，而不是只有结构化 skip。
   验证：`bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（44 pass, 0 fail）；`bun run smoke:computer-use:live`（ok true, skipped true, reason cua-command-not-found, checks 含 delegate-alias-screenshot-capture、delegate-alias-doubleClick-captureAfter）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11）；`git diff --check`。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-live-delegate-coverage
+  摘要：准备让 `smoke:browser-use:live` 在探测可选 Chrome/Chromium CDP backend 前先运行确定性 external process-json delegate，覆盖 action alias、canonical dispatched action、read-only 与 captureAfter。
+  原因：当前 browser-use live smoke 依赖本机 Chrome/Chromium；浏览器缺失时没有 process-json 子进程闭环证据。delegate live closure 可以与 computer-use smoke 对齐，证明外挂工具血管层不依赖本机浏览器可用性。
+  验证：待跑 focused browser-use tests、真实 browser/computer smoke、docs/check、真实闭环与 `git diff --check`。
+  风险：只改变可选 smoke 的验证流程；临时 delegate 位于隔离 temp 目录，不改变 sidecar 权限、默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota/audit、Memory/Scope/Crystal 主链和 kernel import 边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-live-delegate-coverage
+  摘要：`smoke:browser-use:live` 现在先运行隔离 temp delegate，覆盖 `browser_navigate`、`observe`、`fill`、`evaluate-js`、`browser_get_images`、`browser_vision` alias、canonical dispatched action、read-only 与 `captureAfter`；随后再探测可选 Chrome/Chromium CDP backend。
+  原因：即使本机缺少 Chrome/Chromium，browser-use live smoke 也会留下真实外部子进程闭环证据，而不是只有结构化 skip。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（52 pass, 0 fail）；`bun run smoke:browser-use:live`（ok true，checks 先包含 delegate-alias-browser_navigate、delegate-alias-fill-captureAfter、delegate-alias-browser_vision，再包含 CDP checks）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:computer-use:live`（ok true，structured skip: cua-command-not-found，含 delegate checks）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 18）。
+  风险：只改变可选 smoke 的验证流程；默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota/audit、Memory/Scope/Crystal 主链和 kernel import 边界不变。

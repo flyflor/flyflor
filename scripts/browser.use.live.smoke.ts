@@ -30,9 +30,16 @@ class BrowserUseLiveSmoke {
     private readonly invoker = new BrowserUseInvoker(SIDECAR);
 
     public async run(): Promise<SmokeResult> {
+        let checks: string[];
+        try {
+            checks = await this.runDelegateClosure();
+        } catch (err) {
+            return { ok: false, failure: failureSummary(err) };
+        }
+
         const browser = await this.locator.find();
         if (!browser) {
-            return this.skip("chrome-not-found");
+            return this.skip("chrome-not-found", checks);
         }
 
         const profileDir = await mkdtemp(join(tmpdir(), "flyflor-browser-use-profile-"));
@@ -45,7 +52,6 @@ class BrowserUseLiveSmoke {
             const endpoint = `http://127.0.0.1:${port}`;
             await new CdpReadiness(endpoint).wait();
 
-            const checks: string[] = [];
             const config = { backend: "cdp", cdpUrl: endpoint };
             const visionDelegate = await this.writeVisionDelegate(profileDir);
             const visionLog = join(profileDir, "vision-delegate.log");
@@ -158,6 +164,82 @@ class BrowserUseLiveSmoke {
         }
     }
 
+    private async runDelegateClosure(): Promise<string[]> {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-browser-use-live-delegate-"));
+        const delegate = join(root, "delegate.ts");
+        await writeFile(
+            delegate,
+            `const raw = await new Response(Bun.stdin.stream()).text();
+const request = JSON.parse(raw);
+const readOnly = ["snapshot", "screenshot", "get_images", "vision", "wait"].includes(request.action);
+console.log(JSON.stringify({
+  receivedAction: request.action,
+  inputAction: request.input?.action,
+  input: request.input,
+  readOnly,
+}));
+`,
+        );
+        await chmod(delegate, 0o755);
+        try {
+            const checks: string[] = [];
+            const config = { delegateCommand: "bun", delegateArgs: [delegate], timeoutMs: 15_000 };
+
+            const navigate = await this.invoker.call({
+                tool: "browser.use",
+                config,
+                input: { action: "browser_navigate", url: "https://example.com" },
+            });
+            this.expectDelegateOk(navigate, "navigate", "browser_navigate", false);
+            checks.push("delegate-alias-browser_navigate");
+
+            const observe = await this.invoker.call({
+                tool: "browser.use",
+                config,
+                input: { action: "observe", max_elements: 5 },
+            });
+            this.expectDelegateOk(observe, "snapshot", "observe", true);
+            checks.push("delegate-alias-observe");
+
+            const fill = await this.invoker.call({
+                tool: "browser.use",
+                config,
+                input: { action: "fill", target: "#name", text: TYPE_TEXT, capture_after: true, maxElements: 5 },
+            });
+            this.expectDelegateOk(fill, "type", "fill", false);
+            this.expectDelegateCaptureAfter(fill, "type");
+            checks.push("delegate-alias-fill-captureAfter");
+
+            const evaluate = await this.invoker.call({
+                tool: "browser.use",
+                config,
+                input: { action: "evaluate-js", expression: "document.title" },
+            });
+            this.expectDelegateOk(evaluate, "evaluate", "evaluate-js", false);
+            checks.push("delegate-alias-evaluate-js");
+
+            const images = await this.invoker.call({
+                tool: "browser.use",
+                config,
+                input: { action: "browser_get_images", max_images: 3 },
+            });
+            this.expectDelegateOk(images, "get_images", "browser_get_images", true);
+            checks.push("delegate-alias-browser_get_images");
+
+            const vision = await this.invoker.call({
+                tool: "browser.use",
+                config,
+                input: { action: "browser_vision", question: "What is visible?", annotate: false },
+            });
+            this.expectDelegateOk(vision, "vision", "browser_vision", true);
+            checks.push("delegate-alias-browser_vision");
+
+            return checks;
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    }
+
     private launch(command: string, profileDir: string, port: number): ReturnType<typeof Bun.spawn> {
         return Bun.spawn({
             cmd: [
@@ -186,6 +268,27 @@ class BrowserUseLiveSmoke {
         const capture = value.captureAfter as JsonObject | undefined;
         if (!capture || capture.action !== "snapshot" || capture.backend !== "cdp" || capture.readOnly !== true) {
             throw new Error(`${action} did not include a read-only snapshot captureAfter`);
+        }
+    }
+
+    private expectDelegateOk(value: JsonObject, action: string, inputAction: string, readOnly: boolean): void {
+        if (value.ok !== true || value.action !== action || value.backend !== "delegate" || value.readOnly !== readOnly) {
+            throw new Error(`${action} did not return an ok delegate response: ${JSON.stringify(value).slice(0, 1000)}`);
+        }
+        const response = ((value.result as JsonObject | undefined)?.response as JsonObject | undefined) ?? {};
+        if (response.receivedAction !== action || response.inputAction !== inputAction || response.readOnly !== readOnly) {
+            throw new Error(`${action} delegate payload was not canonical while preserving input action: ${JSON.stringify(value).slice(0, 1000)}`);
+        }
+    }
+
+    private expectDelegateCaptureAfter(value: JsonObject, action: string): void {
+        const capture = value.captureAfter as JsonObject | undefined;
+        if (!capture || capture.action !== "snapshot" || capture.backend !== "delegate" || capture.readOnly !== true) {
+            throw new Error(`${action} did not include a delegate captureAfter response`);
+        }
+        const response = ((capture.result as JsonObject | undefined)?.response as JsonObject | undefined) ?? {};
+        if (response.receivedAction !== "snapshot" || response.inputAction !== "snapshot") {
+            throw new Error(`${action} captureAfter did not dispatch canonical snapshot: ${JSON.stringify(capture).slice(0, 1000)}`);
         }
     }
 
@@ -276,8 +379,10 @@ console.log(JSON.stringify({
         }
     }
 
-    private skip(reason: string): SmokeResult {
-        return REQUIRE_BROWSER ? { ok: false, skipped: true, reason } : { ok: true, skipped: true, reason };
+    private skip(reason: string, checks: readonly string[]): SmokeResult {
+        return REQUIRE_BROWSER
+            ? { ok: false, skipped: true, reason, checks }
+            : { ok: true, skipped: true, reason, checks };
     }
 }
 
