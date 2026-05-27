@@ -1803,3 +1803,25 @@
   范围：browser-use-cdp-resource-bounds
   摘要：最终 whitespace 检查通过。
   验证：`git diff --check`。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：computer-use-cua-defaults
+  摘要：准备让 `computer.use` CUA payload 对齐 Hermes 默认值：`capture` 默认 `mode: "som"` 与 `max_elements: 100`，`wait` 默认 `seconds: 1`。
+  原因：当前 CUA payload 只在模型显式提供字段时传递这些值，会让真实 CUA driver 依赖自身隐式默认；sidecar 边界应给 CUA backend 一个明确、可测的 Hermes 兼容 payload。
+  验证：待跑 focused computer-use tests、check/docs、真实闭环与 diff。
+  风险：只影响 opt-in `computer.use` CUA backend payload；delegate backend 保持原始 process-json input，默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit、Memory/Scope/Crystal 主链不变。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-cua-defaults
+  摘要：`computer.use` CUA backend payload 现在在 `capture` 省略观察字段时显式传递 `mode: "som"` 与 `max_elements: 100`，在 `wait` 省略等待时间时显式传递 `seconds: 1`；delegate backend 继续收到原始 process-json invocation。
+  原因：对齐 Hermes computer-use 默认语义，让 CUA 子进程边界获得可测、稳定的默认 payload，同时不把 backend 默认值回写进通用工具输入。
+  验证：`bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（41 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:computer-use:live`（ok true，structured skip: cua-command-not-found）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11）；`bun run test`（1113 pass, 0 fail）；待最终 `git diff --check`。
+  风险：只影响 opt-in `computer.use` CUA backend payload；默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit、Memory/Scope/Crystal 主链和 kernel import 边界不变。
+
+- 状态：补充验证
+  执行者：main-codex
+  范围：computer-use-cua-defaults
+  摘要：最终 whitespace 检查通过。
+  验证：`git diff --check`。

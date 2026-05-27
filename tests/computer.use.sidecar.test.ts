@@ -363,6 +363,71 @@ console.log(JSON.stringify({ backendTool: request.backendTool, backendPayload: r
         }
     });
 
+    test.skipIf(process.platform !== "darwin")("normalizes CUA capture and wait defaults", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-cua-defaults-"));
+        const delegate = join(root, "delegate.ts");
+        await writeFile(
+            delegate,
+            `const raw = await new Response(Bun.stdin.stream()).text();
+const request = JSON.parse(raw);
+console.log(JSON.stringify({ backendTool: request.backendTool, backendPayload: request.backendPayload }));
+`,
+        );
+        await chmod(delegate, 0o755);
+        try {
+            const capture = await invokeSidecarBody({
+                tool: "computer.use",
+                input: { action: "capture" },
+                config: { backend: "cua", cuaCommand: "bun", cuaArgs: [delegate] },
+                projectDir: root,
+            });
+            const wait = await invokeSidecarBody({
+                tool: "computer.use",
+                input: { action: "wait" },
+                config: { backend: "cua", cuaCommand: "bun", cuaArgs: [delegate] },
+                projectDir: root,
+            });
+
+            expect(capture).toMatchObject({
+                action: "capture",
+                backend: "cua",
+                backendTool: "get_window_state",
+                result: {
+                    response: {
+                        backendTool: "get_window_state",
+                        backendPayload: {
+                            action: "capture",
+                            capture_after: false,
+                            click_count: 1,
+                            max_elements: 100,
+                            mode: "som",
+                            raise_window: false,
+                        },
+                    },
+                },
+            });
+            expect(wait).toMatchObject({
+                action: "wait",
+                backend: "cua",
+                backendTool: "wait",
+                result: {
+                    response: {
+                        backendTool: "wait",
+                        backendPayload: {
+                            action: "wait",
+                            capture_after: false,
+                            click_count: 1,
+                            raise_window: false,
+                            seconds: 1,
+                        },
+                    },
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("runs the requested action then captureAfter through the delegate", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-"));
         const delegate = join(root, "delegate.ts");

@@ -1225,3 +1225,9 @@ Kernel V2 acceptance focus：
 - [x] `browser.use` CDP backend 与 delegate backend 使用同一套 `timeoutMs` / `maxOutputBytes` 资源配置校验。
 - [x] CDP HTTP/WebSocket open/command response 等待必须使用配置后的 `timeoutMs`，不能固定走默认超时。
 - [x] 新增 focused CDP resource bound 回归与追加文档，复跑 browser-use tests、check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Computer Use CUA Defaults
+
+- [x] `computer.use` CUA payload 对齐 Hermes 默认值：`capture` 默认 `mode: "som"`、`max_elements: 100`，`wait` 默认 `seconds: 1`。
+- [x] delegate backend 继续收到原始 process-json invocation，不把默认值写回通用输入。
+- [x] 新增 focused CUA payload 回归与追加文档，复跑 computer-use tests、check/docs、真实闭环与 `git diff --check`。

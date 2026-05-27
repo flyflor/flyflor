@@ -225,6 +225,8 @@ function cuaPayload(invocation: ComputerUseInvocation): JsonObject {
         coordinate(input.from_coordinate, "input.from_coordinate");
     const toCoordinate = coordinate(input.toCoordinate, "input.toCoordinate") ??
         coordinate(input.to_coordinate, "input.to_coordinate");
+    const isCapture = invocation.action === "capture";
+    const isWait = invocation.action === "wait";
     const payload: JsonObject = {
         action: invocation.action,
         app: readString(input.app),
@@ -237,11 +239,11 @@ function cuaPayload(invocation: ComputerUseInvocation): JsonObject {
             positiveIntegerInput(input.from_element, "input.from_element"),
         from_x: fromCoordinate?.[0],
         from_y: fromCoordinate?.[1],
-        max_elements: boundedInt(input.maxElements ?? input.max_elements, 1, 1000),
-        mode: readCaptureMode(input.mode),
+        max_elements: boundedInt(input.maxElements ?? input.max_elements, 1, 1000) ?? (isCapture ? 100 : undefined),
+        mode: readCaptureMode(input.mode) ?? (isCapture ? "som" : undefined),
         modifiers: stringArray(input.modifiers),
         raise_window: input.raiseWindow === true || input.raise_window === true,
-        seconds: boundedNumber(input.seconds, 0, 30),
+        seconds: isWait ? boundedNumber(input.seconds, 0, 30) ?? 1 : boundedNumber(input.seconds, 0, 30),
         text: readString(input.text),
         to_element: positiveIntegerInput(input.toElement, "input.toElement") ??
             positiveIntegerInput(input.to_element, "input.to_element"),
