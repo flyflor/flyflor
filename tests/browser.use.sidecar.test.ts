@@ -30,6 +30,18 @@ describe("high-level browser.use process-json sidecar", () => {
         expect(String(response.body.error)).toContain("blocked protocol");
     });
 
+    test("blocks cloud metadata URLs before invoking a backend", async () => {
+        const response = await invokeSidecar({
+            tool: "browser.use",
+            input: { action: "open", url: "http://169.254.169.254/latest/meta-data/" },
+            config: { backend: "cdp", cdpUrl: "http://127.0.0.1:1" },
+        }, { expectExit: 1 });
+
+        expect(response.body.ok).toBe(false);
+        expect(response.body.code).toBe("blocked");
+        expect(String(response.body.error)).toContain("always-blocked browser URL");
+    });
+
     test("reports configured delegate command availability before spawning", async () => {
         const response = await invokeSidecar({
             tool: "browser.use",

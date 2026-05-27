@@ -1351,3 +1351,27 @@
   原因：确保追加 TODO/LOGS 后仍无空白错误，并避免混入无 owner 的运行态/工作流文件。
   验证：`git diff --check`。
   风险：无代码风险，仅验证记录追加。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-always-blocked-url-floor
+  摘要：准备为 `browser.use` 与原子 `browser.cdp` 增加 Hermes-style always-blocked URL 地板，拦截云 metadata/link-local 凭据端点。
+  原因：当前 browser sidecar 只挡危险协议；metadata/link-local 端点没有合法 agent 用途，应在子进程 sidecar 层进入结构化失败，避免外部浏览器工具访问凭据面。
+  验证：待跑 focused browser-use/browser-cdp tests、browser live、check/docs、真实闭环与 diff。
+  风险：只阻断 metadata/link-local 安全地板，不扩大到 localhost/file/private 全量阻断，不改变默认 manifest 暴露面、ASK、plan、yolo 或动态预算逻辑。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-always-blocked-url-floor-verification
+  摘要：完成 `browser.use` 与原子 `browser.cdp` 的 always-blocked URL 地板；metadata/link-local 凭据端点在 sidecar URL 校验层阻断并返回结构化失败。
+  原因：对齐 Hermes 不可协商 URL 安全地板，同时保留 localhost、本地文件与普通私网 URL 给显式高权限本地 browser 工作流使用。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/browser.cdp.sidecar.test.ts --timeout 30000`（18 pass, 0 fail）；`bun run smoke:browser-use:live`; `bun run check`; `bun run docs:check`; `bun run smoke:live:closure`（ok true, failedChecks []）；`bun run test`（1077 pass, 0 fail）；待最终 `git diff --check`。
+  风险：只收紧 `browser.use` 与 `browser.cdp` 的 metadata/link-local URL floor；不改变默认 manifest 暴露面、ASK、plan、yolo 或动态预算逻辑。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-always-blocked-url-floor-final-diff-check
+  摘要：提交前完成最终 whitespace diff gate；未跟踪 `.github/` 与 `.workmux.yaml` 不属于本轮工具层改动，未纳入提交。
+  原因：确保追加 TODO/LOGS 与新增文档后仍无空白错误，并避免混入无 owner 的工作流/运行态文件。
+  验证：`git diff --check`。
+  风险：无代码风险，仅验证记录追加。

@@ -1088,3 +1088,9 @@ Kernel V2 acceptance focus：
 - [x] 对齐 Hermes computer-use target schema：`element/fromElement/toElement`、`maxElements`、坐标数组 items 在模型可见 descriptor 中使用 integer 语义。
 - [x] sidecar 在 delegate spawn 前拒绝小数 element / drag target / coordinate item，避免不可执行目标进入外部后端。
 - [x] 新增 focused 回归与追加文档，复跑 computer-use/external descriptor tests、live smoke、check、docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Browser Always-Blocked URL Floor
+
+- [x] 参考 Hermes `url_safety.py`，为 `browser.use` 与原子 `browser.cdp` 增加 cloud metadata / link-local URL 地板拦截。
+- [x] 保持本地开发与真实 browser smoke 可用：不扩大到 localhost/file/private 全量 SSRF 策略，只阻断不可协商 metadata 端点。
+- [x] 新增 focused 回归与追加文档，复跑 browser-use/browser-cdp tests、browser live smoke、check/docs、真实闭环与 `git diff --check`。

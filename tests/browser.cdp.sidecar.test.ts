@@ -131,6 +131,17 @@ describe("Browser CDP process-json sidecar", () => {
         expect(response.stderr).toContain("blocked protocol");
     });
 
+    test("blocks cloud metadata URLs before CDP calls", async () => {
+        const response = await invokeSidecar({
+            tool: "browser.open",
+            input: { url: "http://metadata.google.internal/computeMetadata/v1/", cdpUrl: "http://127.0.0.1:1" },
+        }, { expectExit: 1 });
+
+        expect(response.body.ok).toBe(false);
+        expect(String(response.body.error)).toContain("always-blocked browser URL");
+        expect(response.stderr).toContain("always-blocked browser URL");
+    });
+
     test("rejects non-browser tools without semantic fallback", async () => {
         const response = await invokeSidecar({
             tool: "web.fetch",
