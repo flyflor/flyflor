@@ -1190,3 +1190,9 @@ Kernel V2 acceptance focus：
 - [x] `browser.use` 支持 `capture_after` 作为 `captureAfter` 的结构化别名，避免真实模型字段口径导致执行后回看丢失。
 - [x] 后置 snapshot 保留 `full` 与 `maxElements` 观察上下文，保障 refs 小闭环执行后仍按同一观察预算回看。
 - [x] 新增 focused browser-use/external descriptor 回归与追加文档，复跑 check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Computer Use Scroll Defaults
+
+- [x] `computer.use` 的 `scroll` 允许省略 `direction`，按 Hermes 语义默认 `down`。
+- [x] CUA backend payload 在省略 `amount` 时默认 `3`，仍保留非法 direction/amount 的 spawn 前结构化失败。
+- [x] 新增 focused computer-use 回归与追加文档，复跑 check/docs、真实闭环与 `git diff --check`。

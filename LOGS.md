@@ -1695,3 +1695,19 @@
   原因：补齐 Hermes 风格 snapshot -> ref -> action -> captureAfter 小闭环，避免真实模型字段口径或默认 snapshot cap 让执行后观察变形。
   验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（44 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true，覆盖 ref/captureAfter/vision/console/screenshot）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；待最终 `git diff --check`。
   风险：只影响 opt-in `browser.use` 的结构化 follow-up capture；默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit 与 process-json 子进程边界不变。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：computer-use-scroll-defaults
+  摘要：准备让 `computer.use scroll` 对齐 Hermes 默认值：省略 `direction` 时默认为 `down`，省略 `amount` 时 CUA payload 默认为 `3`。
+  原因：真实模型常发出最短 `{"action":"scroll"}` 调用；当前 sidecar 把缺失 direction 当失败，会造成不必要工具错误和 ASK/预算噪音。
+  验证：待跑 focused computer-use tests、check/docs、真实闭环与 diff。
+  风险：只放宽结构化 scroll 默认值；非法 direction/amount 仍在 spawn 前失败，不改变默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota 或 kernel import 边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-scroll-defaults
+  摘要：`computer.use scroll` 现在允许省略 `direction`，按 Hermes 语义默认为 `down`；CUA backend payload 在省略 `amount` 时默认为 `3`，delegate backend 继续收到原始 process-json input。
+  原因：减少真实模型发出最短 scroll 调用时的不必要工具失败，同时保留非法 direction/amount 的 spawn 前结构化校验。
+  验证：`bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（40 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:computer-use:live`（structured skip: cua-command-not-found）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；待最终 `bun run test` 与 `git diff --check`。
+  风险：只放宽 opt-in `computer.use` 的结构化 scroll 默认值；默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit 与 process-json 子进程边界不变。

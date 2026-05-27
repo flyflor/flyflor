@@ -96,6 +96,41 @@ describe("high-level computer.use process-json sidecar", () => {
         expect(String(response.body.error)).toContain("integer field must be an integer");
     });
 
+    test("accepts Hermes scroll defaults without direction or amount", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-scroll-defaults-"));
+        const delegate = join(root, "delegate.ts");
+        await writeFile(
+            delegate,
+            `const raw = await new Response(Bun.stdin.stream()).text();
+const request = JSON.parse(raw);
+console.log(JSON.stringify({ receivedAction: request.action, input: request.input }));
+`,
+        );
+        await chmod(delegate, 0o755);
+        try {
+            const response = await invokeSidecarBody({
+                tool: "computer.use",
+                input: { action: "scroll" },
+                config: { delegateCommand: "bun", delegateArgs: [delegate] },
+                projectDir: root,
+            });
+
+            expect(response).toMatchObject({
+                action: "scroll",
+                backend: "delegate",
+                readOnly: false,
+                result: {
+                    response: {
+                        receivedAction: "scroll",
+                        input: { action: "scroll" },
+                    },
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("rejects fractional element targets before spawning a delegate", async () => {
         const response = await invokeSidecar({
             tool: "computer.use",
@@ -277,6 +312,48 @@ console.log(JSON.stringify({ backendTool: request.backendTool, backendPayload: r
                             modifiers: ["shift"],
                             raise_window: false,
                             to_element: 2,
+                        },
+                    },
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test.skipIf(process.platform !== "darwin")("normalizes CUA scroll defaults", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-cua-scroll-"));
+        const delegate = join(root, "delegate.ts");
+        await writeFile(
+            delegate,
+            `const raw = await new Response(Bun.stdin.stream()).text();
+const request = JSON.parse(raw);
+console.log(JSON.stringify({ backendTool: request.backendTool, backendPayload: request.backendPayload }));
+`,
+        );
+        await chmod(delegate, 0o755);
+        try {
+            const response = await invokeSidecarBody({
+                tool: "computer.use",
+                input: { action: "scroll" },
+                config: { backend: "cua", cuaCommand: "bun", cuaArgs: [delegate] },
+                projectDir: root,
+            });
+
+            expect(response).toMatchObject({
+                action: "scroll",
+                backend: "cua",
+                backendTool: "scroll",
+                result: {
+                    response: {
+                        backendTool: "scroll",
+                        backendPayload: {
+                            action: "scroll",
+                            amount: 3,
+                            capture_after: false,
+                            click_count: 1,
+                            direction: "down",
+                            raise_window: false,
                         },
                     },
                 },
