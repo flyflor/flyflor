@@ -84,6 +84,34 @@ describe("high-level browser.use process-json sidecar", () => {
         expect(String(response.body.error)).toContain("config.maxOutputBytes must be an integer between 1 and 2097152");
     });
 
+    test("rejects oversized CDP resource config before opening browser connections", async () => {
+        const timeout = await invokeSidecar({
+            tool: "browser.use",
+            input: { action: "snapshot" },
+            config: {
+                backend: "cdp",
+                cdpUrl: "http://127.0.0.1:1",
+                timeoutMs: 120_001,
+            },
+        }, { expectExit: 1 });
+        const outputCap = await invokeSidecar({
+            tool: "browser.use",
+            input: { action: "snapshot" },
+            config: {
+                backend: "cdp",
+                cdpUrl: "http://127.0.0.1:1",
+                maxOutputBytes: 2 * 1024 * 1024 + 1,
+            },
+        }, { expectExit: 1 });
+
+        expect(timeout.body.ok).toBe(false);
+        expect(timeout.body.code).toBe("failed");
+        expect(String(timeout.body.error)).toContain("config.timeoutMs must be an integer between 1 and 120000");
+        expect(outputCap.body.ok).toBe(false);
+        expect(outputCap.body.code).toBe("failed");
+        expect(String(outputCap.body.error)).toContain("config.maxOutputBytes must be an integer between 1 and 2097152");
+    });
+
     test("drives browser actions through the CDP backend", async () => {
         const server = new MockCdpServer();
         try {

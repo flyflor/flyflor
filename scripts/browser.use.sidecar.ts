@@ -129,13 +129,16 @@ class BrowserUseSidecar {
     }
 
     private backend(config: JsonObject):
-        | { kind: "cdp"; endpoint: string }
+        | { kind: "cdp"; endpoint: string; timeoutMs: number }
         | { kind: "delegate"; command: string; args: readonly string[]; timeoutMs: number; maxOutputBytes: number } {
         const backend = readString(config.backend) ?? "delegate";
+        const timeoutMs = boundedPositiveInt(config.timeoutMs, "config.timeoutMs", DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
+        const maxOutputBytes = boundedPositiveInt(config.maxOutputBytes, "config.maxOutputBytes", DEFAULT_MAX_OUTPUT_BYTES, MAX_OUTPUT_BYTES);
         if (backend === "cdp") {
             return {
                 kind: "cdp",
                 endpoint: readString(config.cdpUrl) ?? Bun.env.FLYFLOR_BROWSER_CDP_URL ?? DEFAULT_CDP_URL,
+                timeoutMs,
             };
         }
         if (backend === "delegate") {
@@ -150,8 +153,8 @@ class BrowserUseSidecar {
                 kind: "delegate",
                 command,
                 args: stringArray(config.delegateArgs),
-                timeoutMs: boundedPositiveInt(config.timeoutMs, "config.timeoutMs", DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS),
-                maxOutputBytes: boundedPositiveInt(config.maxOutputBytes, "config.maxOutputBytes", DEFAULT_MAX_OUTPUT_BYTES, MAX_OUTPUT_BYTES),
+                timeoutMs,
+                maxOutputBytes,
             };
         }
         throw new BrowserUseError("unsupported", `unsupported browser.use backend: ${backend}`);
@@ -159,7 +162,7 @@ class BrowserUseSidecar {
 
     private async invokeBackend(
         backend:
-            | { kind: "cdp"; endpoint: string }
+            | { kind: "cdp"; endpoint: string; timeoutMs: number }
             | { kind: "delegate"; command: string; args: readonly string[]; timeoutMs: number; maxOutputBytes: number },
         invocation: BrowserUseInvocation,
     ): Promise<JsonObject> {
@@ -176,10 +179,10 @@ class BrowserUseSidecar {
     }
 
     private async invokeCdp(
-        backend: { endpoint: string },
+        backend: { endpoint: string; timeoutMs: number },
         invocation: BrowserUseInvocation,
     ): Promise<JsonObject> {
-        const client = new BrowserUseCdpClient(backend.endpoint);
+        const client = new BrowserUseCdpClient(backend.endpoint, backend.timeoutMs);
         switch (invocation.action) {
             case "open": {
                 const target = await client.open(await requiredUrl(invocation.input.url, "input.url"));
@@ -318,7 +321,10 @@ class BrowserUseSidecar {
 }
 
 class BrowserUseCdpClient {
-    public constructor(private readonly endpoint: string) {}
+    public constructor(
+        private readonly endpoint: string,
+        private readonly timeoutMs: number,
+    ) {}
 
     public async open(url: string): Promise<CdpTarget> {
         const target = await this.fetchJson<CdpTarget>(`/json/new?${encodeURIComponent(url)}`, { method: "PUT" }).catch(
@@ -335,7 +341,7 @@ class BrowserUseCdpClient {
         if (!target.webSocketDebuggerUrl) {
             throw new BrowserUseError("failed", "CDP page target did not include webSocketDebuggerUrl");
         }
-        return new CdpSocket(target.webSocketDebuggerUrl).send(method, params);
+        return new CdpSocket(target.webSocketDebuggerUrl, this.timeoutMs).send(method, params);
     }
 
     public async goBack(): Promise<JsonObject> {
@@ -390,7 +396,22 @@ class BrowserUseCdpClient {
     }
 
     private async fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-        const response = await fetch(new URL(path, normalizedBaseUrl(this.endpoint)), init);
+        const controller = new AbortController();
+        const timer = timeout(() => controller.abort(), this.timeoutMs);
+        let response: Response;
+        try {
+            response = await fetch(new URL(path, normalizedBaseUrl(this.endpoint)), {
+                ...init,
+                signal: controller.signal,
+            });
+        } catch (err) {
+            if (controller.signal.aborted) {
+                throw new BrowserUseError("failed", `CDP HTTP request timed out for ${path}`);
+            }
+            throw err;
+        } finally {
+            clearTimeout(timer);
+        }
         if (!response.ok) {
             throw new BrowserUseError("failed", `CDP HTTP ${response.status} for ${path}`);
         }
@@ -401,13 +422,16 @@ class BrowserUseCdpClient {
 class CdpSocket {
     private nextId = 1;
 
-    public constructor(private readonly url: string) {}
+    public constructor(
+        private readonly url: string,
+        private readonly timeoutMs: number,
+    ) {}
 
     public async send(method: string, params: JsonObject): Promise<unknown> {
         const id = this.nextId++;
         const ws = new WebSocket(this.url);
-        await waitForOpen(ws);
-        const response = waitForResponse(ws, id);
+        await waitForOpen(ws, this.timeoutMs);
+        const response = waitForResponse(ws, id, this.timeoutMs);
         ws.send(JSON.stringify({ id, method, params }));
         try {
             return await response;
@@ -637,9 +661,9 @@ function captureAfterInput(input: JsonObject, action: BrowserUseAction): JsonObj
     );
 }
 
-function waitForOpen(ws: WebSocket): Promise<void> {
+function waitForOpen(ws: WebSocket, timeoutMs: number): Promise<void> {
     return new Promise((resolve, reject) => {
-        const timer = timeout(() => reject(new BrowserUseError("unavailable", "CDP WebSocket open timed out")));
+        const timer = timeout(() => reject(new BrowserUseError("unavailable", "CDP WebSocket open timed out")), timeoutMs);
         ws.onopen = () => {
             clearTimeout(timer);
             resolve();
@@ -651,9 +675,9 @@ function waitForOpen(ws: WebSocket): Promise<void> {
     });
 }
 
-function waitForResponse(ws: WebSocket, id: number): Promise<unknown> {
+function waitForResponse(ws: WebSocket, id: number, timeoutMs: number): Promise<unknown> {
     return new Promise((resolve, reject) => {
-        const timer = timeout(() => reject(new BrowserUseError("failed", "CDP command timed out")));
+        const timer = timeout(() => reject(new BrowserUseError("failed", "CDP command timed out")), timeoutMs);
         ws.onmessage = (event) => {
             const raw = String(event.data);
             let response: CdpResponse;
@@ -1000,8 +1024,8 @@ function normalizedBaseUrl(value: string): string {
     return value.endsWith("/") ? value : `${value}/`;
 }
 
-function timeout(callback: () => void): Timer {
-    const timer = setTimeout(callback, DEFAULT_TIMEOUT_MS);
+function timeout(callback: () => void, timeoutMs: number): Timer {
+    const timer = setTimeout(callback, timeoutMs);
     if (typeof (timer as { unref?: () => void }).unref === "function") {
         (timer as { unref: () => void }).unref();
     }

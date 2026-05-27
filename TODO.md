@@ -1219,3 +1219,9 @@ Kernel V2 acceptance focus：
 
 - [x] 状态校正：上方 `2026-05-25 执行层 ASK 与相对路径第一阶段` 中 Phase 7 与 Phase 10-13 的旧未完成行保留为历史原文；后续 `2026-05-26 执行层 ASK / Job / 工具稳定性完整封口` 与 `2026-05-27 ASK 公民权限与工具闭环` 已完成 socket job query、工具稳定性状态机、ASK 联动和 Crystal evidence 闭环。
 - [x] 本轮追加 `execution.job.detail.get` 重复查询 cache 回归，证明 execution job detail read-model 在短 TTL 内不会重复打 DB/read gateway。
+
+## 2026-05-27 Browser Use CDP Resource Bounds
+
+- [x] `browser.use` CDP backend 与 delegate backend 使用同一套 `timeoutMs` / `maxOutputBytes` 资源配置校验。
+- [x] CDP HTTP/WebSocket open/command response 等待必须使用配置后的 `timeoutMs`，不能固定走默认超时。
+- [x] 新增 focused CDP resource bound 回归与追加文档，复跑 browser-use tests、check/docs、真实闭环与 `git diff --check`。

@@ -1781,3 +1781,25 @@
   原因：为工具/子进程/子代理失败 detail 的 socket read-model 去重提供显式回归证据，同时遵守文档 append-only 约束。
   验证：`bun test tests/gateway.ws.test.ts tests/protocol.control.test.ts --timeout 30000`（79 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run test`（1111 pass, 0 fail）；`bun run provider:ready -- --require-ready`（ok true, home deepseek/deepseek-v4-flash）；`bun run smoke:live:closure` 第二轮通过（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11；第一轮预算 ASK 场景遇到一次 provider 空响应并作为外部瞬态记录）；`git diff --check`。
   风险：只新增测试与 append-only 文档记录；不改变 socket runtime path、Memory/Scope/Crystal 主链、工具执行、默认 manifest、ASK/plan/yolo 或动态预算。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-cdp-resource-bounds
+  摘要：准备让 `browser.use` CDP backend 和 delegate backend 共享 `timeoutMs` / `maxOutputBytes` 资源配置校验，并把配置后的 timeout 应用到 CDP HTTP/WebSocket 路径。
+  原因：当前 delegate backend 会校验资源配置，CDP backend 只读取 `cdpUrl` 且使用固定默认超时；这会造成同一个 `browser.use` sidecar 内资源边界口径漂移。
+  验证：待跑 focused browser-use tests、check/docs、真实闭环与 diff。
+  风险：只影响 opt-in `browser.use` CDP sidecar 的资源边界；默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit、Memory/Scope/Crystal 主链不变。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-cdp-resource-bounds
+  摘要：`browser.use` CDP backend 现在和 delegate backend 共享 `timeoutMs` / `maxOutputBytes` 配置校验；CDP `/json/*` HTTP 请求、WebSocket open 和 command response 等待均使用配置后的 `timeoutMs`。
+  原因：消除同一 sidecar 内 delegate 与 CDP 的资源边界漂移，避免 CDP 配置绕过 sidecar 资源窗口或固定默认超时。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（49 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true，覆盖 open/navigate/wait/snapshot refs/ref captureAfter/evaluate/get_images/back/console/vision/screenshot）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11）；`bun run test`（1112 pass, 0 fail）；待最终 `git diff --check`。
+  风险：只影响 opt-in `browser.use` CDP sidecar 的资源边界；默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota、audit、Memory/Scope/Crystal 主链不变。
+
+- 状态：补充验证
+  执行者：main-codex
+  范围：browser-use-cdp-resource-bounds
+  摘要：最终 whitespace 检查通过。
+  验证：`git diff --check`。
