@@ -984,3 +984,9 @@ Kernel V2 acceptance focus：
 - [x] 新增 `docs/external/browser.use.md` 与 `docs/external/browser.use.zh.cn.md`，记录 `browser.use` owner 边界、process-json 执行契约、默认不暴露策略、ASK/权限边界与聚焦验证文件。
 - [x] push 前复跑 `docs:check`、focused 工具层测试、`bun run check`、`bun run test`、`git diff --check`，确认新增文档不要求改写既有 docs index。
 - [x] 真实 provider 闭环复验：`bun run provider:ready -- --require-ready` 与 `bun run smoke:live:closure` 均通过；`browser.use` 在真实默认工具面保持 unavailable，phantom permission user events 为 0。
+
+## 2026-05-27 Browser Use Capture/Verify 闭环
+
+- [x] `browser.use` 增加 `captureAfter` 与 `captureMode` 输入，导航/变更动作完成后可用同一后端补一次 `snapshot` 或 `screenshot`，形成 browser action/verify 小闭环。
+- [x] `browser.use` CDP 后端的 DOM click/type 改为 `Runtime.evaluate` IIFE，并把 DOM 目标缺失作为结构化 `failed` 暴露，避免依赖脆弱的 function-on-object 调用形态。
+- [x] 复跑 browser/computer focused tests、external registry/socket tests、`bun run check`、`bun run docs:check`、`git diff --check`。

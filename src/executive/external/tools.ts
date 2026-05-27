@@ -548,6 +548,8 @@ function browserUseTool(): ExternalToolSpec {
                         "wait",
                     ],
                 },
+                captureAfter: { type: "boolean" },
+                captureMode: { type: "string", enum: ["snapshot", "screenshot"] },
                 format: { type: "string" },
                 ms: { type: "number" },
                 script: { type: "string" },

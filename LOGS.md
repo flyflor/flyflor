@@ -1047,3 +1047,19 @@
   原因：单元测试不足以证明闭环质量，push 前需要真实 LLM 场景确认 ASK/tool/subagent/history/brain.db 没有回归。
   验证：`bun run provider:ready -- --require-ready`; `bun run smoke:live:closure`，结果 `ok: true`、`failedChecks: []`、`phantomPermissionUserEvents: 0`、`askAnswerPairs: 1`、`executionJobCount: 11`。
   风险：live smoke 依赖当前 home provider；docker provider 不作为本轮阻塞。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-capture-after
+  摘要：`browser.use` 增加动作后捕获能力，支持 `captureAfter` 与 `captureMode`；CDP click/type 改为 `Runtime.evaluate` DOM IIFE，并在目标缺失时返回结构化 `failed`。
+  原因：高层 browser-use 需要更接近 Hermes 式 capture/action/verify 循环，同时保持 sidecar 子进程边界和内核不 import 浏览器自动化 runtime。
+  验证：已跑 `bun test tests/browser.use.sidecar.test.ts --timeout 30000`；待补全 focused/docs/check。
+  风险：真实默认 manifest 仍为 `tools: []`，本改动不会把 `browser.use` 暴露给普通模型轮次。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-capture-after-verification
+  摘要：完成 `browser.use` capture/action/verify 小闭环验证，覆盖 CDP action 后 snapshot、registry descriptor 输入 schema、socket catalog 与 computer/browser use focused tests。
+  原因：确认本轮增强没有破坏 ASK/plan/yolo 可见性和血管层 catalog 边界。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts tests/gateway.ws.test.ts tests/runtime.mcp.tool.plan.test.ts tests/computer.use.sidecar.test.ts tests/browser.cdp.sidecar.test.ts --timeout 30000`（98 pass, 0 fail）；`bun run docs:check`; `bun run check`; `git diff --check`。
+  风险：真实浏览器高权限 CDP 点击仍依赖用户显式启用 `browser.use` 或配置相应 manifest，默认工具面保持不暴露控制能力。

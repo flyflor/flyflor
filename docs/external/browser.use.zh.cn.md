@@ -53,3 +53,13 @@ Mock manifest 可以暴露 `browser.use`，用于验证 catalog、socket 和 run
 - `tests/install.script.test.ts`
 
 真实闭环 smoke 会继续断言 `browser.use` 默认不可用，避免高权限控制面泄漏到普通模型轮次。
+
+## 动作后捕获
+
+`browser.use` 支持在导航或改变状态的动作上设置 `captureAfter: true`。sidecar 会先执行请求动作，再用同一个后端执行一次观察动作，并把结果放在 `captureAfter` 字段中。
+
+- 默认捕获模式：`snapshot`。
+- 可选捕获模式：通过 `captureMode: "screenshot"` 使用 `screenshot`。
+- 只读动作（`snapshot`、`screenshot`、`wait`）不会触发第二次捕获。
+
+CDP 后端的 DOM click/type 动作使用 `Runtime.evaluate`，这样 sidecar 可以在普通页面执行上下文中运行，而不需要把浏览器自动化库 import 到内核里。

@@ -60,13 +60,42 @@ describe("high-level browser.use process-json sidecar", () => {
             expect(server.commands).toEqual([
                 {
                     id: 1,
-                    method: "Runtime.callFunctionOn",
+                    method: "Runtime.evaluate",
                     params: expect.objectContaining({
-                        arguments: [{ value: "#continue" }],
+                        expression: expect.stringContaining('const selector = "#continue"'),
                         awaitPromise: true,
                         returnByValue: true,
                     }),
                 },
+            ]);
+        } finally {
+            server.stop();
+        }
+    });
+
+    test("runs browser actions then captureAfter through the CDP backend", async () => {
+        const server = new MockCdpServer();
+        try {
+            const response = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "type", target: "#search", text: "flyflor", captureAfter: true },
+                config: { backend: "cdp", cdpUrl: server.url },
+            });
+
+            expect(response).toMatchObject({
+                ok: true,
+                action: "type",
+                backend: "cdp",
+                readOnly: false,
+                captureAfter: {
+                    action: "snapshot",
+                    backend: "cdp",
+                    readOnly: true,
+                },
+            });
+            expect(server.commands.map((entry) => (entry as { method: string }).method)).toEqual([
+                "Runtime.evaluate",
+                "Accessibility.getFullAXTree",
             ]);
         } finally {
             server.stop();
@@ -167,10 +196,12 @@ class MockCdpServer {
                         JSON.stringify({
                             id: command.id,
                             result: {
-                                result: {
-                                    type: "boolean",
-                                    value: true,
-                                },
+                                result: command.method === "Accessibility.getFullAXTree"
+                                    ? { nodes: [] }
+                                    : {
+                                        type: "object",
+                                        value: { ok: true },
+                                    },
                             },
                         }),
                     );

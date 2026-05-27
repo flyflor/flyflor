@@ -53,3 +53,13 @@ Focused verification lives in:
 - `tests/install.script.test.ts`
 
 The live closure smoke keeps `browser.use` unavailable by default so high-permission control does not leak into ordinary model turns.
+
+## Capture After
+
+`browser.use` supports `captureAfter: true` for mutating or navigation actions. The sidecar performs the requested action first, then runs an observation action through the same backend and returns it under `captureAfter`.
+
+- Default capture mode: `snapshot`.
+- Optional capture mode: `screenshot` through `captureMode: "screenshot"`.
+- Read-only actions (`snapshot`, `screenshot`, `wait`) do not trigger a second capture.
+
+The CDP backend uses `Runtime.evaluate` for DOM click/type actions so the sidecar can run against a normal page execution context without importing browser automation libraries into the kernel.

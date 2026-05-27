@@ -85,14 +85,33 @@ export async function runBrowserUseSidecar(): Promise<void> {
 class BrowserUseSidecar {
     public async invoke(invocation: BrowserUseInvocation): Promise<JsonObject> {
         const backend = this.backend(invocation.config);
-        const result = backend.kind === "cdp"
-            ? await this.invokeCdp(backend, invocation)
-            : await this.invokeDelegate(backend, invocation);
-        return {
+        const result = await this.invokeBackend(backend, invocation);
+        const response: JsonObject = {
             action: invocation.action,
             backend: backend.kind,
             readOnly: READ_ACTIONS.has(invocation.action),
             result,
+        };
+        if (invocation.input.captureAfter !== true || READ_ACTIONS.has(invocation.action)) {
+            return response;
+        }
+        const captureAction = readString(invocation.input.captureMode) === "screenshot" ? "screenshot" : "snapshot";
+        const captureInput: JsonObject = captureAction === "screenshot"
+            ? { action: "screenshot", format: readString(invocation.input.format) }
+            : { action: "snapshot" };
+        const capture = await this.invokeBackend(backend, {
+            ...invocation,
+            action: captureAction,
+            input: captureInput,
+        });
+        return {
+            ...response,
+            captureAfter: {
+                action: captureAction,
+                backend: backend.kind,
+                readOnly: true,
+                result: capture,
+            },
         };
     }
 
@@ -123,6 +142,17 @@ class BrowserUseSidecar {
             };
         }
         throw new BrowserUseError("unsupported", `unsupported browser.use backend: ${backend}`);
+    }
+
+    private async invokeBackend(
+        backend:
+            | { kind: "cdp"; endpoint: string }
+            | { kind: "delegate"; command: string; args: readonly string[]; timeoutMs: number; maxOutputBytes: number },
+        invocation: BrowserUseInvocation,
+    ): Promise<JsonObject> {
+        return backend.kind === "cdp"
+            ? await this.invokeCdp(backend, invocation)
+            : await this.invokeDelegate(backend, invocation);
     }
 
     private async invokeDelegate(
@@ -158,22 +188,24 @@ class BrowserUseSidecar {
             }
             case "click":
                 return {
-                    response: await client.callFunction(
-                        `(selector) => {
+                    response: await client.evaluateDomAction(
+                        `(() => {
+                            const selector = ${JSON.stringify(requiredString(invocation.input.target, "input.target"))};
                             const element = document.querySelector(selector);
-                            if (!element) throw new Error("target not found: " + selector);
+                            if (!element) return { ok: false, error: "target not found: " + selector };
                             element.click();
-                            return true;
-                        }`,
-                        [requiredString(invocation.input.target, "input.target")],
+                            return { ok: true };
+                        })()`,
                     ),
                 };
             case "type":
                 return {
-                    response: await client.callFunction(
-                        `(selector, text) => {
+                    response: await client.evaluateDomAction(
+                        `(() => {
+                            const selector = ${JSON.stringify(requiredString(invocation.input.target, "input.target"))};
+                            const text = ${JSON.stringify(requiredString(invocation.input.text, "input.text"))};
                             const element = document.querySelector(selector);
-                            if (!element) throw new Error("target not found: " + selector);
+                            if (!element) return { ok: false, error: "target not found: " + selector };
                             element.focus();
                             if ("value" in element) {
                                 element.value = text;
@@ -182,12 +214,8 @@ class BrowserUseSidecar {
                             } else {
                                 element.textContent = text;
                             }
-                            return true;
-                        }`,
-                        [
-                            requiredString(invocation.input.target, "input.target"),
-                            requiredString(invocation.input.text, "input.text"),
-                        ],
+                            return { ok: true };
+                        })()`,
                     ),
                 };
             case "evaluate":
@@ -228,10 +256,24 @@ class BrowserUseCdpClient {
         return new CdpSocket(target.webSocketDebuggerUrl).send(method, params);
     }
 
-    public async callFunction(source: string, args: unknown[]): Promise<unknown> {
-        return this.sendToPage("Runtime.callFunctionOn", {
-            functionDeclaration: source,
-            arguments: args.map((value) => ({ value })),
+    public async evaluateDomAction(expression: string): Promise<unknown> {
+        const response = asObject(await this.evaluateExpression(expression), "Runtime.evaluate result");
+        if (response.exceptionDetails !== undefined) {
+            throw new BrowserUseError("failed", "browser.use DOM action raised a runtime exception", {
+                exceptionDetails: response.exceptionDetails,
+            });
+        }
+        const result = asObject(response.result, "Runtime.evaluate result.result");
+        const value = result.value;
+        if (typeof value === "object" && value !== null && (value as { ok?: unknown }).ok === false) {
+            throw new BrowserUseError("failed", String((value as { error?: unknown }).error ?? "browser.use DOM action failed"));
+        }
+        return response;
+    }
+
+    public async evaluateExpression(expression: string): Promise<unknown> {
+        return this.sendToPage("Runtime.evaluate", {
+            expression,
             awaitPromise: true,
             returnByValue: true,
         });
@@ -353,6 +395,12 @@ async function pathExists(path: string): Promise<boolean> {
 }
 
 function validateAction(action: BrowserUseAction, input: JsonObject): void {
+    if (input.captureAfter !== undefined && typeof input.captureAfter !== "boolean") {
+        throw new BrowserUseError("failed", "input.captureAfter must be a boolean");
+    }
+    if (input.captureMode !== undefined && readString(input.captureMode) !== "snapshot" && readString(input.captureMode) !== "screenshot") {
+        throw new BrowserUseError("failed", "input.captureMode must be 'snapshot' or 'screenshot'");
+    }
     if (action === "open" || action === "navigate") {
         requiredUrl(input.url, "input.url");
     }
