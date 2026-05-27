@@ -1119,3 +1119,19 @@
   原因：`computer-use` package 已经被创建，但 manifest 缺少 sidecar 条目，和 `browser.use` 的“已安装、可诊断、默认不暴露”策略不一致。
   验证：`bun test tests/install.script.test.ts tests/external.tools.test.ts tests/external.use.runtime.test.ts tests/gateway.ws.test.ts --timeout 30000`（100 pass, 0 fail）；`bun run docs:check`; `bun run check`; `bun run provider:ready -- --require-ready`; `bun run smoke:live:closure`; `bun run test`。
   风险：该改动只登记 sidecar 配置，不把 `computer.use` 放入 sidecar `tools`，因此默认模型工具面仍不可调用桌面控制。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-live-smoke
+  摘要：新增 `scripts/browser.use.live.smoke.ts`，用真实 Chrome/Chromium 临时 profile 和本地 HTML 页面验证 `browser.use` CDP 后端 open/navigate/type/click/captureAfter/evaluate/screenshot；新增 `smoke:browser-use:live` package 入口与中英文说明文档。
+  原因：mock CDP 和 opt-in runtime 测试不足以证明真实浏览器 action/read 小闭环，需补齐不共享用户 profile、不写真实 memory、不把高风险工具默认暴露的 live 证据。
+  验证：待跑 `bun run smoke:browser-use:live`、focused 工具层测试、`bun run docs:check`、`bun run check`、真实闭环 smoke、全量测试与 `git diff --check`。
+  风险：该 smoke 依赖本机 Chrome/Chromium；默认无浏览器时结构化 skip，`--require-browser` 才作为硬失败。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-live-smoke-verification
+  摘要：完成真实 Chrome CDP browser-use smoke 与全量回归；`browser.use` 真实动作链已覆盖 open/navigate/wait/type/click/captureAfter/evaluate/screenshot，默认模型工具面仍不暴露 `browser.use`。
+  原因：把 Browser Use 从 mock CDP / deterministic delegate 推进到本机真实浏览器闭环，同时不破坏 ASK、plan、yolo、动态预算和外部工具默认安全面。
+  验证：`bun run smoke:browser-use:live`（macos-google-chrome，checks 全部通过）；focused 工具层测试（113 pass, 0 fail）；`bun run docs:check`; `bun run check`; `bun run provider:ready -- --require-ready`; `bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1066 pass, 0 fail）；`git diff --check`。
+  风险：真实 browser-use smoke 依赖本机 Chrome/Chromium；无浏览器时默认结构化 skip，CI 若要求真实浏览器需加 `--require-browser`。

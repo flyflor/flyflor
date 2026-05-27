@@ -1018,3 +1018,10 @@ Kernel V2 acceptance focus：
 - [x] 更新 installer 回归，确认 `computer-use` package、runner path、`xtool-sidecar computer.use` args 和空工具面同时存在。
 - [x] 新增 `docs/external/computer.use.install.md` 与 `docs/external/computer.use.install.zh.cn.md`，记录“已安装但不暴露”的安全语义。
 - [x] 复跑 docs/typecheck、真实闭环 smoke、全量测试与 `git diff --check`。
+
+## 2026-05-27 Browser Use 真实浏览器 Smoke
+
+- [x] 新增可选真实 Chrome/Chromium CDP smoke，覆盖 `browser.use` 的 open/navigate/type/click/captureAfter/evaluate/screenshot 闭环。
+- [x] smoke 默认在缺少浏览器时结构化 skip，`--require-browser` 模式下缺浏览器失败，避免普通门禁被本机环境阻塞。
+- [x] 新增 `docs/external/browser.use.live.md` 与 `docs/external/browser.use.live.zh.cn.md`，只追加文档，不改写既有 active docs。
+- [x] 复跑 browser-use live smoke、focused 工具层测试、docs/check/typecheck/真实闭环/full test 与 `git diff --check`。
