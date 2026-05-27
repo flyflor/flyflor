@@ -1046,3 +1046,9 @@ Kernel V2 acceptance focus：
 - [x] 新增 browser/computer use focused 回归，验证无扩展名 PATH command 能解析到 `delegate.cmd`。
 - [x] 新增 `docs/external/use.path.portability.md` 与 `docs/external/use.path.portability.zh.cn.md`，只追加文档，不改写既有 active docs。
 - [x] 复跑 focused sidecar tests、docs/check/typecheck/真实闭环/full test 与 `git diff --check`。
+
+## 2026-05-27 Browser Use CDP 协议失败闭环
+
+- [x] 新增 `browser.use` CDP WebSocket 非 JSON 帧回归，要求立即返回结构化 `failed`，不能等待超时。
+- [x] 修复 `browser.use` CDP response reader，在帧解析失败时携带截断 frame 进入 sidecar failure details。
+- [x] 复跑 focused browser-use sidecar、check、docs、真实闭环与 `git diff --check`。

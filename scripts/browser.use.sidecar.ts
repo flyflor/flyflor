@@ -463,7 +463,17 @@ function waitForResponse(ws: WebSocket, id: number): Promise<unknown> {
     return new Promise((resolve, reject) => {
         const timer = timeout(() => reject(new BrowserUseError("failed", "CDP command timed out")));
         ws.onmessage = (event) => {
-            const response = JSON.parse(String(event.data)) as CdpResponse;
+            const raw = String(event.data);
+            let response: CdpResponse;
+            try {
+                response = JSON.parse(raw) as CdpResponse;
+            } catch {
+                clearTimeout(timer);
+                reject(new BrowserUseError("failed", "CDP WebSocket returned non-json response", {
+                    frame: raw.slice(0, 500),
+                }));
+                return;
+            }
             if (response.id !== id) {
                 return;
             }

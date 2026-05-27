@@ -73,6 +73,23 @@ describe("high-level browser.use process-json sidecar", () => {
         }
     });
 
+    test("reports malformed CDP WebSocket frames as structured failures", async () => {
+        const server = new MockCdpServer(() => "not-json");
+        try {
+            const response = await invokeSidecar({
+                tool: "browser.use",
+                input: { action: "click", target: "#continue" },
+                config: { backend: "cdp", cdpUrl: server.url },
+            }, { expectExit: 1 });
+
+            expect(response.body.ok).toBe(false);
+            expect(response.body.code).toBe("failed");
+            expect(String(response.body.error)).toContain("CDP WebSocket returned non-json response");
+        } finally {
+            server.stop();
+        }
+    });
+
     test("runs browser actions then captureAfter through the CDP backend", async () => {
         const server = new MockCdpServer();
         try {
@@ -200,11 +217,25 @@ async function invokeSidecar(
     return { body: JSON.parse(stdout.split("\n")[0] ?? "{}") as Record<string, unknown>, stderr };
 }
 
+type MockCdpCommand = { id: number; method: string; params?: unknown };
+
 class MockCdpServer {
     public readonly commands: unknown[] = [];
     private readonly server: Bun.Server<{ id: string }>;
 
-    public constructor() {
+    public constructor(
+        private readonly respond: (command: MockCdpCommand) => string | Record<string, unknown> = (command) => ({
+            id: command.id,
+            result: {
+                result: command.method === "Accessibility.getFullAXTree"
+                    ? { nodes: [] }
+                    : {
+                        type: "object",
+                        value: { ok: true },
+                    },
+            },
+        }),
+    ) {
         this.server = Bun.serve<{ id: string }>({
             port: 0,
             fetch: (request, server) => {
@@ -227,21 +258,10 @@ class MockCdpServer {
             },
             websocket: {
                 message: (socket, raw) => {
-                    const command = JSON.parse(String(raw)) as { id: number; method: string; params?: unknown };
+                    const command = JSON.parse(String(raw)) as MockCdpCommand;
                     this.commands.push(command);
-                    socket.send(
-                        JSON.stringify({
-                            id: command.id,
-                            result: {
-                                result: command.method === "Accessibility.getFullAXTree"
-                                    ? { nodes: [] }
-                                    : {
-                                        type: "object",
-                                        value: { ok: true },
-                                    },
-                            },
-                        }),
-                    );
+                    const response = this.respond(command);
+                    socket.send(typeof response === "string" ? response : JSON.stringify(response));
                 },
             },
         });
