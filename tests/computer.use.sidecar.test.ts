@@ -96,6 +96,73 @@ describe("high-level computer.use process-json sidecar", () => {
         expect(String(response.body.error)).toContain("integer field must be an integer");
     });
 
+    test("normalizes common model action aliases before delegate dispatch", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-action-alias-"));
+        const delegate = join(root, "delegate.ts");
+        await writeFile(
+            delegate,
+            `const raw = await new Response(Bun.stdin.stream()).text();
+const request = JSON.parse(raw);
+console.log(JSON.stringify({ receivedAction: request.action, inputAction: request.input.action, input: request.input }));
+`,
+        );
+        await chmod(delegate, 0o755);
+        try {
+            const doubleClick = await invokeSidecarBody({
+                tool: "computer.use",
+                input: { action: "doubleClick", element: 5 },
+                config: { delegateCommand: "bun", delegateArgs: [delegate] },
+                projectDir: root,
+            });
+            const typeText = await invokeSidecarBody({
+                tool: "computer.use",
+                input: { action: "type-text", text: "hello" },
+                config: { delegateCommand: "bun", delegateArgs: [delegate] },
+                projectDir: root,
+            });
+            const screenshot = await invokeSidecarBody({
+                tool: "computer.use",
+                input: { action: "screenshot" },
+                config: { delegateCommand: "bun", delegateArgs: [delegate] },
+                projectDir: root,
+            });
+
+            expect(doubleClick).toMatchObject({
+                action: "double_click",
+                result: {
+                    response: {
+                        receivedAction: "double_click",
+                        inputAction: "doubleClick",
+                        input: { action: "doubleClick", element: 5 },
+                    },
+                },
+            });
+            expect(typeText).toMatchObject({
+                action: "type",
+                result: {
+                    response: {
+                        receivedAction: "type",
+                        inputAction: "type-text",
+                        input: { action: "type-text", text: "hello" },
+                    },
+                },
+            });
+            expect(screenshot).toMatchObject({
+                action: "capture",
+                readOnly: true,
+                result: {
+                    response: {
+                        receivedAction: "capture",
+                        inputAction: "screenshot",
+                        input: { action: "screenshot" },
+                    },
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("accepts Hermes scroll defaults without direction or amount", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-scroll-defaults-"));
         const delegate = join(root, "delegate.ts");

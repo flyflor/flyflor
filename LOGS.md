@@ -1898,3 +1898,18 @@
   摘要：`computer.use key` 现在接受 `input.key` 作为 `input.keys` 的模型字段 alias；CUA backend 使用任一字段继续分流到 `press_key` / `hotkey`，descriptor 也显式暴露 `key`。
   原因：减少真实模型按键调用的字段口径失败，同时保持 delegate 原始 process-json input、默认 manifest 与高权限执行边界不变。
   验证：`bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（43 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:computer-use:live`（ok true，structured skip: cua-command-not-found）；`bun run smoke:browser-use:live`（ok true）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11）；`git diff --check`。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：computer-use-action-aliases
+  摘要：准备让 `computer.use` sidecar 接受真实模型常见 action alias，例如 `doubleClick`、`double-click`、`type-text`、`press_key`、`setValue`、`listApps`、`focusApp` 和 `screenshot`。
+  原因：模型可见 schema 仍应提示 Hermes canonical snake_case，但真实模型偶发 camelCase/hyphen/backend-shaped action 时不应在 sidecar 入口产生无意义失败。
+  验证：待跑 focused computer-use tests、check/docs、真实 computer/browser smoke、真实闭环与 `git diff --check`。
+  风险：只影响 opt-in `computer.use` action 读取边界；原始 `input.action` 保留在 process-json payload 中，默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota/audit、Memory/Scope/Crystal 主链和 kernel import 边界不变。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-action-aliases
+  摘要：`computer.use` sidecar 现在接受 `doubleClick`、`double-click`、`type-text`、`press_key`、`setValue`、`listApps`、`focusApp`、`screenshot` 等 action alias，并归一化为 canonical dispatched action。
+  原因：真实模型偶发 camelCase/hyphen/backend-shaped action 时仍能进入同一结构化校验和子进程执行路径，减少无意义入口失败。
+  验证：`bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（44 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:computer-use:live`（ok true，structured skip: cua-command-not-found）；`bun run smoke:browser-use:live`（ok true）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11）；`git diff --check`。

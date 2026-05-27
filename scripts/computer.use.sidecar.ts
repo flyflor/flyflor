@@ -49,6 +49,23 @@ const ACTIONS = new Set<ComputerUseAction>([
     "list_apps",
     "focus_app",
 ]);
+const ACTION_ALIASES: Record<string, ComputerUseAction> = {
+    doubleclick: "double_click",
+    focusapp: "focus_app",
+    get_window_state: "capture",
+    hotkey: "key",
+    left_click: "click",
+    listapps: "list_apps",
+    middleclick: "middle_click",
+    observe: "capture",
+    press_key: "key",
+    presskey: "key",
+    rightclick: "right_click",
+    screenshot: "capture",
+    setvalue: "set_value",
+    type_text: "type",
+    typetext: "type",
+};
 const READ_ACTIONS = new Set<ComputerUseAction>(["capture", "wait", "list_apps"]);
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 512 * 1024;
@@ -454,11 +471,24 @@ function requiredKeyComboInput(input: JsonObject): string {
 }
 
 function readAction(value: unknown): ComputerUseAction {
-    const action = requiredString(value, "input.action") as ComputerUseAction;
+    const raw = requiredString(value, "input.action");
+    const action = normalizeAction(raw);
     if (!ACTIONS.has(action)) {
-        throw new ComputerUseError("unsupported", `unsupported computer.use action: ${action}`);
+        throw new ComputerUseError("unsupported", `unsupported computer.use action: ${raw}`);
     }
     return action;
+}
+
+function normalizeAction(value: string): ComputerUseAction {
+    const snake = value
+        .trim()
+        .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
+        .replace(/[\s-]+/gu, "_")
+        .toLowerCase();
+    if (ACTIONS.has(snake as ComputerUseAction)) {
+        return snake as ComputerUseAction;
+    }
+    return ACTION_ALIASES[snake] ?? ACTION_ALIASES[snake.replace(/_/gu, "")] ?? (snake as ComputerUseAction);
 }
 
 async function collectBounded(stream: ReadableStream<Uint8Array> | null, maxBytes: number): Promise<{ text: string; truncated: boolean }> {

@@ -1255,3 +1255,9 @@ Kernel V2 acceptance focus：
 - [x] `computer.use key` 接受 `input.key` 作为 `input.keys` 的模型字段 alias，减少真实模型按键调用的字段口径失败。
 - [x] CUA backend 使用 `keys` 或 `key` 继续分流到 `press_key` / `hotkey`，delegate backend 保留原始 process-json invocation。
 - [x] descriptor 暴露 `key` 字段，并新增 focused 回归与追加文档。
+
+## 2026-05-27 Computer Use Action Aliases
+
+- [x] `computer.use` sidecar 接受常见模型 action alias：`doubleClick`、`double-click`、`type-text`、`press_key`、`setValue`、`listApps`、`focusApp`、`screenshot` 等。
+- [x] alias 只归一化 top-level dispatched action，保留原始 `input.action` 供 delegate/audit 查看。
+- [x] 新增 focused action alias 回归与追加文档。
