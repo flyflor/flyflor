@@ -143,6 +143,15 @@ else
             "maxOutputBytes": 262144,
             "tools": []
         },
+        "computer.use": {
+            "command": "$COMPUTER_USE_RUNNER",
+            "args": ["xtool-sidecar", "computer.use"],
+            "cwd": "app",
+            "config": { "backend": "delegate", "delegateCommand": "", "delegateArgs": [], "cuaCommand": "cua-driver", "cuaArgs": [] },
+            "timeoutMs": 30000,
+            "maxOutputBytes": 524288,
+            "tools": []
+        },
         "computer.native": {
             "command": "$COMPUTER_NATIVE_RUNNER",
             "args": ["xtool-sidecar", "computer.native"],

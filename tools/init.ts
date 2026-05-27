@@ -122,6 +122,21 @@ class XToolsInitializer {
                     maxOutputBytes: 262144,
                     tools: [],
                 },
+                "computer.use": {
+                    command: this.packageCommand(options.targetDir, "computer-use", options.runnerName),
+                    args: ["xtool-sidecar", "computer.use"],
+                    cwd: "app",
+                    config: {
+                        backend: "delegate",
+                        delegateCommand: "",
+                        delegateArgs: [],
+                        cuaCommand: "cua-driver",
+                        cuaArgs: [],
+                    },
+                    timeoutMs: 30000,
+                    maxOutputBytes: 524288,
+                    tools: [],
+                },
                 "computer.native": {
                     command: this.packageCommand(options.targetDir, "computer-native", options.runnerName),
                     args: ["xtool-sidecar", "computer.native"],

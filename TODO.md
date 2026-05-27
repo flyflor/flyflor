@@ -1011,3 +1011,10 @@ Kernel V2 acceptance focus：
 - [x] 修复 `PluginRunner` 执行 PATH 命令时缺少最小查找环境的问题；只透传 PATH/PATHEXT/SystemRoot/WINDIR，不继承全量环境变量。
 - [x] 新增 `docs/external/use.runtime.closure.md` 与 `docs/external/use.runtime.closure.zh.cn.md`，记录默认不暴露、显式启用、运行时闭环和安全边界。
 - [x] 复跑 focused tests、`bun run docs:check`、`bun run check`、真实闭环 smoke、全量测试与 `git diff --check`。
+
+## 2026-05-27 Computer Use 安装态对齐
+
+- [x] 将默认真实 external tools manifest、`tools/init.ts`、POSIX `tools/init.sh`、PowerShell `tools/init.ps1` 对齐：登记 `computer.use` process-json sidecar，但保持 `tools: []` 默认不暴露。
+- [x] 更新 installer 回归，确认 `computer-use` package、runner path、`xtool-sidecar computer.use` args 和空工具面同时存在。
+- [x] 新增 `docs/external/computer.use.install.md` 与 `docs/external/computer.use.install.zh.cn.md`，记录“已安装但不暴露”的安全语义。
+- [x] 复跑 docs/typecheck、真实闭环 smoke、全量测试与 `git diff --check`。

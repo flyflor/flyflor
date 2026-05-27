@@ -1111,3 +1111,11 @@
   原因：external descriptor 稳定性检查允许 PATH 命令，但 process-json 执行阶段给子进程传空 env，导致 `bun` 这类 PATH 命令在真实执行时失败。
   验证：`bun test tests/external.use.runtime.test.ts --timeout 30000`; focused 工具层套件；`bun run docs:check`; `bun run check`; `bun run provider:ready -- --require-ready`; `bun run smoke:live:closure`; `bun run test`。
   风险：该修复不继承全量环境变量，只补命令查找所需最小环境，避免把密钥扩散到 sidecar。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-install-alignment
+  摘要：默认真实 external registry 与 `tools/init.*` 现在登记 `computer.use` sidecar，使用 `./tools/packages/computer-use/bin/flyflor`、`xtool-sidecar computer.use`、delegate/CUA 空配置和 `tools: []`；新增安装对齐文档。
+  原因：`computer-use` package 已经被创建，但 manifest 缺少 sidecar 条目，和 `browser.use` 的“已安装、可诊断、默认不暴露”策略不一致。
+  验证：`bun test tests/install.script.test.ts tests/external.tools.test.ts tests/external.use.runtime.test.ts tests/gateway.ws.test.ts --timeout 30000`（100 pass, 0 fail）；`bun run docs:check`; `bun run check`; `bun run provider:ready -- --require-ready`; `bun run smoke:live:closure`; `bun run test`。
+  风险：该改动只登记 sidecar 配置，不把 `computer.use` 放入 sidecar `tools`，因此默认模型工具面仍不可调用桌面控制。

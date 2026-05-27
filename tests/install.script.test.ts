@@ -437,9 +437,14 @@ describe("source/docker/windows installers", () => {
         const manifest = await readFile(join(target, "external.tools.jsonc"), "utf8");
         await expect(stat(join(target, "packages", "computer-use", "bin", "flyflor"))).resolves.toBeTruthy();
         const parsed = JSON.parse(manifest) as { sidecars: Record<string, { tools?: string[]; args?: string[] }> };
-        expect(parsed.sidecars["computer.use"]).toBeUndefined();
+        expect(parsed.sidecars["computer.use"]).toMatchObject({
+            args: ["xtool-sidecar", "computer.use"],
+            tools: [],
+        });
+        expect(manifest).toContain('"command": "./tools/packages/computer-use/bin/flyflor"');
+        expect(manifest).toContain('"delegateCommand": ""');
+        expect(manifest).toContain('"cuaCommand": "cua-driver"');
         expect(Object.values(parsed.sidecars).flatMap((entry) => entry.tools ?? [])).not.toContain("computer.use");
-        expect(Object.values(parsed.sidecars).some((entry) => entry.args?.join(" ") === "xtool-sidecar computer.use")).toBe(false);
         expect(manifest).not.toContain("playwright");
         await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
     });
