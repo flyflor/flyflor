@@ -1167,3 +1167,27 @@
   原因：即使本地 manifest 显式开启高层工具，模型看到的工具目录也必须携带执行层红线，避免破坏 coding 工具、ASK、plan、yolo 和动态额度边界。
   验证：`bun test tests/external.tools.test.ts tests/runtime.mcp.tool.plan.test.ts tests/external.use.runtime.test.ts tests/gateway.ws.test.ts --timeout 30000`（84 pass, 0 fail）；`bun run docs:check`; `bun run check`; `bun run provider:ready -- --require-ready`; `bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1066 pass, 0 fail）；`git diff --check`。
   风险：只改 descriptor 文案、文档和测试；默认 manifest 仍保持 `browser.use` / `computer.use` 的 `tools: []` 安全边界。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：use-tool-path-portability
+  摘要：`browser.use` / `computer.use` sidecar delegate command lookup 增加 PATHEXT 风格后缀候选，PATH 或相对 command 可解析到 `.cmd` / `.exe` / `.bat` / `.com` 等平台入口；新增中英文路径可移植性文档。
+  原因：工具层要求外挂 sidecar、相对路径和全平台兼容，Windows 风格 delegate 不能依赖 manifest 硬编码平台后缀。
+  验证：已跑 `bun test tests/browser.use.sidecar.test.ts tests/computer.use.sidecar.test.ts --timeout 30000`（15 pass, 0 fail）；`bun run check`；待跑 docs/真实闭环/full test。
+  风险：只扩展 sidecar 内部 command lookup，不改变默认 manifest 暴露面、Tool Plan visibility、ASK、plan、yolo 或动态预算逻辑。
+
+- 状态：完成
+  执行者：main-codex
+  范围：use-tool-path-portability-verification
+  摘要：完成 `browser.use` / `computer.use` delegate command PATH/PATHEXT 可移植性闭环；无扩展名 delegate command 可在 PATH 中解析到 `.cmd` 入口，文档保持新增文件形式。
+  原因：外挂 sidecar 需要支持跨平台 delegate 入口，同时不把平台后缀写死进 manifest 或 prompt 边界。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/computer.use.sidecar.test.ts --timeout 30000`（15 pass, 0 fail）；`bun run check`; `bun run docs:check`; `bun run provider:ready -- --require-ready`; `bun run test`（1068 pass, 0 fail）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；待最终 `git diff --check`。
+  风险：只扩展 sidecar 内部 command lookup 和 focused tests；不改变默认 manifest 暴露面、Tool Plan visibility、ASK、plan、yolo 或动态预算逻辑。
+
+- 状态：完成
+  执行者：main-codex
+  范围：use-tool-path-portability-final-diff-check
+  摘要：提交前完成最终 whitespace diff gate。
+  原因：确保追加 TODO/LOGS 后仍无空白错误。
+  验证：`git diff --check`。
+  风险：无代码风险，仅验证记录追加。

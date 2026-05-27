@@ -423,17 +423,46 @@ function concat(chunks: readonly Uint8Array[]): Uint8Array {
 async function resolveCommand(command: string): Promise<string | undefined> {
     if (isAbsolute(command) || command.startsWith(".")) {
         const path = isAbsolute(command) ? command : join(process.cwd(), command);
-        return (await pathExists(path)) ? path : undefined;
+        for (const candidate of pathWithExecutableExtensions(path)) {
+            if (await pathExists(candidate)) return candidate;
+        }
+        return undefined;
     }
     for (const dir of pathEntries()) {
         const path = join(dir, command);
-        if (await pathExists(path)) return path;
+        for (const candidate of pathWithExecutableExtensions(path)) {
+            if (await pathExists(candidate)) return candidate;
+        }
     }
     return undefined;
 }
 
 function pathEntries(): string[] {
     return (process.env.PATH ?? "").split(delimiter).map((entry) => entry.trim()).filter(Boolean);
+}
+
+function pathWithExecutableExtensions(path: string): readonly string[] {
+    const extensions = executableExtensions();
+    if (extensions.length === 0 || extensions.some((extension) => path.toLowerCase().endsWith(extension.toLowerCase()))) {
+        return [path];
+    }
+    return [path, ...extensions.map((extension) => `${path}${extension}`)];
+}
+
+function executableExtensions(): readonly string[] {
+    const raw = process.env.PATHEXT;
+    if (!raw && process.platform !== "win32") {
+        return [];
+    }
+    const entries = raw?.split(/[;:]/u) ?? [".COM", ".EXE", ".BAT", ".CMD"];
+    const normalized = entries
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+        .flatMap((entry) => {
+            const extension = entry.startsWith(".") ? entry : `.${entry}`;
+            return [extension, extension.toLowerCase()];
+        });
+    return [...new Set(normalized)];
 }
 
 async function pathExists(path: string): Promise<boolean> {

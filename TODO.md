@@ -1039,3 +1039,10 @@ Kernel V2 acceptance focus：
 - [x] 新增 descriptor 回归测试，锁住高层 use 工具的提示词边界。
 - [x] 新增 `docs/external/use.prompt.boundary.md` 与 `docs/external/use.prompt.boundary.zh.cn.md`，只追加文档，不改写既有 active docs。
 - [x] 复跑 focused descriptor/tool plan tests、docs/check/typecheck/真实闭环/full test 与 `git diff --check`。
+
+## 2026-05-27 Use Tool PATH/PATHEXT 可移植性
+
+- [x] `browser.use` / `computer.use` sidecar delegate command lookup 支持 PATHEXT 风格后缀，覆盖 `.cmd` / `.exe` 等跨平台委托入口。
+- [x] 新增 browser/computer use focused 回归，验证无扩展名 PATH command 能解析到 `delegate.cmd`。
+- [x] 新增 `docs/external/use.path.portability.md` 与 `docs/external/use.path.portability.zh.cn.md`，只追加文档，不改写既有 active docs。
+- [x] 复跑 focused sidecar tests、docs/check/typecheck/真实闭环/full test 与 `git diff --check`。

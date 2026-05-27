@@ -1,6 +1,6 @@
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 const SIDECAR = new URL("../scripts/computer.use.sidecar.ts", import.meta.url).pathname;
@@ -200,6 +200,45 @@ console.log(JSON.stringify({ receivedAction: request.action, readOnly: request.a
             await rm(root, { recursive: true, force: true });
         }
     });
+
+    test("resolves PATH delegates through PATHEXT-style extensions", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-computer-use-pathext-"));
+        const delegate = join(root, "delegate.cmd");
+        await writeFile(
+            delegate,
+            `#!/usr/bin/env bun
+const raw = await new Response(Bun.stdin.stream()).text();
+const request = JSON.parse(raw);
+console.log(JSON.stringify({ receivedAction: request.action, readOnly: request.action === "capture" }));
+`,
+        );
+        await chmod(delegate, 0o755);
+        try {
+            const response = await invokeSidecarBody({
+                tool: "computer.use",
+                input: { action: "capture" },
+                config: { delegateCommand: "delegate" },
+                projectDir: root,
+            }, {
+                env: {
+                    ...Bun.env,
+                    PATH: `${root}${delimiter}${Bun.env.PATH ?? ""}`,
+                    PATHEXT: ".cmd",
+                },
+            });
+
+            expect(response).toMatchObject({
+                action: "capture",
+                backend: "delegate",
+                readOnly: true,
+                result: {
+                    response: { receivedAction: "capture", readOnly: true },
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
 });
 
 interface SidecarInvocationResult {
@@ -207,14 +246,14 @@ interface SidecarInvocationResult {
     stderr: string;
 }
 
-async function invokeSidecarBody(request: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await invokeSidecar(request);
+async function invokeSidecarBody(request: Record<string, unknown>, options: { env?: Record<string, string | undefined> } = {}): Promise<Record<string, unknown>> {
+    const response = await invokeSidecar(request, options);
     expect(response.stderr).toBe("");
     return response.body;
 }
 
-async function invokeSidecar(request: Record<string, unknown>, options: { expectExit?: number } = {}): Promise<SidecarInvocationResult> {
-    const proc = Bun.spawn(["bun", SIDECAR], { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+async function invokeSidecar(request: Record<string, unknown>, options: { env?: Record<string, string | undefined>; expectExit?: number } = {}): Promise<SidecarInvocationResult> {
+    const proc = Bun.spawn(["bun", SIDECAR], { env: options.env, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
     const stdin = proc.stdin as { write(chunk: Uint8Array): unknown; end(): void };
     stdin.write(new TextEncoder().encode(`${JSON.stringify(request)}\n`));
     stdin.end();
