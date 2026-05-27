@@ -1166,3 +1166,9 @@ Kernel V2 acceptance focus：
 - [x] `computer.use` 后置 capture 保留 `app`、`mode`、`maxElements` / `max_elements` 上下文，避免 `focus_app` 后回看错范围。
 - [x] 保持 delegate/CUA 都只通过 process-json 子进程执行，不新增 kernel browser/desktop runtime import。
 - [x] 新增 focused computer-use 回归与追加文档，复跑 computer-use tests、check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 Browser Use Hermes Vision
+
+- [x] 为 `browser.use` 增加 Hermes 风格 `vision` action：CDP 只负责截图，视觉分析必须委派给外部 process-json `visionDelegateCommand`。
+- [x] 模型可见 descriptor 暴露 `question` 与 `annotate`，并保持高权限 browser control opt-in、ASK、plan、yolo、动态预算不变。
+- [x] 新增 focused browser-use/external descriptor/live smoke 回归与追加文档，复跑 browser-use tests、check/docs、真实闭环、全量测试与 `git diff --check`。

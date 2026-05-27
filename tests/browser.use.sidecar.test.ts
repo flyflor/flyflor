@@ -278,6 +278,90 @@ describe("high-level browser.use process-json sidecar", () => {
         expect(String(response.body.error)).toContain("input.clear must be a boolean");
     });
 
+    test("reports browser vision as unavailable when no vision delegate is configured", async () => {
+        const response = await invokeSidecar({
+            tool: "browser.use",
+            input: { action: "vision", question: "What is visible?" },
+            config: { backend: "cdp", cdpUrl: "http://127.0.0.1:1" },
+        }, { expectExit: 1 });
+
+        expect(response.body.ok).toBe(false);
+        expect(response.body.code).toBe("unavailable");
+        expect(String(response.body.error)).toContain("visionDelegateCommand");
+    });
+
+    test("captures a CDP screenshot and delegates browser vision analysis through process-json", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-browser-use-vision-"));
+        const delegate = join(root, "vision-delegate.ts");
+        const log = join(root, "vision-delegate.log");
+        await writeFile(
+            delegate,
+            `import { appendFile } from "node:fs/promises";
+const raw = await new Response(Bun.stdin.stream()).text();
+await appendFile("${log}", raw);
+const request = JSON.parse(raw);
+console.log(JSON.stringify({
+  analysis: "fixture vision",
+  question: request.question,
+  annotate: request.annotate,
+  screenshotFormat: request.screenshot.format,
+  screenshotBytes: Buffer.from(request.screenshot.data, "base64").byteLength,
+}));
+`,
+        );
+        await chmod(delegate, 0o755);
+        const server = new MockCdpServer((command) => ({
+            id: command.id,
+            result: command.method === "Page.captureScreenshot"
+                ? { data: "aGVsbG8=", format: "png" }
+                : { result: { type: "object", value: { ok: true } } },
+        }));
+        try {
+            const response = await invokeSidecarBody({
+                tool: "browser.use",
+                input: { action: "vision", question: "What is visible?", annotate: true },
+                config: { backend: "cdp", cdpUrl: server.url, visionDelegateCommand: "bun", visionDelegateArgs: [delegate] },
+            });
+
+            expect(response).toMatchObject({
+                ok: true,
+                action: "vision",
+                backend: "cdp",
+                readOnly: true,
+                result: {
+                    screenshot: { format: "png", dataBytes: 5 },
+                    vision: {
+                        response: {
+                            analysis: "fixture vision",
+                            question: "What is visible?",
+                            annotate: true,
+                            screenshotFormat: "png",
+                            screenshotBytes: 5,
+                        },
+                    },
+                },
+            });
+            expect(server.commands.map((entry) => (entry as { method: string }).method)).toEqual(["Page.captureScreenshot"]);
+            const call = JSON.parse((await readFile(log, "utf8")).trim()) as { screenshot?: { data?: unknown } };
+            expect(call.screenshot?.data).toBe("aGVsbG8=");
+        } finally {
+            server.stop();
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("rejects invalid browser vision annotate values before invoking CDP", async () => {
+        const response = await invokeSidecar({
+            tool: "browser.use",
+            input: { action: "vision", question: "What is visible?", annotate: "yes" },
+            config: { backend: "cdp", cdpUrl: "http://127.0.0.1:1", visionDelegateCommand: "bun" },
+        }, { expectExit: 1 });
+
+        expect(response.body.ok).toBe(false);
+        expect(response.body.code).toBe("failed");
+        expect(String(response.body.error)).toContain("input.annotate must be a boolean");
+    });
+
     test("reports malformed CDP WebSocket frames as structured failures", async () => {
         const server = new MockCdpServer(() => "not-json");
         try {

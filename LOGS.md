@@ -1631,3 +1631,19 @@
   原因：对齐 Hermes `capture_after=True` 的 app-scoped 回看语义，避免 `focus_app` 或 app-scoped action 后的 follow-up capture 退回 frontmost app 或 whole screen。
   验证：`bun test tests/computer.use.sidecar.test.ts --timeout 30000`（17 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`; `bun run smoke:computer-use:live`（structured skip: cua-command-not-found）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun test tests/naming.boundaries.test.ts --timeout 30000`（30 pass, 0 fail）；`bun run test`（1098 pass, 0 fail）；待最终 `git diff --check`。
   风险：只改变 follow-up capture input 的上下文保留；不新增权限，不改变默认 manifest 暴露策略、高权限 ASK/plan/yolo、动态预算或 kernel import 边界。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-hermes-vision
+  摘要：准备为 `browser.use` 增加 Hermes 风格 `vision` action；CDP backend 只捕获 screenshot，视觉分析委派给外部 process-json delegate。
+  原因：Hermes browser 工具包含 `browser_vision`；Flyflor 需要补齐视觉理解闭环，但不能把 vision provider、browser runtime 或 desktop runtime import 进 kernel。
+  验证：待跑 focused browser-use/external descriptor tests、browser-use live smoke、check/docs、真实闭环、全量测试与 diff。
+  风险：`vision` 会读取当前页面截图，仍只在 opt-in 高权限 `browser.use` 面暴露；默认 manifest 暴露策略、ASK/plan/yolo、动态预算和子进程 JSON 边界不变。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-hermes-vision
+  摘要：`browser.use` 现在支持 Hermes 风格 `vision` action；CDP backend 捕获 screenshot 后调用外部 process-json `visionDelegateCommand`，缺少 delegate 时返回结构化 `unavailable`。
+  原因：补齐真实浏览器视觉理解闭环，同时保持 kernel 不 import vision provider、browser runtime 或 desktop runtime，只拥有 descriptor、gateway/event/audit、visibility、approval、quota 和 dispatch。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（40 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`; `bun run smoke:browser-use:live`（ok true，覆盖 vision-delegate）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun test tests/naming.boundaries.test.ts --timeout 30000`（30 pass, 0 fail）；`bun run test`（1101 pass, 0 fail）；待最终 `git diff --check`。
+  风险：`vision` 会读取当前浏览器页面截图，仍只在 opt-in 高权限 `browser.use` 面暴露；默认 manifest 暴露策略、高权限 ASK/plan/yolo、动态预算和子进程 JSON 边界不变。

@@ -17,6 +17,7 @@ type BrowserUseAction =
     | "back"
     | "press"
     | "get_images"
+    | "vision"
     | "console"
     | "wait";
 
@@ -58,10 +59,11 @@ const ACTIONS = new Set<BrowserUseAction>([
     "back",
     "press",
     "get_images",
+    "vision",
     "console",
     "wait",
 ]);
-const READ_ACTIONS = new Set<BrowserUseAction>(["snapshot", "screenshot", "get_images", "wait"]);
+const READ_ACTIONS = new Set<BrowserUseAction>(["snapshot", "screenshot", "get_images", "vision", "wait"]);
 const DEFAULT_CDP_URL = "http://127.0.0.1:9222";
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 512 * 1024;
@@ -269,6 +271,28 @@ class BrowserUseSidecar {
                         returnByValue: true,
                     }),
                 };
+            case "vision": {
+                if (!readString(invocation.config.visionDelegateCommand)) {
+                    throw new BrowserUseError("unavailable", "browser.use vision requires config.visionDelegateCommand");
+                }
+                const format = readString(invocation.input.format) ?? "png";
+                const screenshot = asObject(
+                    await client.sendToPage("Page.captureScreenshot", {
+                        format,
+                        fromSurface: true,
+                    }),
+                    "Page.captureScreenshot result",
+                );
+                const data = requiredString(screenshot.data, "Page.captureScreenshot result.data");
+                const vision = await invokeVisionDelegate(invocation, { data, format });
+                return {
+                    screenshot: {
+                        format,
+                        dataBytes: base64ByteLength(data),
+                    },
+                    vision,
+                };
+            }
             case "console":
                 return {
                     response: await client.sendToPage("Runtime.evaluate", {
@@ -439,6 +463,31 @@ async function runProcessJson(
     };
 }
 
+async function invokeVisionDelegate(
+    invocation: BrowserUseInvocation,
+    screenshot: { readonly data: string; readonly format: string },
+): Promise<JsonObject> {
+    const command = readString(invocation.config.visionDelegateCommand);
+    if (!command) {
+        throw new BrowserUseError("unavailable", "browser.use vision requires config.visionDelegateCommand");
+    }
+    const timeoutMs = invocation.config.visionTimeoutMs === undefined
+        ? boundedPositiveInt(invocation.config.timeoutMs, "config.timeoutMs", DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS)
+        : boundedPositiveInt(invocation.config.visionTimeoutMs, "config.visionTimeoutMs", DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
+    const maxOutputBytes = invocation.config.visionMaxOutputBytes === undefined
+        ? boundedPositiveInt(invocation.config.maxOutputBytes, "config.maxOutputBytes", DEFAULT_MAX_OUTPUT_BYTES, MAX_OUTPUT_BYTES)
+        : boundedPositiveInt(invocation.config.visionMaxOutputBytes, "config.visionMaxOutputBytes", DEFAULT_MAX_OUTPUT_BYTES, MAX_OUTPUT_BYTES);
+    return runProcessJson(command, stringArray(invocation.config.visionDelegateArgs), {
+        tool: BROWSER_USE_TOOL,
+        action: "vision",
+        input: invocation.input,
+        config: invocation.config,
+        question: requiredString(invocation.input.question, "input.question"),
+        annotate: invocation.input.annotate === true,
+        screenshot,
+    }, timeoutMs, maxOutputBytes);
+}
+
 async function resolveCommand(command: string): Promise<string | undefined> {
     if (isAbsolute(command) || command.startsWith(".")) {
         const path = isAbsolute(command) ? command : join(process.cwd(), command);
@@ -524,6 +573,12 @@ async function validateAction(action: BrowserUseAction, input: JsonObject): Prom
     }
     if (action === "get_images" && input.maxImages !== undefined) {
         boundedInt(input.maxImages, 1, 1000);
+    }
+    if (action === "vision") {
+        requiredString(input.question, "input.question");
+        if (input.annotate !== undefined && typeof input.annotate !== "boolean") {
+            throw new BrowserUseError("failed", "input.annotate must be a boolean");
+        }
     }
     if (action === "console") {
         if (input.clear !== undefined && typeof input.clear !== "boolean") {
@@ -793,6 +848,12 @@ function boundedPositiveInt(value: unknown, path: string, fallback: number, max:
         throw new BrowserUseError("failed", `${path} must be an integer between 1 and ${max}`);
     }
     return value;
+}
+
+function base64ByteLength(value: string): number {
+    const compact = value.replace(/\s/gu, "");
+    const padding = compact.endsWith("==") ? 2 : compact.endsWith("=") ? 1 : 0;
+    return Math.max(0, Math.floor((compact.length * 3) / 4) - padding);
 }
 
 function readString(value: unknown): string | undefined {

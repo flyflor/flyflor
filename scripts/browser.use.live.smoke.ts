@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { access, chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, delimiter, join } from "node:path";
 
@@ -47,6 +47,8 @@ class BrowserUseLiveSmoke {
 
             const checks: string[] = [];
             const config = { backend: "cdp", cdpUrl: endpoint };
+            const visionDelegate = await this.writeVisionDelegate(profileDir);
+            const visionLog = join(profileDir, "vision-delegate.log");
 
             const open = await this.invoker.call({ tool: "browser.use", config, input: { action: "open", url: page.url } });
             this.expectOk(open, "open");
@@ -113,6 +115,15 @@ class BrowserUseLiveSmoke {
             this.expectOk(consoleResult, "console");
             this.expectConsole(consoleResult);
             checks.push("console-expression");
+
+            const vision = await this.invoker.call({
+                tool: "browser.use",
+                config: { ...config, visionDelegateCommand: "bun", visionDelegateArgs: [visionDelegate] },
+                input: { action: "vision", question: "Describe the page title and input area.", annotate: true },
+            });
+            this.expectOk(vision, "vision");
+            await this.expectVision(vision, visionLog);
+            checks.push("vision-delegate");
 
             const screenshot = await this.invoker.call({
                 tool: "browser.use",
@@ -204,6 +215,46 @@ class BrowserUseLiveSmoke {
         const result = value.result as JsonObject | undefined;
         if (typeof result?.data !== "string" || result.data.length < 100 || result.format !== "png") {
             throw new Error("screenshot did not return png data");
+        }
+    }
+
+    private async writeVisionDelegate(root: string): Promise<string> {
+        const path = join(root, "vision-delegate.ts");
+        const log = join(root, "vision-delegate.log");
+        await writeFile(
+            path,
+            `import { appendFile } from "node:fs/promises";
+const raw = await new Response(Bun.stdin.stream()).text();
+await appendFile(${JSON.stringify(log)}, raw);
+const request = JSON.parse(raw);
+console.log(JSON.stringify({
+  analysis: "live browser vision delegate",
+  question: request.question,
+  annotate: request.annotate,
+  screenshotFormat: request.screenshot.format,
+  screenshotBytes: Buffer.from(request.screenshot.data, "base64").byteLength,
+}));
+`,
+        );
+        await chmod(path, 0o755);
+        return path;
+    }
+
+    private async expectVision(value: JsonObject, log: string): Promise<void> {
+        const result = value.result as JsonObject | undefined;
+        const screenshot = result?.screenshot as JsonObject | undefined;
+        const vision = result?.vision as JsonObject | undefined;
+        const response = vision?.response as JsonObject | undefined;
+        if (screenshot?.format !== "png" || typeof screenshot.dataBytes !== "number" || screenshot.dataBytes < 100) {
+            throw new Error(`vision did not include screenshot metadata: ${JSON.stringify(value).slice(0, 1000)}`);
+        }
+        if (response?.analysis !== "live browser vision delegate" || response.question !== "Describe the page title and input area." || response.annotate !== true) {
+            throw new Error(`vision delegate returned unexpected payload: ${JSON.stringify(value).slice(0, 1000)}`);
+        }
+        const call = JSON.parse((await readFile(log, "utf8")).trim()) as JsonObject;
+        const captured = call.screenshot as JsonObject | undefined;
+        if (typeof captured?.data !== "string" || captured.data.length < 100) {
+            throw new Error("vision delegate did not receive screenshot data");
         }
     }
 
