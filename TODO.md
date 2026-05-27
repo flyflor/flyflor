@@ -1025,3 +1025,10 @@ Kernel V2 acceptance focus：
 - [x] smoke 默认在缺少浏览器时结构化 skip，`--require-browser` 模式下缺浏览器失败，避免普通门禁被本机环境阻塞。
 - [x] 新增 `docs/external/browser.use.live.md` 与 `docs/external/browser.use.live.zh.cn.md`，只追加文档，不改写既有 active docs。
 - [x] 复跑 browser-use live smoke、focused 工具层测试、docs/check/typecheck/真实闭环/full test 与 `git diff --check`。
+
+## 2026-05-27 Computer Use 真实 CUA Smoke
+
+- [x] 新增可选真实 CUA-driver smoke，覆盖 `computer.use` 的只读 capture/list_apps/wait CUA backend 闭环。
+- [x] smoke 默认在缺少 `cua-driver` 时结构化 skip，`--require-cua` 模式下缺 driver 失败，避免普通门禁被本机桌面驱动环境阻塞。
+- [x] 新增 `docs/external/computer.use.live.md` 与 `docs/external/computer.use.live.zh.cn.md`，只追加文档，不改写既有 active docs。
+- [x] 复跑 computer-use live smoke、focused 工具层测试、docs/check/typecheck/真实闭环/full test 与 `git diff --check`。

@@ -1135,3 +1135,19 @@
   原因：把 Browser Use 从 mock CDP / deterministic delegate 推进到本机真实浏览器闭环，同时不破坏 ASK、plan、yolo、动态预算和外部工具默认安全面。
   验证：`bun run smoke:browser-use:live`（macos-google-chrome，checks 全部通过）；focused 工具层测试（113 pass, 0 fail）；`bun run docs:check`; `bun run check`; `bun run provider:ready -- --require-ready`; `bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1066 pass, 0 fail）；`git diff --check`。
   风险：真实 browser-use smoke 依赖本机 Chrome/Chromium；无浏览器时默认结构化 skip，CI 若要求真实浏览器需加 `--require-browser`。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：computer-use-live-smoke
+  摘要：新增 `scripts/computer.use.live.smoke.ts`，通过可选 `cua-driver` 真实验证 `computer.use` CUA backend 的只读 capture/list_apps/wait；新增 `smoke:computer-use:live` package 入口与中英文说明文档。
+  原因：`computer.use` 已有 sidecar、install alignment 和 opt-in runtime delegate 证明，但缺少真实 CUA backend 的本机闭环入口；本轮只验证只读路径，避免默认打开鼠标/键盘控制面。
+  验证：待跑 `bun run smoke:computer-use:live`、focused 工具层测试、`bun run docs:check`、`bun run check`、真实闭环 smoke、全量测试与 `git diff --check`。
+  风险：该 smoke 依赖 macOS `cua-driver`；默认无 driver 时结构化 skip，`--require-cua` 才作为硬失败。
+
+- 状态：完成
+  执行者：main-codex
+  范围：computer-use-live-smoke-verification
+  摘要：完成 `computer.use` 可选真实 CUA smoke 与全量回归；同时修复 `scripts/live.loop.closure.ts` 的等待器，让同一 requestId 的 `turn.error` 成为明确终态，避免真实模型/解析异常时 smoke 黑盒卡住。
+  原因：工具闭环需要在缺少本机 CUA driver 时结构化 skip，在真实 turn 出错时明确失败，不允许测试器把 socket 错误吞成等待。
+  验证：`bun run smoke:computer-use:live`（ok true, skipped true, reason cua-command-not-found）；focused 工具层测试（129 pass, 0 fail）；`bun run docs:check`; `bun run check`; `bun run provider:ready -- --require-ready`; `bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1066 pass, 0 fail）；`git diff --check`。
+  风险：本机没有 `cua-driver`，因此真实 CUA 动作链本轮以结构化 skip 验证缺驱动路径；有 driver 的机器可用 `--require-cua` 把缺驱动转为硬失败。

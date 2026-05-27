@@ -271,11 +271,11 @@ class LiveLoopClosureScenario {
                 ...(input.yolo ? { permissions: { mode: SandboxMode.Yolo } } : {}),
             },
         }, { id: `turn-${input.id}`, requestId });
-        const envelope = await waitForType(
-            received,
-            GatewayControlMessageType.TurnFinal,
-            (candidate) => candidate.requestId === requestId,
-        );
+        const envelope = await waitForTurnTerminal(received, requestId);
+        if (envelope.type === GatewayControlMessageType.TurnError) {
+            const payload = envelope.payload as { message?: unknown };
+            throw new Error(`Live turn ${input.id} failed: ${String(payload.message ?? "unknown turn.error")}`);
+        }
         return envelope.payload as GatewayControlTurnFinalPayload;
     }
 
@@ -493,6 +493,24 @@ async function waitForType(
         if (existing) return existing;
         if (Date.now() > deadline) {
             throw new Error(`Timed out waiting for ${type}. Received: ${received.map((item) => item.type).join(", ")}`);
+        }
+        await Bun.sleep(25);
+    }
+}
+
+async function waitForTurnTerminal(
+    received: GatewayControlEnvelope[],
+    requestId: string,
+): Promise<GatewayControlEnvelope> {
+    const deadline = Date.now() + 180_000;
+    while (true) {
+        const existing = received.find((item) =>
+            item.requestId === requestId &&
+            (item.type === GatewayControlMessageType.TurnFinal || item.type === GatewayControlMessageType.TurnError)
+        );
+        if (existing) return existing;
+        if (Date.now() > deadline) {
+            throw new Error(`Timed out waiting for turn terminal ${requestId}. Received: ${received.map((item) => item.type).join(", ")}`);
         }
         await Bun.sleep(25);
     }
