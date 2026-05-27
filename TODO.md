@@ -1106,3 +1106,9 @@ Kernel V2 acceptance focus：
 - [x] 为 `browser.use` 与 `computer.use` delegate/CUA 资源配置增加硬上限，避免 `timeoutMs` 或 `maxOutputBytes` 静默扩大单次子进程执行窗口。
 - [x] 保持 ASK、plan、yolo、动态预算和默认工具暴露不变；非法资源配置在 command resolution / delegate spawn 前结构化失败。
 - [x] 新增 focused 回归与追加文档，复跑 browser-use/computer-use tests、check/docs、真实闭环与 `git diff --check`。
+
+## 2026-05-27 External Manifest Resource Bounds
+
+- [x] 在 `external.tools.jsonc` normalization 层同步限制 `timeoutMs` 与 `maxOutputBytes`，避免坏 manifest 先进入模型可见 catalog。
+- [x] 保持 sidecar 执行期资源边界不变；manifest 层失败必须发生在 command resolution / executor 暴露之前。
+- [x] 新增 focused 回归与追加文档，复跑 external-tools tests、check/docs、真实闭环与 `git diff --check`。

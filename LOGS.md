@@ -1455,3 +1455,19 @@
   原因：收束历史 TODO 中 Browser Use provider/delegate 安装说明和真实高权限 smoke 要求。
   验证：`bun run docs:check`（26 pass, 0 fail）；`bun run smoke:browser-use:live`（ok true）；`git diff --check`。
   风险：仅新增文档与 TODO 状态更新；不改变运行态代码、ASK、plan、yolo、动态预算或默认工具暴露。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：external-manifest-resource-bounds
+  摘要：准备把 sidecar `timeoutMs` / `maxOutputBytes` 硬上限前移到 `external.tools.jsonc` normalization 层。
+  原因：上一轮已让 `browser.use` / `computer.use` sidecar 执行期拒绝超大资源配置；但 manifest loader 仍只校验正整数，坏配置可能先进入模型可见 catalog。
+  验证：待跑 focused external-tools tests、check/docs、真实闭环与 diff。
+  风险：只影响 external manifest preflight；不改变 ASK、plan、yolo、动态预算、默认工具暴露或 kernel import 边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：external-manifest-resource-bounds-verification
+  摘要：完成 `external.tools.jsonc` normalization 层资源上限；`timeoutMs` 与 `maxOutputBytes` 超过 sidecar runner 边界时，manifest 在 catalog/executor 暴露前失败。
+  原因：防止坏 external sidecar manifest 先进入模型可见 catalog，再在执行期才暴露资源配置错误。
+  验证：`bun test tests/external.tools.test.ts --timeout 30000`（19 pass, 0 fail）；`bun run check`; `bun run docs:check`; `bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；待全量测试与最终 `git diff --check`。
+  风险：只影响 external manifest preflight；不改变 ASK、plan、yolo、动态预算、默认工具暴露或 kernel import 边界。

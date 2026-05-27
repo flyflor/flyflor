@@ -98,6 +98,8 @@ interface ResolvedSidecar {
 }
 
 const EXTERNAL_TOOL_SCHEMA_VERSION = 2;
+const EXTERNAL_SIDECAR_MAX_TIMEOUT_MS = 120_000;
+const EXTERNAL_SIDECAR_MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 
 const EXTERNAL_TOOL_SPECS: readonly ExternalToolSpec[] = [
     browserTool("browser.open", "Open a URL in the external browser sidecar.", false, ["url"]),
@@ -360,13 +362,13 @@ export class ExternalToolDescriptorComponent {
             env: this.optionalStringRecord(shape.env, `${path}.env`),
             id,
             manifestSource,
-            maxOutputBytes: this.optionalPositiveInt(shape.maxOutputBytes, `${path}.maxOutputBytes`) ?? 64 * 1024,
+            maxOutputBytes: this.optionalBoundedPositiveInt(shape.maxOutputBytes, `${path}.maxOutputBytes`, EXTERNAL_SIDECAR_MAX_OUTPUT_BYTES) ?? 64 * 1024,
             mock: this.optionalBoolean(shape.mock, `${path}.mock`) ?? false,
             packageId: this.optionalNonEmptyString(shape.packageId, `${path}.packageId`),
             packageVersion: this.optionalNonEmptyString(shape.packageVersion, `${path}.packageVersion`),
             protocolVersion: this.optionalNonEmptyString(shape.protocolVersion, `${path}.protocolVersion`),
             schemaVersion,
-            timeoutMs: this.optionalPositiveInt(shape.timeoutMs, `${path}.timeoutMs`) ?? 10_000,
+            timeoutMs: this.optionalBoundedPositiveInt(shape.timeoutMs, `${path}.timeoutMs`, EXTERNAL_SIDECAR_MAX_TIMEOUT_MS) ?? 10_000,
             tools: this.optionalToolNames(shape.tools, `${path}.tools`) ?? EXTERNAL_TOOL_SPECS.map((spec) => spec.name),
             upgrade: this.optionalUpgrade(shape.upgrade, `${path}.upgrade`),
         };
@@ -472,6 +474,17 @@ export class ExternalToolDescriptorComponent {
             throw new Error(`${path} must be a positive integer.`);
         }
         return value;
+    }
+
+    private optionalBoundedPositiveInt(value: unknown, path: string, max: number): number | undefined {
+        const number = this.optionalPositiveInt(value, path);
+        if (number === undefined) {
+            return undefined;
+        }
+        if (number > max) {
+            throw new Error(`${path} must be <= ${max}.`);
+        }
+        return number;
     }
 
     private requiredString(value: unknown, path: string): string {

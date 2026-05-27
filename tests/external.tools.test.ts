@@ -186,6 +186,57 @@ describe("external tool descriptor discovery", () => {
         }
     });
 
+    test("rejects oversized sidecar resource bounds before catalog exposure", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-resource-bounds-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectToolDir!, { recursive: true });
+            await writeFile(
+                externalToolManifestPath(paths),
+                JSON.stringify({
+                    schemaVersion: 2,
+                    sidecars: {
+                        "mock.xtools": {
+                            command: "bun",
+                            maxOutputBytes: 2 * 1024 * 1024 + 1,
+                            timeoutMs: 120_001,
+                            tools: ["browser.use"],
+                        },
+                    },
+                }),
+            );
+
+            await expect(loadExternalTools(paths)).rejects.toThrow("sidecars.mock.xtools.maxOutputBytes must be <= 2097152");
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("rejects oversized sidecar timeouts before catalog exposure", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-timeout-bounds-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectToolDir!, { recursive: true });
+            await writeFile(
+                externalToolManifestPath(paths),
+                JSON.stringify({
+                    schemaVersion: 2,
+                    sidecars: {
+                        "mock.xtools": {
+                            command: "bun",
+                            timeoutMs: 120_001,
+                            tools: ["browser.use"],
+                        },
+                    },
+                }),
+            );
+
+            await expect(loadExternalTools(paths)).rejects.toThrow("sidecars.mock.xtools.timeoutMs must be <= 120000");
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("accepts v2 app-relative sidecar commands", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-v2-app-"));
         const paths = testPaths(root);
