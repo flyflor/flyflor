@@ -529,7 +529,7 @@ function browserUseTool(): ExternalToolSpec {
             requiresFocusTarget: true,
         },
         concurrencySafe: false,
-        description: "Drive a browser through a high-level open/snapshot/action/verify browser-use sidecar.",
+        description: "Opt-in high-privilege browser control sidecar. Prefer snapshot/screenshot/read actions first; use click/type/evaluate only for explicit browser tasks, never as a replacement for workspace, git, process, or file tools.",
         exclusive: true,
         inputSchema: {
             type: "object",
@@ -607,7 +607,7 @@ function computerUseTool(): ExternalToolSpec {
             requiresFocusTarget: true,
         },
         concurrencySafe: false,
-        description: "Drive a desktop through a high-level capture/action/verify computer-use sidecar.",
+        description: "Opt-in high-privilege desktop control sidecar. Prefer capture/list_apps/wait observation first; use mouse, keyboard, app focus, or value changes only for explicit desktop tasks, never as a replacement for workspace, git, process, or file tools.",
         exclusive: true,
         inputSchema: {
             type: "object",

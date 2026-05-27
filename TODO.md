@@ -1032,3 +1032,10 @@ Kernel V2 acceptance focus：
 - [x] smoke 默认在缺少 `cua-driver` 时结构化 skip，`--require-cua` 模式下缺 driver 失败，避免普通门禁被本机桌面驱动环境阻塞。
 - [x] 新增 `docs/external/computer.use.live.md` 与 `docs/external/computer.use.live.zh.cn.md`，只追加文档，不改写既有 active docs。
 - [x] 复跑 computer-use live smoke、focused 工具层测试、docs/check/typecheck/真实闭环/full test 与 `git diff --check`。
+
+## 2026-05-27 Use Tool 提示词边界
+
+- [x] 收紧 `browser.use` / `computer.use` 模型可见 descriptor：显式标注 opt-in 高权限、观察优先、不能替代 workspace/git/process/file 工具。
+- [x] 新增 descriptor 回归测试，锁住高层 use 工具的提示词边界。
+- [x] 新增 `docs/external/use.prompt.boundary.md` 与 `docs/external/use.prompt.boundary.zh.cn.md`，只追加文档，不改写既有 active docs。
+- [x] 复跑 focused descriptor/tool plan tests、docs/check/typecheck/真实闭环/full test 与 `git diff --check`。

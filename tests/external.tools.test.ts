@@ -78,6 +78,8 @@ describe("external tool descriptor discovery", () => {
             },
             tags: expect.arrayContaining(["computer-use", "approval:computer"]),
         });
+        expect(externalToolSpecs().find((entry) => entry.name === "computer.use")?.description).toContain("Prefer capture/list_apps/wait observation first");
+        expect(externalToolSpecs().find((entry) => entry.name === "computer.use")?.description).toContain("never as a replacement for workspace, git, process, or file tools");
         expect(externalToolSpecs().find((entry) => entry.name === "browser.use")).toMatchObject({
             computer: {
                 action: "browser",
@@ -94,6 +96,8 @@ describe("external tool descriptor discovery", () => {
             },
             tags: expect.arrayContaining(["browser-use", "approval:computer"]),
         });
+        expect(externalToolSpecs().find((entry) => entry.name === "browser.use")?.description).toContain("Prefer snapshot/screenshot/read actions first");
+        expect(externalToolSpecs().find((entry) => entry.name === "browser.use")?.description).toContain("never as a replacement for workspace, git, process, or file tools");
         expect(externalToolSpecs().find((entry) => entry.name === "screen.screenshot")?.computer).toMatchObject({
             action: "screen",
             observationOnly: true,

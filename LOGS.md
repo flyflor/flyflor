@@ -1151,3 +1151,19 @@
   原因：工具闭环需要在缺少本机 CUA driver 时结构化 skip，在真实 turn 出错时明确失败，不允许测试器把 socket 错误吞成等待。
   验证：`bun run smoke:computer-use:live`（ok true, skipped true, reason cua-command-not-found）；focused 工具层测试（129 pass, 0 fail）；`bun run docs:check`; `bun run check`; `bun run provider:ready -- --require-ready`; `bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1066 pass, 0 fail）；`git diff --check`。
   风险：本机没有 `cua-driver`，因此真实 CUA 动作链本轮以结构化 skip 验证缺驱动路径；有 driver 的机器可用 `--require-cua` 把缺驱动转为硬失败。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：use-tool-prompt-boundary
+  摘要：收紧 `browser.use` / `computer.use` descriptor 文案，明确 opt-in 高权限、观察优先、不能替代 workspace/git/process/file 工具；新增提示词边界中英文文档与 descriptor 回归测试。
+  原因：高层 use 工具显式 opt-in 后会进入模型工具目录，工具 descriptor 本身必须携带执行层红线，避免模型把浏览器/桌面控制误用成 coding 工具。
+  验证：待跑 focused descriptor/tool plan tests、`bun run docs:check`、`bun run check`、真实闭环 smoke、全量测试与 `git diff --check`。
+  风险：只修改 descriptor 文案和测试，不改变 manifest 默认 `tools: []`、Tool Plan visibility、ASK、plan、yolo 或动态预算逻辑。
+
+- 状态：完成
+  执行者：main-codex
+  范围：use-tool-prompt-boundary-verification
+  摘要：完成高层 use 工具提示词边界回归；`browser.use` / `computer.use` descriptor 现在明确 opt-in 高权限、观察优先、不能替代 workspace/git/process/file 工具，并有中英文文档记录。
+  原因：即使本地 manifest 显式开启高层工具，模型看到的工具目录也必须携带执行层红线，避免破坏 coding 工具、ASK、plan、yolo 和动态额度边界。
+  验证：`bun test tests/external.tools.test.ts tests/runtime.mcp.tool.plan.test.ts tests/external.use.runtime.test.ts tests/gateway.ws.test.ts --timeout 30000`（84 pass, 0 fail）；`bun run docs:check`; `bun run check`; `bun run provider:ready -- --require-ready`; `bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0）；`bun run test`（1066 pass, 0 fail）；`git diff --check`。
+  风险：只改 descriptor 文案、文档和测试；默认 manifest 仍保持 `browser.use` / `computer.use` 的 `tools: []` 安全边界。
