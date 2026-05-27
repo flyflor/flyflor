@@ -1267,3 +1267,9 @@ Kernel V2 acceptance focus：
 - [x] `browser.use` sidecar 接受 Hermes tool-name 与模型 action alias：`browser_navigate`、`browser_snapshot`、`browser_type`、`fill`、`evaluate-js`、`browser_get_images`、`press_key`、`observe`、`browser_vision` 等。
 - [x] alias 只归一化 top-level dispatched action，保留原始 `input.action` 供 delegate/audit 查看。
 - [x] 新增 focused browser-use action alias 回归与追加文档。
+
+## 2026-05-27 Browser Use Live Action Alias Coverage
+
+- [x] `smoke:browser-use:live` 在真实 Chrome/Chromium CDP backend 中发送 `browser_navigate`、`observe`、`fill`、`evaluate-js`、`browser_get_images`、`go-back`、`browser_vision` 等 alias。
+- [x] live smoke 断言 alias 输入返回 canonical dispatched action，避免 alias 只停留在 mock delegate 单测。
+- [x] 新增 live alias 覆盖文档并复跑真实 browser smoke。

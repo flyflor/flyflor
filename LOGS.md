@@ -1928,3 +1928,18 @@
   摘要：`browser.use` sidecar 现在接受 `browser_navigate`、`browser_snapshot`、`browser_type`、`fill`、`evaluate-js`、`browser_get_images`、`press_key`、`observe`、`browser_vision` 等 action alias，并归一化为 canonical dispatched action。
   原因：真实模型把 Hermes 独立浏览器工具名或常见 action 别名写进 compact `browser.use` 时，仍能进入同一结构化校验和子进程执行路径。
   验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（52 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:browser-use:live`（ok true）；`bun run smoke:computer-use:live`（ok true，structured skip: cua-command-not-found）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11）；`git diff --check`。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：browser-use-live-action-alias-coverage
+  摘要：准备把 `browser.use` action alias 纳入真实 Chrome/Chromium CDP live smoke，覆盖 `browser_navigate`、`observe`、`fill`、`evaluate-js`、`browser_get_images`、`go-back`、`browser_vision` 等 alias 输入。
+  原因：上一轮 alias 已有 focused mock delegate 回归，但用户要求真实 LLM/工具闭环证据；真实浏览器 smoke 应覆盖 alias 在 CDP backend 中返回 canonical dispatched action。
+  验证：待跑 focused browser-use tests、docs/check、真实 browser/computer smoke、真实闭环与 `git diff --check`。
+  风险：只改变可选 `smoke:browser-use:live` 的验证输入，不改变 sidecar 权限、默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota/audit、Memory/Scope/Crystal 主链和 kernel import 边界。
+
+- 状态：完成
+  执行者：main-codex
+  范围：browser-use-live-action-alias-coverage
+  摘要：`smoke:browser-use:live` 现在在真实 Chrome/Chromium CDP backend 中发送 `browser_navigate`、`observe`、`fill`、`evaluate-js`、`browser_get_images`、`go-back`、`browser_vision` 等 alias，并断言 canonical action 返回。
+  原因：把 action alias 从 mock delegate 回归提升到真实浏览器路径，给高权限 `browser.use` 兼容层留下可复现的真实工具证据。
+  验证：`bun test tests/browser.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（52 pass, 0 fail）；`bun run smoke:browser-use:live`（ok true，checks 含 alias-browser_navigate、alias-observe-refs、alias-fill-ref-captureAfter、alias-browser_vision-delegate）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:computer-use:live`（ok true，structured skip: cua-command-not-found）；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11）；`git diff --check`。

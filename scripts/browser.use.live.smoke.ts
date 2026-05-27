@@ -54,27 +54,27 @@ class BrowserUseLiveSmoke {
             this.expectOk(open, "open");
             checks.push("open");
 
-            const navigate = await this.invoker.call({ tool: "browser.use", config, input: { action: "navigate", url: page.url } });
+            const navigate = await this.invoker.call({ tool: "browser.use", config, input: { action: "browser_navigate", url: page.url } });
             this.expectOk(navigate, "navigate");
-            checks.push("navigate");
+            checks.push("alias-browser_navigate");
 
             const wait = await this.invoker.call({ tool: "browser.use", config, input: { action: "wait", ms: 250 } });
             this.expectOk(wait, "wait");
             checks.push("wait");
 
-            const snapshot = await this.invoker.call({ tool: "browser.use", config, input: { action: "snapshot", maxElements: 10 } });
+            const snapshot = await this.invoker.call({ tool: "browser.use", config, input: { action: "observe", maxElements: 10 } });
             this.expectOk(snapshot, "snapshot");
             this.expectSnapshotRefs(snapshot);
-            checks.push("snapshot-refs");
+            checks.push("alias-observe-refs");
 
             const type = await this.invoker.call({
                 tool: "browser.use",
                 config,
-                input: { action: "type", ref: "@e1", text: TYPE_TEXT, captureAfter: true },
+                input: { action: "fill", ref: "@e1", text: TYPE_TEXT, captureAfter: true },
             });
             this.expectOk(type, "type");
             this.expectCaptureAfter(type, "type");
-            checks.push("type-ref-captureAfter");
+            checks.push("alias-fill-ref-captureAfter");
 
             const click = await this.invoker.call({
                 tool: "browser.use",
@@ -88,29 +88,29 @@ class BrowserUseLiveSmoke {
             const evaluate = await this.invoker.call({
                 tool: "browser.use",
                 config,
-                input: { action: "evaluate", script: "document.querySelector('#result')?.textContent ?? ''" },
+                input: { action: "evaluate-js", script: "document.querySelector('#result')?.textContent ?? ''" },
             });
             this.expectOk(evaluate, "evaluate");
             this.expectEvaluationValue(evaluate, `saved:${TYPE_TEXT}`);
-            checks.push("evaluate-state");
+            checks.push("alias-evaluate-js-state");
 
             const images = await this.invoker.call({
                 tool: "browser.use",
                 config,
-                input: { action: "get_images", maxImages: 5 },
+                input: { action: "browser_get_images", maxImages: 5 },
             });
             this.expectOk(images, "get_images");
             this.expectImages(images);
-            checks.push("get-images");
+            checks.push("alias-browser_get_images");
 
             const secondPage = page.url.replace(/\/?$/u, "/second");
             const navigateSecond = await this.invoker.call({ tool: "browser.use", config, input: { action: "navigate", url: secondPage } });
             this.expectOk(navigateSecond, "navigate");
             checks.push("navigate-second");
 
-            const back = await this.invoker.call({ tool: "browser.use", config, input: { action: "back" } });
+            const back = await this.invoker.call({ tool: "browser.use", config, input: { action: "go-back" } });
             this.expectOk(back, "back");
-            checks.push("back");
+            checks.push("alias-go-back");
 
             const consoleResult = await this.invoker.call({
                 tool: "browser.use",
@@ -124,11 +124,11 @@ class BrowserUseLiveSmoke {
             const vision = await this.invoker.call({
                 tool: "browser.use",
                 config: { ...config, visionDelegateCommand: "bun", visionDelegateArgs: [visionDelegate] },
-                input: { action: "vision", question: "Describe the page title and input area.", annotate: true },
+                input: { action: "browser_vision", question: "Describe the page title and input area.", annotate: true },
             });
             this.expectOk(vision, "vision");
             await this.expectVision(vision, visionLog);
-            checks.push("vision-delegate");
+            checks.push("alias-browser_vision-delegate");
 
             const screenshot = await this.invoker.call({
                 tool: "browser.use",
