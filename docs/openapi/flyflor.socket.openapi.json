@@ -1580,6 +1580,7 @@
                 "blackboard.worker.done",
                 "blackboard.worker.end",
                 "blackboard.worker.start",
+                "confirm.answered",
                 "gateway.message.received",
                 "gateway.dedup.store.failed",
                 "gateway.start",

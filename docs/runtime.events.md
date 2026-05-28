@@ -23,6 +23,7 @@ Important event families include:
 - socket/gateway lifecycle: start, message received, dispatch failed
 - turn lifecycle: delta/final/error visibility
 - ASK lifecycle: ask created, answered, resumed
+- Confirm lifecycle: `confirm.answered` publishes confirmation-only answers separately from ASK crystallization evidence while retaining bounded audit metadata
 - model allocation: `model.allocation.selected` shows provider/model selection for main turns, planners and subagent children without prompt text or secrets
 - Executive loop: `executive.loop.paused`, `executive.loop.resumed`
 - tool lifecycle: calls, approvals, failures and summaries
@@ -45,7 +46,7 @@ Important event families include:
 
 `/ws` `event.subscribe` / `event.publish` and snapshot query messages are the public boundary for TUI and other thin clients. They are vascular transport contracts, not private Runtime APIs. A client can render timeline changes from events, then load authoritative detail through query/read snapshots such as `blackboard.detail.get`, `ask.detail.get`, `execution.job.detail.get` or `gateway.status.get`.
 
-Stable event type selectors are closed over `RuntimeEventType`; unknown selectors must return `invalid-payload` and must not enter socket subscription state. TUI-facing event payloads must carry stable ids needed for refresh and drilldown, including `askId` for `executive.loop.paused`, `allocationId` for `model.allocation.selected`, `jobId` / `batchId` / `childId` for subagent events, and `turnId` plus message/step/decision ids for Blackboard events.
+Stable event type selectors are closed over `RuntimeEventType`; unknown selectors must return `invalid-payload` and must not enter socket subscription state. TUI-facing event payloads must carry stable ids needed for refresh and drilldown, including `askId` for `executive.loop.paused`, `askEventId` plus `snapshotId` for `confirm.answered`, `allocationId` for `model.allocation.selected`, `jobId` / `batchId` / `childId` for subagent events, and `turnId` plus message/step/decision ids for Blackboard events.
 
 ## Boundary
 

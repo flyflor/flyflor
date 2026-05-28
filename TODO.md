@@ -1306,3 +1306,10 @@ Kernel V2 acceptance focus：
 - [x] Executive ASK metadata 的 `answerContract.metadataKey` 改为 `confirmAnswer`，并暴露 `acceptedMetadataKeys`。
 - [x] Memory ledger 记录 `confirmAnswer` 的 bounded audit summary，但不把 Confirm 当作 Crystal evidence。
 - [ ] 后续如引入独立 `confirm.snapshot`/`confirm.answered` event，再把当前 ASK-compatible 展示迁移到完整 Confirm read-model。
+
+## 2026-05-28 Confirm Event Visibility
+
+- [x] 新增 `confirm.answered` RuntimeEvent，让 Confirm 答复不再只隐藏在 `memory.ask.answered` payload 中。
+- [x] `confirm.answered` 归入 ASK/interaction subscription class，供 thin client timeline 可见。
+- [x] Memory 仅发布 bounded `confirmAnswer` audit summary，不把 Confirm answer 提升为 ASK evidence 或 Crystal candidate。
+- [ ] 后续继续实现完整 `confirm.snapshot` / `confirm.detail.get` read-model。

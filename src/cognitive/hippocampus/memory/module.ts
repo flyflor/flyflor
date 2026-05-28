@@ -2312,6 +2312,20 @@ export class MemoryModule extends Memory {
                     ...(confirmAnswer ? { confirmAnswer: this.askAnswerSummary(confirmAnswer) } : {}),
                 }),
             );
+            if (confirmAnswer) {
+                this.events.publish(
+                    event(
+                        RuntimeEventType.ConfirmAnswered,
+                        {
+                            askEventId,
+                            confirmAnswer: this.askAnswerSummary(confirmAnswer),
+                            sourceKey: sourceKeyForMessage(message, context),
+                            snapshotId: content.snapshotId,
+                        },
+                        context.requestId,
+                    ),
+                );
+            }
         } catch (err) {
             this.events.publish(
                 event(RuntimeEventType.MemoryBrainWriteFailed, {

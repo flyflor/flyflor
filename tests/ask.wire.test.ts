@@ -241,6 +241,65 @@ describe("LF-R3 Ask first-class wiring", () => {
         }
     });
 
+    test("confirmAnswer emits confirm.answered without promoting the answer as ASK evidence", async () => {
+        const config = await makeConfig();
+        const sink = new RecordingSink();
+        const memory = new MemoryModule(config, sink);
+        await memory.warmup();
+        try {
+            await memory.rememberTurn(
+                gatewayMessage("needs tool approval", "msg-confirm-1"),
+                gatewayReply("Need confirmation", "rep-confirm-1"),
+                runtimeContext(),
+                [],
+                {},
+                askA,
+            );
+
+            await memory.rememberTurn(
+                {
+                    ...gatewayMessage("confirmed", "msg-confirm-2"),
+                    metadata: {
+                        confirmAnswer: {
+                            answers: [
+                                {
+                                    questionId: "execution-strategy",
+                                    choiceId: "continue-tools",
+                                    value: "continue-tools",
+                                },
+                            ],
+                        },
+                    },
+                },
+                gatewayReply("Continuing.", "rep-confirm-2"),
+                runtimeContext(),
+            );
+
+            const answered = sink.events.find((e) => e.type === RuntimeEventType.MemoryAskAnswered)?.payload;
+            expect(answered).toEqual(
+                expect.objectContaining({
+                    confirmAnswer: expect.objectContaining({
+                        answerCount: 1,
+                        choiceIds: ["continue-tools"],
+                        questionIds: ["execution-strategy"],
+                    }),
+                }),
+            );
+            expect(answered).not.toHaveProperty("askAnswer");
+            expect(sink.events.find((e) => e.type === RuntimeEventType.ConfirmAnswered)?.payload).toEqual(
+                expect.objectContaining({
+                    confirmAnswer: expect.objectContaining({
+                        answerCount: 1,
+                        choiceIds: ["continue-tools"],
+                    }),
+                    snapshotId: expect.any(String),
+                }),
+            );
+        } finally {
+            memory.dispose();
+        }
+    });
+
     test("chained asks accumulate chainDepth and emit MemoryAskChainCapped past maxChainDepth", async () => {
         const config = await makeConfig();
         // Force tiny cap for deterministic test.

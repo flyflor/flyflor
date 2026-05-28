@@ -2026,3 +2026,21 @@
   原因：提交前需要证明 `confirmAnswer` 新入口不会破坏旧 ASK answer resume、Executive tool loop 或 socket 文档契约。
   验证：`bun test tests/skill.mcp.test.ts --timeout 30000`（73 pass, 0 fail）；`bun run check`；`bun run docs:check`（26 pass, 0 fail）；`git diff --check`。
   风险：独立 `confirm.snapshot`/`confirm.answered` read-model/event 仍待后续实现；旧 `askAnswer` fallback 暂时保留。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：confirm-event-visibility
+  变动文件：`src/events/types.ts`、`src/events/classifier.ts`、`src/cognitive/hippocampus/memory/module.ts`、`tests/event.component.test.ts`、`tests/ask.wire.test.ts`、`tests/gateway.ws.test.ts`、`docs/runtime.events.md`、`docs/runtime.events.zh.cn.md`、`TODO.md`、`LOGS.md`
+  摘要：新增 `confirm.answered` runtime event，并在 Memory 记录 `metadata.confirmAnswer` 后发布 bounded Confirm audit summary。
+  原因：Confirm 是确认交互，需要独立可见的 timeline event；不能继续只藏在 ASK-compatible payload 中，也不能进入 Crystal candidate。
+  验证：已运行 `bun test tests/ask.wire.test.ts tests/event.component.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts --timeout 30000`（90 pass, 0 fail）；待运行 `bun run check`、`bun run docs:check`、`git diff --check`。
+  风险：本轮只补事件可见性；完整 `confirm.snapshot` / `confirm.detail.get` read-model 仍待后续实现。
+
+- 状态：完成
+  执行者：main-codex
+  范围：confirm-event-visibility-verification
+  变动文件：同上，另同步 `docs/openapi/flyflor.socket.openapi.json` 和生成的 Apifox artifacts。
+  摘要：完成 Confirm 独立事件切片的 focused、OpenAPI/Apifox、docs、TypeScript 和 whitespace 验证。
+  原因：新增 `RuntimeEventType.ConfirmAnswered` 后，socket subscription schema 必须与 runtime enum 完全一致。
+  验证：`bun test tests/ask.wire.test.ts tests/event.component.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts --timeout 30000`（90 pass, 0 fail）；`bun run docs:apifox`；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`git diff --check`。
+  风险：完整 `confirm.snapshot` / `confirm.detail.get` read-model 仍待后续实现；本轮只新增实时事件可见性。

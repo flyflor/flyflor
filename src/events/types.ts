@@ -17,6 +17,7 @@ export const RuntimeEventType = {
     BlackboardWorkerDone: "blackboard.worker.done",
     BlackboardWorkerEnd: "blackboard.worker.end",
     BlackboardWorkerStart: "blackboard.worker.start",
+    ConfirmAnswered: "confirm.answered",
     GatewayMessageReceived: "gateway.message.received",
     GatewayDedupStoreFailed: "gateway.dedup.store.failed",
     GatewayStart: "gateway.start",

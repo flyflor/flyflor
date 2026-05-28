@@ -594,6 +594,7 @@ describe("SocketControlHub", () => {
             RuntimeEventType.MemoryContextForkWritten,
             RuntimeEventType.MemoryAskRecorded,
             RuntimeEventType.MemoryAskAnswered,
+            RuntimeEventType.ConfirmAnswered,
             RuntimeEventType.BlackboardMessageAppended,
             RuntimeEventType.BlackboardTurnEnd,
             RuntimeEventType.MemoryTaskPlanWritten,
