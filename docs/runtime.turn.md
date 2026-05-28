@@ -66,7 +66,7 @@ Scope recall follows a visible gate:
 
 ASK is a normal runtime outcome. It appears when scope boundaries, fork merge conflicts, blackboard caps, crystallization gates, tool-loop limits, child subagent `needs_user`, or external tool stability failures need user judgment.
 
-Confirm is separate from ASK. Confirm covers write permission, tool approval, project creation, and other confirmation-only interactions. Confirm answers use structured `metadata.confirmAnswer`; legacy `metadata.askAnswer` remains accepted only as a compatibility fallback for existing clients. Confirm does not produce Crystal candidates and must not be rendered as ASK by thin clients.
+Confirm is separate from ASK. Confirm covers write permission, tool approval, project creation, and other confirmation-only interactions. Confirm answers use structured `metadata.confirmAnswer`; `metadata.askAnswer` is only for ordinary ASK continuations and is not accepted as a Confirm/citizen-permission fallback. Confirm does not produce Crystal candidates and must not be rendered as ASK by thin clients.
 
 ASK v1 can carry multiple questions. Each question keeps one to three owner-proposed choices, a canonical `recommendedChoiceId`, and a fixed `other` option for user-owned freeform input. Runtime does not parse `other` text semantically; it preserves the answer as next-turn model input, audit data and possible Crystal evidence.
 

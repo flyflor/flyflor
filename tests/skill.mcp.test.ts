@@ -2056,11 +2056,11 @@ describe("Skill and MCP capability config", () => {
         expect(bareContinue.metadata?.ask).toEqual(
             expect.objectContaining({
                 answerContract: expect.objectContaining({
-                    acceptedMetadataKeys: ["confirmAnswer", "askAnswer"],
+                    acceptedMetadataKeys: ["confirmAnswer"],
                     kind: "citizen-permission",
                     metadataKey: "confirmAnswer",
                 }),
-                acceptedMetadata: ["confirmAnswer", "askAnswer"],
+                acceptedMetadata: ["confirmAnswer"],
                 askId: expect.any(String),
                 requiredMetadata: "confirmAnswer",
                 structuredAnswerRequired: true,
@@ -2223,7 +2223,7 @@ describe("Skill and MCP capability config", () => {
                 ...gatewayMessage("continue-tools\nincrease-budget\nkeep-subagents"),
                 metadata: {
                     continuation,
-                    askAnswer: {
+                    confirmAnswer: {
                         answers: [
                             {
                                 questionId: "execution-strategy",
@@ -2458,7 +2458,7 @@ describe("Skill and MCP capability config", () => {
         );
     });
 
-    test("structured askAnswer choices can increase the next executive tool budget", async () => {
+    test("structured confirmAnswer choices can increase the next executive tool budget", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-ask-answer-budget-"));
         const paths = testPaths(root);
         await installTestTemplates(paths);
@@ -2474,7 +2474,7 @@ describe("Skill and MCP capability config", () => {
         const message = {
             ...gatewayMessage("continue after ASK"),
             metadata: {
-                askAnswer: {
+                confirmAnswer: {
                     answers: [
                         { questionId: "execution-strategy", choiceId: "continue-tools", value: "continue-tools" },
                         { questionId: "budget-policy", choiceId: "increase-budget", value: "increase-budget" },
@@ -2501,7 +2501,7 @@ describe("Skill and MCP capability config", () => {
         expect(model.messages).toHaveLength(3);
     });
 
-    test("structured askAnswer increase gives a large enough retry budget", async () => {
+    test("structured confirmAnswer increase gives a large enough retry budget", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-ask-answer-large-budget-"));
         const paths = testPaths(root);
         await installTestTemplates(paths);
@@ -2518,7 +2518,7 @@ describe("Skill and MCP capability config", () => {
         const message = {
             ...gatewayMessage("continue after ASK with larger budget"),
             metadata: {
-                askAnswer: {
+                confirmAnswer: {
                     answers: [
                         { questionId: "execution-strategy", choiceId: "continue-tools", value: "continue-tools" },
                         { questionId: "budget-policy", choiceId: "increase-budget", value: "increase-budget" },

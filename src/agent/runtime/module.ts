@@ -700,7 +700,7 @@ export class RuntimeModule extends RuntimeBoundary {
                     {
                         askId: pendingStructuredAsk.askId,
                         reason: "structured-answer-required",
-                        acceptedMetadata: ["confirmAnswer", "askAnswer"],
+                        acceptedMetadata: ["confirmAnswer"],
                         requiredMetadata: "confirmAnswer",
                         source: pendingStructuredAsk.ask.source,
                     },
@@ -777,7 +777,7 @@ export class RuntimeModule extends RuntimeBoundary {
     }
 
     private readCitizenPermissionAnswerMetadata(metadata: Record<string, unknown> | undefined): unknown {
-        return metadata?.confirmAnswer ?? metadata?.askAnswer;
+        return metadata?.confirmAnswer;
     }
 
     private isExecutableCitizenPermissionAnswerItem(answer: unknown): boolean {
@@ -814,7 +814,7 @@ export class RuntimeModule extends RuntimeBoundary {
                     askId: activeAsk.askId,
                     chainDepth: activeAsk.chainDepth,
                     structuredAnswerRequired: true,
-                    acceptedMetadata: ["confirmAnswer", "askAnswer"],
+                    acceptedMetadata: ["confirmAnswer"],
                     requiredMetadata: "confirmAnswer",
                 },
             },
@@ -2360,7 +2360,7 @@ export class RuntimeModule extends RuntimeBoundary {
             authority: AskAuthority.Executive,
             answerContract: {
                 kind: AskAnswerContractKind.CitizenPermission,
-                acceptedMetadataKeys: ["confirmAnswer", "askAnswer"],
+                acceptedMetadataKeys: ["confirmAnswer"],
                 metadataKey: "confirmAnswer",
                 requiresStructuredAnswer: true,
             },

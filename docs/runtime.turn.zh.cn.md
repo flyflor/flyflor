@@ -66,7 +66,7 @@ Scope recall 遵循可见 gate：
 
 ASK 是正常 runtime outcome。scope 边界、fork merge conflict、blackboard cap、crystallization gate、tool-loop limit、子代理 `needs_user` 冒泡，或外部工具 sidecar 缺失、升级中、回滚要求、root-safe/path/version 判定失败时，都会通过 ASK 交给用户裁决。
 
-Confirm 与 ASK 分离。Confirm 只覆盖写入权限、工具授权、是否创建项目和其他确认交互。Confirm answer 使用结构化 `metadata.confirmAnswer`；旧 `metadata.askAnswer` 只作为现有 client 的兼容 fallback 继续接受。Confirm 不产生 Crystal candidate，thin client 不得把 Confirm 渲染成 ASK。
+Confirm 与 ASK 分离。Confirm 只覆盖写入权限、工具授权、是否创建项目和其他确认交互。Confirm answer 使用结构化 `metadata.confirmAnswer`；`metadata.askAnswer` 只用于普通 ASK continuation，不再作为 Confirm / citizen-permission fallback 接受。Confirm 不产生 Crystal candidate，thin client 不得把 Confirm 渲染成 ASK。
 
 ASK v1 的结构化显示规则：
 

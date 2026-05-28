@@ -1316,7 +1316,7 @@ Kernel V2 acceptance focus：
 - [x] Memory 仅发布 bounded `confirmAnswer` audit summary，不把 Confirm answer 提升为 ASK evidence 或 Crystal candidate。
 - [x] 新增 `confirm.list` / `confirm.detail.get` / `confirm.snapshot` read-model，直接读取 `brain.db` 中已有 Confirm audit，不触发 Runtime。
 - [x] CLI startup 已主动请求 `confirm.list` 并把 `confirm.snapshot` 渲染为 Confirm timeline row（flyflor-cli `9a3fe19`）。
-- [ ] 后续接入完整独立 Confirm component UI，并移除 ASK-compatible permission fallback。
+- [x] 后续接入完整独立 Confirm component UI，并移除 ASK-compatible permission fallback。
 
 ## 2026-05-28 Route / Memory / Confirm Drift Audit
 

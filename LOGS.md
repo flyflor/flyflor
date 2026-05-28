@@ -2134,3 +2134,12 @@
   原因：失败恢复属于 thinking/coding 执行策略，不应继续由 turn orchestrator 拼装 failure continuation 细节。
   验证：`bun test tests/runtime.thinking.coding.test.ts --timeout 30000`（7 pass, 0 fail）；`bun run check`；`git diff --check`。
   风险：本轮不改变 `recordContinuationFromReason` 存储语义、不改变 ASK/Confirm、Memory/Scope/Crystal 主链；只是迁移结构化 evidence 构建 owner。
+
+- 状态：完成
+  执行者：main-codex
+  范围：confirm-askanswer-fallback-removal
+  变动文件：`src/agent/runtime/module.ts`、`tests/skill.mcp.test.ts`、`docs/runtime.turn.md`、`docs/runtime.turn.zh.cn.md`、`TODO.md`、`LOGS.md`、`session-table.md`
+  摘要：移除 citizen-permission / Executive Confirm 对 `metadata.askAnswer` 的兼容 fallback，只接受结构化 `metadata.confirmAnswer`。
+  原因：Confirm 是确认交互，不参与 ASK 结晶；继续接受 `askAnswer` 会让 thin client 和执行授权路径混淆 ASK 与 Confirm。
+  验证：`bun test tests/skill.mcp.test.ts tests/ask.wire.test.ts --timeout 30000`（77 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`git diff --check`。
+  风险：旧 client 如仍用 `metadata.askAnswer` 恢复 Executive permission 会被要求改为 `metadata.confirmAnswer`；普通 ASK continuation 的 `metadata.askAnswer` 语义不受影响。
