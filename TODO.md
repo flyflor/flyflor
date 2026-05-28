@@ -1307,7 +1307,7 @@ Kernel V2 acceptance focus：
 - [x] 公民权限/执行授权使用 `metadata.confirmAnswer` 作为新结构化入口，`metadata.askAnswer` 仅保留旧客户端兼容 fallback。
 - [x] Executive ASK metadata 的 `answerContract.metadataKey` 改为 `confirmAnswer`，并暴露 `acceptedMetadataKeys`。
 - [x] Memory ledger 记录 `confirmAnswer` 的 bounded audit summary，但不把 Confirm 当作 Crystal evidence。
-- [ ] 后续如引入独立 `confirm.snapshot`/`confirm.answered` event，再把当前 ASK-compatible 展示迁移到完整 Confirm read-model。
+- [x] 后续如引入独立 `confirm.snapshot`/`confirm.answered` event，再把当前 ASK-compatible 展示迁移到完整 Confirm read-model。
 
 ## 2026-05-28 Confirm Event Visibility
 
@@ -1317,3 +1317,10 @@ Kernel V2 acceptance focus：
 - [x] 新增 `confirm.list` / `confirm.detail.get` / `confirm.snapshot` read-model，直接读取 `brain.db` 中已有 Confirm audit，不触发 Runtime。
 - [x] CLI startup 已主动请求 `confirm.list` 并把 `confirm.snapshot` 渲染为 Confirm timeline row（flyflor-cli `9a3fe19`）。
 - [ ] 后续接入完整独立 Confirm component UI，并移除 ASK-compatible permission fallback。
+
+## 2026-05-28 Route / Memory / Confirm Drift Audit
+
+- [x] 校正 Confirm Metadata Protocol 待办状态：`confirm.answered` event 与 `confirm.snapshot` read-model 已在后续切片闭合。
+- [x] 校正 active code/test 注释中旧 `brain.db prompt recall` 口径，保持 `brain.db` 为 ledger/query/replay/audit/detail，prompt/context 装配走 durable working memory、Crystal、显式 Scope/Fork 和 Executive 能力面。
+- [x] 修复 `working.memory.recovery.smoke.ts` 固定端口，改为启动前分配空闲 TCP port，避免端口占用被误判为记忆恢复失败。
+- [x] 新增 `session-table.md` 记录本轮未启动子 Codex 的真实主控切片。

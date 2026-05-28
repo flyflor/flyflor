@@ -2098,3 +2098,12 @@
   原因：确认按需子代理提示策略不重新引入入口级 planner，并且既有 `subagent.batch` 执行、needs_user 冒泡、ASK 暂停和审计测试保持通过。
   验证：`bun test tests/prompt.lint.test.ts --timeout 30000`（13 pass, 0 fail）；`bun test tests/runtime.executive.boundaries.test.ts tests/skill.mcp.test.ts --timeout 30000`（77 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`git diff --check`。
   风险：本轮不改变 Runtime、Memory、Scope、Crystal 或工具执行代码；coding thinking 更深层拆分仍在后续。
+
+- 状态：完成
+  执行者：main-codex
+  范围：route-memory-confirm-drift-audit
+  变动文件：`TODO.md`、`session-table.md`、`scripts/working.memory.recovery.smoke.ts`、`src/cognitive/hippocampus/memory/module.ts`、`src/protocol/contracts/memory.atom.ts`、`tests/brain.store.test.ts`、`tests/memory.brain.wire.test.ts`、`tests/runtime.perf.test.ts`
+  摘要：校正 active code/test 中旧 `brain.db prompt recall` 口径，更新 Confirm read-model 待办状态，并让 working-memory recovery smoke 使用动态空闲端口。
+  原因：当前实现已证明 prompt/context 装配不调用 brain prompt recall，`confirm.answered` / `confirm.snapshot` 已闭合；固定端口会把端口占用误报成热记忆恢复失败。
+  验证：`bun test tests/brain.store.test.ts tests/memory.brain.wire.test.ts tests/runtime.perf.test.ts --timeout 30000`（54 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:recovery`（ok true，working memory `loadedFrom=empty/wal/backup`，WAL replay 1，torn WAL 1）；`git diff --check`。
+  风险：本轮不改变 Runtime、Memory、Scope、Crystal 主链行为；只修复 smoke 端口选择和注释/测试命名漂移。

@@ -606,7 +606,7 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         expect(events.countOf(RuntimeEventType.MemoryBrainEventWritten)).toBe(1);
     });
 
-    test("rememberTurn writes structured memory actions as brain atoms", async () => {
+    test("rememberTurn writes structured memory actions as ledger atoms", async () => {
         const config = await buildConfig();
         const events = new CapturingSink();
         const memory = new MemoryModule(config, events);
@@ -642,12 +642,12 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         expect(visible[0]?.score.total).toBeGreaterThan(0);
     });
 
-    test("hippocampus context reads brain atoms without sidecar memory files", async () => {
+    test("hippocampus context reads durable working memory without sidecar files", async () => {
         const config = await buildConfig();
         const memory = new MemoryModule(config, new CapturingSink());
         await memory.warmup();
-        const ctx = withEmbedding(await embedFor(config, "brain-backed hippocampus"));
-        await memory.rememberTurn(msg("brain-backed hippocampus"), rep("stored"), ctx, [
+        const ctx = withEmbedding(await embedFor(config, "durable hippocampus"));
+        await memory.rememberTurn(msg("durable hippocampus"), rep("stored"), ctx, [
             {
                 action: "add",
                 target: "memory",
@@ -659,13 +659,13 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
                 },
             },
         ]);
-        // Simulate removing an old sidecar directory: hippocampus context must come from brain.db.
+        // Simulate removing an old sidecar directory: hippocampus context must come from durable working memory.
         await rm(join(config.paths.home, "journal"), { recursive: true, force: true });
 
-        const prompt = await memory.buildPrompt(msg("brain-backed hippocampus follow-up"), {
+        const prompt = await memory.buildPrompt(msg("durable hippocampus follow-up"), {
             ...ctx,
             requestId: crypto.randomUUID(),
-            embedding: await embedFor(config, "brain-backed hippocampus"),
+            embedding: await embedFor(config, "durable hippocampus"),
         });
 
         expect(prompt).toContain("Recent Notes");

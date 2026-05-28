@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -33,12 +34,13 @@ async function main(): Promise<void> {
     const tempMemoryDir = join(tempConfigHome, "memory");
     const tempLogDir = join(tempHome, "logs");
     const socketCommand = resolveSocketCommand(repoRoot);
+    const gatewayPort = await findFreeTcpPort();
 
     try {
         await mkdir(tempConfigHome, { recursive: true });
         await mkdir(tempMemoryDir, { recursive: true });
         await mkdir(tempLogDir, { recursive: true });
-        await writeFile(join(tempConfigHome, "config.jsonc"), renderConfigJsonc(), "utf8");
+        await writeFile(join(tempConfigHome, "config.jsonc"), renderConfigJsonc(gatewayPort), "utf8");
         await runInstallTemplates(tempConfigHome, repoRoot);
 
         const firstStart = await startSocket(tempHome, tempDataHome, tempCacheHome, repoRoot, socketCommand);
@@ -236,7 +238,29 @@ function assertWarmup(event: WorkingMemoryWarmupEvent, label: string): void {
     }
 }
 
-function renderConfigJsonc(): string {
+async function findFreeTcpPort(): Promise<number> {
+    const server = createServer();
+    await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, "127.0.0.1", () => {
+            server.off("error", reject);
+            resolve();
+        });
+    });
+    const address = server.address();
+    await new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+            if (error) reject(error);
+            else resolve();
+        });
+    });
+    if (!address || typeof address === "string") {
+        throw new Error("failed to allocate a recovery smoke TCP port");
+    }
+    return address.port;
+}
+
+function renderConfigJsonc(gatewayPort: number): string {
     return JSON.stringify(
         {
             gateway: {
@@ -246,7 +270,7 @@ function renderConfigJsonc(): string {
                     api: {},
                 },
                 host: "127.0.0.1",
-                port: 19990,
+                port: gatewayPort,
                 stdio: false,
             },
             memory: {

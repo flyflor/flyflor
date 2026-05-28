@@ -336,8 +336,8 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * brain.db 是事件写入和 prompt recall 的权威源，不能只依赖 runtime/gateway 先调用 warmup。
-     * MemoryModule 的直接调用者（测试、CLI、后台 worker）进入写路径前也必须能安全打开 brain.db。
+     * brain.db 是 ledger/query/replay/audit/detail 权威源，不能只依赖 runtime/gateway 先调用 warmup。
+     * MemoryModule 的直接调用者（测试、CLI、后台 worker）进入 ledger 写路径前也必须能安全打开 brain.db。
      */
     private async ensureBrainOpen(stage: string): Promise<void> {
         if (this.brainOpened) return;
@@ -1382,7 +1382,7 @@ export class MemoryModule extends Memory {
 
     /**
      * brain.db 是生命事件事实层：每轮写 `memory_events`，并把模型同轮结构化
-     * memory action 派生的 prompt atom 一并封进 event.content.atoms。
+     * memory action 派生的 ledger atom/provenance 一并封进 event.content.atoms。
      * 旧 journal 只读保留，不再从热路径反向写入。
      */
     private async writeTurnToBrain(
@@ -1457,8 +1457,9 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * LF-R10：把每条 episode 落到 brain.db `memory_events`。
-     * prompt recall 直接从 event.content.atoms 展开；brain.db 是唯一热路径写入源。
+     * LF-R10：把每条 episode 的 ledger/provenance 落到 brain.db `memory_events`。
+     * Prompt/context 装配不再从 brain prompt atoms 展开；热路径上下文来自 durable working memory、
+     * Crystal、显式 Scope/Fork 和 Executive visible capability surface。
      */
     private writeBrainEvent(input: {
         episodeId: string;

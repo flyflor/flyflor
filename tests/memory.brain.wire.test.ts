@@ -229,7 +229,7 @@ describe("MemoryModule + BrainStore", () => {
                     {
                         action: "add",
                         target: "memory",
-                        content: "brain prompt recall fixture atom",
+                        content: "ledger-only fixture atom",
                         confidence: 0.95,
                         signals: {
                             durability: 1,

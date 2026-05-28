@@ -83,7 +83,7 @@ describe("BrainStore", () => {
                     ["scope:test"],
                 );
 
-                // These are lifecycle-critical reads for prompt recall / pending ask checks.
+                // These are lifecycle-critical ledger reads for query windows / pending ask checks.
                 // The test pins index intent, not micro-benchmark timing, so it stays stable on CI.
                 expect(promptPlan).toContain("idx_events_owner_type_ts");
                 expect(pendingAskPlan).toContain("idx_events_owner_type_ts");

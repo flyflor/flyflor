@@ -7,7 +7,7 @@
  * - 三阶段压缩对应 stage 字段：raw / compressed / fuzzy；原文保留在 SQLite 历史层。
  * - LLM 只负责"表达结晶"，是否升格由 AtomScore + Gate A/B/C 系统决定。
  *
- * 这些类型已被 MemoryModule、BrainStore prompt recall 与旧 journal 审计路径共同消费；
+ * 这些类型已被 MemoryModule、ledger provenance 与旧 journal 审计路径共同消费；
  * 新增字段必须保持 JSON 可序列化，并经 `src/protocol/contracts/index.ts` 对外暴露。
  */
 
