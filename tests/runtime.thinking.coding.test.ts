@@ -109,4 +109,40 @@ describe("CodingThinkingPolicy", () => {
             })}</agent_tool_calls>`,
         );
     });
+
+    test("builds bounded tool-failure continuation evidence outside RuntimeModule", () => {
+        const policy = new CodingThinkingPolicy();
+        const continuation = policy.buildToolFailureContinuation({
+            mcpCalls: [
+                { ok: true, server: "workspace", tool: "read" },
+                { ok: false, server: "git", tool: "diff", error: "x".repeat(260) },
+                { ok: false, server: "process", tool: "run" },
+            ],
+            originalUserMessage: "inspect and fix".repeat(80),
+            ownerKey: "owner-1",
+            requestId: "req-1",
+            sourceKey: "source-1",
+            sourceSurface: "tui",
+        });
+
+        expect(continuation).toEqual({
+            ownerKey: "owner-1",
+            sourceKey: "source-1",
+            reason: "tool-failure",
+            userFacing: {
+                title: "MCP tool failed: git/diff",
+                contextHint: "x".repeat(200),
+            },
+            snapshot: {
+                originalUserMessage: "inspect and fix".repeat(80).slice(0, 500),
+                mcpCallProgress: [
+                    { tool: "git/diff", status: "error", lastError: "x".repeat(200) },
+                    { tool: "process/run", status: "error", lastError: undefined },
+                ],
+            },
+            sourceSurface: "tui",
+            requestId: "req-1",
+            importance: 0.6,
+        });
+    });
 });

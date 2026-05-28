@@ -2125,3 +2125,12 @@
   原因：让 thinking/coding owner 继续承接工具探索策略，Runtime 只保留 memory/catalog/sandbox/model/event 编排职责。
   验证：`bun test tests/runtime.thinking.coding.test.ts --timeout 30000`（6 pass, 0 fail）；`bun run check`；`git diff --check`。
   风险：本轮不改变 tool-call wire 结构、ASK/Confirm、Memory/Scope/Crystal 主链或子代理执行；更复杂失败恢复策略仍待后续迁入 thinking owner。
+
+- 状态：完成
+  执行者：main-codex
+  范围：coding-thinking-failure-recovery-owner-split
+  变动文件：`src/agent/runtime/module.ts`、`src/agent/runtime/thinking/coding.policy.ts`、`tests/runtime.thinking.coding.test.ts`、`TODO.md`、`LOGS.md`、`session-table.md`
+  摘要：将工具失败 continuation 证据构建迁入 `CodingThinkingPolicy`，Runtime 仅把 policy 返回的结构化记录写入 Memory。
+  原因：失败恢复属于 thinking/coding 执行策略，不应继续由 turn orchestrator 拼装 failure continuation 细节。
+  验证：`bun test tests/runtime.thinking.coding.test.ts --timeout 30000`（7 pass, 0 fail）；`bun run check`；`git diff --check`。
+  风险：本轮不改变 `recordContinuationFromReason` 存储语义、不改变 ASK/Confirm、Memory/Scope/Crystal 主链；只是迁移结构化 evidence 构建 owner。

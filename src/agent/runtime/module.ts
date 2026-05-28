@@ -2332,34 +2332,16 @@ export class RuntimeModule extends RuntimeBoundary {
         mcpCalls: NonNullable<MemoryEpisodeProvenance["mcpCalls"]>,
     ): void {
         if (!this.memory) return;
-        const failures = mcpCalls.filter((c) => !c.ok);
-        if (failures.length === 0) return;
-        // 同轮多失败聚合为一条 continuation，避免列表淹没。
-        const head = failures[0]!;
-        const title = `MCP tool failed: ${head.server}/${head.tool}`;
-        const contextHint = head.error
-            ? head.error.slice(0, 200)
-            : failures.length > 1
-              ? `${failures.length - 1} more failure(s) in this turn`
-              : undefined;
-        const mcpCallProgress = failures.slice(0, 8).map((c) => ({
-            tool: `${c.server}/${c.tool}`,
-            status: "error",
-            lastError: c.error ? c.error.slice(0, 200) : undefined,
-        }));
-        this.memory.recordContinuationFromReason({
+        const continuation = this.codingThinking.buildToolFailureContinuation({
+            mcpCalls,
             ownerKey: continuityOwnerKey(message, context),
             sourceKey: sourceKeyForMessage(message, context),
-            reason: ContinuationContextReason.ToolFailure,
-            userFacing: contextHint ? { title, contextHint } : { title },
-            snapshot: {
-                originalUserMessage: message.text.slice(0, 500),
-                mcpCallProgress,
-            },
+            originalUserMessage: message.text,
             sourceSurface: sourceSurfaceForMessage(message),
             requestId: context.requestId,
-            importance: 0.6,
         });
+        if (!continuation) return;
+        this.memory.recordContinuationFromReason(continuation);
     }
 
     private buildExecutiveToolAsk(

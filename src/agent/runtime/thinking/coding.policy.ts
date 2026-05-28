@@ -1,6 +1,11 @@
 import { stat } from "node:fs/promises";
 
-import { ModelRole, type ModelClient, type ModelMessage } from "../../../protocol/contracts/index.ts";
+import {
+    ContinuationContextReason,
+    ModelRole,
+    type ModelClient,
+    type ModelMessage,
+} from "../../../protocol/contracts/index.ts";
 import type {
     ExecutiveLoopGuardOptions,
     ExecutiveToolRuntimeBudget,
@@ -22,6 +27,27 @@ export interface CodingThinkingBudgetOptions {
 
 export type CodingThinkingBudget = Required<Pick<ExecutiveToolRuntimeBudget, "modelToolTurnBudget">> &
     ExecutiveToolRuntimeBudget;
+
+export interface CodingThinkingToolFailureCall {
+    readonly error?: string;
+    readonly ok: boolean;
+    readonly server: string;
+    readonly tool: string;
+}
+
+export interface CodingThinkingToolFailureContinuation {
+    readonly sourceKey: string;
+    readonly ownerKey?: string;
+    readonly reason: typeof ContinuationContextReason.ToolFailure;
+    readonly userFacing: { title: string; contextHint?: string };
+    readonly snapshot: {
+        originalUserMessage: string;
+        mcpCallProgress: Array<{ tool: string; status: string; lastError?: string }>;
+    };
+    readonly sourceSurface?: string;
+    readonly requestId?: string;
+    readonly importance: number;
+}
 
 export const CODING_THINKING_DEFAULT_MODEL_TOOL_TURN_BUDGET = 192;
 export const CODING_THINKING_LOCAL_ABSOLUTE_PATH_PATTERN =
@@ -113,6 +139,43 @@ export class CodingThinkingPolicy {
                 input: tool === "tree" ? { path, maxDepth: 3, maxEntries: 200 } : { path },
             },
         ]);
+    }
+
+    public buildToolFailureContinuation(input: {
+        mcpCalls: readonly CodingThinkingToolFailureCall[];
+        originalUserMessage: string;
+        ownerKey?: string;
+        requestId?: string;
+        sourceKey: string;
+        sourceSurface?: string;
+    }): CodingThinkingToolFailureContinuation | undefined {
+        const failures = input.mcpCalls.filter((call) => !call.ok);
+        if (failures.length === 0) return undefined;
+        const head = failures[0]!;
+        const title = `MCP tool failed: ${head.server}/${head.tool}`;
+        const contextHint = head.error
+            ? head.error.slice(0, 200)
+            : failures.length > 1
+              ? `${failures.length - 1} more failure(s) in this turn`
+              : undefined;
+        const mcpCallProgress = failures.slice(0, 8).map((call) => ({
+            tool: `${call.server}/${call.tool}`,
+            status: "error",
+            lastError: call.error ? call.error.slice(0, 200) : undefined,
+        }));
+        return {
+            ownerKey: input.ownerKey,
+            sourceKey: input.sourceKey,
+            reason: ContinuationContextReason.ToolFailure,
+            userFacing: contextHint ? { title, contextHint } : { title },
+            snapshot: {
+                originalUserMessage: input.originalUserMessage.slice(0, 500),
+                mcpCallProgress,
+            },
+            sourceSurface: input.sourceSurface,
+            requestId: input.requestId,
+            importance: 0.6,
+        };
     }
 
     private latestUserMessage(messages: readonly ModelMessage[]): ModelMessage | undefined {
