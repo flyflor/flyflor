@@ -66,6 +66,10 @@ export interface CodingThinkingAskExecutionStrategy {
 }
 
 export const CODING_THINKING_DEFAULT_MODEL_TOOL_TURN_BUDGET = 192;
+export const CODING_THINKING_COMPLETION_MODEL_TOOL_TURN_BUDGET = 384;
+export const CODING_THINKING_CONTINUATION_MODEL_TOOL_TURN_BUDGET = 512;
+export const CODING_THINKING_COMPLETION_EXECUTION_OPERATION_BUDGET = 2_048;
+export const CODING_THINKING_CONTINUATION_EXECUTION_OPERATION_BUDGET = 4_096;
 export const CODING_THINKING_LOCAL_ABSOLUTE_PATH_PATTERN =
     /((?:\/[^\s"'()[\]{}<>，。；：！？、]+)+|[A-Za-z]:\\[^\s"'()[\]{}<>，。；：！？、]+)/gu;
 
@@ -152,6 +156,36 @@ export class CodingThinkingPolicy {
                 riskQuota: options.executiveToolBudget?.riskQuota,
             },
             maxToolTurns: Math.max(options.maxToolTurns ?? 0, modelToolTurnBudget),
+        };
+    }
+
+    public applyCompletionBudgetProfile<TOptions extends CodingThinkingBudgetOptions>(
+        options: TOptions,
+        input: { isContinuation: boolean; userText: string },
+    ): TOptions & CodingThinkingBudgetOptions {
+        if (options.maxToolTurns !== undefined || options.executiveToolBudget?.modelToolTurnBudget !== undefined) {
+            return options;
+        }
+        const hasLocalPath = this.hasLocalAbsolutePath(input.userText);
+        if (!input.isContinuation && !hasLocalPath) return options;
+        const modelToolTurnBudget = input.isContinuation
+            ? CODING_THINKING_CONTINUATION_MODEL_TOOL_TURN_BUDGET
+            : CODING_THINKING_COMPLETION_MODEL_TOOL_TURN_BUDGET;
+        const executionOperationBudget = input.isContinuation
+            ? CODING_THINKING_CONTINUATION_EXECUTION_OPERATION_BUDGET
+            : CODING_THINKING_COMPLETION_EXECUTION_OPERATION_BUDGET;
+        return {
+            ...options,
+            executiveToolBudget: {
+                ...options.executiveToolBudget,
+                executionOperationBudget: Math.max(
+                    options.executiveToolBudget?.executionOperationBudget ?? 0,
+                    executionOperationBudget,
+                ),
+                modelToolTurnBudget,
+                riskQuota: options.executiveToolBudget?.riskQuota,
+            },
+            maxToolTurns: modelToolTurnBudget,
         };
     }
 

@@ -2161,3 +2161,21 @@
   原因：Confirm answer 如何影响工具预算和子代理策略属于 thinking/coding 执行策略，不应由 RuntimeModule 维护 token/patch 映射细节。
   验证：`bun test tests/runtime.thinking.coding.test.ts --timeout 30000`（9 pass, 0 fail）；`bun test tests/skill.mcp.test.ts tests/ask.wire.test.ts --timeout 30000`（77 pass, 0 fail）；`bun run check`；`git diff --check`。
   风险：本轮不改变 Confirm wire key（仍为 `metadata.confirmAnswer`）、ASK/Confirm 分层、Memory/Scope/Crystal 主链或工具执行行为；只是迁移 owner 并补 focused coverage。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：coding-thinking-completion-budget-owner-split
+  变动文件：`src/agent/runtime/module.ts`、`src/agent/runtime/thinking/coding.policy.ts`、`tests/runtime.thinking.coding.test.ts`、`TODO.md`、`LOGS.md`、`session-table.md`
+  摘要：将 completion/continuation 工具预算画像迁入 `CodingThinkingPolicy`，Runtime 只传递 continuation 状态和用户文本。
+  原因：本地路径 completion 与 ASK continuation 的预算提升属于 thinking/coding 执行策略，不应继续由 turn orchestrator 持有预算常量和路径判断。
+  验证：已运行 `bun test tests/runtime.thinking.coding.test.ts --timeout 30000`（12 pass, 0 fail）；待运行 ASK wire、docs、TypeScript 和 whitespace 验证。
+  风险：本轮不改变 Memory/Scope/Crystal 主链、ASK/Confirm wire contract、工具执行结果或 TUI；只是迁移 owner 并补 focused coverage。
+
+- 状态：完成
+  执行者：main-codex
+  范围：coding-thinking-completion-budget-owner-split
+  变动文件：`src/agent/runtime/module.ts`、`src/agent/runtime/thinking/coding.policy.ts`、`tests/runtime.thinking.coding.test.ts`、`TODO.md`、`LOGS.md`、`session-table.md`
+  摘要：完成 completion/continuation 工具预算画像 owner 拆分，新增 completion/continuation 预算常量与 focused tests。
+  原因：让 Runtime 保持 turn 编排职责，coding thinking owner 承接本地路径 completion 与 ASK continuation 的预算策略。
+  验证：`bun test tests/runtime.thinking.coding.test.ts --timeout 30000`（12 pass, 0 fail）；`bun test tests/skill.mcp.test.ts tests/ask.wire.test.ts --timeout 30000`（77 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`git diff --check`。
+  风险：本轮不改变 Memory/Scope/Crystal 主链、ASK/Confirm wire contract、工具执行结果或 TUI；仅迁移 owner 与补充覆盖。

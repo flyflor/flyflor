@@ -216,10 +216,6 @@ interface RuntimeMcpCapabilityCatalogBuild {
 const MCP_TOOL_CATALOG_CACHE_TTL_MS = 30_000;
 const MCP_TOOL_CATALOG_CACHE_MAX_ENTRIES = 64;
 const MCP_TOOL_CATALOG_STALE_GRACE_MS = 5_000;
-const COMPLETION_MCP_TOOL_LOOP_LIMIT = 384;
-const CONTINUATION_MCP_TOOL_LOOP_LIMIT = 512;
-const COMPLETION_EXECUTION_OPERATION_LIMIT = 2_048;
-const CONTINUATION_EXECUTION_OPERATION_LIMIT = 4_096;
 const BUILTIN_SHELL_SERVER = "shell";
 const BUILTIN_SHELL_TOOL = "run";
 const BUILTIN_SHELL_CATALOG_ENTRY: McpToolCatalogEntry = {
@@ -699,7 +695,10 @@ export class RuntimeModule extends RuntimeBoundary {
             return this.replyFromStructuredAskAnswerRequired(restored.message, restored.context, pendingStructuredAsk);
         }
         const turnOptions = this.codingThinking.applyAskExecutionStrategy(
-            this.applyCompletionBudgetProfile(options, restored.message),
+            this.codingThinking.applyCompletionBudgetProfile(options, {
+                isContinuation: resumeRead.request !== undefined,
+                userText: restored.message.text,
+            }),
             this.codingThinking.readAskExecutionStrategy(message.metadata),
         );
         await this.inflight.markStart({
@@ -767,36 +766,6 @@ export class RuntimeModule extends RuntimeBoundary {
                     requiredMetadata: "confirmAnswer",
                 },
             },
-        };
-    }
-
-    private applyCompletionBudgetProfile(
-        options: RuntimeStreamOptions,
-        message: GatewayMessage,
-    ): RuntimeStreamOptions {
-        if (options.maxToolTurns !== undefined || options.executiveToolBudget?.modelToolTurnBudget !== undefined) {
-            return options;
-        }
-        const resumeRead = this.continuationGhosts.readResumeRequest(message.metadata);
-        const isContinuation = resumeRead.ok && resumeRead.request !== undefined;
-        const hasLocalPath = this.codingThinking.hasLocalAbsolutePath(message.text);
-        if (!isContinuation && !hasLocalPath) return options;
-        const modelToolTurnBudget = isContinuation ? CONTINUATION_MCP_TOOL_LOOP_LIMIT : COMPLETION_MCP_TOOL_LOOP_LIMIT;
-        const executionOperationBudget = isContinuation
-            ? CONTINUATION_EXECUTION_OPERATION_LIMIT
-            : COMPLETION_EXECUTION_OPERATION_LIMIT;
-        return {
-            ...options,
-            executiveToolBudget: {
-                ...options.executiveToolBudget,
-                executionOperationBudget: Math.max(
-                    options.executiveToolBudget?.executionOperationBudget ?? 0,
-                    executionOperationBudget,
-                ),
-                modelToolTurnBudget,
-                riskQuota: options.executiveToolBudget?.riskQuota,
-            },
-            maxToolTurns: modelToolTurnBudget,
         };
     }
 

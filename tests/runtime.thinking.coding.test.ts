@@ -3,6 +3,10 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+    CODING_THINKING_COMPLETION_EXECUTION_OPERATION_BUDGET,
+    CODING_THINKING_COMPLETION_MODEL_TOOL_TURN_BUDGET,
+    CODING_THINKING_CONTINUATION_EXECUTION_OPERATION_BUDGET,
+    CODING_THINKING_CONTINUATION_MODEL_TOOL_TURN_BUDGET,
     CODING_THINKING_DEFAULT_MODEL_TOOL_TURN_BUDGET,
     CodingThinkingPolicy,
 } from "../src/agent/runtime/thinking/index.ts";
@@ -55,6 +59,61 @@ describe("CodingThinkingPolicy", () => {
 
         expect(policy.hasLocalAbsolutePath("please inspect /Users/example/project")).toBe(true);
         expect(policy.hasLocalAbsolutePath("please answer without local files")).toBe(false);
+    });
+
+    test("applies completion budget profile for local absolute-path work", () => {
+        const policy = new CodingThinkingPolicy();
+
+        expect(
+            policy.applyCompletionBudgetProfile(
+                { executiveToolBudget: { executionOperationBudget: 7, riskQuota: 2 } },
+                { isContinuation: false, userText: "inspect /Users/example/project" },
+            ),
+        ).toEqual({
+            executiveToolBudget: {
+                executionOperationBudget: CODING_THINKING_COMPLETION_EXECUTION_OPERATION_BUDGET,
+                modelToolTurnBudget: CODING_THINKING_COMPLETION_MODEL_TOOL_TURN_BUDGET,
+                riskQuota: 2,
+            },
+            maxToolTurns: CODING_THINKING_COMPLETION_MODEL_TOOL_TURN_BUDGET,
+        });
+    });
+
+    test("applies continuation budget profile without requiring a local path", () => {
+        const policy = new CodingThinkingPolicy();
+
+        expect(
+            policy.applyCompletionBudgetProfile(
+                { executiveToolBudget: { executionOperationBudget: 8 } },
+                { isContinuation: true, userText: "continue" },
+            ),
+        ).toEqual({
+            executiveToolBudget: {
+                executionOperationBudget: CODING_THINKING_CONTINUATION_EXECUTION_OPERATION_BUDGET,
+                modelToolTurnBudget: CODING_THINKING_CONTINUATION_MODEL_TOOL_TURN_BUDGET,
+                riskQuota: undefined,
+            },
+            maxToolTurns: CODING_THINKING_CONTINUATION_MODEL_TOOL_TURN_BUDGET,
+        });
+    });
+
+    test("does not override explicit completion budgets", () => {
+        const policy = new CodingThinkingPolicy();
+        const explicit = {
+            executiveToolBudget: {
+                executionOperationBudget: 33,
+                modelToolTurnBudget: 22,
+                riskQuota: 1,
+            },
+            maxToolTurns: 22,
+        };
+
+        expect(
+            policy.applyCompletionBudgetProfile(explicit, {
+                isContinuation: true,
+                userText: "inspect /Users/example/project",
+            }),
+        ).toBe(explicit);
     });
 
     test("probes an existing local file with workspace.read before first model turn", async () => {
