@@ -64,7 +64,7 @@ Scope recall 遵循可见 gate：
 
 ASK 是正常 runtime outcome。scope 边界、fork merge conflict、blackboard cap、crystallization gate、tool-loop limit、子代理 `needs_user` 冒泡，或外部工具 sidecar 缺失、升级中、回滚要求、root-safe/path/version 判定失败时，都会通过 ASK 交给用户裁决。
 
-Confirm 与 ASK 分离。Confirm 只覆盖写入权限、工具授权、是否创建项目和其他确认交互。Confirm 不产生 Crystal candidate，thin client 不得把 Confirm 渲染成 ASK。
+Confirm 与 ASK 分离。Confirm 只覆盖写入权限、工具授权、是否创建项目和其他确认交互。Confirm answer 使用结构化 `metadata.confirmAnswer`；旧 `metadata.askAnswer` 只作为现有 client 的兼容 fallback 继续接受。Confirm 不产生 Crystal candidate，thin client 不得把 Confirm 渲染成 ASK。
 
 ASK v1 的结构化显示规则：
 
@@ -73,6 +73,8 @@ ASK v1 的结构化显示规则：
 - 每个问题必须有 `recommendedChoiceId`。
 - runtime 固定补齐 `other: { id: "other", label: "其他", freeform: true }`，让用户保留自由输入权。
 - `other` 文本只作为下一轮模型输入、审计和 Crystal evidence，不由 runtime 做自然语言字符匹配解析。
+
+当 thin client 发送结构化 `metadata.askAnswer` 时，Memory 会把 legacy 单答案字段和多问题 `answers[]` 存入 `ask-answer-pair` content。当 thin client 发送 `metadata.confirmAnswer` 时，Memory 只记录 bounded confirmation audit 字段，不把它当作 Crystal evidence。`memory.ask.answered` 只发布 question id、choice id 和 freeform presence 的 bounded summary，让 TUI timeline 不读取 prompt text 也能闭环。
 - 高权限 ASK 可以带 `crystalCandidates`，但只进入 candidate evidence，Gem 升格仍由 Crystal quality gate 决定。
 
 Thin client 发送结构化 `metadata.askAnswer` 时，Memory 会把 legacy 单答案字段和多问题 `answers[]` 一起写入 `ask-answer-pair` content。`memory.ask.answered` 只发布有界摘要：question ids、choice ids 和是否有 freeform，让 TUI timeline 可以闭合 ASK，而不读取 prompt text。

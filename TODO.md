@@ -1299,3 +1299,10 @@ Kernel V2 acceptance focus：
 - [x] 为 MemoryComponent hot memory 增加 durable backend 红线说明和 WAL replay health snapshot 断言。
 - [x] 同步 runtime/memory/boundaries 文档，明确 ASK/Confirm 分层、`brain.db` 非 prompt container、Scope hot memory 属于 scope-local `.flyflor/scope.db`。
 - [ ] 后续继续把 coding thinking / on-demand subagent 执行策略从现有 runtime 中拆出，并保证父级 deny/Confirm/approval 约束向下传递。
+
+## 2026-05-28 Confirm Metadata Protocol
+
+- [x] 公民权限/执行授权使用 `metadata.confirmAnswer` 作为新结构化入口，`metadata.askAnswer` 仅保留旧客户端兼容 fallback。
+- [x] Executive ASK metadata 的 `answerContract.metadataKey` 改为 `confirmAnswer`，并暴露 `acceptedMetadataKeys`。
+- [x] Memory ledger 记录 `confirmAnswer` 的 bounded audit summary，但不把 Confirm 当作 Crystal evidence。
+- [ ] 后续如引入独立 `confirm.snapshot`/`confirm.answered` event，再把当前 ASK-compatible 展示迁移到完整 Confirm read-model。

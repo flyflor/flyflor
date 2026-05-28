@@ -82,7 +82,9 @@ export interface AgentAskAnswerContract {
     kind: AskAnswerContractKind;
     /** Kernel-owned ASK answers with side effects must arrive as structured metadata, never prose inference. */
     requiresStructuredAnswer?: boolean;
-    metadataKey?: "askAnswer";
+    metadataKey?: "askAnswer" | "confirmAnswer";
+    /** Backward-compatible metadata keys accepted while thin clients migrate. */
+    acceptedMetadataKeys?: ("askAnswer" | "confirmAnswer")[];
 }
 
 export interface AgentAskChoice {
@@ -200,6 +202,10 @@ export interface AskAnswerPairContent {
     answerText: string;
     /** Structured ASK answer from GatewayMessage.metadata.askAnswer. */
     askAnswer?: AgentAskAnswerPayload;
+    /** Structured confirmation answer from GatewayMessage.metadata.confirmAnswer. Not Crystal evidence. */
+    confirmAnswer?: AgentAskAnswerPayload;
+    /** Bounded audit summary for confirmation-only answers. */
+    confirmAnswerSummary?: Record<string, unknown>;
     /** 用户的原 message id，便于跨表回查。 */
     answerMessageId?: string;
     /** 是否被新输入 cancel（abandoned）。默认 false（正常答复）。 */

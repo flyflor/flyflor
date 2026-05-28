@@ -186,7 +186,11 @@ export interface GatewayMessage {
     channelPrompt?: string;
     /** Synthetic/internal events can bypass external authorization at the gateway boundary only. */
     internal?: boolean;
-    /** JSON-serializable platform metadata that has no stable public field yet. */
+    /**
+     * JSON-serializable platform/control metadata. `askAnswer` is the ASK
+     * continuation payload; `confirmAnswer` is reserved for confirmation-only
+     * interactions such as tool authorization.
+     */
     metadata?: Record<string, unknown>;
     raw?: unknown;
     receivedAt: string;

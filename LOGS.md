@@ -2008,3 +2008,21 @@
   原因：提交前需要证明 `fast | thinking` contract、thinking escalation 和 MemoryComponent WAL recovery 断言不会破坏现有内核。
   验证：`bun test tests/route.escalation.test.ts tests/local.working.store.test.ts --timeout 30000`（29 pass, 0 fail）；`bun run check`；`bun run docs:check`（26 pass, 0 fail）；`git diff --check`。
   风险：工具 loop、coding thinking、on-demand subagent 和 ASK/Confirm ledger 深拆仍是后续 TODO；本轮未改 Memory/Scope/Crystal 主链的装配语义。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：confirm-metadata-protocol
+  变动文件：`src/protocol/contracts/ask.ts`、`src/protocol/contracts/types.ts`、`src/agent/runtime/module.ts`、`src/cognitive/hippocampus/memory/module.ts`、`tests/skill.mcp.test.ts`、`docs/runtime.turn.md`、`docs/runtime.turn.zh.cn.md`、`TODO.md`、`LOGS.md`
+  摘要：为 Confirm 引入 `metadata.confirmAnswer` 结构化入口，Executive 公民权限声明 `metadataKey=confirmAnswer`，旧 `askAnswer` 仅作为兼容 fallback；Memory 记录 bounded confirm audit summary。
+  原因：Confirm 是确认交互，不应继续以 ASK answer 作为新协议主入口，也不应进入 Crystal candidate。
+  验证：已运行 `bun test tests/skill.mcp.test.ts --timeout 30000`（73 pass, 0 fail）；待运行 `bun run check`、`bun run docs:check`、`git diff --check`。
+  风险：本轮保留旧 `metadata.askAnswer` 兼容，尚未新增独立 `confirm.snapshot` read-model/event。
+
+- 状态：完成
+  执行者：main-codex
+  范围：confirm-metadata-protocol-verification
+  变动文件：同上
+  摘要：完成 Confirm metadata 协议切片的 focused、TypeScript、docs 和 whitespace 验证。
+  原因：提交前需要证明 `confirmAnswer` 新入口不会破坏旧 ASK answer resume、Executive tool loop 或 socket 文档契约。
+  验证：`bun test tests/skill.mcp.test.ts --timeout 30000`（73 pass, 0 fail）；`bun run check`；`bun run docs:check`（26 pass, 0 fail）；`git diff --check`。
+  风险：独立 `confirm.snapshot`/`confirm.answered` read-model/event 仍待后续实现；旧 `askAnswer` fallback 暂时保留。

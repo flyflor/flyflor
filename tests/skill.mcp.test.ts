@@ -2059,9 +2059,14 @@ describe("Skill and MCP capability config", () => {
         expect(bareContinue.metadata?.kind).toBe("ask");
         expect(bareContinue.metadata?.ask).toEqual(
             expect.objectContaining({
-                answerContract: expect.objectContaining({ kind: "citizen-permission" }),
+                answerContract: expect.objectContaining({
+                    acceptedMetadataKeys: ["confirmAnswer", "askAnswer"],
+                    kind: "citizen-permission",
+                    metadataKey: "confirmAnswer",
+                }),
+                acceptedMetadata: ["confirmAnswer", "askAnswer"],
                 askId: expect.any(String),
-                requiredMetadata: "askAnswer",
+                requiredMetadata: "confirmAnswer",
                 structuredAnswerRequired: true,
             }),
         );
@@ -2075,7 +2080,7 @@ describe("Skill and MCP capability config", () => {
                         mode: "continue",
                         snapshotId: paused.metadata?.behaviorSnapshotId,
                     },
-                    askAnswer: {},
+                    confirmAnswer: {},
                 },
             },
             {
@@ -2089,7 +2094,7 @@ describe("Skill and MCP capability config", () => {
         expect(emptyStructuredAnswer.metadata?.kind).toBe("ask");
         expect(emptyStructuredAnswer.metadata?.ask).toEqual(
             expect.objectContaining({
-                requiredMetadata: "askAnswer",
+                requiredMetadata: "confirmAnswer",
                 structuredAnswerRequired: true,
             }),
         );
@@ -2103,7 +2108,7 @@ describe("Skill and MCP capability config", () => {
                         mode: "continue",
                         snapshotId: paused.metadata?.behaviorSnapshotId,
                     },
-                    askAnswer: {
+                    confirmAnswer: {
                         answers: [{ questionId: "execution-strategy", choiceId: "unknown-permission" }],
                     },
                 },
@@ -2119,7 +2124,7 @@ describe("Skill and MCP capability config", () => {
         expect(unknownStructuredAnswer.metadata?.kind).toBe("ask");
         expect(unknownStructuredAnswer.metadata?.ask).toEqual(
             expect.objectContaining({
-                requiredMetadata: "askAnswer",
+                requiredMetadata: "confirmAnswer",
                 structuredAnswerRequired: true,
             }),
         );
@@ -2133,7 +2138,7 @@ describe("Skill and MCP capability config", () => {
                         mode: "continue",
                         snapshotId: paused.metadata?.behaviorSnapshotId,
                     },
-                    askAnswer: {
+                    confirmAnswer: {
                         answers: [
                             { questionId: "execution-strategy", choiceId: "continue-tools", value: "continue-tools" },
                             { questionId: "budget-policy", choiceId: "increase-budget", value: "increase-budget" },

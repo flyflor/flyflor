@@ -706,7 +706,8 @@ export class RuntimeModule extends RuntimeBoundary {
                     {
                         askId: pendingStructuredAsk.askId,
                         reason: "structured-answer-required",
-                        requiredMetadata: "askAnswer",
+                        acceptedMetadata: ["confirmAnswer", "askAnswer"],
+                        requiredMetadata: "confirmAnswer",
                         source: pendingStructuredAsk.ask.source,
                     },
                     restored.context.requestId,
@@ -756,7 +757,7 @@ export class RuntimeModule extends RuntimeBoundary {
     private readAskAnswerExecutionStrategy(
         metadata: Record<string, unknown> | undefined,
     ): RuntimeAskExecutionStrategy | undefined {
-        const raw = metadata?.askAnswer;
+        const raw = this.readCitizenPermissionAnswerMetadata(metadata);
         if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
         const payload = raw as Record<string, unknown>;
         const answers = Array.isArray(payload.answers) ? payload.answers : [payload];
@@ -772,13 +773,17 @@ export class RuntimeModule extends RuntimeBoundary {
     }
 
     private hasExecutableCitizenPermissionAnswer(metadata: Record<string, unknown> | undefined): boolean {
-        const raw = metadata?.askAnswer;
+        const raw = this.readCitizenPermissionAnswerMetadata(metadata);
         if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
         const payload = raw as Record<string, unknown>;
         if (Array.isArray(payload.answers)) {
             return payload.answers.some((answer) => this.isExecutableCitizenPermissionAnswerItem(answer));
         }
         return this.isExecutableCitizenPermissionAnswerItem(payload);
+    }
+
+    private readCitizenPermissionAnswerMetadata(metadata: Record<string, unknown> | undefined): unknown {
+        return metadata?.confirmAnswer ?? metadata?.askAnswer;
     }
 
     private isExecutableCitizenPermissionAnswerItem(answer: unknown): boolean {
@@ -815,7 +820,8 @@ export class RuntimeModule extends RuntimeBoundary {
                     askId: activeAsk.askId,
                     chainDepth: activeAsk.chainDepth,
                     structuredAnswerRequired: true,
-                    requiredMetadata: "askAnswer",
+                    acceptedMetadata: ["confirmAnswer", "askAnswer"],
+                    requiredMetadata: "confirmAnswer",
                 },
             },
         };
@@ -2380,7 +2386,8 @@ export class RuntimeModule extends RuntimeBoundary {
             authority: AskAuthority.Executive,
             answerContract: {
                 kind: AskAnswerContractKind.CitizenPermission,
-                metadataKey: "askAnswer",
+                acceptedMetadataKeys: ["confirmAnswer", "askAnswer"],
+                metadataKey: "confirmAnswer",
                 requiresStructuredAnswer: true,
             },
             reason: AskReason.PolicyDecision,

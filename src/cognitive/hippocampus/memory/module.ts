@@ -2276,11 +2276,18 @@ export class MemoryModule extends Memory {
         const ts = Date.parse(message.receivedAt);
         const nowMs = Number.isFinite(ts) ? ts : Date.now();
         const askAnswer = this.readStructuredAskAnswer(message.metadata?.askAnswer);
+        const confirmAnswer = this.readStructuredAskAnswer(message.metadata?.confirmAnswer);
         const content: AskAnswerPairContent = {
             askId: askEventId,
             snapshotId: snapshotId ?? `behavior-${message.id}`,
             answerText: message.text.slice(0, 4000),
             ...(askAnswer ? { askAnswer } : {}),
+            ...(confirmAnswer
+                ? {
+                      confirmAnswer,
+                      confirmAnswerSummary: this.askAnswerSummary(confirmAnswer),
+                  }
+                : {}),
             answerMessageId: message.id,
         };
         try {
@@ -2302,6 +2309,7 @@ export class MemoryModule extends Memory {
                     snapshotId: content.snapshotId,
                     sourceKey: sourceKeyForMessage(message, context),
                     ...(askAnswer ? { askAnswer: this.askAnswerSummary(askAnswer) } : {}),
+                    ...(confirmAnswer ? { confirmAnswer: this.askAnswerSummary(confirmAnswer) } : {}),
                 }),
             );
         } catch (err) {

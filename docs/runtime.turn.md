@@ -64,11 +64,11 @@ Scope recall follows a visible gate:
 
 ASK is a normal runtime outcome. It appears when scope boundaries, fork merge conflicts, blackboard caps, crystallization gates, tool-loop limits, child subagent `needs_user`, or external tool stability failures need user judgment.
 
-Confirm is separate from ASK. Confirm covers write permission, tool approval, project creation, and other confirmation-only interactions. Confirm does not produce Crystal candidates and must not be rendered as ASK by thin clients.
+Confirm is separate from ASK. Confirm covers write permission, tool approval, project creation, and other confirmation-only interactions. Confirm answers use structured `metadata.confirmAnswer`; legacy `metadata.askAnswer` remains accepted only as a compatibility fallback for existing clients. Confirm does not produce Crystal candidates and must not be rendered as ASK by thin clients.
 
 ASK v1 can carry multiple questions. Each question keeps one to three owner-proposed choices, a canonical `recommendedChoiceId`, and a fixed `other` option for user-owned freeform input. Runtime does not parse `other` text semantically; it preserves the answer as next-turn model input, audit data and possible Crystal evidence.
 
-When a thin client sends structured `metadata.askAnswer`, Memory stores the legacy single answer fields and the multi-question `answers[]` form in the `ask-answer-pair` content. `memory.ask.answered` publishes only a bounded summary of question ids, choice ids and freeform presence so TUI timelines can close the ASK loop without reading prompt text.
+When a thin client sends structured `metadata.askAnswer`, Memory stores the legacy single answer fields and the multi-question `answers[]` form in the `ask-answer-pair` content. When it sends `metadata.confirmAnswer`, Memory records only bounded confirmation audit fields and does not treat it as Crystal evidence. `memory.ask.answered` publishes only bounded summaries of question ids, choice ids and freeform presence so TUI timelines can close the loop without reading prompt text.
 
 ## Executive Loop Pause
 
