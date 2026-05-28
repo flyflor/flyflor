@@ -6,7 +6,7 @@ import {
     CODING_THINKING_DEFAULT_MODEL_TOOL_TURN_BUDGET,
     CodingThinkingPolicy,
 } from "../src/agent/runtime/thinking/index.ts";
-import { ModelRole } from "../src/protocol/contracts/index.ts";
+import { ExecutiveLoopGuardReason, ModelRole } from "../src/protocol/contracts/index.ts";
 import { RuntimeMcpToolNeedDecisionKind } from "../src/agent/runtime/mcp/index.ts";
 
 describe("CodingThinkingPolicy", () => {
@@ -144,5 +144,48 @@ describe("CodingThinkingPolicy", () => {
             requestId: "req-1",
             importance: 0.6,
         });
+    });
+
+    test("owns executive tool-loop ASK construction outside RuntimeModule", () => {
+        const policy = new CodingThinkingPolicy();
+        const ask = policy.buildExecutiveToolAsk({
+            askRequired: {
+                askId: "ask-1",
+                crystalCandidate: {
+                    kind: "executive-loop-pause",
+                    reason: "failed-call-repeat",
+                    summary: "tool loop blocked",
+                },
+                message: "tool loop exceeded retry guard after repeated failures",
+                loopGuardReason: ExecutiveLoopGuardReason.FailedCallRepeat,
+                pause: {
+                    mode: "pause",
+                    options: [{ mode: "continue" }, { mode: "narrow" }, { mode: "stop" }],
+                },
+                resume: { mode: "continue" },
+                stepCount: 2,
+                stop: "ask",
+            },
+            executions: [
+                { ok: true, call: { server: "workspace", tool: "read" } },
+                { ok: false, call: { server: "process", tool: "run" } },
+            ] as never,
+        });
+
+        expect(ask.answerContract).toEqual({
+            kind: "citizen-permission",
+            acceptedMetadataKeys: ["confirmAnswer"],
+            metadataKey: "confirmAnswer",
+            requiresStructuredAnswer: true,
+        });
+        expect(ask.source).toBe("executive");
+        expect(ask.resumePolicy).toBe("replan");
+        expect(ask.relatedIds).toEqual(["process.run"]);
+        expect(ask.continuationHint?.contextHint).toContain("workspace.read:ok, process.run:blocked");
+        expect(ask.questions?.map((question) => question.id)).toEqual([
+            "execution-strategy",
+            "budget-policy",
+            "subagent-policy",
+        ]);
     });
 });

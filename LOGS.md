@@ -2143,3 +2143,12 @@
   原因：Confirm 是确认交互，不参与 ASK 结晶；继续接受 `askAnswer` 会让 thin client 和执行授权路径混淆 ASK 与 Confirm。
   验证：`bun test tests/skill.mcp.test.ts tests/ask.wire.test.ts --timeout 30000`（77 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`git diff --check`。
   风险：旧 client 如仍用 `metadata.askAnswer` 恢复 Executive permission 会被要求改为 `metadata.confirmAnswer`；普通 ASK continuation 的 `metadata.askAnswer` 语义不受影响。
+
+- 状态：完成
+  执行者：main-codex
+  范围：coding-thinking-executive-ask-owner-split
+  变动文件：`src/agent/runtime/module.ts`、`src/agent/runtime/thinking/coding.policy.ts`、`tests/runtime.thinking.coding.test.ts`、`TODO.md`、`LOGS.md`、`session-table.md`
+  摘要：将 Executive 工具 loop 卡住时的 Confirm/ASK 构造和工具进度摘要迁入 `CodingThinkingPolicy`，Runtime 只调用策略结果。
+  原因：Executive 工具 loop 的下一步策略、预算策略和子代理策略属于 thinking/coding 执行策略 owner，不应继续堆在 turn orchestrator 中。
+  验证：`bun test tests/runtime.thinking.coding.test.ts --timeout 30000`（8 pass, 0 fail）；`bun run check`；`git diff --check`。
+  风险：本轮不改变 ASK/Confirm wire contract、Memory/Scope/Crystal 主链、工具执行行为或现有文案内容；只是迁移 owner 并增加 focused coverage。

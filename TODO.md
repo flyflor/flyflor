@@ -1331,3 +1331,4 @@ Kernel V2 acceptance focus：
 - [x] 增加 `tests/runtime.thinking.coding.test.ts`，钉住默认预算、显式 Executive budget 优先级和 loop guard 派生规则。
 - [x] 将初始工具需求判断、本地绝对路径检测和 workspace read/tree 预探测迁入 `CodingThinkingPolicy`，Runtime 只保留 event/model/catalog 装配。
 - [x] 后续继续把初始工具需求判断、local path probe 和更复杂失败恢复策略从 `RuntimeModule` 拆入 thinking owner。
+- [x] 将 Executive 工具 loop 卡住时的 Confirm/ASK 构造与工具进度摘要迁入 `CodingThinkingPolicy`，Runtime 只负责调用策略结果。

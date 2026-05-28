@@ -1,16 +1,25 @@
 import { stat } from "node:fs/promises";
 
 import {
+    AskAnswerContractKind,
+    AskAuthority,
+    AskCrystalCandidatePolicy,
+    AskReason,
+    AskResumePolicy,
+    AskSource,
     ContinuationContextReason,
     ModelRole,
+    type AgentAsk,
     type ModelClient,
     type ModelMessage,
 } from "../../../protocol/contracts/index.ts";
 import type {
     ExecutiveLoopGuardOptions,
+    ExecutiveToolRuntimeAskRequired,
     ExecutiveToolRuntimeBudget,
 } from "../../../executive/index.ts";
 import {
+    type McpToolCallExecution,
     type McpToolCallRequest,
     type McpToolCatalogEntry,
 } from "../../mcp/index.ts";
@@ -178,6 +187,190 @@ export class CodingThinkingPolicy {
         };
     }
 
+    public buildExecutiveToolAsk(input: {
+        askRequired: ExecutiveToolRuntimeAskRequired;
+        executions: readonly McpToolCallExecution[];
+    }): AgentAsk {
+        const { askRequired, executions } = input;
+        const failed = executions.filter((execution) => !execution.ok);
+        const failureSummary = failed.slice(0, 3).map((execution) => `${execution.call.server}.${execution.call.tool}`);
+        const progressSummary = this.renderExecutiveToolProgressSummary(executions);
+        const basePrompt =
+            askRequired.toolBudgetExhausted === true
+                ? "本轮工具调用预算已用完。要继续执行当前任务，还是先调整目标范围？"
+                : "执行层连续遇到工具阻断。请补充下一步执行策略或调整约束后再继续。";
+        const prompt = progressSummary ? `${basePrompt}\n\n已记录的工具进度：${progressSummary}` : basePrompt;
+        return {
+            authority: AskAuthority.Executive,
+            answerContract: {
+                kind: AskAnswerContractKind.CitizenPermission,
+                acceptedMetadataKeys: ["confirmAnswer"],
+                metadataKey: "confirmAnswer",
+                requiresStructuredAnswer: true,
+            },
+            reason: AskReason.PolicyDecision,
+            resumePolicy: askRequired.toolBudgetExhausted === true ? AskResumePolicy.Continue : AskResumePolicy.Replan,
+            source: askRequired.toolStability ? AskSource.ToolStability : AskSource.Executive,
+            prompt,
+            questions: [
+                {
+                    id: "execution-strategy",
+                    prompt: "下一步执行策略是什么？",
+                    choices: [
+                        {
+                            id: "continue-tools",
+                            label: "继续执行",
+                            value: "continue-tools",
+                            description: "允许下一轮继续使用工具完成当前任务。",
+                            recommended: true,
+                            executionPatch: { mode: "continue" },
+                        },
+                        {
+                            id: "narrow-scope",
+                            label: "缩小范围",
+                            value: "narrow-scope",
+                            description: "减少本轮目标，只处理最关键部分。",
+                            executionPatch: { mode: "narrow" },
+                        },
+                        {
+                            id: "stop-and-crystalize",
+                            label: "停止并结晶",
+                            value: "stop-and-crystalize",
+                            description: "停止当前执行循环，并把已得到的执行经验作为候选沉淀。",
+                            executionPatch: { mode: "stop" },
+                        },
+                    ],
+                    recommendedChoiceId: "continue-tools",
+                    other: { id: "other", label: "其他", freeform: true },
+                    allowOther: true,
+                    crystalCandidatePolicy: AskCrystalCandidatePolicy.Candidate,
+                    rationale: "executive-loop-strategy",
+                },
+                {
+                    id: "budget-policy",
+                    prompt: "是否调整下一轮工具预算？",
+                    choices: [
+                        {
+                            id: "increase-budget",
+                            label: "增加一档预算",
+                            value: "increase-budget",
+                            description: "适合任务仍然明确、只是当前额度不足的情况。",
+                            recommended: askRequired.toolBudgetExhausted === true,
+                            executionPatch: { budget: "increase-one-tier" },
+                        },
+                        {
+                            id: "keep-budget",
+                            label: "保持预算",
+                            value: "keep-budget",
+                            description: "适合先让模型重新规划，不扩大执行面。",
+                            recommended: askRequired.toolBudgetExhausted !== true,
+                            executionPatch: { budget: "keep" },
+                        },
+                        {
+                            id: "user-budget",
+                            label: "自定义预算",
+                            value: "user-budget",
+                            description: "你可以在其他输入里指定更具体的工具轮数或限制。",
+                            executionPatch: { budget: "user-defined" },
+                        },
+                    ],
+                    recommendedChoiceId: askRequired.toolBudgetExhausted === true ? "increase-budget" : "keep-budget",
+                    other: { id: "other", label: "其他", freeform: true },
+                    allowOther: true,
+                    rationale: "executive-loop-budget",
+                },
+                {
+                    id: "subagent-policy",
+                    prompt: "是否调整子代理执行方式？",
+                    choices: [
+                        {
+                            id: "keep-subagents",
+                            label: "按当前拆分继续",
+                            value: "keep-subagents",
+                            description: "保留已规划的子任务和工具隔离策略。",
+                            recommended: true,
+                            executionPatch: { subagents: "keep" },
+                        },
+                        {
+                            id: "reduce-subagents",
+                            label: "减少子代理",
+                            value: "reduce-subagents",
+                            description: "降低并发和上下文分叉，适合需要更稳的串行推进。",
+                            executionPatch: { subagents: "reduce" },
+                        },
+                        {
+                            id: "no-subagents",
+                            label: "不使用子代理",
+                            value: "no-subagents",
+                            description: "回到单执行循环，适合任务范围较小或需要强一致判断。",
+                            executionPatch: { subagents: "disable" },
+                        },
+                    ],
+                    recommendedChoiceId: "keep-subagents",
+                    other: { id: "other", label: "其他", freeform: true },
+                    allowOther: true,
+                    rationale: "executive-loop-subagent-policy",
+                },
+            ],
+            choices: [
+                {
+                    id: "continue-tools",
+                    label: "继续执行",
+                    value: "continue-tools",
+                    description: "允许下一轮继续使用工具完成当前任务。",
+                },
+                {
+                    id: "narrow-scope",
+                    label: "缩小范围",
+                    value: "narrow-scope",
+                    description: "减少本轮目标，只处理最关键部分。",
+                },
+                {
+                    id: "stop-and-crystalize",
+                    label: "停止并结晶",
+                    value: "stop-and-crystalize",
+                    description: "停止当前执行循环，并把已得到的执行经验作为候选沉淀。",
+                },
+            ],
+            freeform: true,
+            relatedIds: failureSummary,
+            ...(askRequired.job || askRequired.toolStability
+                ? {
+                      crystalCandidates: [
+                          ...(askRequired.job
+                              ? [
+                                    {
+                                        kind: "execution-job",
+                                        jobId: askRequired.jobId,
+                                        progress: askRequired.job.progress,
+                                        status: askRequired.job.status,
+                                    },
+                                ]
+                              : []),
+                          ...(askRequired.toolStability
+                              ? [
+                                    {
+                                        kind: "tool-stability",
+                                        stability: askRequired.toolStability,
+                                    },
+                                ]
+                              : []),
+                      ],
+                  }
+                : {}),
+            rationale:
+                askRequired.toolBudgetExhausted === true
+                    ? "executive-tool-loop:budget"
+                    : `executive-tool-loop:guard:${askRequired.loopGuardReason ?? "blocked"}`,
+            continuationHint: {
+                title: askRequired.toolBudgetExhausted === true ? "Tool budget exhausted" : "Tool loop blocked",
+                contextHint: progressSummary
+                    ? `${askRequired.message.slice(0, 160)} | ${progressSummary}`
+                    : askRequired.message.slice(0, 200),
+            },
+        };
+    }
+
     private latestUserMessage(messages: readonly ModelMessage[]): ModelMessage | undefined {
         return [...messages].reverse().find((message) => message.role === ModelRole.User);
     }
@@ -233,5 +426,18 @@ export class CodingThinkingPolicy {
         } catch {
             return undefined;
         }
+    }
+
+    private renderExecutiveToolProgressSummary(executions: readonly McpToolCallExecution[]): string | undefined {
+        if (executions.length === 0) return undefined;
+        const entries = executions.slice(0, 6).map((execution) => {
+            const status = execution.ok ? "ok" : "blocked";
+            const key = `${execution.call.server}.${execution.call.tool}`;
+            return `${key}:${status}`;
+        });
+        if (executions.length > entries.length) {
+            entries.push(`more:${executions.length - entries.length}`);
+        }
+        return entries.join(", ");
     }
 }
