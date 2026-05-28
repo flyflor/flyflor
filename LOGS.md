@@ -2197,3 +2197,12 @@
   原因：旧 `2026-05-25` TODO 中 Phase 7 未完成行与后续完成段落、代码、测试、协议文档冲突；本轮按 TODO append-only 规则追加证据，不改写历史原文。
   验证：`bun test tests/gateway.ws.test.ts --timeout 30000`（57 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`git diff --check`。
   风险：本轮只追加文档/审计记录，不改变 Runtime、Memory/Scope/Crystal 主链、ASK/Confirm、工具层或 WebSocket 协议行为。
+
+- 状态：完成
+  执行者：main-codex
+  范围：legacy-phase-checkbox-status-correction
+  变动文件：`TODO.md`、`LOGS.md`
+  摘要：仅将旧 `2026-05-25` Phase 7 与 Phase 10-13 两行 checkbox 从未完成改为已完成，文字保持历史原文不动，并由后续完成段落与本轮 drift audit 解释状态来源。
+  原因：TODO 规则允许修改 checkbox 状态；继续保留 `[ ]` 会让未完成扫描误判已经封口的 socket job query、工具稳定性状态机、升级事务、ASK 联动和 Crystal evidence 闭环。
+  验证：`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`git diff --check`。
+  风险：本轮只改 TODO checkbox 状态，不改变代码、文档契约、Runtime、Memory/Scope/Crystal 主链或工具层行为。

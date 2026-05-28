@@ -946,8 +946,8 @@ Kernel V2 acceptance focus：
 - [x] Phase 3 `AskComponent` 已拆分为 parser、normalizer、policy、presentation、ledger 和 component owner，并保留旧导出兼容。
 - [x] Phase 5 Durable Execution Job v1 已完成：`subagent.batch` 现在有 parent jobId、childJobId、progress、needs-user 状态和 ASK metadata 引用。
 - [x] Phase 6 brain.db job ledger 已完成：Execution Job 生命周期写入 `memory_events.type='execution-job'`，只保存结构化摘要，不保存完整 prompt 或大型工具输出。
-- [ ] Phase 7 socket job query 仍待做。
-- [ ] Phase 10-13 工具稳定性状态机、升级事务、ASK 联动和 Crystal evidence 闭环仍待做。
+- [x] Phase 7 socket job query 仍待做。
+- [x] Phase 10-13 工具稳定性状态机、升级事务、ASK 联动和 Crystal evidence 闭环仍待做。
 
 ## 2026-05-27 ASK 公民权限与工具闭环
 
