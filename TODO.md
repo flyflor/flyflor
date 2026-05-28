@@ -1291,3 +1291,11 @@ Kernel V2 acceptance focus：
 - [x] `browser.use` 接受 `direction` 与 `captureMode` / `capture_mode` 的大小写口径差异，例如 `Down` 与 `ScreenShot`。
 - [x] `computer.use` 接受 `direction`、`button`、`mode`、`modifiers` 的大小写/常见 modifier alias，例如 `Down`、`LEFT`、`AX`、`Command`、`Alt`。
 - [x] 真实 browser/computer live smoke 覆盖 enum alias，不改变 delegate 原始 input、ASK/plan/yolo、动态预算或 kernel import 边界。
+
+## 2026-05-28 Runtime Route And Memory Durability Slice
+
+- [x] 建立 `fast | thinking` 主路由契约，保留旧 `BlackboardMode` 作为 wire-compatible execution detail。
+- [x] 将 Blackboard 表达为 thinking escalation detail，并让升级事件携带 `mainRoute`。
+- [x] 为 MemoryComponent hot memory 增加 durable backend 红线说明和 WAL replay health snapshot 断言。
+- [x] 同步 runtime/memory/boundaries 文档，明确 ASK/Confirm 分层、`brain.db` 非 prompt container、Scope hot memory 属于 scope-local `.flyflor/scope.db`。
+- [ ] 后续继续把 coding thinking / on-demand subagent 执行策略从现有 runtime 中拆出，并保证父级 deny/Confirm/approval 约束向下传递。

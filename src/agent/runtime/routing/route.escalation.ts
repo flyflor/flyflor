@@ -1,9 +1,13 @@
 /**
- * direct-with-watch 升级器（纯函数）。
+ * thinking escalation policy（纯函数）。
  *
  * 资源指标驱动（零字符串匹配）：
  *   - 输入：当前 LLM 路由模式、本会话最近的 watch / failure 计数、阈值；
  *   - 输出：可选 escalation —— 把当前模式强制升格为 BlackboardMode.Blackboard。
+ *
+ * Route 主层已经收缩为 fast | thinking；这里不再表达入口级黑板路由。
+ * BlackboardMode.Blackboard 是 thinking 内部的升级细节，负责复杂分歧、
+ * 封顶、反复工具失败或上下文压力下的合议收敛。
  *
  * 触发条件（任一即升级）：
  *   1. 当前模式是 DirectWithWatch，且 consecutiveWatchTurns >= watchThreshold；

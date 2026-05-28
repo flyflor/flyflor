@@ -46,6 +46,14 @@ Runtime must not equip raw `brain.db` event streams as prompt text. `brain.db` i
 
 Route decisions are model- or structure-driven. Production semantic routing cannot use `text.includes`, regex intent rules or keyword dictionaries.
 
+The main route is now only `fast | thinking`:
+
+- `fast` is the immediate-answer path. It does not start tool loops, subagents, or Blackboard.
+- `thinking` owns coding analysis, tool exploration, plans, verification, and on-demand subagents.
+- Blackboard is a thinking escalation detail, not a peer top-level route. Thinking escalates into Blackboard only for complex disagreement, repeated tool failure, context pressure, caps, or non-convergent synthesis.
+
+The legacy `BlackboardMode` values remain wire-compatible execution detail. `direct` maps to `fast`; `direct-with-watch` and `blackboard` map to `thinking`.
+
 Scope recall follows a visible gate:
 
 1. Runtime publishes a recall-start event.
@@ -55,6 +63,8 @@ Scope recall follows a visible gate:
 5. `ask` returns an `AgentAsk` instead of guessing.
 
 ASK is a normal runtime outcome. It appears when scope boundaries, fork merge conflicts, blackboard caps, crystallization gates, tool-loop limits, child subagent `needs_user`, or external tool stability failures need user judgment.
+
+Confirm is separate from ASK. Confirm covers write permission, tool approval, project creation, and other confirmation-only interactions. Confirm does not produce Crystal candidates and must not be rendered as ASK by thin clients.
 
 ASK v1 can carry multiple questions. Each question keeps one to three owner-proposed choices, a canonical `recommendedChoiceId`, and a fixed `other` option for user-owned freeform input. Runtime does not parse `other` text semantically; it preserves the answer as next-turn model input, audit data and possible Crystal evidence.
 
@@ -77,7 +87,7 @@ There is no private background continuation protocol. Resumption uses the next s
 
 ## Blackboard
 
-Complex turns may route through `RuntimeBlackboardRouteComponent`. Blackboard operates on the already assembled turn context. It is not a transport-session memory owner and does not infer continuity from conversation/thread/user metadata.
+Complex thinking turns may escalate through `RuntimeBlackboardRouteComponent`. Blackboard operates on the already assembled turn context. It is not a transport-session memory owner and does not infer continuity from conversation/thread/user metadata.
 
 If Blackboard hits a cap or conflict, `RuntimeBlackboardOutputComponent` hands the state back through ASK.
 

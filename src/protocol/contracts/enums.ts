@@ -442,6 +442,13 @@ export const BlackboardMode = {
 
 export type BlackboardMode = (typeof BlackboardMode)[keyof typeof BlackboardMode];
 
+export const RuntimeMainRouteMode = {
+    Fast: "fast",
+    Thinking: "thinking",
+} as const;
+
+export type RuntimeMainRouteMode = (typeof RuntimeMainRouteMode)[keyof typeof RuntimeMainRouteMode];
+
 export const BlackboardTurnStatus = {
     Converged: "converged",
     Failed: "failed",

@@ -67,6 +67,9 @@ interface WorkingMemoryState {
  * to a JSONL WAL before the in-memory view is changed. On restart the store
  * loads the latest snapshot and replays the WAL, so a power cut can lose at
  * most a torn final line, never the whole working-memory window.
+ *
+ * This is the MemoryComponent durability boundary: process memory is only a
+ * cache. Snapshot/WAL state is the recoverable active-context authority.
  */
 @Component()
 export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingMemoryStore {

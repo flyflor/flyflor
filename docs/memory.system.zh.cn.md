@@ -46,6 +46,8 @@ Context assembly 使用宪法文件、Memory、Crystal、显式 Scope、显式 C
 
 热记忆本来就是不稳定的。它让近期 evidence 可用，同时由 decay、compression 和 consolidation 决定什么值得留下。
 
+热记忆不是易失进程内存。`MemoryComponent` 必须有 durable backend。进程内 Map/LRU view 只是性能缓存；可恢复权威来自本地 snapshot/WAL 或 SQLite state。所有 mutation 必须先持久追加，再更新 hot view。启动恢复顺序固定为 snapshot、WAL replay、health snapshot、active-memory hydrate。断电最多丢失最后一条 torn WAL line，不能丢掉整个活跃上下文窗口。
+
 遗忘不只是删除：
 
 - TTL 和 recency 会随时间降低 activation。
@@ -85,6 +87,8 @@ Scope recall 由模型 gate：
 2. `ScopeRecallComponent` 要求模型输出结构化 `none | load | ask`。
 3. `load` 为当前 turn 装备 scope。
 4. `ask` 产生 ASK 给用户确认。
+
+Scope 热记忆也必须持久化。默认 context/index plane 是 scope-local `.flyflor/scope.db`；它存储 vector/tree/hot-memory/association material，并可恢复成 prompt equipment，同时不把 `brain.db` 当成 prompt container。
 
 ## ContextFork
 

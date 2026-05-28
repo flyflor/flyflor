@@ -27,6 +27,13 @@ describe("LocalWorkingMemoryStore", () => {
             const episode = await second.readEpisode("scope:u1", "ep1");
             expect(episode?.text).toBe("remember me");
             expect(await second.readContextRing("scope:u1", 4)).toEqual(["ep1"]);
+            expect(second.getHealthSnapshot()).toMatchObject({
+                backend: "local",
+                circuitState: "closed",
+                loaded: true,
+                loadedFrom: "wal",
+                replayedWalRecords: 1,
+            });
         } finally {
             await rm(root, { recursive: true, force: true });
         }

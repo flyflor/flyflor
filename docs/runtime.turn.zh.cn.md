@@ -46,6 +46,14 @@ Runtime 不得把原始 `brain.db` event streams 装进 prompt text。`brain.db`
 
 Route decision 由模型或结构化字段驱动。生产语义路由不能使用 `text.includes`、regex intent rules 或 keyword dictionaries。
 
+主路由现在只分 `fast | thinking`：
+
+- `fast` 是即时回答路径，不启动工具 loop、子代理或 Blackboard。
+- `thinking` 拥有 coding analysis、tool exploration、plan、verification 和按需子代理能力。
+- Blackboard 是 thinking 内部的升级细节，不再是并列顶层路由。只有复杂分歧、反复工具失败、上下文压力、封顶或不可收敛综合时，thinking 才升级到 Blackboard。
+
+旧 `BlackboardMode` 值继续作为 wire-compatible execution detail 保留。`direct` 映射到 `fast`；`direct-with-watch` 和 `blackboard` 映射到 `thinking`。
+
 Scope recall 遵循可见 gate：
 
 1. Runtime 发布 recall-start event。
@@ -55,6 +63,8 @@ Scope recall 遵循可见 gate：
 5. `ask` 返回 `AgentAsk`，而不是猜测。
 
 ASK 是正常 runtime outcome。scope 边界、fork merge conflict、blackboard cap、crystallization gate、tool-loop limit、子代理 `needs_user` 冒泡，或外部工具 sidecar 缺失、升级中、回滚要求、root-safe/path/version 判定失败时，都会通过 ASK 交给用户裁决。
+
+Confirm 与 ASK 分离。Confirm 只覆盖写入权限、工具授权、是否创建项目和其他确认交互。Confirm 不产生 Crystal candidate，thin client 不得把 Confirm 渲染成 ASK。
 
 ASK v1 的结构化显示规则：
 
@@ -83,7 +93,7 @@ Executive tool execution 可以暂停 turn，而不是隐藏重试：
 
 ## Blackboard
 
-复杂 turn 可以进入 `RuntimeBlackboardRouteComponent`。Blackboard 只在已经装配好的 turn context 上运行。它不是 transport-session memory owner，也不会从 conversation/thread/user metadata 推断连续性。
+复杂 thinking turn 可以升级进入 `RuntimeBlackboardRouteComponent`。Blackboard 只在已经装配好的 turn context 上运行。它不是 transport-session memory owner，也不会从 conversation/thread/user metadata 推断连续性。
 
 如果 Blackboard 命中 cap 或 conflict，`RuntimeBlackboardOutputComponent` 通过 ASK 交还状态。
 

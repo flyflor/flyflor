@@ -46,6 +46,8 @@ Archived months become read-only shards. The current month remains writable.
 
 Hot memory is intentionally unstable. It keeps recent evidence available while decay, compression, and consolidation decide what remains useful.
 
+Hot memory is not volatile process memory. `MemoryComponent` must have a durable backend. The in-process Map/LRU view is only a performance cache; the recoverable authority is local snapshot/WAL or SQLite state. Mutations must be appended durably before the hot view changes. Startup recovery follows snapshot, WAL replay, health snapshot, then active-memory hydrate. A power cut may lose at most one torn final WAL line, never the whole active context window.
+
 Forgetting is not only deletion:
 
 - TTL and recency reduce activation over time.
@@ -85,6 +87,8 @@ Scope recall is model-gated:
 2. `ScopeRecallComponent` asks the model for structured `none | load | ask`.
 3. `load` equips the scope for the current turn.
 4. `ask` produces ASK for confirmation.
+
+Scope hot memory is also durable. The default context/index plane is the scope-local `.flyflor/scope.db`; it stores vector/tree/hot-memory/association material and can be rebuilt into prompt equipment without treating `brain.db` as the prompt container.
 
 ## ContextFork
 

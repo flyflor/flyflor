@@ -140,6 +140,7 @@ import {
     FastRouteEvaluator,
     FileBackedFastRouteSnapshotStore,
     RouteEscalationPolicy,
+    ThinkingRoutePolicy,
     type FastRouteSnapshot,
     type FastRouteResult,
     type FastRouteSnapshotStore,
@@ -351,6 +352,7 @@ export class RuntimeModule extends RuntimeBoundary {
     protected readonly identityAppendParser: IdentityAppendParser;
     protected readonly fastRouteEvaluator: FastRouteEvaluator;
     protected readonly routeEscalationPolicy: RouteEscalationPolicy;
+    protected readonly thinkingRoute: ThinkingRoutePolicy;
     protected readonly mcpToolPlan: RuntimeMcpToolPlanComponent;
     protected readonly mcpToolNeed: RuntimeMcpToolNeedComponent;
     protected readonly mcpToolExecutor: RuntimeMcpToolExecutor;
@@ -395,6 +397,7 @@ export class RuntimeModule extends RuntimeBoundary {
         this.identityAppendParser = new IdentityAppendParser();
         this.fastRouteEvaluator = new FastRouteEvaluator();
         this.routeEscalationPolicy = new RouteEscalationPolicy();
+        this.thinkingRoute = new ThinkingRoutePolicy(this.routeEscalationPolicy);
         this.mcpToolPlan = new RuntimeMcpToolPlanComponent();
         this.mcpToolNeed = new RuntimeMcpToolNeedComponent();
         this.mcpToolExecutor = new RuntimeMcpToolExecutor(config, events, this.sandboxQuota);
@@ -2694,9 +2697,9 @@ export class RuntimeModule extends RuntimeBoundary {
     }
 
     /**
-     * direct-with-watch 升级器：基于上一轮 snapshot 的累计计数，
-     * 把 LLM 给出的 direct/direct-with-watch 强制升格为 blackboard。
-     * 升格触发时发布 RouteEscalated 事件并构造一个最小化的 blackboard route decision。
+     * thinking escalation：基于上一轮 snapshot 的累计计数，
+     * 把 thinking 细节中的 direct/direct-with-watch 强制升格为 blackboard。
+     * Blackboard 不再是入口级主路由，只是 thinking 内部的升级细节。
      */
     protected applyRouteEscalation(
         original: RuntimeBlackboardRouteDecision | undefined,
@@ -2709,7 +2712,7 @@ export class RuntimeModule extends RuntimeBoundary {
         const budget = this.config.routing.contextPressureBudgetTokens ?? 0;
         const estimatedTokens = Math.ceil(currentMessageChars / 4);
         const pressureRatio = budget > 0 ? estimatedTokens / budget : 0;
-        const decision = this.routeEscalationPolicy.decide({
+        const routed = this.thinkingRoute.applyEscalation(original, {
             currentMode: original.mode,
             consecutiveWatchTurns: snapshot?.consecutiveWatchTurns ?? 0,
             consecutiveBlackboardFailures: snapshot?.consecutiveBlackboardFailures ?? 0,
@@ -2720,15 +2723,16 @@ export class RuntimeModule extends RuntimeBoundary {
             toolFailureThreshold: this.config.routing.toolFailureEscalationThreshold ?? 2,
             contextPressureTrigger: budget > 0 ? 1 : 0,
         });
-        if (!decision.escalated) return original;
+        if (!routed?.escalation) return original;
         this.events.publish(
             event(
                 RuntimeEventType.RouteEscalated,
                 {
                     channel,
                     fromMode: original.mode,
-                    toMode: decision.targetMode,
-                    reason: decision.reason,
+                    mainRoute: routed.mainRoute,
+                    toMode: routed.escalation.targetMode,
+                    reason: routed.escalation.reason,
                     consecutiveWatchTurns: snapshot?.consecutiveWatchTurns ?? 0,
                     consecutiveBlackboardFailures: snapshot?.consecutiveBlackboardFailures ?? 0,
                     consecutiveToolFailureTurns: snapshot?.consecutiveToolFailureTurns ?? 0,
@@ -2740,9 +2744,14 @@ export class RuntimeModule extends RuntimeBoundary {
             ),
         );
         return {
-            ...original,
-            mode: decision.targetMode,
-            reason: `${original.reason} | escalated:${decision.reason}`,
+            ...routed.blackboard,
+            blackboardContract:
+                original.blackboardContract.mode === "normal"
+                    ? {
+                          ...original.blackboardContract,
+                          policyReason: `thinking-escalation:${routed.escalation.reason}`,
+                      }
+                    : original.blackboardContract,
         };
     }
 
@@ -3514,7 +3523,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 mode: route.mode,
                 reason: route.reason,
                 decisions: [],
-                metadata: this.blackboardOutput.routeMetadata(route),
+                metadata: this.blackboardOutput.routeMetadata(route, this.thinkingRoute.mainRouteFor(route)),
                 steps: [],
                 transcript: [],
             };
@@ -3535,6 +3544,7 @@ export class RuntimeModule extends RuntimeBoundary {
             workers: route.workers,
             metadata: {
                 blackboardContract: route.blackboardContract,
+                mainRoute: this.thinkingRoute.mainRouteFor(route),
                 routeReason: route.reason,
                 routeScore: route.score,
                 routeSignals: route.signals,

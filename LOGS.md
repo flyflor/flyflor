@@ -1990,3 +1990,21 @@
   原因：真实模型偶发 `Down`、`ScreenShot`、`LEFT`、`AX`、`Command`、`Alt` 等输入时，sidecar 不应在进入外部工具血管层前产生无意义失败。
   验证：`bun test tests/browser.use.sidecar.test.ts tests/computer.use.sidecar.test.ts tests/external.tools.test.ts --timeout 30000`（77 pass, 0 fail）；`bun run smoke:browser-use:live`（ok true，checks 含 `scroll-direction-casing`）；`bun run smoke:computer-use:live`（ok true，含 `delegate-scroll-direction-casing`，CUA structured skip: `cua-command-not-found`）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:live:closure`（ok true, failedChecks [], phantomPermissionUserEvents 0, executionJobCount 11）。
   风险：只影响 sidecar 入参校验和 backend payload 构造；delegate backend 仍保留原始 input，descriptor enum 保持 canonical 小写，默认 manifest、高权限 ASK/plan/yolo、动态预算、approval/quota/audit、Memory/Scope/Crystal 主链和 kernel import 边界不变。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：runtime-route-memory-durability-slice
+  变动文件：`AGENTS.md`、`src/protocol/contracts/enums.ts`、`src/agent/runtime/routing/thinking.route.ts`、`src/agent/runtime/routing/index.ts`、`src/agent/runtime/routing/route.escalation.ts`、`src/agent/runtime/module.ts`、`src/agent/runtime/blackboard/output.ts`、`src/cognitive/hippocampus/memory/working/store.ts`、`tests/route.escalation.test.ts`、`tests/local.working.store.test.ts`、`docs/runtime.turn.md`、`docs/runtime.turn.zh.cn.md`、`docs/memory.system.md`、`docs/memory.system.zh.cn.md`、`docs/boundaries.md`、`docs/boundaries.zh.cn.md`、`TODO.md`、`LOGS.md`
+  摘要：收缩 Runtime 主路由为 `fast | thinking`，把 Blackboard 保留为 thinking escalation detail，并补充 MemoryComponent durable active-context 红线和 WAL replay health 断言。
+  原因：用户要求重新设计路由层，并明确热记忆不能只存在进程内存，断电、重启或崩溃后不能整体失忆。
+  验证：待运行 focused route/memory tests、`bun run check`、`git diff --check`。
+  风险：本轮是第一段安全切片，未扩展工具 loop、coding thinking 或 on-demand subagent 调度；旧 `BlackboardMode` 仍保留 wire compatibility。
+
+- 状态：完成
+  执行者：main-codex
+  范围：runtime-route-memory-durability-slice-verification
+  变动文件：同上
+  摘要：完成主路由/记忆耐久切片的 focused 单测、TypeScript check、文档索引检查和 whitespace 检查。
+  原因：提交前需要证明 `fast | thinking` contract、thinking escalation 和 MemoryComponent WAL recovery 断言不会破坏现有内核。
+  验证：`bun test tests/route.escalation.test.ts tests/local.working.store.test.ts --timeout 30000`（29 pass, 0 fail）；`bun run check`；`bun run docs:check`（26 pass, 0 fail）；`git diff --check`。
+  风险：工具 loop、coding thinking、on-demand subagent 和 ASK/Confirm ledger 深拆仍是后续 TODO；本轮未改 Memory/Scope/Crystal 主链的装配语义。

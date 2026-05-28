@@ -4,6 +4,7 @@ import {
     decideRouteEscalation,
     nextEscalationCounters,
     RouteEscalationReason,
+    ThinkingRoutePolicy,
 } from "../src/agent/runtime/routing/index.ts";
 
 describe("decideRouteEscalation", () => {
@@ -78,6 +79,31 @@ describe("decideRouteEscalation", () => {
             failureThreshold: 2,
         });
         expect(r.escalated).toBe(false);
+    });
+});
+
+describe("ThinkingRoutePolicy", () => {
+    test("maps direct to fast and watch/blackboard to thinking", () => {
+        const policy = new ThinkingRoutePolicy();
+        expect(policy.mainRouteFor(route(BlackboardMode.Direct))).toBe("fast");
+        expect(policy.mainRouteFor(route(BlackboardMode.DirectWithWatch))).toBe("thinking");
+        expect(policy.mainRouteFor(route(BlackboardMode.Blackboard))).toBe("thinking");
+    });
+
+    test("turns thinking saturation into a blackboard escalation detail", () => {
+        const policy = new ThinkingRoutePolicy();
+        const decision = policy.applyEscalation(route(BlackboardMode.DirectWithWatch), {
+            currentMode: BlackboardMode.DirectWithWatch,
+            consecutiveWatchTurns: 3,
+            consecutiveBlackboardFailures: 0,
+            watchThreshold: 3,
+            failureThreshold: 2,
+        });
+
+        expect(decision?.mainRoute).toBe("thinking");
+        expect(decision?.blackboard.mode).toBe(BlackboardMode.Blackboard);
+        expect(decision?.blackboard.reason).toBe(`thinking-escalation:${RouteEscalationReason.WatchSaturation}`);
+        expect(decision?.blackboard.signals).toContain("thinking-escalation");
     });
 });
 
@@ -275,3 +301,21 @@ describe("nextEscalationCounters – tool failure", () => {
         expect(c).toEqual({ watch: 0, failure: 0, toolFailure: 0 });
     });
 });
+
+function route(mode: BlackboardMode) {
+    return {
+        blackboardContract: {
+            contradictions: [],
+            evidence: [],
+            mode: "normal" as const,
+            policyReason: "test",
+        },
+        mode,
+        needsReflectionCandidate: false,
+        raw: "",
+        reason: "test-route",
+        score: 1,
+        signals: [],
+        workers: [],
+    };
+}

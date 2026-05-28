@@ -14,7 +14,11 @@
 - 代码风格锁定 OOP + use Composition API：业务能力用 class / Component / Module / Repo 表达，跨 class 装配只允许放在对应目录 `composition.ts` 中，并统一用 `useXxx()` 命名。禁止新增函数式编程风格的业务模块；确需函数时，只能是 `composition.ts` 装配入口、薄 CLI/script/app 入口、框架强制 handler、测试 fixture、小型纯协议 adapter 或 TypeScript 类型守卫。
 - 目录表达语义，文件名保持短而稳定：优先使用 `module.ts`、`component.ts`、`composition.ts`、`store.ts`、`types.ts`、`repo.ts`、`worker.ts`、`manager.ts`。例如 `src/agent/blackboard/composition.ts` 与 `src/agent/blackboard/store.ts` 已由目录说明 blackboard owner；不要写回 `blackboard.store.ts`、`blackboard.module.ts`、`dependency.container.ts` 这类重复命名。整体结构参考 NestJS / Angular 的模块化边界，而不是散函数脚本集合。
 - Flyflor 是智能生命体内核，不是 chat/session agent。LLM 是流体智力，`MemoryComponent` 是热区记忆，`CrystalComponent` 是晶体智力，显式 `Scope` / `ContextFork` 是固化工作域，`ASK` 是不确定性、结晶、升格和长线 loop 的闭环器官。
+- Runtime 主路由只允许表达 `fast | thinking`。`fast` 是即时回答；`thinking` 承载 coding analysis、工具探索、计划、验证和按需子代理。Blackboard 只能作为 thinking 内部升级层，不能再作为入口级并列路由；升级条件必须来自结构化模型输出或资源指标。
+- `ASK` 与 `Confirm` 必须分层：ASK 是一级公民，可携带结晶候选；Confirm 只用于写入权限、工具授权、是否创建项目等确认交互，禁止进入 Crystal candidate，也禁止被 thin client 渲染成 ASK。
 - `brain.db` 是按月生命账本，只负责 ledger/query/replay/audit/detail；它不参与 prompt/context assembly，不是 session store，也不是 prompt 容器。上下文装配主语只能是当前输入、`MemoryComponent`、`CrystalComponent`、显式 `Scope/Fork` 和 Executive 可见能力面。
+- `MemoryComponent` 活跃上下文必须可恢复：进程内 Map/LRU 只是性能缓存，权威热记忆必须先写 snapshot/WAL 或 SQLite 再更新内存视图；启动恢复顺序固定为 snapshot → WAL replay → health snapshot → active-memory hydrate。断电、重启或进程崩溃不能造成整体失忆。
+- Scope 热记忆必须持久化到 scope-local `.flyflor/scope.db` context/index plane；禁止把 Scope 热记忆放进 `brain.db` prompt path，`brain.db` 原始 event stream 不得用于恢复 prompt。
 - `src/socket` 是外显 socket 血管层，承载 live turn、event、operation、ledger query/replay；WebSocket 只是当前默认 transport，不是目录主语。`gateway.*` wire 名称只作为 `flyflor.ws.v1` compatibility 保留，不代表架构仍是 Gateway/session/chat 模型。
 - `clientId`、`conversationKey`、`user.id`、`threadId`、connection 和 transport metadata 只允许用于 live peer、routing、audit、dedup、reply anchor；它们不承担认知连续性，也不能决定当前 scope、memory owner 或 prompt 装配。
 - 该使用枚举/常量对象时不要裸写字符串；新增协议值先放入 `src/protocol/contracts/enums.ts` 并经 `src/protocol/contracts/index.ts` 暴露，或放入对应 registry。

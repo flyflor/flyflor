@@ -13,6 +13,8 @@ import {
     BlackboardMode,
     BlackboardTurnStatus,
     ReplayRecordKind,
+    RuntimeMainRouteMode,
+    type RuntimeMainRouteMode as RuntimeMainRouteModeType,
     type BlackboardTurnStatus as BlackboardTurnStatusType,
 } from "../../../protocol/contracts/index.ts";
 import { Component } from "../../../agent/di/decorators/index.ts";
@@ -134,8 +136,14 @@ export class RuntimeBlackboardOutputComponent extends Runtime {
         };
     }
 
-    public routeMetadata(route: RuntimeBlackboardRouteDecision): Record<string, unknown> {
+    public routeMetadata(
+        route: RuntimeBlackboardRouteDecision,
+        mainRoute: RuntimeMainRouteModeType = route.mode === BlackboardMode.Direct
+            ? RuntimeMainRouteMode.Fast
+            : RuntimeMainRouteMode.Thinking,
+    ): Record<string, unknown> {
         return {
+            mainRoute,
             route: {
                 mode: route.mode,
                 needsReflectionCandidate: route.needsReflectionCandidate,
