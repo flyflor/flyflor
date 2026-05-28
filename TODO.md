@@ -1299,6 +1299,7 @@ Kernel V2 acceptance focus：
 - [x] 为 MemoryComponent hot memory 增加 durable backend 红线说明和 WAL replay health snapshot 断言。
 - [x] 同步 runtime/memory/boundaries 文档，明确 ASK/Confirm 分层、`brain.db` 非 prompt container、Scope hot memory 属于 scope-local `.flyflor/scope.db`。
 - [x] 移除入口级 `mcp.subtask.plan` / `RuntimeSubtaskPlanComponent` 分配器，保留 `subagent.batch` 作为 thinking tool loop 内按需能力。
+- [x] 收紧 `mcp.context` 提示词：`subagent.batch` 是工具 loop 内按需动作，不是自动第一步；困难时通过结构化问题边界或 advisory discussion 交还。
 - [ ] 后续继续把 coding thinking 执行策略从现有 runtime 中拆出，并补充更多困难/失败后按需子代理策略证据。
 
 ## 2026-05-28 Confirm Metadata Protocol

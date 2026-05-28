@@ -2080,3 +2080,21 @@
   原因：确认 Runtime 不再拥有入口级 subtask planner，同时 `subagent.batch` 仍可通过 thinking tool loop 正常执行并继承 Executive 权限/ASK/审计链路。
   验证：`bun test tests/runtime.executive.boundaries.test.ts tests/skill.mcp.test.ts --timeout 30000`（77 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`git diff --check`。
   风险：更细的 coding thinking 策略拆分仍在后续；本轮不改变 Memory/Scope/Crystal 主链。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：thinking-tool-context-subagent-policy
+  变动文件：`templates/prompts/mcp.context.md`、`templates/prompts/mcp.context.zh.cn.md`、`tests/prompt.lint.test.ts`、`TODO.md`、`LOGS.md`
+  摘要：收紧工具上下文中的 `subagent.batch` 策略，明确它是 thinking 工具 loop 内按需动作，不是自动第一步；重复失败、证据互斥或上下文压力应走结构化问题边界或 advisory discussion。
+  原因：用户要求子代理在 thinking/coding 分析遇到可并行探索、独立验证或困难时启动，同时避免入口级 planner 回归。
+  验证：已运行 `bun test tests/prompt.lint.test.ts --timeout 30000`（13 pass, 0 fail）；待运行 focused runtime/subagent tests、`bun run docs:check`、`bun run check`、`git diff --check`。
+  风险：本轮只改模型可见工具策略和 lint 断言，不改变 Runtime、Memory、Scope、Crystal 或工具执行代码。
+
+- 状态：完成
+  执行者：main-codex
+  范围：thinking-tool-context-subagent-policy-verification
+  变动文件：同上
+  摘要：完成 thinking 工具上下文子代理策略切片的 prompt lint、runtime/subagent、docs、TypeScript 和 whitespace 验证。
+  原因：确认按需子代理提示策略不重新引入入口级 planner，并且既有 `subagent.batch` 执行、needs_user 冒泡、ASK 暂停和审计测试保持通过。
+  验证：`bun test tests/prompt.lint.test.ts --timeout 30000`（13 pass, 0 fail）；`bun test tests/runtime.executive.boundaries.test.ts tests/skill.mcp.test.ts --timeout 30000`（77 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`git diff --check`。
+  风险：本轮不改变 Runtime、Memory、Scope、Crystal 或工具执行代码；coding thinking 更深层拆分仍在后续。

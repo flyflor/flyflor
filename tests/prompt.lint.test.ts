@@ -246,6 +246,27 @@ describe("lintPromptTemplates", () => {
         expect(zh).toContain("优先使用上面展示的 `input` 对象形态");
     });
 
+    test("mcp context keeps subagent delegation inside the tool loop", async () => {
+        const canonical = await readFile(join(process.cwd(), "templates", "prompts", "mcp.context.md"), "utf8");
+        const zh = await readFile(join(process.cwd(), "templates", "prompts", "mcp.context.zh.cn.md"), "utf8");
+
+        expect(canonical).toContain("on-demand tool-loop action");
+        expect(canonical).toContain("not an automatic first step");
+        expect(canonical).toContain("Use direct workspace tools for the first narrow fact");
+        expect(canonical).toContain("independent evidence gathering, verification, failure diagnosis, or long-context slices");
+        expect(canonical).toContain("Helpers must return a structured `needs_user` result");
+        expect(canonical).toContain("Do not include `subagent.batch` in a helper allowlist");
+        expect(canonical).toContain("structured question boundary or the advisory discussion context");
+
+        expect(zh).toContain("按需的工具 loop 动作");
+        expect(zh).toContain("不是自动第一步");
+        expect(zh).toContain("先用直接 workspace 工具确认第一个窄事实");
+        expect(zh).toContain("独立取证、验证、失败排查或长上下文分片");
+        expect(zh).toContain("必须返回结构化 `needs_user` 结果");
+        expect(zh).toContain("不要把 `subagent.batch` 放进辅助任务的允许列表");
+        expect(zh).toContain("结构化提问边界或 runtime 返回的参考讨论上下文");
+    });
+
     test("runtime prompt prose is not embedded in TypeScript source", async () => {
         const offenders: string[] = [];
         const sourceFiles = await listTypeScriptFiles(join(process.cwd(), "src"));
