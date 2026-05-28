@@ -152,3 +152,20 @@ bun test tests/skill.mcp.test.ts tests/ask.wire.test.ts --timeout 30000
 bun run check
 git diff --check
 ```
+
+## 2026-05-28 主控切片：Socket Execution Job Query Drift Audit
+
+本轮未新增实现型子 Codex；由主控在主 worktree 审计旧 Phase 7 TODO 与当前 socket/read-model/job ledger 实现之间的状态漂移。
+
+| Lane | Branch | Worktree Path | Tmux Attach | Capture Working 细节 | Scope |
+|---|---|---|---|---|---|
+| coordinator | `master` | `/Users/yi./Desktop/yi/flyflors/flyflor` | 无新增 session | 本轮对话 + `git show --stat HEAD` / `git show HEAD` | `/ws` execution job query drift audit. |
+
+可用检查命令：
+
+```bash
+bun test tests/gateway.ws.test.ts --timeout 30000
+bun run docs:check
+bun run check
+git diff --check
+```

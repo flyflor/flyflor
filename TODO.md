@@ -1234,6 +1234,13 @@ Kernel V2 acceptance focus：
 
 ## 2026-05-27 Computer Use CUA Key Hotkey
 
+## 2026-05-28 Socket Execution Job Query Drift Audit
+
+- [x] 复核旧 TODO `Phase 7 socket job query 仍待做` 为历史漂移项：`src/socket/control.ts` 已接入 `execution.job.list` / `execution.job.detail.get`，并统一返回 `execution.job.snapshot`。
+- [x] 复核 `tests/gateway.ws.test.ts` 已覆盖从 `brain.db.memory_events type=execution-job` 读取 job list/detail，且重复 detail/list query 命中 read-model cache，不触发 Runtime/model/tool/prompt assembly。
+- [x] 复核 `docs/ws.doc.md`、`docs/control.protocol.md`、`docs/openapi/flyflor.socket.openapi.md` 与 Apifox/OpenAPI 生成物已包含 execution job query/snapshot 契约。
+- [x] 本轮只追加 drift audit 证据，不改写历史段落原文；旧 `2026-05-25` 部分未完成行继续由后续完成段落和本节状态校正覆盖。
+
 - [x] `computer.use key` 在 CUA backend 中区分普通按键与组合键：无 modifier 走 `press_key`，有 modifier 走 `hotkey`。
 - [x] CUA payload 对普通按键传 `key`，对组合键传 Hermes 风格 `keys: [modifier..., key]`，delegate backend 继续收到原始 invocation。
 - [x] 新增 focused CUA key/hotkey 回归与追加文档，复跑 computer-use tests、check/docs、真实闭环与 `git diff --check`。

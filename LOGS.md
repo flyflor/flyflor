@@ -2188,3 +2188,12 @@
   原因：继续削薄 Runtime turn orchestrator，让 Executive 工具 loop ASK/Confirm 构造只由 thinking/coding owner 表达。
   验证：`bun test tests/runtime.thinking.coding.test.ts --timeout 30000`（12 pass, 0 fail）；`bun test tests/skill.mcp.test.ts tests/ask.wire.test.ts --timeout 30000`（77 pass, 0 fail）；`bun run check`；`git diff --check`。
   风险：本轮不改变 Memory/Scope/Crystal 主链、ASK/Confirm wire contract、工具执行行为或提示词；只是去掉无 owner 意义的 wrapper。
+
+- 状态：完成
+  执行者：main-codex
+  范围：socket-execution-job-query-drift-audit
+  变动文件：`TODO.md`、`LOGS.md`、`session-table.md`
+  摘要：追加 socket execution job query 旧 TODO 漂移审计证据，确认 `execution.job.list` / `execution.job.detail.get` 已由 `/ws` read-model 返回 `execution.job.snapshot`，且测试和文档已覆盖。
+  原因：旧 `2026-05-25` TODO 中 Phase 7 未完成行与后续完成段落、代码、测试、协议文档冲突；本轮按 TODO append-only 规则追加证据，不改写历史原文。
+  验证：`bun test tests/gateway.ws.test.ts --timeout 30000`（57 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`git diff --check`。
+  风险：本轮只追加文档/审计记录，不改变 Runtime、Memory/Scope/Crystal 主链、ASK/Confirm、工具层或 WebSocket 协议行为。
