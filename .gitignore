@@ -15,19 +15,6 @@ logs
 _.log
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
-# local Flyflor runtime state at repo root
-/.flyflor/
-/.config/
-/tools/*
-!/tools/
-!/tools/README.md
-!/tools/external.tools.jsonc
-!/tools/init.ts
-!/tools/init.sh
-!/tools/init.ps1
-/tools/packages/*
-!/tools/packages/
-
 # dotenv environment variable files
 .env
 .env.development.local
@@ -40,27 +27,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .cache
 *.tsbuildinfo
 
-# docker dev workspace
-docker/cache/*
-!docker/cache/.gitkeep
-docker/dist/*
-!docker/dist/.gitkeep
-docker/node_modules
-docker/config/*
-!docker/config/.gitkeep
-docker/storage/*
-!docker/storage/.gitkeep
-docker/workspace/.flyflor/memory/events.jsonl
-docker/workspace/.flyflor/memory/manifest.json
-docker/workspace/.flyflor/memory/recalls.jsonl
-docker/workspace/.flyflor/skills/*
-!docker/workspace/.flyflor/skills/.gitkeep
-
 # IntelliJ based IDEs
 .idea
 
 # Finder (MacOS) folder config
 .DS_Store
-
-flyflor-front
-flyflor-tui
