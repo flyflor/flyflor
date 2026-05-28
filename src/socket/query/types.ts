@@ -27,6 +27,7 @@ export interface SocketQueryDetailInput {
     eventId?: string;
     askId?: string;
     blackboardTurnId?: string;
+    confirmId?: string;
     forkId?: string;
     jobId?: string;
     replayId?: string;
@@ -54,6 +55,11 @@ export interface SocketQueryForkInput extends SocketQueryOwnerInput {
 export interface SocketQueryAskInput extends SocketQueryOwnerInput {
     contextForkId?: string;
     status?: "active" | "answered" | "resumed" | "all";
+}
+
+export interface SocketQueryConfirmInput extends SocketQueryOwnerInput {
+    askId?: string;
+    contextForkId?: string;
 }
 
 export interface SocketQueryBlackboardInput extends SocketQueryPageInput {
@@ -150,6 +156,16 @@ export interface SocketAskSnapshot {
     };
     status: "active" | "answered" | "resumed" | "abandoned" | "archived";
     state?: MemoryEventStatus;
+}
+
+export interface SocketConfirmSnapshot {
+    askEventId: string;
+    confirmAnswer: Record<string, unknown>;
+    event: MemoryEventRecord;
+    sourceKey?: string;
+    sourceSurface?: string;
+    snapshotId?: string;
+    status: "answered";
 }
 
 export interface SocketHistoryDetailSnapshot {
@@ -270,6 +286,8 @@ export interface SocketQueryComponentPort {
     blackboardDetail(input: SocketQueryDetailInput): Promise<SocketBlackboardDetailSnapshot | undefined>;
     blackboardList(input: SocketQueryBlackboardInput): Promise<BlackboardTurn[]>;
     crystalList(input: SocketQueryCrystalInput): CrystalGem[];
+    confirmDetail(input: SocketQueryDetailInput): SocketConfirmSnapshot | undefined;
+    confirmList(input: SocketQueryConfirmInput): SocketConfirmSnapshot[];
     forkDetail(input: SocketQueryDetailInput): Promise<SocketForkDetailSnapshot | undefined>;
     forkList(input: SocketQueryForkInput): ContextForkRecord[];
     forkMemory(input: SocketQueryForkInput, options?: { initialized?: boolean }): Promise<SocketForkMemorySnapshot>;

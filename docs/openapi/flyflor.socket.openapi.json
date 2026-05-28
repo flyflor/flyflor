@@ -284,6 +284,9 @@
           "capability.catalog.get",
           "capability.catalog.snapshot",
           "client.hello",
+          "confirm.detail.get",
+          "confirm.list",
+          "confirm.snapshot",
           "error",
           "event.subscribe",
           "event.unsubscribe",
@@ -2046,6 +2049,12 @@
             "$ref": "#/components/schemas/AskDetailGetEnvelope"
           },
           {
+            "$ref": "#/components/schemas/ConfirmListEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/ConfirmDetailGetEnvelope"
+          },
+          {
             "$ref": "#/components/schemas/BlackboardListEnvelope"
           },
           {
@@ -2186,6 +2195,50 @@
               "type": {
                 "type": "string",
                 "const": "ask.detail.get"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "ConfirmListEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "confirm.list"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "ConfirmDetailGetEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "confirm.detail.get"
               },
               "payload": {
                 "$ref": "#/components/schemas/QueryPayload"
@@ -3956,6 +4009,60 @@
                 "event": {
                   "id": "ask-1",
                   "type": "ask"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "ConfirmList": {
+        "summary": "confirm.list read-model query",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-confirm-list-1",
+          "type": "confirm.list",
+          "at": "2026-05-22T00:00:05.160Z",
+          "requestId": "req-confirm-list-1",
+          "payload": {
+            "askId": "ask-1",
+            "limit": 20
+          }
+        }
+      },
+      "ConfirmSnapshot": {
+        "summary": "confirm.snapshot query response",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-confirm-snapshot-1",
+          "type": "confirm.snapshot",
+          "at": "2026-05-22T00:00:05.170Z",
+          "requestId": "req-confirm-list-1",
+          "correlationId": "env-confirm-list-1",
+          "payload": {
+            "cache": {
+              "hit": false,
+              "key": "confirm.list:{\"askId\":\"ask-1\",\"limit\":20}",
+              "ttlMs": 1500
+            },
+            "data": [
+              {
+                "askEventId": "ask-1",
+                "snapshotId": "snapshot-1",
+                "status": "answered",
+                "confirmAnswer": {
+                  "answerCount": 1,
+                  "choiceIds": [
+                    "continue-tools"
+                  ],
+                  "questionIds": [
+                    "execution-strategy"
+                  ],
+                  "hasFreeform": false,
+                  "legacy": false
+                },
+                "event": {
+                  "id": "confirm-1",
+                  "type": "ask-answer-pair"
                 }
               }
             ]

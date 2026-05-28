@@ -672,6 +672,9 @@ export function classifyGatewayControlSemanticType(
         case GatewayControlMessageType.CapabilityCatalogGet:
         case GatewayControlMessageType.CapabilityCatalogSnapshot:
         case GatewayControlMessageType.ClientHello:
+        case GatewayControlMessageType.ConfirmDetailGet:
+        case GatewayControlMessageType.ConfirmList:
+        case GatewayControlMessageType.ConfirmSnapshot:
         case GatewayControlMessageType.ExecutionJobDetailGet:
         case GatewayControlMessageType.ExecutionJobList:
         case GatewayControlMessageType.ExecutionJobSnapshot:

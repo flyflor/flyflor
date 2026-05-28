@@ -212,6 +212,8 @@ describe("documentation references", () => {
             "#/components/schemas/HistoryListEnvelope",
             "#/components/schemas/AskListEnvelope",
             "#/components/schemas/AskDetailGetEnvelope",
+            "#/components/schemas/ConfirmListEnvelope",
+            "#/components/schemas/ConfirmDetailGetEnvelope",
             "#/components/schemas/BlackboardListEnvelope",
             "#/components/schemas/BlackboardDetailGetEnvelope",
             "#/components/schemas/CrystalListEnvelope",

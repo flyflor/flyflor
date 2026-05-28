@@ -777,6 +777,16 @@ export class SocketControlHub implements EventSink {
                 this.requiredQueries().askDetail(payload),
             ),
         );
+        this.handlers.set(GatewayControlMessageType.ConfirmList, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.ConfirmSnapshot, (payload) =>
+                this.requiredQueries().confirmList(payload),
+            ),
+        );
+        this.handlers.set(GatewayControlMessageType.ConfirmDetailGet, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.ConfirmSnapshot, (payload) =>
+                this.requiredQueries().confirmDetail(payload),
+            ),
+        );
         this.handlers.set(GatewayControlMessageType.BlackboardList, (socket, envelope) =>
             this.handleQuery(socket, envelope, GatewayControlMessageType.BlackboardSnapshot, (payload) =>
                 this.requiredQueries().blackboardList(payload),

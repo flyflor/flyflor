@@ -8,6 +8,7 @@ import { SocketScopeReader } from "./scope.reader.ts";
 import type {
     SocketAskSnapshot,
     SocketBlackboardDetailSnapshot,
+    SocketConfirmSnapshot,
     SocketForkDetailSnapshot,
     SocketForkMemoryListItem,
     SocketForkMemorySnapshot,
@@ -15,6 +16,7 @@ import type {
     SocketQueryAskInput,
     SocketQueryBlackboardInput,
     SocketQueryComponentPort,
+    SocketQueryConfirmInput,
     SocketQueryCrystalInput,
     SocketQueryExecutionJobInput,
     SocketQueryDetailInput,
@@ -165,6 +167,14 @@ export class SocketQueryComponent implements SocketQueryComponentPort {
 
     public askDetail(input: SocketQueryDetailInput): SocketAskSnapshot | undefined {
         return this.brain.askDetail(input);
+    }
+
+    public confirmList(input: SocketQueryConfirmInput): SocketConfirmSnapshot[] {
+        return this.brain.listConfirms(input);
+    }
+
+    public confirmDetail(input: SocketQueryDetailInput): SocketConfirmSnapshot | undefined {
+        return this.brain.confirmDetail(input);
     }
 
     public executionJobList(input: SocketQueryExecutionJobInput) {

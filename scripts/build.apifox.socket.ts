@@ -116,6 +116,8 @@ function buildFrames(examples: Record<string, JsonRecord>): FrameExample[] {
         clientFrame("ForkDetailGet", "03 TUI Read Queries", ["ForkSnapshot"], examples),
         clientFrame("AskList", "03 TUI Read Queries", ["AskSnapshot"], examples),
         clientFrame("AskDetailGet", "03 TUI Read Queries", ["AskDetailSnapshot"], examples),
+        clientFrame("ConfirmList", "03 TUI Read Queries", ["ConfirmSnapshot"], examples),
+        clientFrame("ConfirmDetailGet", "03 TUI Read Queries", ["ConfirmSnapshot"], examples),
         clientFrame("BlackboardList", "03 TUI Read Queries", ["BlackboardSnapshot"], examples),
         clientFrame("BlackboardDetailGet", "03 TUI Read Queries", ["BlackboardDetailSnapshot"], examples),
         clientFrame("TaskList", "03 TUI Read Queries", ["TaskSnapshot"], examples),
@@ -136,6 +138,7 @@ function buildFrames(examples: Record<string, JsonRecord>): FrameExample[] {
         serverFrame("ForkSnapshot", "04 TUI Snapshots", examples),
         serverFrame("AskSnapshot", "04 TUI Snapshots", examples),
         serverFrame("AskDetailSnapshot", "04 TUI Snapshots", examples),
+        serverFrame("ConfirmSnapshot", "04 TUI Snapshots", examples),
         serverFrame("BlackboardSnapshot", "04 TUI Snapshots", examples),
         serverFrame("BlackboardDetailSnapshot", "04 TUI Snapshots", examples),
         serverFrame("TaskSnapshot", "04 TUI Snapshots", examples),
@@ -511,6 +514,9 @@ function extraExamples(): Record<string, JsonRecord> {
             },
             "env-ask-detail-1",
         ),
+        ConfirmDetailGet: ws("env-confirm-detail-1", GatewayControlMessageType.ConfirmDetailGet, "req-confirm-detail-1", {
+            confirmId: "confirm-1",
+        }),
         BlackboardDetailGet: ws(
             "env-blackboard-detail-1",
             GatewayControlMessageType.BlackboardDetailGet,

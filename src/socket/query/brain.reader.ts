@@ -24,10 +24,12 @@ import {
 } from "../../protocol/contracts/index.ts";
 import type {
     SocketAskSnapshot,
+    SocketConfirmSnapshot,
     SocketExecutionJobSnapshot,
-    SocketQueryExecutionJobInput,
     SocketQueryAskInput,
+    SocketQueryConfirmInput,
     SocketQueryDetailInput,
+    SocketQueryExecutionJobInput,
     SocketQueryForkInput,
     SocketQueryHistoryInput,
     SocketQueryReplayInput,
@@ -183,6 +185,27 @@ export class SocketBrainReader {
         const askEvent = input.askId ? this.brain.getEvent(input.askId) : null;
         if (!askEvent || askEvent.type !== MemoryEventType.Ask) return undefined;
         return this.askSnapshot(askEvent);
+    }
+
+    public listConfirms(input: SocketQueryConfirmInput): SocketConfirmSnapshot[] {
+        return this.brain
+            .listEvents({
+                ownerKey: input.ownerKey ?? ownerKeyFromScope(input.scopeId),
+                type: MemoryEventType.AskAnswerPair,
+                limit: input.limit ?? 50,
+            })
+            .map((event) => this.confirmSnapshot(event))
+            .filter((snapshot): snapshot is SocketConfirmSnapshot => snapshot !== undefined)
+            .filter((snapshot) => optionalEqual(snapshot.askEventId, input.askId))
+            .filter((snapshot) => this.matchesContextFork(snapshot.event, input.contextForkId));
+    }
+
+    public confirmDetail(input: SocketQueryDetailInput): SocketConfirmSnapshot | undefined {
+        const lookupId = input.confirmId ?? input.eventId;
+        const event = lookupId ? this.brain.getEvent(lookupId) : null;
+        if (event?.type === MemoryEventType.AskAnswerPair) return this.confirmSnapshot(event);
+        if (input.askId) return this.listConfirms({ askId: input.askId, limit: 200 }).at(0);
+        return undefined;
     }
 
     public listScopes(input: { limit?: number } = {}) {
@@ -389,6 +412,25 @@ export class SocketBrainReader {
             replayableAsk: this.replayableAsk(event, ask, continuation),
             state,
             status: this.askStatus(state, answer),
+        };
+    }
+
+    private confirmSnapshot(event: MemoryEventRecord): SocketConfirmSnapshot | undefined {
+        const confirmAnswer = isRecord(event.content.confirmAnswerSummary)
+            ? event.content.confirmAnswerSummary
+            : isRecord(event.content.confirmAnswer)
+              ? event.content.confirmAnswer
+              : undefined;
+        const askEventId = typeof event.content.askId === "string" ? event.content.askId : event.parentId;
+        if (!confirmAnswer || !askEventId) return undefined;
+        return {
+            askEventId,
+            confirmAnswer,
+            event,
+            sourceKey: event.sourceKey,
+            sourceSurface: event.sourceSurface,
+            snapshotId: typeof event.content.snapshotId === "string" ? event.content.snapshotId : undefined,
+            status: "answered",
         };
     }
 

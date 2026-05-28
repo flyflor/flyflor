@@ -1312,4 +1312,5 @@ Kernel V2 acceptance focus：
 - [x] 新增 `confirm.answered` RuntimeEvent，让 Confirm 答复不再只隐藏在 `memory.ask.answered` payload 中。
 - [x] `confirm.answered` 归入 ASK/interaction subscription class，供 thin client timeline 可见。
 - [x] Memory 仅发布 bounded `confirmAnswer` audit summary，不把 Confirm answer 提升为 ASK evidence 或 Crystal candidate。
-- [ ] 后续继续实现完整 `confirm.snapshot` / `confirm.detail.get` read-model。
+- [x] 新增 `confirm.list` / `confirm.detail.get` / `confirm.snapshot` read-model，直接读取 `brain.db` 中已有 Confirm audit，不触发 Runtime。
+- [ ] 后续让 CLI startup 主动请求 `confirm.list` 并接入独立 Confirm component。

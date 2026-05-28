@@ -59,6 +59,8 @@
         "ForkDetailGet",
         "AskList",
         "AskDetailGet",
+        "ConfirmList",
+        "ConfirmDetailGet",
         "BlackboardList",
         "BlackboardDetailGet",
         "TaskList",
@@ -83,6 +85,7 @@
         "ForkSnapshot",
         "AskSnapshot",
         "AskDetailSnapshot",
+        "ConfirmSnapshot",
         "BlackboardSnapshot",
         "BlackboardDetailSnapshot",
         "TaskSnapshot",
@@ -4371,6 +4374,145 @@
     {
       "direction": "client->server",
       "expected": [
+        "ConfirmSnapshot"
+      ],
+      "folder": "03 TUI Read Queries",
+      "name": "ConfirmList",
+      "schema": {
+        "type": "object",
+        "required": [
+          "protocol",
+          "id",
+          "type",
+          "at",
+          "requestId",
+          "payload"
+        ],
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "flyflor.ws.v1"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "confirm.list"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "askId",
+              "limit"
+            ],
+            "properties": {
+              "askId": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "type": "confirm.list",
+      "value": {
+        "protocol": "flyflor.ws.v1",
+        "id": "env-confirm-list-1",
+        "type": "confirm.list",
+        "at": "2026-05-22T00:00:05.160Z",
+        "requestId": "req-confirm-list-1",
+        "payload": {
+          "askId": "ask-1",
+          "limit": 20
+        }
+      }
+    },
+    {
+      "direction": "client->server",
+      "expected": [
+        "ConfirmSnapshot"
+      ],
+      "folder": "03 TUI Read Queries",
+      "name": "ConfirmDetailGet",
+      "schema": {
+        "type": "object",
+        "required": [
+          "protocol",
+          "id",
+          "type",
+          "at",
+          "requestId",
+          "payload"
+        ],
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "flyflor.ws.v1"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "confirm.detail.get"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "confirmId"
+            ],
+            "properties": {
+              "confirmId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "type": "confirm.detail.get",
+      "value": {
+        "protocol": "flyflor.ws.v1",
+        "id": "env-confirm-detail-1",
+        "type": "confirm.detail.get",
+        "at": "2026-05-22T00:00:05.900Z",
+        "requestId": "req-confirm-detail-1",
+        "payload": {
+          "confirmId": "confirm-1"
+        }
+      }
+    },
+    {
+      "direction": "client->server",
+      "expected": [
         "BlackboardSnapshot"
       ],
       "folder": "03 TUI Read Queries",
@@ -6595,6 +6737,195 @@
               "type": "ask"
             }
           }
+        }
+      }
+    },
+    {
+      "direction": "server->client",
+      "expected": [],
+      "folder": "04 TUI Snapshots",
+      "name": "ConfirmSnapshot",
+      "schema": {
+        "type": "object",
+        "required": [
+          "protocol",
+          "id",
+          "type",
+          "at",
+          "requestId",
+          "correlationId",
+          "payload"
+        ],
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "flyflor.ws.v1"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "confirm.snapshot"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "cache",
+              "data"
+            ],
+            "properties": {
+              "cache": {
+                "type": "object",
+                "required": [
+                  "hit",
+                  "key",
+                  "ttlMs"
+                ],
+                "properties": {
+                  "hit": {
+                    "type": "boolean"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "ttlMs": {
+                    "type": "integer"
+                  }
+                },
+                "additionalProperties": true
+              },
+              "data": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "askEventId",
+                    "snapshotId",
+                    "status",
+                    "confirmAnswer",
+                    "event"
+                  ],
+                  "properties": {
+                    "askEventId": {
+                      "type": "string"
+                    },
+                    "snapshotId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "confirmAnswer": {
+                      "type": "object",
+                      "required": [
+                        "answerCount",
+                        "choiceIds",
+                        "questionIds",
+                        "hasFreeform",
+                        "legacy"
+                      ],
+                      "properties": {
+                        "answerCount": {
+                          "type": "integer"
+                        },
+                        "choiceIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "questionIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "hasFreeform": {
+                          "type": "boolean"
+                        },
+                        "legacy": {
+                          "type": "boolean"
+                        }
+                      },
+                      "additionalProperties": true
+                    },
+                    "event": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "type"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": true
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "type": "confirm.snapshot",
+      "value": {
+        "protocol": "flyflor.ws.v1",
+        "id": "env-confirm-snapshot-1",
+        "type": "confirm.snapshot",
+        "at": "2026-05-22T00:00:05.170Z",
+        "requestId": "req-confirm-list-1",
+        "correlationId": "env-confirm-list-1",
+        "payload": {
+          "cache": {
+            "hit": false,
+            "key": "confirm.list:{\"askId\":\"ask-1\",\"limit\":20}",
+            "ttlMs": 1500
+          },
+          "data": [
+            {
+              "askEventId": "ask-1",
+              "snapshotId": "snapshot-1",
+              "status": "answered",
+              "confirmAnswer": {
+                "answerCount": 1,
+                "choiceIds": [
+                  "continue-tools"
+                ],
+                "questionIds": [
+                  "execution-strategy"
+                ],
+                "hasFreeform": false,
+                "legacy": false
+              },
+              "event": {
+                "id": "confirm-1",
+                "type": "ask-answer-pair"
+              }
+            }
+          ]
         }
       }
     },
@@ -9618,6 +9949,54 @@
         ]
       }
     },
+    "ConfirmList": {
+      "protocol": "flyflor.ws.v1",
+      "id": "env-confirm-list-1",
+      "type": "confirm.list",
+      "at": "2026-05-22T00:00:05.160Z",
+      "requestId": "req-confirm-list-1",
+      "payload": {
+        "askId": "ask-1",
+        "limit": 20
+      }
+    },
+    "ConfirmSnapshot": {
+      "protocol": "flyflor.ws.v1",
+      "id": "env-confirm-snapshot-1",
+      "type": "confirm.snapshot",
+      "at": "2026-05-22T00:00:05.170Z",
+      "requestId": "req-confirm-list-1",
+      "correlationId": "env-confirm-list-1",
+      "payload": {
+        "cache": {
+          "hit": false,
+          "key": "confirm.list:{\"askId\":\"ask-1\",\"limit\":20}",
+          "ttlMs": 1500
+        },
+        "data": [
+          {
+            "askEventId": "ask-1",
+            "snapshotId": "snapshot-1",
+            "status": "answered",
+            "confirmAnswer": {
+              "answerCount": 1,
+              "choiceIds": [
+                "continue-tools"
+              ],
+              "questionIds": [
+                "execution-strategy"
+              ],
+              "hasFreeform": false,
+              "legacy": false
+            },
+            "event": {
+              "id": "confirm-1",
+              "type": "ask-answer-pair"
+            }
+          }
+        ]
+      }
+    },
     "ScopeList": {
       "protocol": "flyflor.ws.v1",
       "id": "env-scope-list-1",
@@ -9877,6 +10256,16 @@
             "type": "ask"
           }
         }
+      }
+    },
+    "ConfirmDetailGet": {
+      "protocol": "flyflor.ws.v1",
+      "id": "env-confirm-detail-1",
+      "type": "confirm.detail.get",
+      "at": "2026-05-22T00:00:05.900Z",
+      "requestId": "req-confirm-detail-1",
+      "payload": {
+        "confirmId": "confirm-1"
       }
     },
     "BlackboardDetailGet": {

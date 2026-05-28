@@ -2044,3 +2044,21 @@
   原因：新增 `RuntimeEventType.ConfirmAnswered` 后，socket subscription schema 必须与 runtime enum 完全一致。
   验证：`bun test tests/ask.wire.test.ts tests/event.component.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts --timeout 30000`（90 pass, 0 fail）；`bun run docs:apifox`；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`git diff --check`。
   风险：完整 `confirm.snapshot` / `confirm.detail.get` read-model 仍待后续实现；本轮只新增实时事件可见性。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：confirm-read-model
+  变动文件：`src/protocol/contracts/enums.ts`、`src/protocol/control/envelope.ts`、`src/socket/control.ts`、`src/socket/query/brain.reader.ts`、`src/socket/query/component.ts`、`src/socket/query/types.ts`、`docs/openapi/flyflor.socket.openapi.json`、`scripts/build.apifox.socket.ts`、`tests/gateway.ws.test.ts`、`tests/docs.references.test.ts`、`TODO.md`、`LOGS.md`
+  摘要：新增 `confirm.list`、`confirm.detail.get` 和 `confirm.snapshot` query/read-model，从 `brain.db` 既有 `ask-answer-pair.confirmAnswerSummary` 暴露 Confirm audit。
+  原因：Confirm 已有独立 metadata 和 event 后，需要完整 read/query 面，避免 thin client 继续只依赖 ASK snapshot。
+  验证：已运行 `bun test tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts --timeout 30000`（92 pass, 0 fail）；待运行 `bun run docs:apifox`、`bun run docs:check`、`bun run check`、`git diff --check`。
+  风险：本轮不新增存储表、不写 `brain.db`、不影响 Memory/Scope/Crystal 主链；CLI 主动请求和独立组件仍是后续切片。
+
+- 状态：完成
+  执行者：main-codex
+  范围：confirm-read-model-verification
+  变动文件：同上，另包含生成后的 `docs/apifox/flyflor.socket.messages.json`、`docs/apifox/flyflor.socket.apifox.openapi.json`、`docs/apifox/flyflor.socket.tester.html`
+  摘要：完成 Confirm read-model 切片的 focused、OpenAPI/Apifox、docs、TypeScript 和 whitespace 验证。
+  原因：`confirm.*` socket query 面属于公开 `/ws` 契约，必须与 protocol enum、canonical OpenAPI 和 Apifox artifact 同步。
+  验证：`bun test tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts --timeout 30000`（92 pass, 0 fail）；`bun run docs:apifox`；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`git diff --check`。
+  风险：CLI 主动请求和独立 Confirm component 仍是后续切片；本轮只读 `brain.db` 既有 Confirm audit，不新增 DB 写入路径。

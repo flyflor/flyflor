@@ -100,6 +100,8 @@ describe("SocketControlHub", () => {
                         GatewayControlMessageType.ForkDetailGet,
                         GatewayControlMessageType.AskList,
                         GatewayControlMessageType.AskDetailGet,
+                        GatewayControlMessageType.ConfirmList,
+                        GatewayControlMessageType.ConfirmDetailGet,
                         GatewayControlMessageType.BlackboardList,
                         GatewayControlMessageType.BlackboardDetailGet,
                         GatewayControlMessageType.TaskList,
@@ -2113,6 +2115,33 @@ describe("SocketControlHub", () => {
                         status: "active",
                     }];
                 },
+                confirmList: (input) => {
+                    expect(input).toEqual({ askId: "ask-1", limit: 5 });
+                    return [{
+                        askEventId: "ask-1",
+                        confirmAnswer: {
+                            answerCount: 1,
+                            choiceIds: ["continue-tools"],
+                            questionIds: ["execution-strategy"],
+                        },
+                        event: {
+                            id: "confirm-1",
+                            ts: 101,
+                            timeBucket: "2026-05-17",
+                            ownerKey: "scope:core",
+                            type: "ask-answer-pair",
+                            content: {
+                                askId: "ask-1",
+                                confirmAnswerSummary: { answerCount: 1 },
+                                snapshotId: "snapshot-1",
+                            },
+                            importance: 0.5,
+                            parentId: "ask-1",
+                        },
+                        snapshotId: "snapshot-1",
+                        status: "answered",
+                    }];
+                },
                 forkDetail: async (input) => {
                     expect(input).toEqual({ forkId: "fork-1" });
                     return {
@@ -2163,6 +2192,16 @@ describe("SocketControlHub", () => {
             socket,
             JSON.stringify(
                 createGatewayControlEnvelope(
+                    GatewayControlMessageType.ConfirmList,
+                    { askId: "ask-1", limit: 5 },
+                    { id: "confirm-list-1" },
+                ),
+            ),
+        );
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
                     GatewayControlMessageType.ForkDetailGet,
                     { forkId: "fork-1" },
                     { id: "fork-detail-1" },
@@ -2175,11 +2214,24 @@ describe("SocketControlHub", () => {
         );
 
         expect(dispatchCount).toBe(0);
-        expect(sent(socket).slice(-3)).toMatchObject([
+        expect(sent(socket).slice(-4)).toMatchObject([
             {
                 correlationId: "ask-list-1",
                 type: GatewayControlMessageType.AskSnapshot,
                 payload: { data: [{ status: "active" }] },
+            },
+            {
+                correlationId: "confirm-list-1",
+                type: GatewayControlMessageType.ConfirmSnapshot,
+                payload: {
+                    data: [{
+                        askEventId: "ask-1",
+                        confirmAnswer: {
+                            choiceIds: ["continue-tools"],
+                        },
+                        status: "answered",
+                    }],
+                },
             },
             {
                 correlationId: "fork-detail-1",
@@ -3670,6 +3722,8 @@ function fakeQueries(overrides: Partial<SocketQueryComponentPort> = {}): SocketQ
         askList: () => [],
         blackboardDetail: async () => undefined,
         blackboardList: async () => [],
+        confirmDetail: () => undefined,
+        confirmList: () => [],
         crystalList: () => [],
         executionJobDetail: () => undefined,
         executionJobList: () => [],
