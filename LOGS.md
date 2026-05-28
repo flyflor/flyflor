@@ -2107,3 +2107,12 @@
   原因：当前实现已证明 prompt/context 装配不调用 brain prompt recall，`confirm.answered` / `confirm.snapshot` 已闭合；固定端口会把端口占用误报成热记忆恢复失败。
   验证：`bun test tests/brain.store.test.ts tests/memory.brain.wire.test.ts tests/runtime.perf.test.ts --timeout 30000`（54 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`bun run smoke:recovery`（ok true，working memory `loadedFrom=empty/wal/backup`，WAL replay 1，torn WAL 1）；`git diff --check`。
   风险：本轮不改变 Runtime、Memory、Scope、Crystal 主链行为；只修复 smoke 端口选择和注释/测试命名漂移。
+
+- 状态：完成
+  执行者：main-codex
+  范围：coding-thinking-budget-owner-split
+  变动文件：`src/agent/runtime/module.ts`、`src/agent/runtime/thinking/**`、`tests/runtime.thinking.coding.test.ts`、`TODO.md`、`LOGS.md`、`session-table.md`
+  摘要：新增 `CodingThinkingPolicy`，把 coding/tool-loop budget 与 loop guard 策略从 `RuntimeModule` 拆入 thinking owner。
+  原因：用户要求 thinking 层具备更强 coding/分析执行能力，并且路由/执行策略需要更清晰的分层 owner，而不是继续堆在 turn orchestrator 中。
+  验证：`bun test tests/runtime.thinking.coding.test.ts --timeout 30000`（3 pass, 0 fail）；`bun run check`；`git diff --check`。
+  风险：本轮只迁移预算与 loop guard 数学，不改变工具 catalog、Memory/Scope/Crystal 主链、ASK/Confirm 协议或子代理执行行为。

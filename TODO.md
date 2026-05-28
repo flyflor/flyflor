@@ -1324,3 +1324,9 @@ Kernel V2 acceptance focus：
 - [x] 校正 active code/test 注释中旧 `brain.db prompt recall` 口径，保持 `brain.db` 为 ledger/query/replay/audit/detail，prompt/context 装配走 durable working memory、Crystal、显式 Scope/Fork 和 Executive 能力面。
 - [x] 修复 `working.memory.recovery.smoke.ts` 固定端口，改为启动前分配空闲 TCP port，避免端口占用被误判为记忆恢复失败。
 - [x] 新增 `session-table.md` 记录本轮未启动子 Codex 的真实主控切片。
+
+## 2026-05-28 Coding Thinking Owner Split
+
+- [x] 新增 `src/agent/runtime/thinking/` owner，把 coding/tool-loop budget 与 loop-guard 策略从 `RuntimeModule` 中拆出为 `CodingThinkingPolicy`。
+- [x] 增加 `tests/runtime.thinking.coding.test.ts`，钉住默认预算、显式 Executive budget 优先级和 loop guard 派生规则。
+- [ ] 后续继续把初始工具需求判断、local path probe 和更复杂失败恢复策略从 `RuntimeModule` 拆入 thinking owner。

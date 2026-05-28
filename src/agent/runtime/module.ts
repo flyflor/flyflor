@@ -158,6 +158,7 @@ import {
     RuntimeSubagentBatchComponent,
     type SubagentTask,
 } from "./subagent/index.ts";
+import { CodingThinkingPolicy } from "./thinking/index.ts";
 
 export { promptApproveMcpToolCall, startHumanChat } from "./chat.ts";
 
@@ -228,7 +229,6 @@ interface RuntimeMcpCapabilityCatalogBuild {
 const MCP_TOOL_CATALOG_CACHE_TTL_MS = 30_000;
 const MCP_TOOL_CATALOG_CACHE_MAX_ENTRIES = 64;
 const MCP_TOOL_CATALOG_STALE_GRACE_MS = 5_000;
-const DEFAULT_MCP_TOOL_LOOP_LIMIT = 192;
 const COMPLETION_MCP_TOOL_LOOP_LIMIT = 384;
 const CONTINUATION_MCP_TOOL_LOOP_LIMIT = 512;
 const COMPLETION_EXECUTION_OPERATION_LIMIT = 2_048;
@@ -351,6 +351,7 @@ export class RuntimeModule extends RuntimeBoundary {
     protected readonly fastRouteEvaluator: FastRouteEvaluator;
     protected readonly routeEscalationPolicy: RouteEscalationPolicy;
     protected readonly thinkingRoute: ThinkingRoutePolicy;
+    protected readonly codingThinking: CodingThinkingPolicy;
     protected readonly mcpToolPlan: RuntimeMcpToolPlanComponent;
     protected readonly mcpToolNeed: RuntimeMcpToolNeedComponent;
     protected readonly mcpToolExecutor: RuntimeMcpToolExecutor;
@@ -395,6 +396,7 @@ export class RuntimeModule extends RuntimeBoundary {
         this.fastRouteEvaluator = new FastRouteEvaluator();
         this.routeEscalationPolicy = new RouteEscalationPolicy();
         this.thinkingRoute = new ThinkingRoutePolicy(this.routeEscalationPolicy);
+        this.codingThinking = new CodingThinkingPolicy();
         this.mcpToolPlan = new RuntimeMcpToolPlanComponent();
         this.mcpToolNeed = new RuntimeMcpToolNeedComponent();
         this.mcpToolExecutor = new RuntimeMcpToolExecutor(config, events, this.sandboxQuota);
@@ -897,7 +899,7 @@ export class RuntimeModule extends RuntimeBoundary {
         strategy?: RuntimeAskExecutionStrategy,
     ): RuntimeStreamOptions {
         if (!strategy || strategy.budget !== "increase-one-tier") return options;
-        const currentBudget = this.executiveToolBudget(options);
+        const currentBudget = this.codingThinking.budgetFor(options);
         const modelToolTurnBudget = Math.max(
             currentBudget.modelToolTurnBudget + 32,
             Math.ceil(currentBudget.modelToolTurnBudget * 2),
@@ -2944,7 +2946,7 @@ export class RuntimeModule extends RuntimeBoundary {
             };
         }
 
-        const budget = this.executiveToolBudget(options);
+        const budget = this.codingThinking.budgetFor(options);
         const firstTurnStreamed = { value: false };
         const initialToolProbe = await this.initialLocalPathProbe(
             messages,
@@ -2955,7 +2957,7 @@ export class RuntimeModule extends RuntimeBoundary {
         const result = await this.mcpToolExecutor.runLoop({
             budget,
             initialMessages: messages,
-            loopGuard: this.executiveLoopGuardForBudget(budget),
+            loopGuard: this.codingThinking.loopGuardForBudget(budget),
             maxTurns: budget.modelToolTurnBudget,
             noMoreToolsMessage: renderMcpToolBudgetExhaustedPrompt(),
             parse: parseMcpToolCalls,
@@ -3136,31 +3138,6 @@ export class RuntimeModule extends RuntimeBoundary {
         } catch {
             return undefined;
         }
-    }
-
-    private executiveToolBudget(
-        options: RuntimeStreamOptions,
-    ): Required<Pick<ExecutiveToolRuntimeBudget, "modelToolTurnBudget">> & ExecutiveToolRuntimeBudget {
-        const configured = options.executiveToolBudget;
-        return {
-            executionOperationBudget: configured?.executionOperationBudget,
-            modelToolTurnBudget: Math.max(
-                1,
-                configured?.modelToolTurnBudget ?? options.maxToolTurns ?? DEFAULT_MCP_TOOL_LOOP_LIMIT,
-            ),
-            riskQuota: configured?.riskQuota,
-        };
-    }
-
-    private executiveLoopGuardForBudget(
-        budget: Required<Pick<ExecutiveToolRuntimeBudget, "modelToolTurnBudget">> & ExecutiveToolRuntimeBudget,
-    ): ExecutiveLoopGuardOptions {
-        return {
-            maxCalls: Math.max(16, budget.modelToolTurnBudget * 4),
-            maxFailedCallRepeats: 2,
-            maxRepeatedCalls: Math.max(3, Math.ceil(budget.modelToolTurnBudget / 8)),
-            maxUnknownToolRepeats: 1,
-        };
     }
 
     private sandboxConfigForTurn(options: RuntimeStreamOptions): FlyflorConfig["sandbox"] {

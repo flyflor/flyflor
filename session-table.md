@@ -19,3 +19,19 @@ bun run check
 bun run docs:check
 bun run smoke:recovery
 ```
+
+## 2026-05-28 主控切片：Coding Thinking Owner Split
+
+本轮未新增实现型子 Codex；由主控在主 worktree 完成 coding/tool-loop budget 和 loop guard 策略 owner 拆分。
+
+| Lane | Branch | Worktree Path | Tmux Attach | Capture Working 细节 | Scope |
+|---|---|---|---|---|---|
+| coordinator | `master` | `/Users/yi./Desktop/yi/flyflors/flyflor` | 无新增 session | 本轮对话 + `git show --stat HEAD` / `git show HEAD` | Runtime thinking / coding tool-loop budget owner split. |
+
+可用检查命令：
+
+```bash
+bun test tests/runtime.thinking.coding.test.ts --timeout 30000
+bun run check
+git diff --check
+```
