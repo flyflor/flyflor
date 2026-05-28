@@ -35,3 +35,19 @@ bun test tests/runtime.thinking.coding.test.ts --timeout 30000
 bun run check
 git diff --check
 ```
+
+## 2026-05-28 主控切片：Coding Thinking Initial Tool Owner Split
+
+本轮未新增实现型子 Codex；由主控在主 worktree 完成初始工具需求判断、本地绝对路径检测和 workspace read/tree 预探测的 thinking owner 拆分。
+
+| Lane | Branch | Worktree Path | Tmux Attach | Capture Working 细节 | Scope |
+|---|---|---|---|---|---|
+| coordinator | `master` | `/Users/yi./Desktop/yi/flyflors/flyflor` | 无新增 session | 本轮对话 + `git show --stat HEAD` / `git show HEAD` | Runtime thinking / initial tool need and local path probe owner split. |
+
+可用检查命令：
+
+```bash
+bun test tests/runtime.thinking.coding.test.ts --timeout 30000
+bun run check
+git diff --check
+```

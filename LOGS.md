@@ -2116,3 +2116,12 @@
   原因：用户要求 thinking 层具备更强 coding/分析执行能力，并且路由/执行策略需要更清晰的分层 owner，而不是继续堆在 turn orchestrator 中。
   验证：`bun test tests/runtime.thinking.coding.test.ts --timeout 30000`（3 pass, 0 fail）；`bun run check`；`git diff --check`。
   风险：本轮只迁移预算与 loop guard 数学，不改变工具 catalog、Memory/Scope/Crystal 主链、ASK/Confirm 协议或子代理执行行为。
+
+- 状态：完成
+  执行者：main-codex
+  范围：coding-thinking-initial-tool-owner-split
+  变动文件：`src/agent/runtime/module.ts`、`src/agent/runtime/thinking/coding.policy.ts`、`tests/runtime.thinking.coding.test.ts`、`TODO.md`、`LOGS.md`、`session-table.md`
+  摘要：将初始工具需求判断、本地绝对路径检测和 workspace read/tree 预探测从 `RuntimeModule` 迁入 `CodingThinkingPolicy`。
+  原因：让 thinking/coding owner 继续承接工具探索策略，Runtime 只保留 memory/catalog/sandbox/model/event 编排职责。
+  验证：`bun test tests/runtime.thinking.coding.test.ts --timeout 30000`（6 pass, 0 fail）；`bun run check`；`git diff --check`。
+  风险：本轮不改变 tool-call wire 结构、ASK/Confirm、Memory/Scope/Crystal 主链或子代理执行；更复杂失败恢复策略仍待后续迁入 thinking owner。

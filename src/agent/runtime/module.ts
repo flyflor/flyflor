@@ -1,4 +1,3 @@
-import { stat } from "node:fs/promises";
 import type { FlyflorConfig } from "../../config/index.ts";
 import type {
     AgentAsk,
@@ -119,7 +118,6 @@ import {
     PROCESS_SERVER,
     RuntimeMcpCapabilityReader,
     RuntimeMcpToolNeedComponent,
-    RuntimeMcpToolNeedDecisionKind,
     RuntimeMcpToolPlanComponent,
     RuntimeMcpToolExecutor,
     type RuntimeMcpHiddenTool,
@@ -233,8 +231,6 @@ const COMPLETION_MCP_TOOL_LOOP_LIMIT = 384;
 const CONTINUATION_MCP_TOOL_LOOP_LIMIT = 512;
 const COMPLETION_EXECUTION_OPERATION_LIMIT = 2_048;
 const CONTINUATION_EXECUTION_OPERATION_LIMIT = 4_096;
-const LOCAL_ABSOLUTE_PATH_PATTERN =
-    /((?:\/[^\s"'()[\]{}<>，。；：！？、]+)+|[A-Za-z]:\\[^\s"'()[\]{}<>，。；：！？、]+)/gu;
 const BUILTIN_SHELL_SERVER = "shell";
 const BUILTIN_SHELL_TOOL = "run";
 const BUILTIN_SHELL_CATALOG_ENTRY: McpToolCatalogEntry = {
@@ -931,9 +927,7 @@ export class RuntimeModule extends RuntimeBoundary {
         }
         const resumeRead = this.continuationGhosts.readResumeRequest(message.metadata);
         const isContinuation = resumeRead.ok && resumeRead.request !== undefined;
-        LOCAL_ABSOLUTE_PATH_PATTERN.lastIndex = 0;
-        const hasLocalPath = LOCAL_ABSOLUTE_PATH_PATTERN.test(message.text);
-        LOCAL_ABSOLUTE_PATH_PATTERN.lastIndex = 0;
+        const hasLocalPath = this.codingThinking.hasLocalAbsolutePath(message.text);
         if (!isContinuation && !hasLocalPath) return options;
         const modelToolTurnBudget = isContinuation ? CONTINUATION_MCP_TOOL_LOOP_LIMIT : COMPLETION_MCP_TOOL_LOOP_LIMIT;
         const executionOperationBudget = isContinuation
@@ -2948,12 +2942,11 @@ export class RuntimeModule extends RuntimeBoundary {
 
         const budget = this.codingThinking.budgetFor(options);
         const firstTurnStreamed = { value: false };
-        const initialToolProbe = await this.initialLocalPathProbe(
+        const initialToolProbe = await this.codingThinking.initialLocalPathProbe({
+            catalog: mcp.catalog,
             messages,
-            mcp.catalog,
-            mcp.workspaceToolset,
-            mcp.requestId,
-        );
+            workspaceToolset: mcp.workspaceToolset,
+        });
         const result = await this.mcpToolExecutor.runLoop({
             budget,
             initialMessages: messages,
@@ -2989,7 +2982,23 @@ export class RuntimeModule extends RuntimeBoundary {
                     return raw;
                 }
                 if (turn === 0 && parsedCalls.calls.length === 0) {
-                    const forced = await this.decideInitialToolNeed(raw, modelTranscript, mcp, options);
+                    const forced = await this.codingThinking.decideInitialToolNeed({
+                        assistantDraft: raw,
+                        catalog: mcp.catalog,
+                        messages: modelTranscript,
+                        model: this.model,
+                        signal: options.signal,
+                        toolNeed: this.mcpToolNeed,
+                        onModelAllocation: () => {
+                            this.publishModelAllocation({
+                                requestId: mcp.requestId,
+                                scope: "tool-need",
+                                agentRole: "planner",
+                                reason: "initial-tool-need.generate",
+                                source: "runtime.tool-need",
+                            });
+                        },
+                    });
                     if (forced) return forced;
                     if (options.onTextDelta && !firstTurnStreamed.value) {
                         firstTurnStreamed.value = true;
@@ -3031,113 +3040,6 @@ export class RuntimeModule extends RuntimeBoundary {
             mcpToolCalls: result.mcpToolCalls,
             requiresApproval: mcp.requiresApproval,
         };
-    }
-
-    private async decideInitialToolNeed(
-        assistantDraft: string,
-        messages: ModelMessage[],
-        mcp: {
-            catalog: McpToolCatalogEntry[];
-            requestId?: string;
-        },
-        options: RuntimeStreamOptions,
-    ): Promise<string | undefined> {
-        const userMessage = [...messages].reverse().find((message) => message.role === ModelRole.User);
-        if (!userMessage) return undefined;
-        let decision: Awaited<ReturnType<RuntimeMcpToolNeedComponent["decide"]>>;
-        try {
-            if (mcp.requestId) {
-                this.publishModelAllocation({
-                    requestId: mcp.requestId,
-                    scope: "tool-need",
-                    agentRole: "planner",
-                    reason: "initial-tool-need.generate",
-                    source: "runtime.tool-need",
-                });
-            }
-            decision = await this.mcpToolNeed.decide({
-                assistantDraft,
-                catalog: mcp.catalog,
-                model: this.model,
-                signal: options.signal,
-                userRequest: userMessage.content,
-            });
-        } catch {
-            return undefined;
-        }
-        if (decision.decision !== RuntimeMcpToolNeedDecisionKind.UseTools || decision.calls.length === 0) {
-            return undefined;
-        }
-        return `<agent_tool_calls>${JSON.stringify({ calls: decision.calls })}</agent_tool_calls>`;
-    }
-
-    private async initialLocalPathProbe(
-        messages: ModelMessage[],
-        catalog: McpToolCatalogEntry[],
-        workspaceToolset: WorkspaceToolset,
-        requestId?: string,
-    ): Promise<string | undefined> {
-        const userMessage = [...messages].reverse().find((message) => message.role === ModelRole.User);
-        if (!userMessage) return undefined;
-        const path = await this.firstExistingAbsolutePath(userMessage.content);
-        if (!path) return undefined;
-        const tool = await this.workspaceProbeTool(path, workspaceToolset);
-        if (!tool) return undefined;
-        const key = `workspace.${tool}`;
-        if (!catalog.some((entry) => `${entry.server}.${entry.tool.name}` === key)) return undefined;
-        return `<agent_tool_calls>${JSON.stringify({
-            calls: [
-                {
-                    server: "workspace",
-                    tool,
-                    input: tool === "tree" ? { path, maxDepth: 3, maxEntries: 200 } : { path },
-                },
-            ],
-        })}</agent_tool_calls>`;
-    }
-
-    private async firstExistingAbsolutePath(text: string): Promise<string | undefined> {
-        for (const match of text.matchAll(LOCAL_ABSOLUTE_PATH_PATTERN)) {
-            const path = await this.existingAbsolutePathPrefix(match[1]?.trim() ?? "");
-            if (path) return path;
-        }
-        return undefined;
-    }
-
-    private async existingAbsolutePathPrefix(raw: string): Promise<string | undefined> {
-        if (!raw) return undefined;
-        if (await this.localPathExists(raw)) return raw;
-        for (let index = raw.length - 1; index > 0; index -= 1) {
-            const candidate = raw.slice(0, index);
-            const suffix = raw.slice(index);
-            if (suffix.includes("/") || suffix.includes("\\")) continue;
-            if (candidate === "/" || /^[A-Za-z]:\\?$/u.test(candidate)) continue;
-            if (await this.localPathExists(candidate)) return candidate;
-        }
-        return undefined;
-    }
-
-    private async localPathExists(path: string): Promise<boolean> {
-        try {
-            await stat(path);
-            return true;
-        } catch {
-            return false;
-        }
-    }
-
-    private async workspaceProbeTool(path: string, workspaceToolset: WorkspaceToolset): Promise<string | undefined> {
-        try {
-            const result = await workspaceToolset.executeWithAccess(
-                { server: "workspace", tool: "stat", input: { path } },
-                { approved: true, reason: "runtime-local-path-probe" },
-            );
-            if (result.isError || !result.raw || typeof result.raw !== "object") return undefined;
-            const type = (result.raw as { type?: unknown }).type;
-            return type === "directory" ? "tree" : type === "file" ? "read" : undefined;
-        } catch {
-            return undefined;
-        }
     }
 
     private sandboxConfigForTurn(options: RuntimeStreamOptions): FlyflorConfig["sandbox"] {

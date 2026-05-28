@@ -1329,4 +1329,5 @@ Kernel V2 acceptance focus：
 
 - [x] 新增 `src/agent/runtime/thinking/` owner，把 coding/tool-loop budget 与 loop-guard 策略从 `RuntimeModule` 中拆出为 `CodingThinkingPolicy`。
 - [x] 增加 `tests/runtime.thinking.coding.test.ts`，钉住默认预算、显式 Executive budget 优先级和 loop guard 派生规则。
+- [x] 将初始工具需求判断、本地绝对路径检测和 workspace read/tree 预探测迁入 `CodingThinkingPolicy`，Runtime 只保留 event/model/catalog 装配。
 - [ ] 后续继续把初始工具需求判断、local path probe 和更复杂失败恢复策略从 `RuntimeModule` 拆入 thinking owner。
