@@ -1334,3 +1334,4 @@ Kernel V2 acceptance focus：
 - [x] 将 Executive 工具 loop 卡住时的 Confirm/ASK 构造与工具进度摘要迁入 `CodingThinkingPolicy`，Runtime 只负责调用策略结果。
 - [x] 将 structured Confirm 执行策略解析和预算提升从 `RuntimeModule` 迁入 `CodingThinkingPolicy`，Runtime 只做结构化 ASK gate 与 turn 编排。
 - [x] 将 completion/continuation 工具预算画像迁入 `CodingThinkingPolicy`，Runtime 只传递 continuation 状态和用户文本，不再拥有 coding 执行预算常量。
+- [x] 移除 `RuntimeModule.buildExecutiveToolAsk` 纯转发包装，Runtime 直接调用 `CodingThinkingPolicy.buildExecutiveToolAsk`。

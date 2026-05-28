@@ -135,3 +135,20 @@ bun run docs:check
 bun run check
 git diff --check
 ```
+
+## 2026-05-28 主控切片：Coding Thinking Executive ASK Wrapper Removal
+
+本轮未新增实现型子 Codex；由主控在主 worktree 移除 `RuntimeModule.buildExecutiveToolAsk` 纯转发包装，让 Runtime 直接调用 thinking owner。
+
+| Lane | Branch | Worktree Path | Tmux Attach | Capture Working 细节 | Scope |
+|---|---|---|---|---|---|
+| coordinator | `master` | `/Users/yi./Desktop/yi/flyflors/flyflor` | 无新增 session | 本轮对话 + `git show --stat HEAD` / `git show HEAD` | Runtime thinking / Executive ASK wrapper removal. |
+
+可用检查命令：
+
+```bash
+bun test tests/runtime.thinking.coding.test.ts --timeout 30000
+bun test tests/skill.mcp.test.ts tests/ask.wire.test.ts --timeout 30000
+bun run check
+git diff --check
+```

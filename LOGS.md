@@ -2179,3 +2179,12 @@
   原因：让 Runtime 保持 turn 编排职责，coding thinking owner 承接本地路径 completion 与 ASK continuation 的预算策略。
   验证：`bun test tests/runtime.thinking.coding.test.ts --timeout 30000`（12 pass, 0 fail）；`bun test tests/skill.mcp.test.ts tests/ask.wire.test.ts --timeout 30000`（77 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`git diff --check`。
   风险：本轮不改变 Memory/Scope/Crystal 主链、ASK/Confirm wire contract、工具执行结果或 TUI；仅迁移 owner 与补充覆盖。
+
+- 状态：完成
+  执行者：main-codex
+  范围：coding-thinking-executive-ask-wrapper-removal
+  变动文件：`src/agent/runtime/module.ts`、`TODO.md`、`LOGS.md`、`session-table.md`
+  摘要：移除 `RuntimeModule.buildExecutiveToolAsk` 纯转发包装，Runtime 在需要 Executive ASK 时直接调用 `CodingThinkingPolicy.buildExecutiveToolAsk`。
+  原因：继续削薄 Runtime turn orchestrator，让 Executive 工具 loop ASK/Confirm 构造只由 thinking/coding owner 表达。
+  验证：`bun test tests/runtime.thinking.coding.test.ts --timeout 30000`（12 pass, 0 fail）；`bun test tests/skill.mcp.test.ts tests/ask.wire.test.ts --timeout 30000`（77 pass, 0 fail）；`bun run check`；`git diff --check`。
+  风险：本轮不改变 Memory/Scope/Crystal 主链、ASK/Confirm wire contract、工具执行行为或提示词；只是去掉无 owner 意义的 wrapper。

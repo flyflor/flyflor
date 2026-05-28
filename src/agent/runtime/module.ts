@@ -1656,7 +1656,10 @@ export class RuntimeModule extends RuntimeBoundary {
         });
         const rawText = generated.rawText;
         const executiveAsk = generated.askRequired
-            ? this.buildExecutiveToolAsk(generated.askRequired, generated.mcpToolCalls)
+            ? this.codingThinking.buildExecutiveToolAsk({
+                  askRequired: generated.askRequired,
+                  executions: generated.mcpToolCalls,
+              })
             : undefined;
         if (executiveAsk) {
             this.events.publish(
@@ -2163,13 +2166,6 @@ export class RuntimeModule extends RuntimeBoundary {
         });
         if (!continuation) return;
         this.memory.recordContinuationFromReason(continuation);
-    }
-
-    private buildExecutiveToolAsk(
-        askRequired: RuntimeExecutiveAskRequired,
-        executions: readonly McpToolCallExecution[],
-    ): AgentAsk {
-        return this.codingThinking.buildExecutiveToolAsk({ askRequired, executions });
     }
 
     /**
