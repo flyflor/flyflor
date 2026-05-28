@@ -1,7 +1,6 @@
 import type { FlyflorConfig } from "../../config/index.ts";
 import type {
     AgentAsk,
-    AgentAskAnswerItem,
     ContextForkRecord,
     GatewayMessage,
     GatewayReply,
@@ -178,12 +177,6 @@ export interface RuntimeStreamOptions {
     interactionMode?: InteractionModeType;
     /** One-turn high-permission sandbox override from structured control metadata. */
     sandboxMode?: SandboxMode;
-}
-
-interface RuntimeAskExecutionStrategy {
-    readonly mode?: "continue" | "narrow" | "stop";
-    readonly budget?: "increase-one-tier" | "keep" | "user-defined";
-    readonly subagents?: "keep" | "reduce" | "disable";
 }
 
 export interface RuntimeMcpResourceReadInput {
@@ -688,7 +681,7 @@ export class RuntimeModule extends RuntimeBoundary {
         if (
             pendingStructuredAsk &&
             this.requiresStructuredCitizenAnswer(pendingStructuredAsk.ask) &&
-            !this.hasExecutableCitizenPermissionAnswer(message.metadata)
+            !this.codingThinking.hasExecutableCitizenPermissionAnswer(message.metadata)
         ) {
             this.events.publish(
                 event(
@@ -705,9 +698,9 @@ export class RuntimeModule extends RuntimeBoundary {
             );
             return this.replyFromStructuredAskAnswerRequired(restored.message, restored.context, pendingStructuredAsk);
         }
-        const turnOptions = this.applyAskAnswerExecutionStrategy(
+        const turnOptions = this.codingThinking.applyAskExecutionStrategy(
             this.applyCompletionBudgetProfile(options, restored.message),
-            this.readAskAnswerExecutionStrategy(message.metadata),
+            this.codingThinking.readAskExecutionStrategy(message.metadata),
         );
         await this.inflight.markStart({
             requestId: restored.context.requestId,
@@ -744,46 +737,6 @@ export class RuntimeModule extends RuntimeBoundary {
         }
     }
 
-    private readAskAnswerExecutionStrategy(
-        metadata: Record<string, unknown> | undefined,
-    ): RuntimeAskExecutionStrategy | undefined {
-        const raw = this.readCitizenPermissionAnswerMetadata(metadata);
-        if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
-        const payload = raw as Record<string, unknown>;
-        const answers = Array.isArray(payload.answers) ? payload.answers : [payload];
-        let strategy: RuntimeAskExecutionStrategy = {};
-        for (const answer of answers) {
-            if (!answer || typeof answer !== "object" || Array.isArray(answer)) continue;
-            strategy = this.mergeAskExecutionStrategy(
-                strategy,
-                this.askExecutionStrategyFromAnswer(answer as AgentAskAnswerItem & { executionPatch?: unknown }),
-            );
-        }
-        return Object.keys(strategy).length > 0 ? strategy : undefined;
-    }
-
-    private hasExecutableCitizenPermissionAnswer(metadata: Record<string, unknown> | undefined): boolean {
-        const raw = this.readCitizenPermissionAnswerMetadata(metadata);
-        if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
-        const payload = raw as Record<string, unknown>;
-        if (Array.isArray(payload.answers)) {
-            return payload.answers.some((answer) => this.isExecutableCitizenPermissionAnswerItem(answer));
-        }
-        return this.isExecutableCitizenPermissionAnswerItem(payload);
-    }
-
-    private readCitizenPermissionAnswerMetadata(metadata: Record<string, unknown> | undefined): unknown {
-        return metadata?.confirmAnswer;
-    }
-
-    private isExecutableCitizenPermissionAnswerItem(answer: unknown): boolean {
-        if (!answer || typeof answer !== "object" || Array.isArray(answer)) return false;
-        const strategy = this.askExecutionStrategyFromAnswer(
-            answer as AgentAskAnswerItem & { executionPatch?: unknown },
-        );
-        return Object.keys(strategy).length > 0;
-    }
-
     private requiresStructuredCitizenAnswer(ask: AgentAsk): boolean {
         return (
             ask.answerContract?.kind === AskAnswerContractKind.CitizenPermission &&
@@ -814,103 +767,6 @@ export class RuntimeModule extends RuntimeBoundary {
                     requiredMetadata: "confirmAnswer",
                 },
             },
-        };
-    }
-
-    private askExecutionStrategyFromAnswer(
-        answer: AgentAskAnswerItem & { executionPatch?: unknown },
-    ): RuntimeAskExecutionStrategy {
-        const fromPatch = this.askExecutionStrategyFromPatch(answer.executionPatch);
-        const tokens = [answer.choiceId, typeof answer.value === "string" ? answer.value : undefined].filter(
-            (token): token is string => Boolean(token),
-        );
-        return tokens.reduce(
-            (strategy, token) => this.mergeAskExecutionStrategy(strategy, this.askExecutionStrategyFromToken(token)),
-            fromPatch,
-        );
-    }
-
-    private askExecutionStrategyFromPatch(value: unknown): RuntimeAskExecutionStrategy {
-        if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-        const record = value as Record<string, unknown>;
-        return {
-            ...(record.mode === "continue" || record.mode === "narrow" || record.mode === "stop"
-                ? { mode: record.mode }
-                : {}),
-            ...(record.budget === "increase-one-tier" || record.budget === "keep" || record.budget === "user-defined"
-                ? { budget: record.budget }
-                : {}),
-            ...(record.subagents === "keep" || record.subagents === "reduce" || record.subagents === "disable"
-                ? { subagents: record.subagents }
-                : {}),
-        };
-    }
-
-    private askExecutionStrategyFromToken(token: string): RuntimeAskExecutionStrategy {
-        switch (token) {
-            case "continue-tools":
-                return { mode: "continue" };
-            case "narrow-scope":
-                return { mode: "narrow" };
-            case "stop-and-crystallize":
-            case "stop-and-crystalize":
-                return { mode: "stop" };
-            case "increase-budget":
-                return { budget: "increase-one-tier" };
-            case "keep-budget":
-                return { budget: "keep" };
-            case "user-budget":
-                return { budget: "user-defined" };
-            case "keep-subagents":
-                return { subagents: "keep" };
-            case "reduce-subagents":
-                return { subagents: "reduce" };
-            case "no-subagents":
-                return { subagents: "disable" };
-            default:
-                return {};
-        }
-    }
-
-    private mergeAskExecutionStrategy(
-        left: RuntimeAskExecutionStrategy,
-        right: RuntimeAskExecutionStrategy,
-    ): RuntimeAskExecutionStrategy {
-        const mode = right.mode ?? left.mode;
-        const budget = right.budget ?? left.budget;
-        const subagents = right.subagents ?? left.subagents;
-        return {
-            ...(mode ? { mode } : {}),
-            ...(budget ? { budget } : {}),
-            ...(subagents ? { subagents } : {}),
-        };
-    }
-
-    private applyAskAnswerExecutionStrategy(
-        options: RuntimeStreamOptions,
-        strategy?: RuntimeAskExecutionStrategy,
-    ): RuntimeStreamOptions {
-        if (!strategy || strategy.budget !== "increase-one-tier") return options;
-        const currentBudget = this.codingThinking.budgetFor(options);
-        const modelToolTurnBudget = Math.max(
-            currentBudget.modelToolTurnBudget + 32,
-            Math.ceil(currentBudget.modelToolTurnBudget * 2),
-        );
-        return {
-            ...options,
-            executiveToolBudget: {
-                ...options.executiveToolBudget,
-                executionOperationBudget:
-                    options.executiveToolBudget?.executionOperationBudget === undefined
-                        ? undefined
-                        : Math.max(
-                              options.executiveToolBudget.executionOperationBudget + 32,
-                              Math.ceil(options.executiveToolBudget.executionOperationBudget * 2),
-                          ),
-                modelToolTurnBudget,
-                riskQuota: options.executiveToolBudget?.riskQuota,
-            },
-            maxToolTurns: Math.max(options.maxToolTurns ?? 0, modelToolTurnBudget),
         };
     }
 

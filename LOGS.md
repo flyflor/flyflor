@@ -2152,3 +2152,12 @@
   原因：Executive 工具 loop 的下一步策略、预算策略和子代理策略属于 thinking/coding 执行策略 owner，不应继续堆在 turn orchestrator 中。
   验证：`bun test tests/runtime.thinking.coding.test.ts --timeout 30000`（8 pass, 0 fail）；`bun run check`；`git diff --check`。
   风险：本轮不改变 ASK/Confirm wire contract、Memory/Scope/Crystal 主链、工具执行行为或现有文案内容；只是迁移 owner 并增加 focused coverage。
+
+- 状态：完成
+  执行者：main-codex
+  范围：coding-thinking-confirm-strategy-owner-split
+  变动文件：`src/agent/runtime/module.ts`、`src/agent/runtime/thinking/coding.policy.ts`、`tests/runtime.thinking.coding.test.ts`、`TODO.md`、`LOGS.md`、`session-table.md`
+  摘要：将 structured Confirm 执行策略解析、可执行答案判断和预算提升迁入 `CodingThinkingPolicy`，Runtime 只保留结构化 ASK gate 与 turn 编排。
+  原因：Confirm answer 如何影响工具预算和子代理策略属于 thinking/coding 执行策略，不应由 RuntimeModule 维护 token/patch 映射细节。
+  验证：`bun test tests/runtime.thinking.coding.test.ts --timeout 30000`（9 pass, 0 fail）；`bun test tests/skill.mcp.test.ts tests/ask.wire.test.ts --timeout 30000`（77 pass, 0 fail）；`bun run check`；`git diff --check`。
+  风险：本轮不改变 Confirm wire key（仍为 `metadata.confirmAnswer`）、ASK/Confirm 分层、Memory/Scope/Crystal 主链或工具执行行为；只是迁移 owner 并补 focused coverage。

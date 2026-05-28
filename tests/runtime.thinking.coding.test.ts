@@ -188,4 +188,44 @@ describe("CodingThinkingPolicy", () => {
             "subagent-policy",
         ]);
     });
+
+    test("owns structured Confirm execution strategy parsing and budget expansion", () => {
+        const policy = new CodingThinkingPolicy();
+        const metadata = {
+            confirmAnswer: {
+                answers: [
+                    { choiceId: "continue-tools", executionPatch: { budget: "increase-one-tier" } },
+                    { value: "reduce-subagents" },
+                ],
+            },
+        };
+
+        expect(policy.hasExecutableCitizenPermissionAnswer(metadata)).toBe(true);
+        const strategy = policy.readAskExecutionStrategy(metadata);
+        expect(strategy).toEqual({
+            budget: "increase-one-tier",
+            mode: "continue",
+            subagents: "reduce",
+        });
+        expect(
+            policy.applyAskExecutionStrategy(
+                {
+                    executiveToolBudget: {
+                        executionOperationBudget: 11,
+                        modelToolTurnBudget: 7,
+                        riskQuota: 3,
+                    },
+                    maxToolTurns: 7,
+                },
+                strategy,
+            ),
+        ).toEqual({
+            executiveToolBudget: {
+                executionOperationBudget: 43,
+                modelToolTurnBudget: 39,
+                riskQuota: 3,
+            },
+            maxToolTurns: 39,
+        });
+    });
 });

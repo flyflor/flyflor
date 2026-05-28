@@ -3,6 +3,7 @@ import { stat } from "node:fs/promises";
 import {
     AskAnswerContractKind,
     AskAuthority,
+    type AgentAskAnswerItem,
     AskCrystalCandidatePolicy,
     AskReason,
     AskResumePolicy,
@@ -58,6 +59,12 @@ export interface CodingThinkingToolFailureContinuation {
     readonly importance: number;
 }
 
+export interface CodingThinkingAskExecutionStrategy {
+    readonly mode?: "continue" | "narrow" | "stop";
+    readonly budget?: "increase-one-tier" | "keep" | "user-defined";
+    readonly subagents?: "keep" | "reduce" | "disable";
+}
+
 export const CODING_THINKING_DEFAULT_MODEL_TOOL_TURN_BUDGET = 192;
 export const CODING_THINKING_LOCAL_ABSOLUTE_PATH_PATTERN =
     /((?:\/[^\s"'()[\]{}<>，。；：！？、]+)+|[A-Za-z]:\\[^\s"'()[\]{}<>，。；：！？、]+)/gu;
@@ -89,6 +96,62 @@ export class CodingThinkingPolicy {
             maxFailedCallRepeats: 2,
             maxRepeatedCalls: Math.max(3, Math.ceil(budget.modelToolTurnBudget / 8)),
             maxUnknownToolRepeats: 1,
+        };
+    }
+
+    public readAskExecutionStrategy(
+        metadata: Record<string, unknown> | undefined,
+    ): CodingThinkingAskExecutionStrategy | undefined {
+        const raw = this.readCitizenPermissionAnswerMetadata(metadata);
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+        const payload = raw as Record<string, unknown>;
+        const answers = Array.isArray(payload.answers) ? payload.answers : [payload];
+        let strategy: CodingThinkingAskExecutionStrategy = {};
+        for (const answer of answers) {
+            if (!answer || typeof answer !== "object" || Array.isArray(answer)) continue;
+            strategy = this.mergeAskExecutionStrategy(
+                strategy,
+                this.askExecutionStrategyFromAnswer(answer as AgentAskAnswerItem & { executionPatch?: unknown }),
+            );
+        }
+        return Object.keys(strategy).length > 0 ? strategy : undefined;
+    }
+
+    public hasExecutableCitizenPermissionAnswer(metadata: Record<string, unknown> | undefined): boolean {
+        const raw = this.readCitizenPermissionAnswerMetadata(metadata);
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+        const payload = raw as Record<string, unknown>;
+        if (Array.isArray(payload.answers)) {
+            return payload.answers.some((answer) => this.isExecutableCitizenPermissionAnswerItem(answer));
+        }
+        return this.isExecutableCitizenPermissionAnswerItem(payload);
+    }
+
+    public applyAskExecutionStrategy<TOptions extends CodingThinkingBudgetOptions>(
+        options: TOptions,
+        strategy?: CodingThinkingAskExecutionStrategy,
+    ): TOptions {
+        if (!strategy || strategy.budget !== "increase-one-tier") return options;
+        const currentBudget = this.budgetFor(options);
+        const modelToolTurnBudget = Math.max(
+            currentBudget.modelToolTurnBudget + 32,
+            Math.ceil(currentBudget.modelToolTurnBudget * 2),
+        );
+        return {
+            ...options,
+            executiveToolBudget: {
+                ...options.executiveToolBudget,
+                executionOperationBudget:
+                    options.executiveToolBudget?.executionOperationBudget === undefined
+                        ? undefined
+                        : Math.max(
+                              options.executiveToolBudget.executionOperationBudget + 32,
+                              Math.ceil(options.executiveToolBudget.executionOperationBudget * 2),
+                          ),
+                modelToolTurnBudget,
+                riskQuota: options.executiveToolBudget?.riskQuota,
+            },
+            maxToolTurns: Math.max(options.maxToolTurns ?? 0, modelToolTurnBudget),
         };
     }
 
@@ -368,6 +431,87 @@ export class CodingThinkingPolicy {
                     ? `${askRequired.message.slice(0, 160)} | ${progressSummary}`
                     : askRequired.message.slice(0, 200),
             },
+        };
+    }
+
+    private readCitizenPermissionAnswerMetadata(metadata: Record<string, unknown> | undefined): unknown {
+        return metadata?.confirmAnswer;
+    }
+
+    private isExecutableCitizenPermissionAnswerItem(answer: unknown): boolean {
+        if (!answer || typeof answer !== "object" || Array.isArray(answer)) return false;
+        const strategy = this.askExecutionStrategyFromAnswer(
+            answer as AgentAskAnswerItem & { executionPatch?: unknown },
+        );
+        return Object.keys(strategy).length > 0;
+    }
+
+    private askExecutionStrategyFromAnswer(
+        answer: AgentAskAnswerItem & { executionPatch?: unknown },
+    ): CodingThinkingAskExecutionStrategy {
+        const fromPatch = this.askExecutionStrategyFromPatch(answer.executionPatch);
+        const tokens = [answer.choiceId, typeof answer.value === "string" ? answer.value : undefined].filter(
+            (token): token is string => Boolean(token),
+        );
+        return tokens.reduce(
+            (strategy, token) => this.mergeAskExecutionStrategy(strategy, this.askExecutionStrategyFromToken(token)),
+            fromPatch,
+        );
+    }
+
+    private askExecutionStrategyFromPatch(value: unknown): CodingThinkingAskExecutionStrategy {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+        const record = value as Record<string, unknown>;
+        return {
+            ...(record.mode === "continue" || record.mode === "narrow" || record.mode === "stop"
+                ? { mode: record.mode }
+                : {}),
+            ...(record.budget === "increase-one-tier" || record.budget === "keep" || record.budget === "user-defined"
+                ? { budget: record.budget }
+                : {}),
+            ...(record.subagents === "keep" || record.subagents === "reduce" || record.subagents === "disable"
+                ? { subagents: record.subagents }
+                : {}),
+        };
+    }
+
+    private askExecutionStrategyFromToken(token: string): CodingThinkingAskExecutionStrategy {
+        switch (token) {
+            case "continue-tools":
+                return { mode: "continue" };
+            case "narrow-scope":
+                return { mode: "narrow" };
+            case "stop-and-crystallize":
+            case "stop-and-crystalize":
+                return { mode: "stop" };
+            case "increase-budget":
+                return { budget: "increase-one-tier" };
+            case "keep-budget":
+                return { budget: "keep" };
+            case "user-budget":
+                return { budget: "user-defined" };
+            case "keep-subagents":
+                return { subagents: "keep" };
+            case "reduce-subagents":
+                return { subagents: "reduce" };
+            case "no-subagents":
+                return { subagents: "disable" };
+            default:
+                return {};
+        }
+    }
+
+    private mergeAskExecutionStrategy(
+        left: CodingThinkingAskExecutionStrategy,
+        right: CodingThinkingAskExecutionStrategy,
+    ): CodingThinkingAskExecutionStrategy {
+        const mode = right.mode ?? left.mode;
+        const budget = right.budget ?? left.budget;
+        const subagents = right.subagents ?? left.subagents;
+        return {
+            ...(mode ? { mode } : {}),
+            ...(budget ? { budget } : {}),
+            ...(subagents ? { subagents } : {}),
         };
     }
 
