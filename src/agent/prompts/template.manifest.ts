@@ -20,7 +20,6 @@ export const PROMPT_TEMPLATE_ORDER = [
     "memoryWorkContextOffer",
     "memorySkillOffer",
     "mcpContext",
-    "mcpSubtaskPlan",
     "mcpToolNeed",
     "mcpToolBudgetExhausted",
     "planningRoute",
@@ -149,11 +148,6 @@ export const PROMPT_TEMPLATE_DEFINITIONS: Record<PromptTemplateKey, PromptTempla
         callSite: "renderMcpContextPrompt",
         filename: "mcp.context.md",
         requiredPlaceholders: ["mcpEntries"],
-    },
-    mcpSubtaskPlan: {
-        callSite: "RuntimeSubtaskPlanComponent.decide",
-        filename: "mcp.subtask.plan.md",
-        requiredPlaceholders: ["toolCatalogJson", "userRequest"],
     },
     mcpToolNeed: {
         callSite: "RuntimeMcpToolNeedComponent.decide",

@@ -54,6 +54,8 @@ Route decision 由模型或结构化字段驱动。生产语义路由不能使�
 
 旧 `BlackboardMode` 值继续作为 wire-compatible execution detail 保留。`direct` 映射到 `fast`；`direct-with-watch` 和 `blackboard` 映射到 `thinking`。
 
+子代理不再由单独的入口级 planner 在主 thinking/tool loop 运行前分配。`subagent.batch` 仍作为 thinking 内可见的 Executive capability 保留，主模型只有在工作已经成为可并行取证或验证问题时才按需调用它。父级 sandbox deny、Confirm/approval、quota 和 ASK 冒泡仍走普通 Executive tool path 继承。
+
 Scope recall 遵循可见 gate：
 
 1. Runtime 发布 recall-start event。

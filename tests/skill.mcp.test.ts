@@ -1518,7 +1518,6 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '{"decision":"continue","tasks":[],"concurrency":0,"maxToolTurns":0,"reason":"bounded tree first"}',
             "项目包含 README 和 src/main.ts。",
             "[]",
         ]);
@@ -1539,10 +1538,8 @@ describe("Skill and MCP capability config", () => {
         expect(reply.metadata?.mcpToolExecutions).toEqual([
             expect.objectContaining({ ok: true, server: "workspace", tool: "tree" }),
         ]);
-        expect(model.messages).toHaveLength(3);
-        expect(model.messages[0]?.[0]?.content).toContain("delegate");
-        expect(model.messages[1]?.[0]?.content).toContain('"name": "tree"');
-        expect(model.messages[2]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+        expect(model.messages).toHaveLength(2);
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
             "src/main.ts",
         );
     });
@@ -1645,7 +1642,6 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '{"decision":"continue","tasks":[],"concurrency":0,"maxToolTurns":0,"reason":"single-directory"}',
             "已经读取粘连路径项目。",
             "[]",
         ]);
@@ -1663,8 +1659,8 @@ describe("Skill and MCP capability config", () => {
         expect(reply.metadata?.mcpToolExecutions).toEqual([
             expect.objectContaining({ ok: true, server: "workspace", tool: "tree" }),
         ]);
-        expect(model.messages).toHaveLength(3);
-        expect(model.messages[2]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+        expect(model.messages).toHaveLength(2);
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
             "README.md",
         );
     });
@@ -2574,7 +2570,11 @@ describe("Skill and MCP capability config", () => {
 
         expect(reply.metadata?.kind).not.toBe("ask");
         expect(reply.text).toBe("Completed the project read.");
-        expect(reply.metadata?.mcpToolExecutions).toHaveLength(140);
+        const executions = reply.metadata?.mcpToolExecutions as Array<Record<string, unknown>> | undefined;
+        expect(executions).toHaveLength(141);
+        expect(executions?.[0]).toEqual(
+            expect.objectContaining({ ok: true, server: "workspace", tool: "tree" }),
+        );
     });
 
     test("runtime executes subagent.batch with narrowed child tools and audit events", async () => {
@@ -2833,8 +2833,8 @@ describe("Skill and MCP capability config", () => {
         }
     });
 
-    test("runtime can delegate broad tool work through a model-planned subtask batch", async () => {
-        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-subtask-plan-"));
+    test("thinking can delegate broad tool work through an on-demand subagent.batch call", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-subagent-on-demand-"));
         const paths = testPaths(root);
         await installTestTemplates(paths);
         await mkdir(join(root, "src"), { recursive: true });
@@ -2843,18 +2843,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            "I should split this into helper checks.",
-            '{"decision":"answer","calls":[],"reason":"not-a-single-direct-tool"}',
-            JSON.stringify({
-                decision: "delegate",
-                concurrency: 2,
-                maxToolTurns: 3,
-                reason: "independent project checks",
-                tasks: [
-                    { id: "tree", goal: "Map the project tree.", toolAllowlist: ["workspace.tree"] },
-                    { id: "readme", goal: "Read the README.", toolAllowlist: ["workspace.read"] },
-                ],
-            }),
+            '<agent_tool_calls>{"calls":[{"server":"subagent","tool":"batch","input":{"concurrency":2,"maxToolTurns":3,"tasks":[{"id":"tree","goal":"Map the project tree.","toolAllowlist":["workspace.tree"]},{"id":"readme","goal":"Read the README.","toolAllowlist":["workspace.read"]}]}}]}</agent_tool_calls>',
             '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"tree","input":{"path":"."}}]}</agent_tool_calls>',
             '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"README.md"}}]}</agent_tool_calls>',
             "tree child done",
@@ -2883,9 +2872,8 @@ describe("Skill and MCP capability config", () => {
                 ],
             }),
         ]);
-        expect(model.messages[2]?.[0]?.content).toContain("delegate");
-        expect(model.messages[2]?.[0]?.content).toContain('"server": "workspace"');
-        expect(model.messages[2]?.[0]?.content).toContain('"tool": "tree"');
+        expect(model.messages[0]?.[0]?.content).not.toContain("focused helper tasks before the main assistant answers");
+        expect(model.messages[0]?.some((message) => message.content.includes("subagent.batch"))).toBe(true);
         const childStarts = sink.events.filter((event) => event.type === RuntimeEventType.SubagentChildStart);
         expect(childStarts).toHaveLength(2);
         expect(childStarts[0]?.payload?.allowedTools).toEqual(

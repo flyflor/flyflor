@@ -109,3 +109,18 @@ Socket 工作需要增加与变更 surface 相关的 focused socket/control test
 - `bun run smoke:computer-use:live` 通过；确定性 delegate checks 含 `delegate-scroll-direction-casing`，本机缺少 CUA 时保留结构化 `cua-command-not-found` skip
 - `bun run smoke:live:closure` 通过，`failedChecks: []`、`phantomPermissionUserEvents: 0`、`executionJobCount: 11`
 - `bun run docs:check` 与 `bun run check` 通过
+
+## 2026-05-28 On-Demand Subagent Thinking
+
+已接受的路由校正切片：
+
+- owner：`main-codex`
+- scope：移除单独的入口级 subtask planner 及其专用 prompt/template，同时保留 `subagent.batch` 作为 thinking tool loop 内的 Executive capability
+- `fast` 仍然不启动工具 loop 或子代理
+- `thinking` 可以在主模型看到任务、catalog 和已有工具上下文后，通过普通 tool path 按需调用 `subagent.batch`
+- 父级 sandbox deny、Confirm/approval、quota、execution-job audit 和 child `needs_user` ASK 冒泡仍通过既有 Executive path 继承
+- 2026-05-25 的 subtask-planner 记录保留为历史；新 runtime code 不得重新引入 `RuntimeSubtaskPlanComponent` 或 `mcp.subtask.plan`
+
+验证：
+
+- `bun test tests/runtime.executive.boundaries.test.ts tests/skill.mcp.test.ts --timeout 30000`

@@ -1209,6 +1209,21 @@ Validation:
 - `bun test tests/skill.mcp.test.ts tests/gateway.ws.test.ts tests/event.component.test.ts tests/runtime.planning.route.test.ts tests/runtime.mcp.tool.plan.test.ts --timeout 30000`
 - `git diff --check`
 
+## 2026-05-28 On-Demand Subagent Thinking
+
+Accepted route correction:
+
+- owner: `main-codex`
+- scope: remove the separate entry-level subtask planner and its dedicated prompt/template, while keeping `subagent.batch` as an Executive capability inside the thinking tool loop
+- `fast` still never starts tool loops or subagents
+- `thinking` may call `subagent.batch` on demand through the normal tool path, after the main model sees the task, catalog and prior tool context
+- parent sandbox deny, Confirm/approval, quota, execution-job audit and child `needs_user` ASK bubbling still inherit through the existing Executive path
+- the old 2026-05-25 subtask-planner closure remains historical; new runtime code must not reintroduce `RuntimeSubtaskPlanComponent` or `mcp.subtask.plan`
+
+Validation:
+
+- `bun test tests/runtime.executive.boundaries.test.ts tests/skill.mcp.test.ts --timeout 30000`
+
 ## 2026-05-25 Executive ASK Tools Relative Path V1
 
 Accepted first implementation slice:

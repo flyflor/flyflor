@@ -54,6 +54,8 @@ The main route is now only `fast | thinking`:
 
 The legacy `BlackboardMode` values remain wire-compatible execution detail. `direct` maps to `fast`; `direct-with-watch` and `blackboard` map to `thinking`.
 
+Subagents are no longer assigned by a separate entry-level planner before the main thinking/tool loop runs. `subagent.batch` remains a visible Executive capability inside thinking, so the main model can call it when the work has already become a parallel evidence-gathering or verification problem. Parent sandbox deny, Confirm/approval, quota and ASK bubbling still apply through the normal Executive tool path.
+
 Scope recall follows a visible gate:
 
 1. Runtime publishes a recall-start event.

@@ -142,14 +142,6 @@
       ]
     },
     {
-      "key": "mcpSubtaskPlan",
-      "filename": "mcp.subtask.plan.md",
-      "requiredPlaceholders": [
-        "toolCatalogJson",
-        "userRequest"
-      ]
-    },
-    {
       "key": "mcpToolNeed",
       "filename": "mcp.tool.need.md",
       "requiredPlaceholders": [

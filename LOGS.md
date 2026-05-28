@@ -2062,3 +2062,21 @@
   原因：`confirm.*` socket query 面属于公开 `/ws` 契约，必须与 protocol enum、canonical OpenAPI 和 Apifox artifact 同步。
   验证：`bun test tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts --timeout 30000`（92 pass, 0 fail）；`bun run docs:apifox`；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`git diff --check`。
   风险：CLI 主动请求和独立 Confirm component 仍是后续切片；本轮只读 `brain.db` 既有 Confirm audit，不新增 DB 写入路径。
+
+- 状态：进行中
+  执行者：main-codex
+  范围：on-demand-subagent-thinking
+  变动文件：`src/agent/runtime/module.ts`、`src/agent/runtime/subagent/index.ts`、`src/agent/runtime/subagent/planner.ts`、`src/agent/prompts/render.ts`、`src/agent/prompts/template.manifest.ts`、`templates/prompts/template.manifest.json`、`templates/prompts/mcp.subtask.plan.md`、`templates/prompts/mcp.subtask.plan.zh.cn.md`、`tests/skill.mcp.test.ts`、`tests/runtime.executive.boundaries.test.ts`、`docs/runtime.turn.md`、`docs/runtime.turn.zh.cn.md`、`docs/development.workflow.md`、`docs/development.workflow.zh.cn.md`、`TODO.md`、`LOGS.md`
+  摘要：移除入口级 `RuntimeSubtaskPlanComponent` 和 `mcp.subtask.plan` 专用提示词，不再在首轮工具 loop 前额外询问模型是否分配子代理；`subagent.batch` 保留为 thinking tool loop 内按需能力。
+  原因：用户要求子代理不应由入口路由/初始 planner 预分配，而应在 thinking/coding 分析和工具循环遇到可并行探索、独立验证或困难时再启动。
+  验证：已运行 `bun test tests/runtime.executive.boundaries.test.ts tests/skill.mcp.test.ts --timeout 30000`（77 pass, 0 fail）；待运行 `bun run docs:check`、`bun run check`、`git diff --check`。
+  风险：本轮移除的是预分配 planner，不移除 `subagent.batch` 执行能力；更细的 coding thinking 策略拆分仍在后续。
+
+- 状态：完成
+  执行者：main-codex
+  范围：on-demand-subagent-thinking-verification
+  变动文件：同上
+  摘要：完成按需子代理路由校正切片的 focused、docs、TypeScript 和 whitespace 验证。
+  原因：确认 Runtime 不再拥有入口级 subtask planner，同时 `subagent.batch` 仍可通过 thinking tool loop 正常执行并继承 Executive 权限/ASK/审计链路。
+  验证：`bun test tests/runtime.executive.boundaries.test.ts tests/skill.mcp.test.ts --timeout 30000`（77 pass, 0 fail）；`bun run docs:check`（26 pass, 0 fail）；`bun run check`；`git diff --check`。
+  风险：更细的 coding thinking 策略拆分仍在后续；本轮不改变 Memory/Scope/Crystal 主链。

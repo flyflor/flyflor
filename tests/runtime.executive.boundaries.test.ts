@@ -64,4 +64,17 @@ describe("Runtime and Executive tool boundaries", () => {
             expect(context).toContain(promptHelper);
         }
     });
+
+    test("Runtime does not run an entry-level subtask planner before thinking tool loops", async () => {
+        const runtime = await Bun.file("src/agent/runtime/module.ts").text();
+        const prompts = await Bun.file("src/agent/prompts/template.manifest.ts").text();
+        const subagentIndex = await Bun.file("src/agent/runtime/subagent/index.ts").text();
+
+        expect(runtime).toContain("RuntimeSubagentBatchComponent");
+        expect(runtime).not.toContain("RuntimeSubtaskPlanComponent");
+        expect(runtime).not.toContain("decideInitialDelegation");
+        expect(runtime).not.toContain("subtask-plan.generate");
+        expect(prompts).not.toContain("mcpSubtaskPlan");
+        expect(subagentIndex).not.toContain("./planner");
+    });
 });

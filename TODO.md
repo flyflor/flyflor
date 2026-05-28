@@ -1298,7 +1298,8 @@ Kernel V2 acceptance focus：
 - [x] 将 Blackboard 表达为 thinking escalation detail，并让升级事件携带 `mainRoute`。
 - [x] 为 MemoryComponent hot memory 增加 durable backend 红线说明和 WAL replay health snapshot 断言。
 - [x] 同步 runtime/memory/boundaries 文档，明确 ASK/Confirm 分层、`brain.db` 非 prompt container、Scope hot memory 属于 scope-local `.flyflor/scope.db`。
-- [ ] 后续继续把 coding thinking / on-demand subagent 执行策略从现有 runtime 中拆出，并保证父级 deny/Confirm/approval 约束向下传递。
+- [x] 移除入口级 `mcp.subtask.plan` / `RuntimeSubtaskPlanComponent` 分配器，保留 `subagent.batch` 作为 thinking tool loop 内按需能力。
+- [ ] 后续继续把 coding thinking 执行策略从现有 runtime 中拆出，并补充更多困难/失败后按需子代理策略证据。
 
 ## 2026-05-28 Confirm Metadata Protocol
 
@@ -1313,4 +1314,5 @@ Kernel V2 acceptance focus：
 - [x] `confirm.answered` 归入 ASK/interaction subscription class，供 thin client timeline 可见。
 - [x] Memory 仅发布 bounded `confirmAnswer` audit summary，不把 Confirm answer 提升为 ASK evidence 或 Crystal candidate。
 - [x] 新增 `confirm.list` / `confirm.detail.get` / `confirm.snapshot` read-model，直接读取 `brain.db` 中已有 Confirm audit，不触发 Runtime。
-- [ ] 后续让 CLI startup 主动请求 `confirm.list` 并接入独立 Confirm component。
+- [x] CLI startup 已主动请求 `confirm.list` 并把 `confirm.snapshot` 渲染为 Confirm timeline row（flyflor-cli `9a3fe19`）。
+- [ ] 后续接入完整独立 Confirm component UI，并移除 ASK-compatible permission fallback。

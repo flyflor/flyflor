@@ -51,11 +51,6 @@ export interface McpToolNeedPromptInput {
     userRequest: string;
 }
 
-export interface McpSubtaskPlanPromptInput {
-    toolCatalogJson: string;
-    userRequest: string;
-}
-
 export interface BlackboardAdvisoryPromptInput {
     compactRounds?: string[];
     configured: boolean;
@@ -322,15 +317,6 @@ export function renderMcpToolNeedPrompt(input: McpToolNeedPromptInput): string {
     });
 }
 
-export function renderMcpSubtaskPlanPrompt(input: McpSubtaskPlanPromptInput): string {
-    // Dedicated model gate: decides whether a request should be wrapped in one
-    // parent subtask batch before the normal tool loop spends individual turns.
-    return renderTemplate(requiredTemplates().mcpSubtaskPlan.content, {
-        toolCatalogJson: input.toolCatalogJson,
-        userRequest: input.userRequest,
-    });
-}
-
 export function renderMcpToolBudgetExhaustedPrompt(_input: McpToolBudgetExhaustedPromptInput = {}): string {
     return requiredTemplates().mcpToolBudgetExhausted.content;
 }
@@ -584,7 +570,6 @@ const REQUIRED_PLACEHOLDERS: Record<PromptTemplateKey, readonly string[]> = {
     crystalReflection: ["evidence"],
     feedbackClassify: ["currentUserText", "previousAssistantText"],
     mcpContext: ["mcpEntries"],
-    mcpSubtaskPlan: ["toolCatalogJson", "userRequest"],
     mcpToolNeed: ["assistantDraft", "toolCatalogJson", "userRequest"],
     memoryAction: [],
     memoryConsolidation: ["episode"],

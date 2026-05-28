@@ -156,8 +156,6 @@ import { elapsed, scopeConstraintIdForContext, renderUserContentWithAttachments 
 import { ReflectionWorker } from "./reflection/worker.ts";
 import {
     RuntimeSubagentBatchComponent,
-    RuntimeSubtaskPlanComponent,
-    SUBAGENT_BATCH_KEY,
     type SubagentTask,
 } from "./subagent/index.ts";
 
@@ -358,7 +356,6 @@ export class RuntimeModule extends RuntimeBoundary {
     protected readonly mcpToolExecutor: RuntimeMcpToolExecutor;
     protected readonly mcpCapabilityReader: RuntimeMcpCapabilityReader;
     protected readonly subagentBatch: RuntimeSubagentBatchComponent;
-    protected readonly subtaskPlan: RuntimeSubtaskPlanComponent;
     protected readonly continuationGhosts: ContinuationGhostStore;
     protected readonly scopeRecall: ScopeRecallComponent;
     private warmupPromise: Promise<void> | undefined;
@@ -408,7 +405,6 @@ export class RuntimeModule extends RuntimeBoundary {
                 this.memory.recordExecutionJobEvent(jobEvent);
             }),
         );
-        this.subtaskPlan = new RuntimeSubtaskPlanComponent();
         this.continuationGhosts = new ContinuationGhostStore(config.paths.storageDir);
         this.scopeRecall = new ScopeRecallComponent();
     }
@@ -2954,7 +2950,6 @@ export class RuntimeModule extends RuntimeBoundary {
             messages,
             mcp.catalog,
             mcp.workspaceToolset,
-            options,
             mcp.requestId,
         );
         const result = await this.mcpToolExecutor.runLoop({
@@ -2994,8 +2989,6 @@ export class RuntimeModule extends RuntimeBoundary {
                 if (turn === 0 && parsedCalls.calls.length === 0) {
                     const forced = await this.decideInitialToolNeed(raw, modelTranscript, mcp, options);
                     if (forced) return forced;
-                    const delegated = await this.decideInitialDelegation(modelTranscript, mcp, options);
-                    if (delegated) return delegated;
                     if (options.onTextDelta && !firstTurnStreamed.value) {
                         firstTurnStreamed.value = true;
                         await options.onTextDelta(
@@ -3076,47 +3069,10 @@ export class RuntimeModule extends RuntimeBoundary {
         return `<agent_tool_calls>${JSON.stringify({ calls: decision.calls })}</agent_tool_calls>`;
     }
 
-    private async decideInitialDelegation(
-        messages: ModelMessage[],
-        mcp: {
-            catalog: McpToolCatalogEntry[];
-            requestId?: string;
-        },
-        options: RuntimeStreamOptions,
-    ): Promise<string | undefined> {
-        const userMessage = [...messages].reverse().find((message) => message.role === ModelRole.User);
-        if (!userMessage) return undefined;
-        if (!mcp.catalog.some((entry) => `${entry.server}.${entry.tool.name}` === SUBAGENT_BATCH_KEY)) return undefined;
-        let decision: ReturnType<RuntimeSubtaskPlanComponent["parse"]>;
-        try {
-            if (mcp.requestId) {
-                this.publishModelAllocation({
-                    requestId: mcp.requestId,
-                    scope: "subtask-planning",
-                    agentRole: "planner",
-                    reason: "subtask-plan.generate",
-                    source: "runtime.subtask-plan",
-                });
-            }
-            decision = await this.subtaskPlan.decide({
-                catalog: mcp.catalog,
-                model: this.model,
-                signal: options.signal,
-                userRequest: userMessage.content,
-            });
-        } catch {
-            return undefined;
-        }
-        const call = this.subtaskPlan.toToolCall(decision);
-        if (!call) return undefined;
-        return `<agent_tool_calls>${JSON.stringify({ calls: [call] })}</agent_tool_calls>`;
-    }
-
     private async initialLocalPathProbe(
         messages: ModelMessage[],
         catalog: McpToolCatalogEntry[],
         workspaceToolset: WorkspaceToolset,
-        options: RuntimeStreamOptions,
         requestId?: string,
     ): Promise<string | undefined> {
         const userMessage = [...messages].reverse().find((message) => message.role === ModelRole.User);
@@ -3125,10 +3081,6 @@ export class RuntimeModule extends RuntimeBoundary {
         if (!path) return undefined;
         const tool = await this.workspaceProbeTool(path, workspaceToolset);
         if (!tool) return undefined;
-        if (tool === "tree") {
-            const delegated = await this.decideInitialDelegation(messages, { catalog, requestId }, options);
-            if (delegated) return delegated;
-        }
         const key = `workspace.${tool}`;
         if (!catalog.some((entry) => `${entry.server}.${entry.tool.name}` === key)) return undefined;
         return `<agent_tool_calls>${JSON.stringify({
