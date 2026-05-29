@@ -27,6 +27,14 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .cache
 *.tsbuildinfo
 
+# workmux local worktrees
+.worktrees
+
+# flyflor local runtime data
+.config/memory
+.config/runtime
+.config/codegraph
+
 # IntelliJ based IDEs
 .idea
 
