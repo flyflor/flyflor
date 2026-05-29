@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Flyflor Socket Test</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f5f6f8;
+        color: #1f2933;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      main {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        min-height: 100vh;
+      }
+
+      header,
+      form {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 12px;
+        background: #ffffff;
+        border-bottom: 1px solid #d8dee5;
+      }
+
+      form {
+        border-top: 1px solid #d8dee5;
+        border-bottom: 0;
+      }
+
+      input,
+      button {
+        height: 36px;
+        border: 1px solid #b8c2cc;
+        border-radius: 6px;
+        padding: 0 10px;
+        font: inherit;
+      }
+
+      input {
+        flex: 1;
+        min-width: 0;
+      }
+
+      button {
+        background: #1565c0;
+        color: #ffffff;
+        border-color: #1565c0;
+        cursor: pointer;
+      }
+
+      #log {
+        overflow: auto;
+        padding: 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .line {
+        white-space: pre-wrap;
+        padding: 6px 8px;
+        margin-bottom: 6px;
+        background: #ffffff;
+        border: 1px solid #d8dee5;
+        border-radius: 6px;
+      }
+
+      .status {
+        min-width: 96px;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="status" id="status">offline</span>
+        <input id="url" aria-label="WebSocket URL" />
+        <button id="connect" type="button">Connect</button>
+      </header>
+      <section id="log" aria-live="polite"></section>
+      <form id="form">
+        <input id="conversation" aria-label="Conversation id" value="local-test" />
+        <input id="message" aria-label="Message" value="记住我的项目代号是 flyflor-alpha" />
+        <button type="submit">Send</button>
+      </form>
+    </main>
+    <script>
+      const statusEl = document.querySelector("#status");
+      const urlEl = document.querySelector("#url");
+      const logEl = document.querySelector("#log");
+      const connectEl = document.querySelector("#connect");
+      const formEl = document.querySelector("#form");
+      const conversationEl = document.querySelector("#conversation");
+      const messageEl = document.querySelector("#message");
+      let socket;
+
+      urlEl.value = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
+
+      function append(type, payload) {
+        const line = document.createElement("div");
+        line.className = "line";
+        line.textContent = `${new Date().toLocaleTimeString()} ${type}\n${JSON.stringify(payload, null, 2)}`;
+        logEl.append(line);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function connect() {
+        socket?.close();
+        socket = new WebSocket(urlEl.value);
+        statusEl.textContent = "connecting";
+        socket.addEventListener("open", () => {
+          statusEl.textContent = "online";
+          append("socket.open", {});
+        });
+        socket.addEventListener("message", (event) => {
+          const envelope = JSON.parse(event.data);
+          append(envelope.type, envelope.payload);
+        });
+        socket.addEventListener("close", () => {
+          statusEl.textContent = "offline";
+          append("socket.close", {});
+        });
+        socket.addEventListener("error", () => {
+          statusEl.textContent = "error";
+          append("socket.error", {});
+        });
+      }
+
+      connectEl.addEventListener("click", connect);
+      formEl.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const envelope = {
+          id: crypto.randomUUID(),
+          type: "chat.message",
+          payload: {
+            conversationId: conversationEl.value,
+            content: messageEl.value,
+          },
+          timestamp: Date.now(),
+        };
+        socket?.send(JSON.stringify(envelope));
+        append("client.chat.message", envelope.payload);
+      });
+      connect();
+    </script>
+  </body>
+</html>

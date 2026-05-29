@@ -49,6 +49,22 @@
 9. assistant final 写回 `messages`，必要时写入 memory chunk。
 10. socket 广播 `chat.final`、`memory.store`、`agent.event`。
 
+## WebSocket 协议
+
+第一阶段使用 Bun 原生 WebSocket，不使用 Socket.IO。所有消息都是 JSON envelope：
+
+- `id`：客户端或服务端生成的消息 id。
+- `type`：事件类型，例如 `chat.message`、`chat.delta`、`chat.final`、`tool.call`、`tool.result`、`memory.store`、`memory.recall`、`agent.error`。
+- `payload`：事件载荷。
+- `timestamp`：Unix 毫秒时间戳。
+
+`chat.message` 的 payload 必须包含：
+
+- `conversationId`：本地 continuity id。无 session 指不使用 provider server-side session，不代表本地不记录线程。
+- `content`：用户输入。
+
+服务端必须把 SignalBus 的 runtime、tool、memory 事件广播为 envelope，方便未来 Rust TUI 壳复用同一协议。
+
 ## 上下文组装顺序
 
 每轮模型输入顺序必须稳定：
@@ -64,6 +80,24 @@
 9. 当前用户输入
 
 recent tail 必须保留最近对话的原文。旧上下文通过 checkpoint summary 和 memory recall 进入模型。
+
+## 本地模型替身
+
+第一阶段默认 `models.provider = "mock"`，它不是最终模型能力，而是用于场景测试的确定性 provider。mock provider 必须走完整 runtime、memory、context、tool、socket 通路，避免把测试退化成方法级单测。
+
+真实模型 provider 后续接入时不得改变 `AgentRuntimeService` 的主要数据流，只替换 provider adapter。
+
+## 场景测试隔离
+
+场景测试必须创建 `.config/runtime/scenarios/<name>` 下的临时 profile，并生成独立 `config.jsonc`、`memory.db`、wiki、artifact、socket 测试页路径。测试不允许写入正常 `.config/memory/memory.db`。
+
+场景测试覆盖：
+
+- 两轮 no-session 对话 continuity。
+- 进程内重建 MemoryComponent 后仍可 recall。
+- SignalBus guard auto approve。
+- 工具执行事件、artifact 写入。
+- WebSocket 页面存在并能通过 socket 完成一轮消息。
 
 ## 配置路径
 

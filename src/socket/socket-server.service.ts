@@ -1,0 +1,188 @@
+import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { Service } from "../di";
+import { ConfigService } from "../config/config.service";
+import { AgentRuntimeService } from "../kernel";
+import type { ChatMessagePayload, SocketEnvelope, SocketServerOptions } from "./socket.types";
+
+/**
+ * Adapts Bun native WebSocket traffic to the Flyflor kernel.
+ *
+ * @usage CLI entrypoint starts this service; tests can start it on an isolated port.
+ */
+@Service()
+export class SocketServerService {
+  private server?: ReturnType<typeof Bun.serve>;
+  private readonly subscriptions: readonly { readonly unsubscribe: () => void }[];
+
+  public constructor(
+    private readonly configService = new ConfigService(),
+    private readonly runtime = new AgentRuntimeService(configService),
+  ) {
+    this.subscriptions = this.attachRuntimeBroadcasts();
+  }
+
+  /**
+   * Starts the Bun WebSocket server.
+   *
+   * @param options - Optional host/port overrides.
+   * @returns Bun server handle.
+   * @usage `bun run src/index.ts --serve` calls this for local testing.
+   */
+  public start(options: SocketServerOptions = {}): ReturnType<typeof Bun.serve> {
+    const config = this.configService.getConfig();
+    const host = options.host ?? config.socket.host;
+    const port = options.port ?? config.socket.port;
+    const testPagePath = this.configService.resolve(config.paths.socketTestPage);
+    this.server = Bun.serve<{ readonly clientId: string }>({
+      hostname: host,
+      port,
+      fetch: (request, server) => {
+        const url = new URL(request.url);
+        if (url.pathname === "/ws") {
+          const upgraded = server.upgrade(request, { data: { clientId: randomUUID() } });
+          return upgraded ? undefined : new Response("WebSocket upgrade failed", { status: 400 });
+        }
+        if (url.pathname === "/" || url.pathname === "/socket-test.html") {
+          if (!existsSync(testPagePath)) {
+            return new Response("socket test page not found", { status: 404 });
+          }
+          return new Response(readFileSync(testPagePath), {
+            headers: { "content-type": "text/html; charset=utf-8" },
+          });
+        }
+        return new Response("not found", { status: 404 });
+      },
+      websocket: {
+        open: (ws) => {
+          ws.subscribe("runtime");
+          ws.send(JSON.stringify(this.envelope("agent.event", { status: "connected", clientId: ws.data.clientId })));
+        },
+        message: async (ws, message) => {
+          try {
+            const envelope = this.parseEnvelope(message);
+            if (envelope.type !== "chat.message") {
+              ws.send(JSON.stringify(this.envelope("agent.error", { error: `unsupported type: ${envelope.type}` })));
+              return;
+            }
+            const payload = envelope.payload as ChatMessagePayload;
+            if (!this.isChatMessagePayload(payload)) {
+              ws.send(JSON.stringify(this.envelope("agent.error", { error: "invalid chat.message payload" })));
+              return;
+            }
+            const result = await this.runtime.runTurn(payload);
+            ws.send(JSON.stringify(this.envelope("chat.turn.complete", {
+              conversationId: result.conversationId,
+              turnId: result.turnId,
+              toolResults: result.toolResults,
+            })));
+          } catch (error) {
+            ws.send(JSON.stringify(this.envelope("agent.error", { error: error instanceof Error ? error.message : String(error) })));
+          }
+        },
+        close: (ws) => {
+          ws.unsubscribe("runtime");
+        },
+      },
+    });
+    return this.server;
+  }
+
+  /**
+   * Stops the Bun WebSocket server and signal subscriptions.
+   *
+   * @returns Nothing.
+   * @usage Tests call this during teardown.
+   */
+  public stop(): void {
+    for (const subscription of this.subscriptions) {
+      subscription.unsubscribe();
+    }
+    this.server?.stop(true);
+    this.server = undefined;
+  }
+
+  /**
+   * Returns the runtime used by this socket service.
+   *
+   * @returns AgentRuntimeService instance.
+   * @usage Scenario tests inspect signal events through the runtime.
+   */
+  public getRuntime(): AgentRuntimeService {
+    return this.runtime;
+  }
+
+  /**
+   * Subscribes runtime SignalBus events and broadcasts them to socket clients.
+   *
+   * @returns Subscription handles for teardown.
+   * @usage Keeps SocketModule as an adapter, not business logic owner.
+   */
+  private attachRuntimeBroadcasts(): readonly { readonly unsubscribe: () => void }[] {
+    const bus = this.runtime.getSignalBus();
+    const types = [
+      "chat.delta",
+      "chat.final",
+      "memory.store",
+      "memory.recall",
+      "context.ready",
+      "tool.call",
+      "tool.result",
+      "tool.error",
+      "tool.artifact",
+      "guard.ask",
+      "guard.answer",
+    ];
+    return types.map((type) => bus.subscribe(type, async (payload) => {
+      this.server?.publish("runtime", JSON.stringify(this.envelope(type, payload)));
+    }));
+  }
+
+  /**
+   * Parses a WebSocket inbound message.
+   *
+   * @param message - Raw Bun WebSocket message.
+   * @returns Parsed protocol envelope.
+   * @usage Rejects malformed traffic before reaching the kernel.
+   */
+  private parseEnvelope(message: string | Buffer): SocketEnvelope {
+    const text = typeof message === "string" ? message : message.toString("utf8");
+    const parsed = JSON.parse(text) as Partial<SocketEnvelope>;
+    if (!parsed.id || !parsed.type || typeof parsed.payload !== "object") {
+      throw new Error("invalid socket envelope");
+    }
+    return parsed as SocketEnvelope;
+  }
+
+  /**
+   * Checks whether an inbound payload is a valid chat request.
+   *
+   * @param payload - Unknown parsed payload.
+   * @returns True when payload contains a conversation id and content.
+   * @usage Socket message handling validates input before calling the kernel.
+   */
+  private isChatMessagePayload(payload: unknown): payload is ChatMessagePayload {
+    return typeof payload === "object"
+      && payload !== null
+      && typeof (payload as Partial<ChatMessagePayload>).conversationId === "string"
+      && typeof (payload as Partial<ChatMessagePayload>).content === "string";
+  }
+
+  /**
+   * Creates a server envelope.
+   *
+   * @typeParam TPayload - Payload shape.
+   * @param type - Event type.
+   * @param payload - JSON payload.
+   * @returns Socket protocol envelope.
+   * @usage All outgoing messages pass through this helper for consistency.
+   */
+  private envelope<TPayload>(type: string, payload: TPayload): SocketEnvelope<TPayload> {
+    return {
+      id: randomUUID(),
+      type,
+      payload,
+      timestamp: Date.now(),
+    };
+  }
+}

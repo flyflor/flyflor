@@ -1,5 +1,15 @@
 {
   // Flyflor keeps all committed paths relative to the project root.
+  "paths": {
+    "templatesDir": "./.config/templates",
+    "memoryDb": "./.config/memory/memory.db",
+    "memoryWiki": "./.config/memory/wiki",
+    "toolArtifacts": "./.config/memory/artifacts",
+    "sqliteVecDir": "./.config/sqlite-vec",
+    "codegraphDir": "./.config/codegraph",
+    "socketTestPage": "./.config/web/socket-test.html",
+    "runtimeDir": "./.config/runtime"
+  },
   "runtime": {
     "autoApproveGuards": true
   },
@@ -10,6 +20,26 @@
   "prompts": {
     "system": "./prompts/system.md"
   },
-  "models": {},
-  "tools": {}
+  "models": {
+    "provider": "mock",
+    "model": "mock-coding-agent"
+  },
+  "tools": {
+    "rtk": {
+      "enabled": true,
+      "command": "rtk"
+    },
+    "codegraph": {
+      "enabled": true,
+      "command": "codegraph"
+    }
+  },
+  "memory": {
+    "embeddingDimensions": 4,
+    "enableSqliteVec": true
+  },
+  "context": {
+    "recentTurns": 6,
+    "maxRecall": 6
+  }
 }
