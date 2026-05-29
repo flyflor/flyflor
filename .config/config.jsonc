@@ -1,0 +1,15 @@
+{
+  // Flyflor keeps all committed paths relative to the project root.
+  "runtime": {
+    "autoApproveGuards": true
+  },
+  "socket": {
+    "host": "127.0.0.1",
+    "port": 17361
+  },
+  "prompts": {
+    "system": "./prompts/system.md"
+  },
+  "models": {},
+  "tools": {}
+}
