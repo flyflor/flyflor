@@ -176,6 +176,32 @@ describe("no-session agent scenario", () => {
     expect(grep.output).toBe("");
   });
 
+  test("rejects invalid tool inputs through the registry schema gate", async () => {
+    const config = new ConfigService(profile.root, profile.configPath);
+    const memory = new MemoryComponent(config);
+    const signalBus = new SignalBus(true);
+    const events: string[] = [];
+    signalBus.subscribe("tool.result", async (payload) => {
+      events.push(JSON.stringify(payload));
+    });
+    const runtime = new AgentRuntimeService(
+      config,
+      memory,
+      new ContextBuilderService(config, undefined, memory),
+      signalBus,
+    );
+    const toolContext = runtime.createToolContext("tool-validation");
+
+    const shellResult = await runtime.getToolRegistry().execute("shell", {}, toolContext);
+    expect(shellResult.ok).toBe(false);
+    expect(shellResult.output).toContain("missing required property command");
+
+    const codeGraphResult = await runtime.getToolRegistry().execute("codegraph", { action: "delete" }, toolContext);
+    expect(codeGraphResult.ok).toBe(false);
+    expect(codeGraphResult.output).toContain("action must be one of");
+    expect(events.join("\n")).toContain("tool input invalid");
+  });
+
   test("registers the phase-one coding tool surface", () => {
     const config = new ConfigService(profile.root, profile.configPath);
     const memory = new MemoryComponent(config);
