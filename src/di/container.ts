@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { decoratorRegistry } from "./registry";
 import type { Constructor, InjectionToken } from "./types";
+import { SignalBus } from "../signal/signal-bus.service";
 
 /**
  * Represents a bootstrapped DI container.
@@ -11,6 +12,7 @@ import type { Constructor, InjectionToken } from "./types";
 export class Container {
   private readonly instances = new Map<InjectionToken, unknown>();
   private readonly bindings = new Map<InjectionToken, Constructor>();
+  private readonly wiredSubscriptions = new WeakSet<object>();
 
   public constructor(private readonly projectRoot = process.cwd()) {}
 
@@ -60,9 +62,37 @@ export class Container {
         value: this.loadPrompt(prompt.relativePath),
       });
     }
+    this.wireSubscriptions(provider, instance as object);
     this.instances.set(provider, instance);
     this.instances.set(token, instance);
     return instance as T;
+  }
+
+  /**
+   * Wires `@Subscribe` methods to the container's SignalBus singleton.
+   *
+   * @param provider - Provider class whose metadata is being inspected.
+   * @param instance - Constructed provider instance.
+   * @returns Nothing.
+   * @usage Called once per provider instance after property and prompt injection.
+   */
+  private wireSubscriptions(provider: Constructor, instance: object): void {
+    if (this.wiredSubscriptions.has(instance) || provider === SignalBus) {
+      return;
+    }
+    const subscriptions = decoratorRegistry.getSubscriptions(provider);
+    if (subscriptions.length === 0 || !this.bindings.has(SignalBus)) {
+      return;
+    }
+    const signalBus = this.resolve(SignalBus);
+    for (const subscription of subscriptions) {
+      const handler = (instance as Record<string | symbol, unknown>)[subscription.methodKey];
+      if (typeof handler !== "function") {
+        throw new Error(`@Subscribe target is not a method: ${String(subscription.methodKey)}`);
+      }
+      signalBus.subscribe(subscription.signalName, async (payload) => handler.call(instance, payload));
+    }
+    this.wiredSubscriptions.add(instance);
   }
 
   /**

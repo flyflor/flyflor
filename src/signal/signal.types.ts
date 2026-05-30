@@ -24,6 +24,24 @@ export interface SignalResult<TResult = unknown> {
 }
 
 /**
+ * Describes a lifecycle signal emitted by `complete`, `final`, `fail`, or `timeout`.
+ *
+ * @property signal - Original signal name that produced the lifecycle event.
+ * @property state - Lifecycle state being emitted.
+ * @property payload - Optional caller payload.
+ * @property error - Optional structured error message for failed signals.
+ * @property emittedAt - Unix timestamp in milliseconds.
+ * @usage Socket and runtime observers can distinguish terminal states without parsing ad hoc payloads.
+ */
+export interface SignalLifecyclePayload<TPayload = unknown> {
+  readonly signal: string;
+  readonly state: "complete" | "final" | "fail" | "timeout";
+  readonly payload?: TPayload;
+  readonly error?: string;
+  readonly emittedAt: number;
+}
+
+/**
  * Describes a subscription returned by `SignalBus.subscribe`.
  *
  * @property signal - Signal name being observed.

@@ -73,9 +73,23 @@ export class DecoratorRegistry {
    * @usage Called only by `@Inject`.
    */
   public addInjection(target: object, propertyKey: string | symbol, token: InjectionToken): void {
-    const constructor = target.constructor as Constructor;
+    this.addInjectionForConstructor(target.constructor as Constructor, propertyKey, token);
+  }
+
+  /**
+   * Records a property injection for a constructor.
+   *
+   * @param constructor - Class receiving the injected property.
+   * @param propertyKey - Property name or symbol that should receive the dependency.
+   * @param token - Explicit dependency token or class.
+   * @returns Nothing.
+   * @usage Standard decorators write class-level metadata before instances exist.
+   */
+  public addInjectionForConstructor(constructor: Constructor, propertyKey: string | symbol, token: InjectionToken): void {
     const injections = injectionMetadataStore.get(constructor) ?? [];
-    injections.push({ propertyKey, token });
+    if (!injections.some((injection) => injection.propertyKey === propertyKey && injection.token === token)) {
+      injections.push({ propertyKey, token });
+    }
     injectionMetadataStore.set(constructor, injections);
   }
 
@@ -100,9 +114,23 @@ export class DecoratorRegistry {
    * @usage Called only by `@Prompt`.
    */
   public addPrompt(target: object, propertyKey: string | symbol, relativePath: string): void {
-    const constructor = target.constructor as Constructor;
+    this.addPromptForConstructor(target.constructor as Constructor, propertyKey, relativePath);
+  }
+
+  /**
+   * Records a prompt injection for a constructor.
+   *
+   * @param constructor - Class receiving prompt text.
+   * @param propertyKey - Property name or symbol that should receive prompt text.
+   * @param relativePath - Prompt path supplied to `@Prompt`.
+   * @returns Nothing.
+   * @usage Standard decorators write class-level metadata before instances exist.
+   */
+  public addPromptForConstructor(constructor: Constructor, propertyKey: string | symbol, relativePath: string): void {
     const prompts = promptMetadataStore.get(constructor) ?? [];
-    prompts.push({ propertyKey, relativePath });
+    if (!prompts.some((prompt) => prompt.propertyKey === propertyKey && prompt.relativePath === relativePath)) {
+      prompts.push({ propertyKey, relativePath });
+    }
     promptMetadataStore.set(constructor, prompts);
   }
 
@@ -127,9 +155,23 @@ export class DecoratorRegistry {
    * @usage Called only by `@Subscribe`.
    */
   public addSubscription(target: object, methodKey: string | symbol, signalName: string): void {
-    const constructor = target.constructor as Constructor;
+    this.addSubscriptionForConstructor(target.constructor as Constructor, methodKey, signalName);
+  }
+
+  /**
+   * Records a signal subscription for a constructor.
+   *
+   * @param constructor - Class declaring the subscriber method.
+   * @param methodKey - Method name or symbol that handles the signal.
+   * @param signalName - Signal name supplied to `@Subscribe`.
+   * @returns Nothing.
+   * @usage Standard decorators write class-level metadata before instances exist.
+   */
+  public addSubscriptionForConstructor(constructor: Constructor, methodKey: string | symbol, signalName: string): void {
     const subscriptions = subscriptionMetadataStore.get(constructor) ?? [];
-    subscriptions.push({ methodKey, signalName });
+    if (!subscriptions.some((subscription) => subscription.methodKey === methodKey && subscription.signalName === signalName)) {
+      subscriptions.push({ methodKey, signalName });
+    }
     subscriptionMetadataStore.set(constructor, subscriptions);
   }
 
