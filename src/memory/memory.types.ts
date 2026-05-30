@@ -75,3 +75,35 @@ export interface MemoryRecallOptions {
   readonly sourceKinds?: readonly string[];
   readonly excludeQuestionLike?: boolean;
 }
+
+/**
+ * Describes a persisted context checkpoint.
+ *
+ * @property id - Stable checkpoint id.
+ * @property conversationId - Local conversation id summarized by the checkpoint.
+ * @property summary - Anchored Markdown summary.
+ * @property sourceMessageIds - Message ids that produced the summary.
+ * @property createdAt - Unix timestamp in milliseconds.
+ * @usage Context builders inject the latest checkpoint before recent tail messages.
+ */
+export interface MemoryCheckpoint {
+  readonly id: string;
+  readonly conversationId: string;
+  readonly summary: string;
+  readonly sourceMessageIds: readonly string[];
+  readonly createdAt: number;
+}
+
+/**
+ * Describes a checkpoint store request.
+ *
+ * @property conversationId - Local conversation id being summarized.
+ * @property summary - Anchored Markdown summary to persist.
+ * @property sourceMessageIds - Message ids used to generate the summary.
+ * @usage ContextCompactTool stores deterministic summaries through this input.
+ */
+export interface MemoryCheckpointInput {
+  readonly conversationId: string;
+  readonly summary: string;
+  readonly sourceMessageIds: readonly string[];
+}

@@ -48,21 +48,38 @@ export class CodeGraphTool implements Tool<{ readonly action: "status" | "index"
 /**
  * Triggers context compaction.
  *
- * @usage V1 exposes a manual hook while concrete compacting lives in ContextModule.
+ * @usage Persists deterministic checkpoint summaries through MemoryComponent.
  */
-export class ContextCompactTool implements Tool<{ readonly reason?: string }> {
+export class ContextCompactTool implements Tool<{ readonly conversationId: string; readonly reason?: string; readonly limit?: number }> {
   public readonly name = "context_compact";
   public readonly description = "Request a context checkpoint compaction.";
   public readonly schema = {
     type: "object" as const,
+    required: ["conversationId"],
     additionalProperties: false,
     properties: {
+      conversationId: { type: "string" as const, description: "Conversation id to compact." },
       reason: { type: "string" as const, description: "Optional compaction reason." },
+      limit: { type: "number" as const, description: "Maximum recent messages to summarize.", default: 20 },
     },
   };
 
-  public async execute(input: { readonly reason?: string }, _context: ToolContext): Promise<ToolResult> {
-    return { ok: true, output: `context compact requested: ${input.reason ?? "manual"}` };
+  public async execute(input: { readonly conversationId: string; readonly reason?: string; readonly limit?: number }, context: ToolContext): Promise<ToolResult> {
+    const messages = context.memoryComponent.recentMessages(input.conversationId, input.limit ?? 20);
+    const summary = [
+      `reason=${input.reason ?? "manual"}`,
+      ...messages.map((message) => `- ${message.role}: ${message.content.slice(0, 240)}`),
+    ].join("\n");
+    const checkpoint = context.memoryComponent.storeCheckpoint({
+      conversationId: input.conversationId,
+      summary: summary || "reason=manual\n- No messages to summarize.",
+      sourceMessageIds: messages.map((message) => message.id),
+    });
+    return {
+      ok: true,
+      output: `stored context checkpoint ${checkpoint.id}`,
+      metadata: { checkpointId: checkpoint.id, sourceCount: checkpoint.sourceMessageIds.length },
+    };
   }
 }
 

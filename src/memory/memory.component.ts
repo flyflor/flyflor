@@ -1,9 +1,10 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { Component } from "../di";
 import { ConfigService } from "../config/config.service";
-import type { MemoryChunk, MemoryMessage, MemoryRecallOptions, MemoryRecallResult, MemoryStoreInput } from "./memory.types";
+import type { MemoryCheckpoint, MemoryCheckpointInput, MemoryChunk, MemoryMessage, MemoryRecallOptions, MemoryRecallResult, MemoryStoreInput } from "./memory.types";
 import { SqliteVecLoader } from "./sqlite-vec-loader";
 
 /**
@@ -164,6 +165,76 @@ export class MemoryComponent {
   }
 
   /**
+   * Deletes one memory chunk and its vector data.
+   *
+   * @param id - Memory chunk id to delete.
+   * @returns True when a chunk row was removed.
+   * @usage MemoryForgetTool uses this for real first-phase forgetting semantics.
+   */
+  public forgetChunk(id: number): boolean {
+    if (this.vectorLoaded) {
+      this.db.query("delete from memory_vectors where rowid = ?").run(id);
+    } else {
+      this.db.query("delete from memory_vectors_fallback where chunk_id = ?").run(id);
+    }
+    this.db.query("delete from memory_edges where from_id = ? or to_id = ?").run(id, id);
+    const result = this.db.query("delete from memory_chunks where id = ?").run(id);
+    return result.changes > 0;
+  }
+
+  /**
+   * Stores one context checkpoint.
+   *
+   * @param input - Checkpoint summary and source message ids.
+   * @returns Persisted checkpoint.
+   * @usage ContextCompactTool writes compacted conversation state through this method.
+   */
+  public storeCheckpoint(input: MemoryCheckpointInput): MemoryCheckpoint {
+    const checkpoint: MemoryCheckpoint = {
+      id: randomUUID(),
+      conversationId: input.conversationId,
+      summary: input.summary,
+      sourceMessageIds: input.sourceMessageIds,
+      createdAt: Date.now(),
+    };
+    this.db.query("insert into context_checkpoints(id, conversation_id, summary, created_at) values (?, ?, ?, ?)").run(
+      checkpoint.id,
+      checkpoint.conversationId,
+      JSON.stringify({ summary: checkpoint.summary, sourceMessageIds: checkpoint.sourceMessageIds }),
+      checkpoint.createdAt,
+    );
+    return checkpoint;
+  }
+
+  /**
+   * Reads the latest context checkpoint for one conversation.
+   *
+   * @param conversationId - Local conversation id.
+   * @returns Latest checkpoint or undefined when none exists.
+   * @usage ContextBuilderService injects this before recent tail messages.
+   */
+  public latestCheckpoint(conversationId: string): MemoryCheckpoint | undefined {
+    const row = this.db.query(`
+      select id, conversation_id as conversationId, summary, created_at as createdAt
+      from context_checkpoints
+      where conversation_id = ?
+      order by created_at desc
+      limit 1
+    `).get(conversationId) as { readonly id: string; readonly conversationId: string; readonly summary: string; readonly createdAt: number } | null;
+    if (!row) {
+      return undefined;
+    }
+    const parsed = this.parseCheckpointSummary(row.summary);
+    return {
+      id: row.id,
+      conversationId: row.conversationId,
+      summary: parsed.summary,
+      sourceMessageIds: parsed.sourceMessageIds,
+      createdAt: row.createdAt,
+    };
+  }
+
+  /**
    * Creates a stable small embedding suitable for local smoke tests.
    *
    * @param text - Text to embed.
@@ -196,6 +267,25 @@ export class MemoryComponent {
       [`# ${chunk.sourceKind}:${chunk.sourceId}`, "", `- ${chunk.content}`].join("\n"),
       "utf8",
     );
+  }
+
+  /**
+   * Parses persisted checkpoint summary payloads.
+   *
+   * @param value - Raw DB summary value.
+   * @returns Summary text and source message ids.
+   * @usage Maintains compatibility if older rows stored plain summary text.
+   */
+  private parseCheckpointSummary(value: string): { readonly summary: string; readonly sourceMessageIds: readonly string[] } {
+    try {
+      const parsed = JSON.parse(value) as Partial<{ readonly summary: string; readonly sourceMessageIds: readonly string[] }>;
+      return {
+        summary: parsed.summary ?? value,
+        sourceMessageIds: parsed.sourceMessageIds ?? [],
+      };
+    } catch {
+      return { summary: value, sourceMessageIds: [] };
+    }
   }
 
   /**

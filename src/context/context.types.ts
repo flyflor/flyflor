@@ -1,4 +1,4 @@
-import type { MemoryMessage, MemoryRecallResult } from "../memory";
+import type { MemoryCheckpoint, MemoryMessage, MemoryRecallResult } from "../memory";
 
 /**
  * Describes one model-facing context message.
@@ -33,6 +33,7 @@ export interface ContextBuildInput {
  *
  * @property messages - Stable ordered messages passed to the model provider.
  * @property recall - Memory recall items injected into the context.
+ * @property checkpoint - Latest persisted context checkpoint when available.
  * @property recentMessages - Recent local conversation messages preserved verbatim.
  * @property estimatedChars - Approximate character budget used by the context.
  * @usage Runtime uses this object for provider calls and diagnostic socket events.
@@ -40,6 +41,7 @@ export interface ContextBuildInput {
 export interface ContextBuildResult {
   readonly messages: readonly ContextMessage[];
   readonly recall: readonly MemoryRecallResult[];
+  readonly checkpoint?: MemoryCheckpoint;
   readonly recentMessages: readonly MemoryMessage[];
   readonly estimatedChars: number;
 }

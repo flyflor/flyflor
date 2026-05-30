@@ -112,3 +112,5 @@ Socket 层只订阅并广播这些事件，不直接执行工具。
 - MultiEditTool 能做到全成功或全失败。
 - CodeGraphTool 可报告可用性；不可用时明确 fallback。
 - 工具事件能在 WebSocket 测试页显示。
+- MemoryForgetTool 必须真实删除指定 memory chunk 和向量数据。
+- ContextCompactTool 必须真实写入 `context_checkpoints`，不能只返回占位文本。

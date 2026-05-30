@@ -92,6 +92,47 @@ describe("no-session agent scenario", () => {
     expect(events).toContain("guard.ask");
   });
 
+  test("forgets stored memory and persists context checkpoints through tools", async () => {
+    const config = new ConfigService(profile.root, profile.configPath);
+    const memory = new MemoryComponent(config);
+    const runtime = new AgentRuntimeService(
+      config,
+      memory,
+      new ContextBuilderService(config, undefined, memory),
+      new SignalBus(true),
+    );
+    const toolContext = runtime.createToolContext("tool-checkpoint");
+
+    const storeResult = await runtime.getToolRegistry().execute("memory_store", {
+      content: "记住我的项目代号是 flyflor-forget",
+      sourceId: "forget-scenario",
+    }, toolContext);
+    const chunkId = Number(storeResult.output.match(/\d+$/)?.[0]);
+    expect(memory.recall("flyflor-forget", 3).map((item) => item.chunk.id)).toContain(chunkId);
+
+    const forgetResult = await runtime.getToolRegistry().execute("memory_forget", { id: chunkId }, toolContext);
+    expect(forgetResult.ok).toBe(true);
+    expect(memory.recall("flyflor-forget", 3).map((item) => item.chunk.id)).not.toContain(chunkId);
+
+    memory.appendMessage("compact-conversation", {
+      id: "compact:user",
+      role: "user",
+      content: "记住 compact 项目代号是 flyflor-compact",
+      createdAt: Date.now(),
+    });
+    const compactResult = await runtime.getToolRegistry().execute("context_compact", {
+      conversationId: "compact-conversation",
+      reason: "scenario",
+    }, toolContext);
+    expect(compactResult.ok).toBe(true);
+    const rebuiltContext = new ContextBuilderService(config, undefined, memory).build({
+      conversationId: "compact-conversation",
+      userInput: "继续",
+    });
+    expect(rebuiltContext.checkpoint?.summary).toContain("flyflor-compact");
+    expect(rebuiltContext.messages[0]?.content).toContain("CONTEXT CHECKPOINT");
+  });
+
   test("registers the phase-one coding tool surface", () => {
     const config = new ConfigService(profile.root, profile.configPath);
     const memory = new MemoryComponent(config);

@@ -49,6 +49,10 @@ MemoryComponent 要为无 session agent 提供长期上下文连续性。它不�
 
 `memory_jobs` 存异步任务：embedding、summary seal、projection、dream-ready compaction。
 
+第一阶段 `forget` 采用硬删除 chunk、vector 和相关边。后续如果需要审计型遗忘，再引入 tombstone 状态；当前 schema 没有 status 字段，因此工具层不能只返回“已请求”而不改变 DB。
+
+第一阶段 context checkpoint 由 `ContextCompressorComponent` 生成确定性 anchored summary，并写入 `context_checkpoints`。`ContextModule` 读取同一 conversation 的最新 checkpoint 注入上下文，recent tail 仍保留原文。
+
 ## 记忆生命周期
 
 1. 用户消息和 assistant final 先进入 `messages`。
@@ -90,3 +94,5 @@ MemoryComponent 要为无 session agent 提供长期上下文连续性。它不�
 - 能对一个 query 返回 topK recall。
 - 能导出至少一个 Markdown 投影文件。
 - 重启后 recall 仍可用。
+- 能删除指定 chunk，删除后 recall 不再返回该 chunk。
+- 能写入并读取最新 context checkpoint。

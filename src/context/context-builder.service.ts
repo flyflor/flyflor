@@ -38,11 +38,13 @@ export class ContextBuilderService {
     const recentMessages = this.memoryComponent
       .recentMessages(input.conversationId, config.context.recentTurns * 2)
       .filter((message) => message.id !== input.excludeMessageId);
+    const checkpoint = this.memoryComponent.latestCheckpoint(input.conversationId);
     const systemSections = [
       ...this.templateLoader.readCoreTemplates().map((section) => `## ${section.name}\n\n${section.content.trim()}`),
       `## SYSTEM\n\n${readFileSync(this.configService.resolve(config.prompts.system), "utf8").trim()}`,
       `## RUNTIME\n\n${input.runtimeState ?? "runtime=ready"}`,
       `## MEMORY RECALL\n\n${this.renderRecall(recall)}`,
+      `## CONTEXT CHECKPOINT\n\n${this.renderCheckpoint(checkpoint)}`,
     ];
     const messages: ContextMessage[] = [
       { role: "system", content: systemSections.join("\n\n") },
@@ -52,6 +54,7 @@ export class ContextBuilderService {
     return {
       messages,
       recall,
+      checkpoint,
       recentMessages,
       estimatedChars: messages.reduce((total, message) => total + message.content.length, 0),
     };
@@ -71,5 +74,23 @@ export class ContextBuilderService {
     return recall
       .map((item) => `- [${item.chunk.sourceKind}:${item.chunk.sourceId} score=${item.score.toFixed(3)}] ${item.chunk.content}`)
       .join("\n");
+  }
+
+  /**
+   * Renders the latest checkpoint as compact Markdown.
+   *
+   * @param checkpoint - Latest persisted checkpoint or undefined.
+   * @returns Markdown checkpoint section.
+   * @usage Keeps old-context summaries visible without replacing recent tail messages.
+   */
+  private renderCheckpoint(checkpoint: ContextBuildResult["checkpoint"]): string {
+    if (!checkpoint) {
+      return "- No context checkpoint.";
+    }
+    return [
+      `- checkpoint=${checkpoint.id}`,
+      `- sources=${checkpoint.sourceMessageIds.join(",") || "none"}`,
+      checkpoint.summary,
+    ].join("\n");
   }
 }

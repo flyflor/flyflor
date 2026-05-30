@@ -54,9 +54,9 @@ export class MemoryStoreTool implements Tool<{ readonly content: string; readonl
 }
 
 /**
- * Marks memory removal intent.
+ * Deletes a durable memory chunk.
  *
- * @usage V1 returns an explicit placeholder until deletion policy is implemented.
+ * @usage Tool loop uses this to remove stale or incorrect local facts from memory.db.
  */
 export class MemoryForgetTool implements Tool<{ readonly id: number }> {
   public readonly name = "memory_forget";
@@ -70,7 +70,12 @@ export class MemoryForgetTool implements Tool<{ readonly id: number }> {
     },
   };
 
-  public async execute(input: { readonly id: number }, _context: ToolContext): Promise<ToolResult> {
-    return { ok: true, output: `forget requested for memory ${input.id}` };
+  public async execute(input: { readonly id: number }, context: ToolContext): Promise<ToolResult> {
+    const deleted = context.memoryComponent.forgetChunk(input.id);
+    return {
+      ok: deleted,
+      output: deleted ? `forgot memory ${input.id}` : `memory ${input.id} not found`,
+      metadata: { deleted },
+    };
   }
 }
