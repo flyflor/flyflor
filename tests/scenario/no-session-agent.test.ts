@@ -306,6 +306,44 @@ describe("no-session agent scenario", () => {
     }
   });
 
+  test("broadcasts tool, guard, artifact, and memory events over WebSocket", async () => {
+    const config = new ConfigService(profile.root, profile.configPath);
+    const memory = new MemoryComponent(config);
+    const runtime = new AgentRuntimeService(
+      config,
+      memory,
+      new ContextBuilderService(config, undefined, memory),
+      new SignalBus(true),
+    );
+    const server = new SocketServerService(config, runtime);
+    const handle = server.start({ port: 0 });
+    try {
+      const envelopes = await collectSocketTurn(`ws://${handle.hostname}:${handle.port}/ws`, {
+        id: "client-events",
+        type: "chat.message",
+        payload: {
+          conversationId: "socket-events",
+          content: "执行 shell: printf flyflor-socket-tool",
+        },
+        timestamp: Date.now(),
+      });
+      const types = envelopes.map((item) => item.type);
+      expect(types).toContain("guard.ask");
+      expect(types).toContain("guard.answer");
+      expect(types).toContain("tool.call");
+      expect(types).toContain("tool.artifact");
+      expect(types).toContain("tool.result");
+      expect(types).toContain("memory.recall");
+      expect(envelopes.find((item) => item.type === "tool.result")?.payload).toMatchObject({
+        result: expect.objectContaining({
+          output: expect.stringContaining("flyflor-socket-tool"),
+        }),
+      });
+    } finally {
+      server.stop();
+    }
+  });
+
   test("loads Hermes-style model and provider config aliases", () => {
     const config = new ConfigService(profile.root, profile.configPath);
     expect(config.getActiveModelName()).toBe("mock-coding-agent");
