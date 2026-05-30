@@ -57,13 +57,113 @@ export interface PromptConfig {
 /**
  * Describes model provider configuration.
  *
- * @property provider - Provider adapter name, such as `mock` or an OpenAI-compatible adapter.
- * @property model - Model identifier passed to the adapter.
- * @usage Runtime uses `mock` for deterministic scenario tests.
+ * @property default - Default model identifier, following Hermes config naming.
+ * @property name - Optional legacy or alternate model identifier.
+ * @property provider - Active provider selector, such as `auto`, `mock`, or a key under `providers`.
+ * @property base_url - Optional direct base URL for the active provider.
+ * @property api_key_env - Environment variable used to read the provider API key.
+ * @property api_key - Local-only API key override; committed config should keep this empty.
+ * @property request_timeout_seconds - Maximum HTTP request duration.
+ * @property stale_timeout_seconds - Non-streaming stale-call detector budget.
+ * @property max_tokens - Optional output token cap.
+ * @property context_length - Optional total context window override.
+ * @usage Runtime reads this shape instead of the old `models` block.
  */
 export interface ModelConfig {
+  readonly default: string;
+  readonly name?: string;
   readonly provider: string;
-  readonly model: string;
+  readonly base_url: string;
+  readonly api_key_env: string;
+  readonly api_key: string;
+  readonly request_timeout_seconds: number;
+  readonly stale_timeout_seconds: number;
+  readonly max_tokens: number | null;
+  readonly context_length: number | null;
+}
+
+/**
+ * Describes one named provider override, following Hermes provider config shape.
+ *
+ * @property name - Optional display name; when omitted, the provider map key is the name.
+ * @property base_url - Provider API base URL.
+ * @property api - Compatibility alias accepted by future normalization as `base_url`.
+ * @property baseUrl - Compatibility alias accepted by future normalization as `base_url`.
+ * @property api_key_env - Environment variable used to read this provider's API key.
+ * @property api_key - Local-only API key override.
+ * @property apiKey - Compatibility alias accepted by future normalization as `api_key`.
+ * @property request_timeout_seconds - Optional provider-level request timeout.
+ * @property stale_timeout_seconds - Optional provider-level non-stream stale timeout.
+ * @property models - Provider model catalog and per-model overrides.
+ * @usage Real model provider resolution reads this map when `model.provider` names a provider.
+ */
+export interface ProviderConfig {
+  readonly name?: string;
+  readonly base_url?: string;
+  readonly api?: string;
+  readonly baseUrl?: string;
+  readonly api_key_env?: string;
+  readonly api_key?: string;
+  readonly apiKey?: string;
+  readonly request_timeout_seconds?: number;
+  readonly stale_timeout_seconds?: number;
+  readonly models?: ProviderModelConfigMap | readonly string[];
+}
+
+/**
+ * Describes a normalized named provider ready for runtime use.
+ *
+ * @property name - Provider key or explicit provider name.
+ * @property base_url - Normalized provider API base URL.
+ * @property api_key_env - Environment variable used to read this provider's API key.
+ * @property api_key - Local-only API key override.
+ * @property request_timeout_seconds - Provider-level request timeout.
+ * @property stale_timeout_seconds - Provider-level stale timeout.
+ * @property models - Normalized provider model map.
+ * @usage ConfigService returns this shape after applying Hermes-compatible aliases.
+ */
+export interface NormalizedProviderConfig {
+  readonly name: string;
+  readonly base_url: string;
+  readonly api_key_env: string;
+  readonly api_key: string;
+  readonly request_timeout_seconds: number;
+  readonly stale_timeout_seconds: number;
+  readonly models: ProviderModelConfigMap;
+}
+
+/**
+ * Describes per-model overrides under one provider.
+ *
+ * @property context_length - Optional total context window override.
+ * @property max_tokens - Optional output token cap.
+ * @property timeout_seconds - Optional per-model request timeout.
+ * @property stale_timeout_seconds - Optional per-model stale timeout.
+ * @usage Provider selection may read these values to tune request budgets.
+ */
+export interface ProviderModelConfig {
+  readonly context_length?: number | null;
+  readonly max_tokens?: number | null;
+  readonly timeout_seconds?: number;
+  readonly stale_timeout_seconds?: number;
+}
+
+/**
+ * Describes a provider model map keyed by model id.
+ *
+ * @usage Mirrors Hermes' `providers.<name>.models` dict form.
+ */
+export interface ProviderModelConfigMap {
+  readonly [model: string]: ProviderModelConfig;
+}
+
+/**
+ * Describes all named provider overrides.
+ *
+ * @usage Keys can be selected by `model.provider`.
+ */
+export interface ProvidersConfig {
+  readonly [providerName: string]: ProviderConfig;
 }
 
 /**
@@ -121,7 +221,8 @@ export interface ToolsConfig {
  * @property runtime - Runtime guard settings.
  * @property socket - WebSocket settings.
  * @property prompts - Prompt file settings.
- * @property models - Model provider settings.
+ * @property model - Active Hermes-style model provider settings.
+ * @property providers - Named provider overrides and custom endpoints.
  * @property memory - Memory backend settings.
  * @property context - Context assembly settings.
  * @property tools - Tool execution settings.
@@ -132,7 +233,8 @@ export interface FlyflorConfig {
   readonly runtime: RuntimeConfig;
   readonly socket: SocketConfig;
   readonly prompts: PromptConfig;
-  readonly models: ModelConfig;
+  readonly model: ModelConfig;
+  readonly providers: ProvidersConfig;
   readonly memory: MemoryConfig;
   readonly context: ContextConfig;
   readonly tools: ToolsConfig;

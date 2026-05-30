@@ -1,45 +1,162 @@
 {
-  // Flyflor keeps all committed paths relative to the project root.
-  "paths": {
-    "templatesDir": "./.config/templates",
-    "memoryDb": "./.config/memory/memory.db",
-    "memoryWiki": "./.config/memory/wiki",
-    "toolArtifacts": "./.config/memory/artifacts",
-    "sqliteVecDir": "./.config/sqlite-vec",
-    "codegraphDir": "./.config/codegraph",
-    "socketTestPage": "./.config/web/socket-test.html",
-    "runtimeDir": "./.config/runtime"
-  },
-  "runtime": {
-    "autoApproveGuards": true
-  },
-  "socket": {
-    "host": "127.0.0.1",
-    "port": 17361
-  },
-  "prompts": {
-    "system": "./prompts/system.md"
-  },
-  "models": {
-    "provider": "mock",
-    "model": "mock-coding-agent"
-  },
-  "tools": {
-    "rtk": {
-      "enabled": true,
-      "command": "rtk"
+    // Flyflor keeps every committed path relative to the project root.
+    // Runtime-generated data under `.config/memory`, `.config/runtime`, and `.config/codegraph` is ignored by git.
+    "paths": {
+        // Constitutional runtime templates. Runtime loads only `*.md`; `*.zh.cn.md` mirrors are for human review.
+        "templatesDir": "./.config/templates",
+
+        // Authoritative no-session memory database. This DB stores conversations, messages, chunks, vectors, and jobs.
+        "memoryDb": "./.config/memory/memory.db",
+
+        // Human-review Markdown projection generated from memory.db. It is not authoritative runtime memory.
+        "memoryWiki": "./.config/memory/wiki",
+
+        // Raw tool outputs, shell stdout/stderr, and future compressed artifacts are written here.
+        "toolArtifacts": "./.config/memory/artifacts",
+
+        // Vendored sqlite-vec dynamic library assets. These files are statically imported for Bun binary packaging.
+        "sqliteVecDir": "./.config/sqlite-vec",
+
+        // Optional CodeGraph cache/index directory. CodeGraph absence must not block the core agent.
+        "codegraphDir": "./.config/codegraph",
+
+        // Local browser test page served by SocketServerService at `/socket-test.html`.
+        "socketTestPage": "./.config/web/socket-test.html",
+
+        // Runtime-only locks, scenario profiles, materialized binaries, and temporary build outputs.
+        "runtimeDir": "./.config/runtime",
     },
-    "codegraph": {
-      "enabled": true,
-      "command": "codegraph"
-    }
-  },
-  "memory": {
-    "embeddingDimensions": 4,
-    "enableSqliteVec": true
-  },
-  "context": {
-    "recentTurns": 6,
-    "maxRecall": 6
-  }
+    "runtime": {
+        // Development guard behavior. Keep true until Rust TUI or another client answers `guard.ask`.
+        "autoApproveGuards": true,
+    },
+    "socket": {
+        // Bun native WebSocket bind host. Use 127.0.0.1 for local-only testing.
+        "host": "127.0.0.1",
+
+        // Bun native WebSocket port. Test page connects to `ws://host:port/ws`.
+        "port": 17361,
+    },
+    "prompts": {
+        // Runtime system prompt. A matching `.zh.cn.md` mirror exists for human review but is never loaded.
+        "system": "./prompts/system.md",
+    },
+
+    // Hermes-style active model configuration.
+    // `provider` can be `auto`, `mock`, a built-in protocol name, or a key under `providers`.
+    // API keys should normally come from `api_key_env`; do not commit a real `api_key`.
+    "model": {
+        // Default model id. `default` follows Hermes naming; future code may also accept `name`.
+        "default": "deepseek-v4-flash",
+
+        // Active provider selector. `mock` is for local scenario tests; real runs should use `auto` or a provider key.
+        "provider": "deepseek",
+
+        // Optional direct base URL for the active provider. Leave empty when `provider` selects a named provider below.
+        "base_url": "",
+
+        // Environment variable used to read the active provider API key.
+        "api_key_env": "FLYFLOR_LLM_API_KEY",
+
+        // Local-only API key escape hatch. Keep empty in committed config.
+        "api_key": "",
+
+        // Maximum HTTP request duration for provider calls.
+        "request_timeout_seconds": 300,
+
+        // Non-streaming stale call detector budget. Streaming providers should emit events before this.
+        "stale_timeout_seconds": 900,
+
+        // Optional output token cap. Null means let the provider/model default decide.
+        "max_tokens": null,
+
+        // Optional total context window override. Null means detect or use provider metadata later.
+        "context_length": null,
+    },
+
+    // Named provider overrides, model catalogs, and custom endpoints.
+    // Shape follows Hermes: `providers.<name>.base_url`, `api_key`, `models`, and timeout overrides.
+    // Compatibility aliases planned for loader normalization: `baseUrl -> base_url`, `apiKey -> api_key`, `api -> base_url`.
+    "providers": {
+        // OpenAI Responses or Chat Completions endpoint. Use this for official OpenAI or compatible gateways.
+        "openai": {
+            "base_url": "https://api.openai.com/v1",
+            "api_key_env": "OPENAI_API_KEY",
+            "api_key": "",
+            "request_timeout_seconds": 300,
+            "stale_timeout_seconds": 900,
+            "models": {
+                "gpt-5.1": {
+                    "context_length": null,
+                    "max_tokens": null,
+                },
+            },
+        },
+
+        // Anthropic native Messages endpoint.
+        "anthropic": {
+            "base_url": "https://api.anthropic.com/v1",
+            "api_key_env": "ANTHROPIC_API_KEY",
+            "api_key": "",
+            "request_timeout_seconds": 300,
+            "stale_timeout_seconds": 900,
+            "models": {
+                "claude-opus-4.6": {
+                    "context_length": null,
+                    "max_tokens": null,
+                },
+            },
+        },
+
+        "deepseek": {
+            "base_url": "https://api.deepseek.com",
+            "api_key_env": "DEEPSEEK_API_KEY",
+            "api_key": "",
+            "request_timeout_seconds": 300,
+            "stale_timeout_seconds": 900,
+            "models": {
+                "deepseek-v4-flash": {
+                    "context_length": 1024000,
+                    "max_tokens": 4096,
+                },
+            },
+        },
+
+        // User-supplied OpenAI-compatible endpoint. Fill base_url/key/model when using local or proxy providers.
+        "custom": {
+            "base_url": "",
+            "api_key_env": "FLYFLOR_LLM_API_KEY",
+            "api_key": "",
+            "request_timeout_seconds": 300,
+            "stale_timeout_seconds": 900,
+            "models": {},
+        },
+    },
+    "tools": {
+        // Optional RTK command-output compression. Missing command falls back to raw bounded output.
+        "rtk": {
+            "enabled": true,
+            "command": "rtk",
+        },
+
+        // Optional CodeGraph code index/search integration. Missing command falls back to rg/glob/read.
+        "codegraph": {
+            "enabled": true,
+            "command": "codegraph",
+        },
+    },
+    "memory": {
+        // Local deterministic embedding dimension used by current sqlite-vec smoke backend.
+        "embeddingDimensions": 4,
+
+        // Load sqlite-vec for vector recall. If loading fails, MemoryComponent falls back to lexical recall.
+        "enableSqliteVec": true,
+    },
+    "context": {
+        // Recent conversation turns preserved verbatim in no-session context.
+        "recentTurns": 6,
+
+        // Maximum durable memory chunks injected into one model context.
+        "maxRecall": 6,
+    },
 }

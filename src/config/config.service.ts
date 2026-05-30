@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { Component } from "../di";
 import { ProjectPaths } from "../shared/path";
 import { parseJsonc } from "./jsonc";
-import type { FlyflorConfig } from "./config.types";
+import type { FlyflorConfig, NormalizedProviderConfig, ProviderConfig, ProviderModelConfigMap } from "./config.types";
 
 /**
  * Loads and exposes Flyflor's single local configuration file.
@@ -44,6 +44,41 @@ export class ConfigService {
   }
 
   /**
+   * Returns the active model id using Hermes-compatible keys.
+   *
+   * @returns Active configured model name.
+   * @usage Runtime uses this instead of reading `model.default` directly.
+   */
+  public getActiveModelName(): string {
+    return this.config.model.name ?? this.config.model.default;
+  }
+
+  /**
+   * Returns one normalized provider using Hermes-compatible aliases.
+   *
+   * @param providerName - Provider map key to normalize.
+   * @returns Normalized provider config, or undefined when not configured.
+   * @usage Real model adapters use this to accept `base_url`, `baseUrl`, `api`, `api_key`, and `apiKey`.
+   */
+  public getProvider(providerName: string): NormalizedProviderConfig | undefined {
+    const provider = this.config.providers[providerName];
+    if (!provider) {
+      return undefined;
+    }
+    return this.normalizeProvider(providerName, provider);
+  }
+
+  /**
+   * Returns the active provider selected by `model.provider`.
+   *
+   * @returns Normalized active provider config when a named provider exists.
+   * @usage Future real model provider bootstrap calls this before falling back to direct `model.base_url`.
+   */
+  public getActiveProvider(): NormalizedProviderConfig | undefined {
+    return this.getProvider(this.config.model.provider);
+  }
+
+  /**
    * Resolves a project-relative path using the config path guard.
    *
    * @param relativePath - Project-relative path.
@@ -75,4 +110,73 @@ export class ConfigService {
   public ensureDir(relativePath: string): string {
     return this.projectPaths.ensureDir(relativePath);
   }
+
+  /**
+   * Normalizes one provider entry using Hermes-compatible key aliases.
+   *
+   * @param providerName - Key from the providers map.
+   * @param provider - Raw provider config entry.
+   * @returns Normalized provider config.
+   * @usage Internal helper for `getProvider`.
+   */
+  private normalizeProvider(providerName: string, provider: ProviderConfig): NormalizedProviderConfig {
+    return {
+      name: provider.name ?? providerName,
+      base_url: provider.base_url ?? provider.baseUrl ?? provider.api ?? "",
+      api_key_env: provider.api_key_env ?? "",
+      api_key: this.resolveApiKey(provider),
+      request_timeout_seconds: provider.request_timeout_seconds ?? this.config.model.request_timeout_seconds,
+      stale_timeout_seconds: provider.stale_timeout_seconds ?? this.config.model.stale_timeout_seconds,
+      models: this.normalizeModels(provider.models),
+    };
+  }
+
+  /**
+   * Normalizes Hermes provider model catalogs.
+   *
+   * @param models - Dict-form or list-form model config.
+   * @returns Dict-form model config.
+   * @usage Accepts Hermes' list shorthand while keeping runtime reads simple.
+   */
+  private normalizeModels(models: ProviderConfig["models"]): ProviderModelConfigMap {
+    if (isStringList(models)) {
+      return Object.fromEntries(
+        models
+          .map((model) => model.trim())
+          .filter((model) => model.length > 0)
+          .map((model) => [model, {}]),
+      );
+    }
+    return models ?? {};
+  }
+
+  /**
+   * Resolves an API key from explicit key, environment variable, or local shorthand.
+   *
+   * @param provider - Provider config entry.
+   * @returns API key string or empty string.
+   * @usage Supports normal `api_key_env=ENV_NAME` and local shorthand where a key is placed in `api_key_env`.
+   */
+  private resolveApiKey(provider: ProviderConfig): string {
+    const explicit = provider.api_key ?? provider.apiKey ?? "";
+    if (explicit.length > 0) {
+      return explicit;
+    }
+    const envName = provider.api_key_env ?? "";
+    if (envName.startsWith("sk-")) {
+      return envName;
+    }
+    return envName ? process.env[envName] ?? "" : "";
+  }
+}
+
+/**
+ * Checks whether a provider model catalog uses Hermes' list shorthand.
+ *
+ * @param value - Unknown model catalog value.
+ * @returns True when the value is a readonly string list.
+ * @usage Helps TypeScript narrow `ProviderConfig["models"]` before normalization.
+ */
+function isStringList(value: ProviderConfig["models"]): value is readonly string[] {
+  return Array.isArray(value);
 }

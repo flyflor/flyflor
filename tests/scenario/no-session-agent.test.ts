@@ -123,6 +123,39 @@ describe("no-session agent scenario", () => {
       server.stop();
     }
   });
+
+  test("loads Hermes-style model and provider config aliases", () => {
+    const config = new ConfigService(profile.root, profile.configPath);
+    expect(config.getActiveModelName()).toBe("mock-coding-agent");
+    expect(config.getProvider("mock")).toMatchObject({
+      name: "mock",
+      base_url: "",
+      api_key_env: "FLYFLOR_LLM_API_KEY",
+      request_timeout_seconds: 300,
+      stale_timeout_seconds: 900,
+    });
+
+    const aliasProfile = createScenarioProfile(`alias-${Date.now()}-${Math.random().toString(16).slice(2)}`, {
+      providers: {
+        custom: {
+          name: "custom",
+          baseUrl: "https://api.example.com/v1",
+          apiKey: "local-test-key",
+          models: ["alpha", "", "beta"],
+        },
+      },
+    });
+    const aliasConfig = new ConfigService(aliasProfile.root, aliasProfile.configPath);
+    expect(aliasConfig.getProvider("custom")).toMatchObject({
+      name: "custom",
+      base_url: "https://api.example.com/v1",
+      api_key: "local-test-key",
+      models: {
+        alpha: {},
+        beta: {},
+      },
+    });
+  });
 });
 
 /**
@@ -132,7 +165,7 @@ describe("no-session agent scenario", () => {
  * @returns Scenario profile paths.
  * @usage Tests call this before constructing ConfigService.
  */
-function createScenarioProfile(name: string): ScenarioProfile {
+function createScenarioProfile(name: string, overrides: Record<string, unknown> = {}): ScenarioProfile {
   const root = process.cwd();
   const profileDir = `./.config/runtime/scenarios/${name}`;
   const configPath = `${profileDir}/config.jsonc`;
@@ -150,13 +183,34 @@ function createScenarioProfile(name: string): ScenarioProfile {
     runtime: { autoApproveGuards: true },
     socket: { host: "127.0.0.1", port: 0 },
     prompts: { system: "./prompts/system.md" },
-    models: { provider: "mock", model: "mock-coding-agent" },
+    model: {
+      default: "mock-coding-agent",
+      provider: "mock",
+      base_url: "",
+      api_key_env: "FLYFLOR_LLM_API_KEY",
+      api_key: "",
+      request_timeout_seconds: 300,
+      stale_timeout_seconds: 900,
+      max_tokens: null,
+      context_length: null,
+    },
+    providers: {
+      mock: {
+        base_url: "",
+        api_key_env: "FLYFLOR_LLM_API_KEY",
+        api_key: "",
+        request_timeout_seconds: 300,
+        stale_timeout_seconds: 900,
+        models: { "mock-coding-agent": {} },
+      },
+    },
     tools: {
       rtk: { enabled: true, command: "rtk" },
       codegraph: { enabled: true, command: "codegraph" },
     },
     memory: { embeddingDimensions: 4, enableSqliteVec: true },
     context: { recentTurns: 6, maxRecall: 6 },
+    ...overrides,
   };
   mkdirSync(dirname(join(root, configPath)), { recursive: true });
   writeFileSync(join(root, configPath), JSON.stringify(config, null, 2), "utf8");

@@ -83,7 +83,7 @@ recent tail 必须保留最近对话的原文。旧上下文通过 checkpoint su
 
 ## 本地模型替身
 
-第一阶段默认 `models.provider = "mock"`，它不是最终模型能力，而是用于场景测试的确定性 provider。mock provider 必须走完整 runtime、memory、context、tool、socket 通路，避免把测试退化成方法级单测。
+第一阶段默认 `model.provider = "mock"`，它不是最终模型能力，而是用于场景测试的确定性 provider。mock provider 必须走完整 runtime、memory、context、tool、socket 通路，避免把测试退化成方法级单测。
 
 真实模型 provider 后续接入时不得改变 `AgentRuntimeService` 的主要数据流，只替换 provider adapter。
 

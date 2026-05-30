@@ -25,7 +25,7 @@ import {
   type ToolResult,
 } from "../tools";
 import type { AgentTurnInput, AgentTurnResult } from "./agent-runtime.types";
-import { MockModelProvider, type ModelProvider } from "./model-provider";
+import { MockModelProvider, OpenAICompatibleModelProvider, type ModelProvider } from "./model-provider";
 
 /**
  * Orchestrates one no-session agent runtime turn.
@@ -42,12 +42,15 @@ export class AgentRuntimeService {
     private readonly memoryComponent = new MemoryComponent(configService),
     private readonly contextBuilder = new ContextBuilderService(configService, undefined, memoryComponent),
     private readonly signalBus = new SignalBus(configService.getConfig().runtime.autoApproveGuards),
-    private readonly modelProvider: ModelProvider = new MockModelProvider(),
+    modelProvider?: ModelProvider,
   ) {
+    this.modelProvider = modelProvider ?? this.createModelProvider();
     this.artifactWriter = new ArtifactWriterComponent();
     this.toolRegistry = new ToolRegistry();
     this.registerCoreTools();
   }
+
+  private readonly modelProvider: ModelProvider;
 
   /**
    * Runs one user turn through memory, context, model, tools, and events.
@@ -76,7 +79,7 @@ export class AgentRuntimeService {
       conversationId: input.conversationId,
       userInput: input.content,
       excludeMessageId: `${turnId}:user`,
-      runtimeState: `turn=${turnId}\nprovider=${this.configService.getConfig().models.provider}`,
+      runtimeState: `turn=${turnId}\nprovider=${this.configService.getConfig().model.provider}`,
     });
     await this.signalBus.emit("memory.recall", { conversationId: input.conversationId, turnId, recall: context.recall });
     await this.signalBus.emit("context.ready", {
@@ -89,7 +92,7 @@ export class AgentRuntimeService {
     const toolResults = await this.executeInlineTools(turnId, input.content);
     let assistantMessage = "";
     for await (const event of this.modelProvider.stream({
-      model: this.configService.getConfig().models.model,
+      model: this.configService.getActiveModelName(),
       messages: context.messages,
       userInput: input.content,
       recall: context.recall,
@@ -221,5 +224,18 @@ export class AgentRuntimeService {
     }
     const result = await this.toolRegistry.execute("shell", { command: shellMatch[1] }, this.createToolContext(turnId));
     return [result];
+  }
+
+  /**
+   * Creates the configured model provider.
+   *
+   * @returns Mock provider for explicit mock config, otherwise OpenAI-compatible provider.
+   * @usage Keeps scenario tests deterministic while real config uses DeepSeek/OpenAI-compatible endpoints.
+   */
+  private createModelProvider(): ModelProvider {
+    if (this.configService.getConfig().model.provider === "mock") {
+      return new MockModelProvider();
+    }
+    return new OpenAICompatibleModelProvider(this.configService);
   }
 }
