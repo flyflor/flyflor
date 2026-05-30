@@ -112,6 +112,8 @@ recent tail 必须保留最近对话的原文。旧上下文通过 checkpoint su
 - `paths.socketTestPage`
 - `paths.runtimeDir`
 
+模型密钥不提交到 `.config/config.jsonc`。运行时启动时可读取项目根目录下被 git 忽略的 `.env.local` 和 `.env`，只填充当前进程尚未设置的环境变量；shell 显式传入的环境变量优先。`providers.<name>.api_key_env` 指向这些变量名，内测和 `bun run src/index.ts --serve` 使用同一套解析逻辑。
+
 ## 验收标准
 
 - WebSocket 可以完成两轮对话。

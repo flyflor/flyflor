@@ -19,17 +19,20 @@ interface ObservedEvent {
 }
 
 loadLocalEnv();
+const innerConfig = new ConfigService();
+const hasDeepSeekCredential = Boolean(innerConfig.getProvider("deepseek")?.api_key);
+
+if (!hasDeepSeekCredential) {
+  console.warn("DeepSeek credentials are not configured; skipping real-model inner scenario.");
+}
 
 describe("DeepSeek inner scenario", () => {
-  test("uses real model with project inspection when credentials are configured", async () => {
-    if (!process.env["DEEPSEEK_API_KEY"]) {
-      console.warn("DEEPSEEK_API_KEY is not set; skipping DeepSeek inner scenario.");
-      return;
-    }
-    const config = new ConfigService();
+  test.skipIf(!hasDeepSeekCredential)("uses real model with project inspection when credentials are configured", async () => {
+    const config = innerConfig;
     const targetProject = "/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-front";
     expect(config.getConfig().model.provider).toBe("deepseek");
     expect(existsSync(targetProject)).toBe(true);
+    expect(config.getProvider("deepseek")?.api_key.length ?? 0).toBeGreaterThan(0);
 
     const memory = new MemoryComponent(config);
     const signalBus = new SignalBus(true);

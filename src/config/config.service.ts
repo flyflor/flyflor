@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { Component } from "../di";
 import { ProjectPaths } from "../shared/path";
 import { parseJsonc } from "./jsonc";
@@ -19,6 +19,7 @@ export class ConfigService {
     private readonly configPath = "./.config/config.jsonc",
   ) {
     this.projectPaths = new ProjectPaths(projectRoot);
+    this.loadLocalEnvFiles();
     const raw = readFileSync(this.projectPaths.resolve(configPath), "utf8");
     this.config = parseJsonc(raw) as FlyflorConfig;
   }
@@ -167,6 +168,28 @@ export class ConfigService {
       return envName;
     }
     return envName ? process.env[envName] ?? "" : "";
+  }
+
+  /**
+   * Loads ignored project-local environment files without overriding the parent process.
+   *
+   * @returns Nothing.
+   * @usage Runtime and tests can share `.env.local` or `.env` credentials while committed config keeps secrets empty.
+   */
+  private loadLocalEnvFiles(): void {
+    for (const fileName of [".env.local", ".env"]) {
+      const absolutePath = this.projectPaths.resolve(fileName);
+      if (!existsSync(absolutePath)) {
+        continue;
+      }
+      for (const line of readFileSync(absolutePath, "utf8").split("\n")) {
+        const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+        if (!match?.[1] || match[2] === undefined || process.env[match[1]]) {
+          continue;
+        }
+        process.env[match[1]] = match[2].trim().replace(/^["']|["']$/g, "");
+      }
+    }
   }
 }
 

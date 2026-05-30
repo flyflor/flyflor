@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -60,6 +60,7 @@ describe("no-session agent scenario", () => {
     const rebuiltMemory = new MemoryComponent(config);
     const recalled = rebuiltMemory.recall("项目代号是什么", 3);
     expect(recalled.map((item) => item.chunk.content).join("\n")).toContain("flyflor-alpha");
+    expect(listMarkdownFiles(config.resolve(`${profile.profileDir}/memory/wiki/sources`)).length).toBeGreaterThan(0);
   });
 
   test("emits guard and tool events while preserving artifacts", async () => {
@@ -89,6 +90,34 @@ describe("no-session agent scenario", () => {
     expect(events).toContain("tool.call");
     expect(events).toContain("tool.result");
     expect(events).toContain("guard.ask");
+  });
+
+  test("registers the phase-one coding tool surface", () => {
+    const config = new ConfigService(profile.root, profile.configPath);
+    const memory = new MemoryComponent(config);
+    const runtime = new AgentRuntimeService(
+      config,
+      memory,
+      new ContextBuilderService(config, undefined, memory),
+      new SignalBus(true),
+    );
+    const toolNames = runtime.getToolRegistry().list().map((tool) => tool.name).sort();
+    expect(toolNames).toEqual([
+      "codegraph",
+      "context_compact",
+      "edit",
+      "git",
+      "glob",
+      "grep",
+      "memory_forget",
+      "memory_recall",
+      "memory_store",
+      "multi_edit",
+      "read",
+      "shell",
+      "task",
+      "write",
+    ]);
   });
 
   test("runs read-only project inspection before answering project analysis", async () => {
@@ -199,6 +228,77 @@ describe("no-session agent scenario", () => {
       },
     });
   });
+
+  test("loads local env files before resolving provider keys", () => {
+    const envName = "FLYFLOR_SCENARIO_PROVIDER_KEY";
+    const previous = process.env[envName];
+    delete process.env[envName];
+
+    const envRoot = join(process.cwd(), ".config/runtime/scenarios", `env-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    mkdirSync(join(envRoot, ".config"), { recursive: true });
+    writeFileSync(join(envRoot, ".env.local"), `${envName}=env-file-secret\n`, "utf8");
+    writeFileSync(
+      join(envRoot, ".config/config.jsonc"),
+      JSON.stringify(
+        {
+          paths: {
+            templatesDir: "./.config/templates",
+            memoryDb: "./.config/memory/memory.db",
+            memoryWiki: "./.config/memory/wiki",
+            toolArtifacts: "./.config/memory/artifacts",
+            sqliteVecDir: "./.config/sqlite-vec",
+            codegraphDir: "./.config/codegraph",
+            socketTestPage: "./.config/web/socket-test.html",
+            runtimeDir: "./.config/runtime",
+          },
+          runtime: { autoApproveGuards: true },
+          socket: { host: "127.0.0.1", port: 0 },
+          prompts: { system: "./prompts/system.md" },
+          model: {
+            default: "deepseek-v4-flash",
+            provider: "deepseek",
+            base_url: "",
+            api_key_env: envName,
+            api_key: "",
+            request_timeout_seconds: 300,
+            stale_timeout_seconds: 900,
+            max_tokens: null,
+            context_length: null,
+          },
+          providers: {
+            deepseek: {
+              base_url: "https://api.deepseek.com",
+              api_key_env: envName,
+              api_key: "",
+              request_timeout_seconds: 300,
+              stale_timeout_seconds: 900,
+              models: { "deepseek-v4-flash": {} },
+            },
+          },
+          tools: {
+            rtk: { enabled: true, command: "rtk" },
+            codegraph: { enabled: true, command: "codegraph" },
+          },
+          memory: { embeddingDimensions: 4, enableSqliteVec: true },
+          context: { recentTurns: 6, maxRecall: 6 },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    try {
+      const config = new ConfigService(envRoot);
+      expect(config.getProvider("deepseek")?.api_key).toBe("env-file-secret");
+    } finally {
+      if (previous === undefined) {
+        delete process.env[envName];
+      } else {
+        process.env[envName] = previous;
+      }
+    }
+  });
 });
 
 /**
@@ -288,6 +388,20 @@ function countMemoryChunks(config: ConfigService): number {
     .query("select count(*) as count from memory_chunks")
     .get() as { readonly count: number };
   return row.count;
+}
+
+/**
+ * Lists generated Markdown projection files under one directory.
+ *
+ * @param dir - Absolute projection directory.
+ * @returns Markdown filenames found in the directory.
+ * @usage Scenario tests verify memory.db writes also produce human-review projections.
+ */
+function listMarkdownFiles(dir: string): readonly string[] {
+  if (!existsSync(dir)) {
+    return [];
+  }
+  return readdirSync(dir).filter((fileName) => fileName.endsWith(".md"));
 }
 
 /**
