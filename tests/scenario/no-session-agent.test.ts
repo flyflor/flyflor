@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ConfigService } from "../../src/config/config.service";
 import { ContextBuilderService } from "../../src/context";
@@ -88,6 +89,48 @@ describe("no-session agent scenario", () => {
     expect(events).toContain("tool.call");
     expect(events).toContain("tool.result");
     expect(events).toContain("guard.ask");
+  });
+
+  test("runs read-only project inspection before answering project analysis", async () => {
+    const config = new ConfigService(profile.root, profile.configPath);
+    const projectPath = createScenarioProject(profile);
+    const memory = new MemoryComponent(config);
+    const signalBus = new SignalBus(true);
+    const events: string[] = [];
+    signalBus.subscribe("tool.call", async (payload) => {
+      events.push(JSON.stringify(payload));
+    });
+    const runtime = new AgentRuntimeService(
+      config,
+      memory,
+      new ContextBuilderService(config, undefined, memory),
+      signalBus,
+    );
+    const result = await runtime.runTurn({
+      conversationId: "project-read",
+      content: `仔细阅读这个项目 ${projectPath} 说说你的看法`,
+    });
+    expect(result.toolResults.length).toBeGreaterThanOrEqual(4);
+    expect(result.toolResults.map((item) => item.output).join("\n")).toContain("flyflor-inner-test");
+    expect(events.join("\n")).toContain("\"name\":\"glob\"");
+    expect(events.join("\n")).toContain("\"name\":\"read\"");
+    expect(memory.recall("flyflor-inner-test", 3).length).toBe(0);
+  });
+
+  test("does not store question-like messages as durable facts", async () => {
+    const config = new ConfigService(profile.root, profile.configPath);
+    const memory = new MemoryComponent(config);
+    const runtime = new AgentRuntimeService(
+      config,
+      memory,
+      new ContextBuilderService(config, undefined, memory),
+      new SignalBus(true),
+    );
+    await runtime.runTurn({
+      conversationId: "question-memory",
+      content: "我的项目代号是什么？",
+    });
+    expect(countMemoryChunks(config)).toBe(0);
   });
 
   test("serves the socket test page and completes a WebSocket turn", async () => {
@@ -215,6 +258,36 @@ function createScenarioProfile(name: string, overrides: Record<string, unknown> 
   mkdirSync(dirname(join(root, configPath)), { recursive: true });
   writeFileSync(join(root, configPath), JSON.stringify(config, null, 2), "utf8");
   return { root, configPath, profileDir };
+}
+
+/**
+ * Creates a tiny local project for project-read scenario testing.
+ *
+ * @param profile - Scenario profile that owns runtime output paths.
+ * @returns Absolute project path.
+ * @usage Project inspection tests need a real filesystem target without touching repo files.
+ */
+function createScenarioProject(profile: ScenarioProfile): string {
+  const projectDir = join(profile.root, profile.profileDir, "sample-project");
+  mkdirSync(join(projectDir, "src"), { recursive: true });
+  writeFileSync(join(projectDir, "package.json"), JSON.stringify({ name: "flyflor-inner-test", type: "module" }, null, 2), "utf8");
+  writeFileSync(join(projectDir, "README.md"), "# flyflor-inner-test\n\nScenario project for inspection.\n", "utf8");
+  writeFileSync(join(projectDir, "src/index.ts"), "export class InnerTestApp { public readonly name = 'flyflor-inner-test'; }\n", "utf8");
+  return projectDir;
+}
+
+/**
+ * Counts durable memory chunks in an isolated scenario DB.
+ *
+ * @param config - Config service pointing at a scenario profile.
+ * @returns Number of stored memory chunks.
+ * @usage Scenario tests verify that questions do not become durable facts.
+ */
+function countMemoryChunks(config: ConfigService): number {
+  const row = new Database(config.resolve(config.getConfig().paths.memoryDb))
+    .query("select count(*) as count from memory_chunks")
+    .get() as { readonly count: number };
+  return row.count;
 }
 
 /**

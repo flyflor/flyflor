@@ -90,10 +90,19 @@ export class AgentRuntimeService {
     });
 
     const toolResults = await this.executeInlineTools(turnId, input.content);
+    const modelMessages = toolResults.length === 0
+      ? context.messages
+      : [
+        ...context.messages,
+        {
+          role: "tool" as const,
+          content: this.renderToolResults(toolResults),
+        },
+      ];
     let assistantMessage = "";
     for await (const event of this.modelProvider.stream({
       model: this.configService.getActiveModelName(),
-      messages: context.messages,
+      messages: modelMessages,
       userInput: input.content,
       recall: context.recall,
     })) {
@@ -196,7 +205,7 @@ export class AgentRuntimeService {
    * @usage V1 deterministic memory capture for scenario coverage before model distillation exists.
    */
   private storeDurableFacts(conversationId: string, turnId: string, content: string): ReturnType<MemoryComponent["store"]>[] {
-    if (!/(记住|remember|项目代号|project code|codename)/i.test(content)) {
+    if (!this.isDurableFact(content)) {
       return [];
     }
     return [
@@ -219,11 +228,15 @@ export class AgentRuntimeService {
    */
   private async executeInlineTools(turnId: string, content: string): Promise<readonly ToolResult[]> {
     const shellMatch = content.match(/(?:run|执行)\s+shell\s*[:：]\s*(.+)$/i);
-    if (!shellMatch?.[1]) {
-      return [];
+    const results: ToolResult[] = [];
+    const projectPath = this.extractProjectPath(content);
+    if (projectPath) {
+      results.push(...await this.inspectProject(turnId, projectPath, content));
     }
-    const result = await this.toolRegistry.execute("shell", { command: shellMatch[1] }, this.createToolContext(turnId));
-    return [result];
+    if (shellMatch?.[1]) {
+      results.push(await this.toolRegistry.execute("shell", { command: shellMatch[1] }, this.createToolContext(turnId)));
+    }
+    return results;
   }
 
   /**
@@ -237,5 +250,99 @@ export class AgentRuntimeService {
       return new MockModelProvider();
     }
     return new OpenAICompatibleModelProvider(this.configService);
+  }
+
+  /**
+   * Determines whether a user message is a durable fact worth storing.
+   *
+   * @param content - User message content.
+   * @returns True when the message is declarative memory, false for questions or project analysis requests.
+   * @usage Prevents user questions from polluting long-term memory.
+   */
+  private isDurableFact(content: string): boolean {
+    if (/[?？]|是什么|为什么|怎么|如何|吗\b|呢\b|仔细阅读|阅读这个项目|分析这个项目/.test(content)) {
+      return false;
+    }
+    return /(记住|remember|项目代号(?:是|为)|project code(?: is)?|codename(?: is)?)/i.test(content);
+  }
+
+  /**
+   * Extracts a filesystem path from a project-reading request.
+   *
+   * @param content - User message content.
+   * @returns Absolute or project-relative path when present.
+   * @usage Runtime uses this to trigger read-only project exploration before the model call.
+   */
+  private extractProjectPath(content: string): string | undefined {
+    if (!/(仔细阅读|阅读这个项目|分析这个项目|看看这个项目|read this project|analyze this project|codebase)/i.test(content)) {
+      return undefined;
+    }
+    return content.match(/(?:\/[^\s，。；;]+|\.\/[^\s，。；;]+|\.\.\/[^\s，。；;]+)/)?.[0];
+  }
+
+  /**
+   * Runs a bounded read-only project inspection tool chain.
+   *
+   * @param turnId - Current runtime turn id.
+   * @param projectPath - Project path supplied by the user.
+   * @param content - Original user message.
+   * @returns Tool results to inject into model context.
+   * @usage Gives real models current project evidence before answering analysis requests.
+   */
+  private async inspectProject(turnId: string, projectPath: string, content: string): Promise<readonly ToolResult[]> {
+    const context = {
+      ...this.createToolContext(turnId),
+      cwd: projectPath,
+    };
+    const results: ToolResult[] = [];
+    results.push(await this.toolRegistry.execute("git", { args: ["status", "--short"] }, context));
+    for (const pattern of ["package.json", "bun.lock", "tsconfig.json", "README.md", "src/**/*.ts", "src/**/*.tsx", "app/**/*.ts", "app/**/*.tsx"]) {
+      results.push(await this.toolRegistry.execute("glob", { pattern }, context));
+    }
+    results.push(await this.toolRegistry.execute("grep", { pattern: "TODO|FIXME|throw new Error|console\\.error", path: "." }, context));
+    results.push(await this.toolRegistry.execute("codegraph", { action: "status" }, context));
+    for (const path of this.pickProjectFiles(results)) {
+      results.push(await this.toolRegistry.execute("read", { filePath: path, limit: 6000 }, context));
+    }
+    return results;
+  }
+
+  /**
+   * Picks high-value project files from glob output.
+   *
+   * @param results - Prior tool results from project inspection.
+   * @returns Project-relative file paths to read.
+   * @usage Keeps model context bounded while still reading real project files.
+   */
+  private pickProjectFiles(results: readonly ToolResult[]): readonly string[] {
+    const files = results
+      .filter((result) => result.ok)
+      .flatMap((result) => result.output.split("\n"))
+      .map((file) => file.trim())
+      .filter(Boolean);
+    const preferred = ["package.json", "README.md", "tsconfig.json"];
+    const picked = [
+      ...preferred.filter((file) => files.includes(file)),
+      ...files.filter((file) => /^src\/.*\.(ts|tsx)$/.test(file)).slice(0, 6),
+      ...files.filter((file) => /^app\/.*\.(ts|tsx)$/.test(file)).slice(0, 4),
+    ];
+    return [...new Set(picked)].slice(0, 10);
+  }
+
+  /**
+   * Renders tool outputs into one bounded model message.
+   *
+   * @param results - Tool results from the current turn.
+   * @returns Markdown text injected into model context.
+   * @usage Real providers receive tool evidence even before native tool-calling is fully implemented.
+   */
+  private renderToolResults(results: readonly ToolResult[]): string {
+    return [
+      "## TOOL INSPECTION RESULTS",
+      ...results.map((result) => [
+        `### ${result.ok ? "ok" : "fail"} ${result.metadata?.["path"] ?? result.artifactPath ?? "tool"}`,
+        result.output.slice(0, 8000),
+      ].join("\n")),
+    ].join("\n\n").slice(0, 30000);
   }
 }

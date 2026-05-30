@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { Component } from "../di";
 import { ConfigService } from "../config/config.service";
-import type { MemoryChunk, MemoryMessage, MemoryRecallResult, MemoryStoreInput } from "./memory.types";
+import type { MemoryChunk, MemoryMessage, MemoryRecallOptions, MemoryRecallResult, MemoryStoreInput } from "./memory.types";
 import { SqliteVecLoader } from "./sqlite-vec-loader";
 
 /**
@@ -134,7 +134,10 @@ export class MemoryComponent {
    * @returns Ranked recall results with provenance.
    * @usage ContextModule injects these results into every no-session turn.
    */
-  public recall(query: string, limit: number): readonly MemoryRecallResult[] {
+  public recall(query: string, limit: number, options: MemoryRecallOptions = {}): readonly MemoryRecallResult[] {
+    if (this.shouldSkipRecall(query, options)) {
+      return [];
+    }
     if (this.vectorLoaded) {
       const rows = this.db.query(`
         select c.id, c.source_kind as sourceKind, c.source_id as sourceId, c.content, c.importance, c.created_at as createdAt, v.distance
@@ -143,19 +146,19 @@ export class MemoryComponent {
         where v.embedding match vec_f32(?) and k = ?
         order by v.distance
       `).all(JSON.stringify(this.embed(query)), limit) as Array<MemoryChunk & { distance: number }>;
-      return rows.map((row) => ({
+      return this.rankRecall(query, rows.map((row) => ({
         chunk: row,
         score: 1 / (1 + row.distance) + row.importance,
-      }));
+      })), options).slice(0, limit);
     }
     const tokens = query.toLowerCase().split(/\W+/).filter(Boolean);
     const rows = this.db.query("select id, source_kind as sourceKind, source_id as sourceId, content, importance, created_at as createdAt from memory_chunks order by created_at desc").all() as MemoryChunk[];
-    return rows
+    return [...this.rankRecall(query, rows
       .map((chunk) => ({
         chunk,
         score: tokens.reduce((score, token) => score + (chunk.content.toLowerCase().includes(token) ? 1 : 0), chunk.importance),
       }))
-      .filter((item) => item.score > 0)
+      .filter((item) => item.score > 0), options)]
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
   }
@@ -193,5 +196,74 @@ export class MemoryComponent {
       [`# ${chunk.sourceKind}:${chunk.sourceId}`, "", `- ${chunk.content}`].join("\n"),
       "utf8",
     );
+  }
+
+  /**
+   * Checks whether a query should avoid durable recall entirely.
+   *
+   * @param query - Current user query.
+   * @param options - Recall options supplied by ContextModule.
+   * @returns True when durable recall would likely pollute the answer.
+   * @usage Project/code reading should start from tools and recent context, not unrelated user facts.
+   */
+  private shouldSkipRecall(query: string, options: MemoryRecallOptions): boolean {
+    if (options.sourceKinds && options.sourceKinds.length === 0) {
+      return true;
+    }
+    return /(仔细阅读|阅读这个项目|分析这个项目|看看这个项目|read this project|analyze this project|codebase)/i.test(query);
+  }
+
+  /**
+   * Filters and reranks raw recall results against the question text.
+   *
+   * @param query - Current user query.
+   * @param results - Raw vector or lexical recall results.
+   * @param options - Recall options supplied by ContextModule.
+   * @returns Filtered and reranked recall results.
+   * @usage Prevents question chunks and unrelated source kinds from entering model context.
+   */
+  private rankRecall(
+    query: string,
+    results: readonly MemoryRecallResult[],
+    options: MemoryRecallOptions,
+  ): readonly MemoryRecallResult[] {
+    const queryTokens = this.tokenize(query);
+    return results
+      .filter((item) => !options.sourceKinds || options.sourceKinds.includes(item.chunk.sourceKind))
+      .filter((item) => !options.excludeQuestionLike || !this.isQuestionLike(item.chunk.content))
+      .map((item) => {
+        const overlap = this.tokenize(item.chunk.content).filter((token) => queryTokens.includes(token)).length;
+        return {
+          chunk: item.chunk,
+          score: item.score + overlap,
+        };
+      })
+      .filter((item) => item.score >= 1)
+      .sort((a, b) => b.score - a.score);
+  }
+
+  /**
+   * Tokenizes mixed Chinese/English text for lightweight recall reranking.
+   *
+   * @param text - Text to tokenize.
+   * @returns Lowercase token list.
+   * @usage Avoids adding a heavy tokenizer while making recall question-aware.
+   */
+  private tokenize(text: string): readonly string[] {
+    return text
+      .toLowerCase()
+      .split(/[^a-z0-9_\-.一-龥]+/u)
+      .filter((token) => token.length >= 2);
+  }
+
+  /**
+   * Detects whether text is a user question rather than a durable fact.
+   *
+   * @param text - Memory chunk content.
+   * @returns True when the content looks question-like.
+   * @usage Recall filters avoid injecting prior questions as if they were facts.
+   */
+  private isQuestionLike(text: string): boolean {
+    return /[?？]|是什么|为什么|怎么|如何|吗\b|呢\b/.test(text);
   }
 }

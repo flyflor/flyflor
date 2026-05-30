@@ -61,3 +61,17 @@ export interface MemoryStoreInput {
   readonly content: string;
   readonly importance?: number;
 }
+
+/**
+ * Describes options that guide memory recall for one user question.
+ *
+ * @property conversationId - Optional conversation id used to prefer local continuity.
+ * @property sourceKinds - Optional durable memory source kinds allowed in the result.
+ * @property excludeQuestionLike - Whether question-like chunks should be filtered out.
+ * @usage Context builders pass this so recall follows the question intent instead of blindly returning vector topK.
+ */
+export interface MemoryRecallOptions {
+  readonly conversationId?: string;
+  readonly sourceKinds?: readonly string[];
+  readonly excludeQuestionLike?: boolean;
+}

@@ -31,7 +31,10 @@ export class ContextBuilderService {
    */
   public build(input: ContextBuildInput): ContextBuildResult {
     const config = this.configService.getConfig();
-    const recall = this.memoryComponent.recall(input.userInput, config.context.maxRecall);
+    const recall = this.memoryComponent.recall(input.userInput, config.context.maxRecall, {
+      conversationId: input.conversationId,
+      excludeQuestionLike: true,
+    });
     const recentMessages = this.memoryComponent
       .recentMessages(input.conversationId, config.context.recentTurns * 2)
       .filter((message) => message.id !== input.excludeMessageId);
