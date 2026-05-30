@@ -9,6 +9,7 @@ import type { Tool, ToolContext, ToolResult } from "./tool.types";
 export class MemoryRecallTool implements Tool<{ readonly query: string; readonly limit?: number }> {
   public readonly name = "memory_recall";
   public readonly description = "Recall memories relevant to a query.";
+  public readonly execution = { mutability: "read-only" as const, concurrency: "concurrent" as const };
   public readonly schema = {
     type: "object" as const,
     required: ["query"],
@@ -35,6 +36,7 @@ export class MemoryRecallTool implements Tool<{ readonly query: string; readonly
 export class MemoryStoreTool implements Tool<{ readonly content: string; readonly sourceId?: string }> {
   public readonly name = "memory_store";
   public readonly description = "Store durable memory.";
+  public readonly execution = { mutability: "mutating" as const, concurrency: "serial" as const };
   public readonly schema = {
     type: "object" as const,
     required: ["content"],
@@ -61,6 +63,7 @@ export class MemoryStoreTool implements Tool<{ readonly content: string; readonl
 export class MemoryForgetTool implements Tool<{ readonly id: number }> {
   public readonly name = "memory_forget";
   public readonly description = "Request memory deletion.";
+  public readonly execution = { mutability: "mutating" as const, concurrency: "serial" as const };
   public readonly schema = {
     type: "object" as const,
     required: ["id"],

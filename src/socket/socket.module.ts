@@ -1,7 +1,7 @@
 import { Module } from "../di";
 import { ConfigModule } from "../config/config.module";
 import { KernelModule } from "../kernel";
-import { SocketServerService } from "./socket-server.service";
+import { SocketServerService } from "./socket.server.service";
 
 /**
  * Assembles external WebSocket transport adapters.

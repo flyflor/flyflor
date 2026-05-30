@@ -1,5 +1,5 @@
 import { Module } from "../di";
-import { TemplateLoaderComponent } from "./template-loader.component";
+import { TemplateLoaderComponent } from "./template.loader.component";
 import { ConfigService } from "./config.service";
 
 /**

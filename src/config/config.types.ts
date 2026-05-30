@@ -5,8 +5,12 @@
  * @property memoryDb - SQLite database path for authoritative memory.
  * @property memoryWiki - Markdown projection directory for memory review.
  * @property toolArtifacts - Directory for raw tool outputs and artifacts.
+ * @property brainDir - Directory containing monthly full-fidelity brain audit databases.
+ * @property brainArtifacts - Directory containing large raw brain audit artifacts.
  * @property sqliteVecDir - Directory containing sqlite-vec vendor assets.
  * @property codegraphDir - Directory containing CodeGraph cache state.
+ * @property externalPluginsDir - Directory containing external plugin code or binaries.
+ * @property pluginStateDir - Directory containing plugin manifests, cache, and runtime state.
  * @property socketTestPage - Path to the local WebSocket test page.
  * @property runtimeDir - Directory for runtime locks and temporary local state.
  * @usage `ConfigService` returns this shape so modules do not hard-code local asset paths.
@@ -16,8 +20,12 @@ export interface ConfigPaths {
   readonly memoryDb: string;
   readonly memoryWiki: string;
   readonly toolArtifacts: string;
+  readonly brainDir: string;
+  readonly brainArtifacts: string;
   readonly sqliteVecDir: string;
   readonly codegraphDir: string;
+  readonly externalPluginsDir: string;
+  readonly pluginStateDir: string;
   readonly socketTestPage: string;
   readonly runtimeDir: string;
 }
@@ -59,7 +67,7 @@ export interface PromptConfig {
  *
  * @property default - Default model identifier, following Hermes config naming.
  * @property name - Optional legacy or alternate model identifier.
- * @property provider - Active provider selector, such as `auto`, `mock`, or a key under `providers`.
+ * @property provider - Active provider selector, such as `auto` or a key under `providers`.
  * @property base_url - Optional direct base URL for the active provider.
  * @property api_key_env - Environment variable used to read the provider API key.
  * @property api_key - Local-only API key override; committed config should keep this empty.
@@ -171,11 +179,13 @@ export interface ProvidersConfig {
  *
  * @property embeddingDimensions - Vector dimension used by the local embedding adapter.
  * @property enableSqliteVec - Whether sqlite-vec should be loaded for vector search.
+ * @property maxRetrievalTraces - Retention count for hot retrieval trace rows in memory.db.
  * @usage MemoryComponent reads this before schema initialization.
  */
 export interface MemoryConfig {
   readonly embeddingDimensions: number;
   readonly enableSqliteVec: boolean;
+  readonly maxRetrievalTraces: number;
 }
 
 /**
@@ -183,11 +193,15 @@ export interface MemoryConfig {
  *
  * @property recentTurns - Number of recent turns preserved as verbatim tail.
  * @property maxRecall - Maximum memory recall items injected into context.
+ * @property maxContextChars - Approximate character budget before runtime compaction is requested.
+ * @property maxToolSteps - Maximum model/tool loop steps allowed for one turn.
  * @usage ContextModule uses this to keep no-session context bounded and deterministic.
  */
 export interface ContextConfig {
   readonly recentTurns: number;
   readonly maxRecall: number;
+  readonly maxContextChars: number;
+  readonly maxToolSteps: number;
 }
 
 /**
@@ -215,6 +229,78 @@ export interface ToolsConfig {
 }
 
 /**
+ * Describes the supported source kinds for a project-local external plugin.
+ *
+ * @usage `manual` records an explicit local requirement, `local` copies from a project path, and `git` clones into `./plugins`.
+ */
+export type PluginInstallSourceKind = "manual" | "local" | "git";
+
+/**
+ * Describes where an external plugin should be installed from.
+ *
+ * @property kind - Source strategy used by PluginInstallerComponent.
+ * @property path - Project-relative source directory used by local installs.
+ * @property url - Git repository URL used by git installs.
+ * @property ref - Optional git ref checked out after clone.
+ * @usage Plugin registry entries keep source metadata in committed config while runtime state stays under `.config/plugins`.
+ */
+export interface PluginInstallSourceConfig {
+  readonly kind: PluginInstallSourceKind;
+  readonly path?: string;
+  readonly url?: string;
+  readonly ref?: string;
+}
+
+/**
+ * Describes one project-local external plugin registry entry.
+ *
+ * @property enabled - Whether this plugin participates in installation and local command resolution.
+ * @property required - Whether future strict startup should treat failure as blocking.
+ * @property installPath - Project-relative install directory under `paths.externalPluginsDir`.
+ * @property executable - Executable path relative to `installPath`.
+ * @property executableCandidates - Additional executable paths relative to `installPath`.
+ * @property installCommands - Shell commands executed inside `installPath` after source installation.
+ * @property installTimeoutSeconds - Per-command timeout for plugin-local install commands.
+ * @property source - Installation source metadata.
+ * @usage PluginInstallerComponent reads these entries and never resolves commands from global PATH.
+ */
+export interface PluginRegistryEntryConfig {
+  readonly enabled: boolean;
+  readonly required: boolean;
+  readonly installPath: string;
+  readonly executable: string;
+  readonly executableCandidates?: readonly string[];
+  readonly installCommands?: readonly string[];
+  readonly installTimeoutSeconds?: number;
+  readonly source: PluginInstallSourceConfig;
+}
+
+/**
+ * Describes configured project-local external plugins keyed by plugin name.
+ *
+ * @usage Keys such as `rtk` and `codegraph` are used by plugin adapters and status diagnostics.
+ */
+export interface PluginRegistryConfig {
+  readonly [pluginName: string]: PluginRegistryEntryConfig;
+}
+
+/**
+ * Describes external plugin loading settings.
+ *
+ * @property enabled - Whether plugin discovery and adapters are active.
+ * @property autoload - Whether manifests should be discovered automatically during runtime bootstrap.
+ * @property autoInstall - Whether missing project-local plugins may be installed automatically.
+ * @property registry - Project-local external plugin install registry.
+ * @usage PluginModule reads this while keeping external plugins outside the Bun binary core.
+ */
+export interface PluginsConfig {
+  readonly enabled: boolean;
+  readonly autoload: boolean;
+  readonly autoInstall: boolean;
+  readonly registry: PluginRegistryConfig;
+}
+
+/**
  * Describes the full Flyflor local configuration.
  *
  * @property paths - Unified `.config` path settings.
@@ -226,6 +312,7 @@ export interface ToolsConfig {
  * @property memory - Memory backend settings.
  * @property context - Context assembly settings.
  * @property tools - Tool execution settings.
+ * @property plugins - External plugin loading settings.
  * @usage `ConfigService` exposes this shape to DI-managed services.
  */
 export interface FlyflorConfig {
@@ -238,4 +325,5 @@ export interface FlyflorConfig {
   readonly memory: MemoryConfig;
   readonly context: ContextConfig;
   readonly tools: ToolsConfig;
+  readonly plugins: PluginsConfig;
 }

@@ -14,11 +14,23 @@
         // Raw tool outputs, shell stdout/stderr, and future compressed artifacts are written here.
         "toolArtifacts": "./.config/memory/artifacts",
 
+        // Monthly full-fidelity biography/audit databases. Runtime creates `YYYY-MM.brain.db` files here.
+        "brainDir": "./.config/brain",
+
+        // Raw brain artifacts for large model deltas, tool output, sub-agent logs, and recovery evidence.
+        "brainArtifacts": "./.config/brain/artifacts",
+
         // Vendored sqlite-vec dynamic library assets. These files are statically imported for Bun binary packaging.
         "sqliteVecDir": "./.config/sqlite-vec",
 
         // Optional CodeGraph cache/index directory. CodeGraph absence must not block the core agent.
         "codegraphDir": "./.config/codegraph",
+
+        // External plugin source/binary root. Plugin state remains under `.config/plugins`.
+        "externalPluginsDir": "./plugins",
+
+        // Plugin manifests, runtime status, caches, and adapter state.
+        "pluginStateDir": "./.config/plugins",
 
         // Local browser test page served by SocketServerService at `/socket-test.html`.
         "socketTestPage": "./.config/web/socket-test.html",
@@ -43,13 +55,13 @@
     },
 
     // Hermes-style active model configuration.
-    // `provider` can be `auto`, `mock`, a built-in protocol name, or a key under `providers`.
+    // `provider` can be `auto`, a built-in protocol name, or a key under `providers`.
     // API keys should normally come from `api_key_env`; do not commit a real `api_key`.
     "model": {
         // Default model id. `default` follows Hermes naming; future code may also accept `name`.
         "default": "deepseek-v4-flash",
 
-        // Active provider selector. `mock` is for local scenario tests; real runs should use `auto` or a provider key.
+        // Active provider selector. Runtime and scenario tests use real provider paths.
         "provider": "deepseek",
 
         // Optional direct base URL for the active provider. Leave empty when `provider` selects a named provider below.
@@ -136,13 +148,58 @@
         // Optional RTK command-output compression. Missing command falls back to raw bounded output.
         "rtk": {
             "enabled": true,
-            "command": "rtk",
+            "command": "./plugins/rtk/target/release/rtk",
         },
 
         // Optional CodeGraph code index/search integration. Missing command falls back to rg/glob/read.
         "codegraph": {
             "enabled": true,
-            "command": "codegraph",
+            "command": "./plugins/codegraph/dist/bin/codegraph.js",
+        },
+    },
+    "plugins": {
+        // External plugins are loaded through src/plugins adapters and never become Bun binary hard dependencies.
+        "enabled": true,
+
+        // Plugin manifests are discovered from `paths.pluginStateDir` and may point to `paths.externalPluginsDir`.
+        "autoload": true,
+
+        // Missing project-local external plugins may be cloned or copied into `./plugins` by PluginInstallerComponent.
+        "autoInstall": true,
+
+        // External plugin install registry. Runtime verifies or installs these into `paths.externalPluginsDir`.
+        "registry": {
+            // RTK is used to filter noisy command output into model-facing summaries.
+            "rtk": {
+                "enabled": true,
+                "required": false,
+                "installPath": "./plugins/rtk",
+                "executable": "target/release/rtk",
+                "executableCandidates": ["target/release/rtk", "rtk", "bin/rtk", "dist/rtk"],
+                "installCommands": ["cargo build --release"],
+                "installTimeoutSeconds": 180,
+                "source": {
+                    "kind": "git",
+                    "url": "https://github.com/rtk-ai/rtk.git",
+                    "ref": "master",
+                },
+            },
+
+            // CodeGraph is used only for coding/codebase turns; absence falls back to rg/glob/read.
+            "codegraph": {
+                "enabled": true,
+                "required": false,
+                "installPath": "./plugins/codegraph",
+                "executable": "dist/bin/codegraph.js",
+                "executableCandidates": ["dist/bin/codegraph.js", "codegraph", "bin/codegraph", "node_modules/.bin/codegraph"],
+                "installCommands": ["npm install", "npm run build"],
+                "installTimeoutSeconds": 180,
+                "source": {
+                    "kind": "git",
+                    "url": "https://github.com/colbymchenry/codegraph.git",
+                    "ref": "main",
+                },
+            },
         },
     },
     "memory": {
@@ -151,6 +208,9 @@
 
         // Load sqlite-vec for vector recall. If loading fails, MemoryComponent falls back to lexical recall.
         "enableSqliteVec": true,
+
+        // Number of retrieval trace rows kept before old rows become audit-only through brain.db.
+        "maxRetrievalTraces": 2000,
     },
     "context": {
         // Recent conversation turns preserved verbatim in no-session context.
@@ -158,5 +218,11 @@
 
         // Maximum durable memory chunks injected into one model context.
         "maxRecall": 6,
+
+        // Approximate character budget that triggers deterministic checkpoint compaction.
+        "maxContextChars": 90000,
+
+        // Number of runtime/tool-loop steps allowed before the agent must finish or report a loop guard.
+        "maxToolSteps": 8,
     },
 }

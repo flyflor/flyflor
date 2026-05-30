@@ -47,18 +47,12 @@ export class SqliteVecLoader {
    * Loads sqlite-vec into an open Bun SQLite database.
    *
    * @param db - Open Bun SQLite database.
-   * @returns Whether sqlite-vec was loaded successfully.
-   * @usage Tests can continue with fallback lexical recall if local extension loading is unavailable.
+   * @returns Nothing.
+   * @usage When enabled, sqlite-vec must load successfully or startup fails.
    */
-  public load(db: Database): boolean {
-    try {
-      const vecPath = this.materializeAssetFile(this.vendorVecAssetPath(), this.vendorVecPath());
-      db.loadExtension(vecPath, "sqlite3_vec_init");
-      return true;
-    } catch (error) {
-      console.warn(`[memory] sqlite-vec unavailable: ${error instanceof Error ? error.message : String(error)}`);
-      return false;
-    }
+  public load(db: Database): void {
+    const vecPath = this.materializeAssetFile(this.vendorVecAssetPath(), this.vendorVecPath());
+    db.loadExtension(vecPath, "sqlite3_vec_init");
   }
 
   /**

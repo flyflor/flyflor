@@ -1,7 +1,8 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { config as loadDotenv } from "dotenv";
+import { parse, printParseErrorCode, type ParseError } from "jsonc-parser";
 import { Component } from "../di";
 import { ProjectPaths } from "../shared/path";
-import { parseJsonc } from "./jsonc";
 import type { FlyflorConfig, NormalizedProviderConfig, ProviderConfig, ProviderModelConfigMap } from "./config.types";
 
 /**
@@ -13,16 +14,15 @@ import type { FlyflorConfig, NormalizedProviderConfig, ProviderConfig, ProviderM
 export class ConfigService {
   private readonly projectPaths: ProjectPaths;
   private readonly config: FlyflorConfig;
-  private readonly localEnv: Readonly<Record<string, string>>;
 
   public constructor(
     private readonly projectRoot = process.cwd(),
     private readonly configPath = "./.config/config.jsonc",
   ) {
     this.projectPaths = new ProjectPaths(projectRoot);
-    this.localEnv = this.loadLocalEnvFiles();
+    this.loadLocalEnvFiles();
     const raw = readFileSync(this.projectPaths.resolve(configPath), "utf8");
-    this.config = this.mergeEnvIntoConfig(parseJsonc(raw) as FlyflorConfig);
+    this.config = this.mergeEnvIntoConfig(this.applyConfigDefaults(this.parseConfig(raw, configPath)));
   }
 
   /**
@@ -134,6 +134,161 @@ export class ConfigService {
   }
 
   /**
+   * Parses the project JSONC config with structured parse diagnostics.
+   *
+   * @param raw - Raw config file text.
+   * @param configPath - Project-relative config path for diagnostics.
+   * @returns Parsed partial config.
+   * @usage Config errors fail startup with location details instead of falling back to defaults.
+   */
+  private parseConfig(raw: string, configPath: string): Partial<FlyflorConfig> {
+    const errors: ParseError[] = [];
+    const parsed = parse(raw, errors, {
+      allowTrailingComma: true,
+      disallowComments: false,
+    }) as Partial<FlyflorConfig>;
+    if (errors.length > 0) {
+      const diagnostics = errors
+        .map((error) => {
+          const location = this.offsetToLineColumn(raw, error.offset);
+          return `${configPath}:${location.line}:${location.column} ${printParseErrorCode(error.error)}`;
+        })
+        .join("; ");
+      throw new Error(`Config JSONC parse failed: ${diagnostics}`);
+    }
+    return parsed;
+  }
+
+  /**
+   * Converts a string offset into one-based line and column numbers.
+   *
+   * @param text - Source text.
+   * @param offset - Zero-based string offset.
+   * @returns One-based line and column.
+   * @usage JSONC parser errors expose offsets; diagnostics need locations.
+   */
+  private offsetToLineColumn(text: string, offset: number): { readonly line: number; readonly column: number } {
+    const prefix = text.slice(0, offset);
+    const lines = prefix.split(/\r\n|\r|\n/);
+    const lastLine = lines[lines.length - 1] ?? "";
+    return {
+      line: lines.length,
+      column: lastLine.length + 1,
+    };
+  }
+
+  /**
+   * Applies runtime defaults for config files created before newer sections existed.
+   *
+   * @param config - Parsed partial config.
+   * @returns Complete FlyflorConfig object.
+   * @usage Scenario profiles and older local configs keep working when new brain/plugin/context settings are added.
+   */
+  private applyConfigDefaults(config: Partial<FlyflorConfig>): FlyflorConfig {
+    const paths = config.paths ?? {} as Partial<FlyflorConfig["paths"]>;
+    const model = config.model ?? {} as Partial<FlyflorConfig["model"]>;
+    const memory = config.memory ?? {} as Partial<FlyflorConfig["memory"]>;
+    const context = config.context ?? {} as Partial<FlyflorConfig["context"]>;
+    const tools = config.tools ?? {} as Partial<FlyflorConfig["tools"]>;
+    return {
+      paths: {
+        templatesDir: paths.templatesDir ?? "./.config/templates",
+        memoryDb: paths.memoryDb ?? "./.config/memory/memory.db",
+        memoryWiki: paths.memoryWiki ?? "./.config/memory/wiki",
+        toolArtifacts: paths.toolArtifacts ?? "./.config/memory/artifacts",
+        brainDir: paths.brainDir ?? "./.config/brain",
+        brainArtifacts: paths.brainArtifacts ?? "./.config/brain/artifacts",
+        sqliteVecDir: paths.sqliteVecDir ?? "./.config/sqlite-vec",
+        codegraphDir: paths.codegraphDir ?? "./.config/codegraph",
+        externalPluginsDir: paths.externalPluginsDir ?? "./plugins",
+        pluginStateDir: paths.pluginStateDir ?? "./.config/plugins",
+        socketTestPage: paths.socketTestPage ?? "./.config/web/socket-test.html",
+        runtimeDir: paths.runtimeDir ?? "./.config/runtime",
+      },
+      runtime: config.runtime ?? { autoApproveGuards: true },
+      socket: config.socket ?? { host: "127.0.0.1", port: 17361 },
+      prompts: config.prompts ?? { system: "./prompts/system.md" },
+      model: {
+        default: model.default ?? "deepseek-v4-flash",
+        name: model.name,
+        provider: model.provider ?? "deepseek",
+        base_url: model.base_url ?? "",
+        api_key_env: model.api_key_env ?? "DEEPSEEK_API_KEY",
+        api_key: model.api_key ?? "",
+        request_timeout_seconds: model.request_timeout_seconds ?? 300,
+        stale_timeout_seconds: model.stale_timeout_seconds ?? 900,
+        max_tokens: model.max_tokens ?? null,
+        context_length: model.context_length ?? null,
+      },
+      providers: config.providers ?? {
+        deepseek: {
+          base_url: "https://api.deepseek.com",
+          api_key_env: "DEEPSEEK_API_KEY",
+          api_key: "",
+          request_timeout_seconds: 300,
+          stale_timeout_seconds: 900,
+          models: {
+            "deepseek-v4-flash": {
+              context_length: 1024000,
+              max_tokens: 4096,
+            },
+          },
+        },
+      },
+      memory: {
+        embeddingDimensions: memory.embeddingDimensions ?? 4,
+        enableSqliteVec: memory.enableSqliteVec ?? true,
+        maxRetrievalTraces: memory.maxRetrievalTraces ?? 2000,
+      },
+      context: {
+        recentTurns: context.recentTurns ?? 6,
+        maxRecall: context.maxRecall ?? 6,
+        maxContextChars: context.maxContextChars ?? 90000,
+        maxToolSteps: context.maxToolSteps ?? 8,
+      },
+      tools: {
+        rtk: tools.rtk ?? { enabled: true, command: "./plugins/rtk/rtk" },
+        codegraph: tools.codegraph ?? { enabled: true, command: "./plugins/codegraph/codegraph" },
+      },
+      plugins: {
+        enabled: config.plugins?.enabled ?? true,
+        autoload: config.plugins?.autoload ?? true,
+        autoInstall: config.plugins?.autoInstall ?? true,
+        registry: config.plugins?.registry ?? {
+          rtk: {
+            enabled: true,
+            required: false,
+            installPath: "./plugins/rtk",
+            executable: "target/release/rtk",
+            executableCandidates: ["target/release/rtk", "rtk", "bin/rtk", "dist/rtk"],
+            installCommands: ["cargo build --release"],
+            installTimeoutSeconds: 180,
+            source: {
+              kind: "git",
+              url: "https://github.com/rtk-ai/rtk.git",
+              ref: "master",
+            },
+          },
+          codegraph: {
+            enabled: true,
+            required: false,
+            installPath: "./plugins/codegraph",
+            executable: "dist/bin/codegraph.js",
+            executableCandidates: ["dist/bin/codegraph.js", "codegraph", "bin/codegraph", "node_modules/.bin/codegraph"],
+            installCommands: ["npm install", "npm run build"],
+            installTimeoutSeconds: 180,
+            source: {
+              kind: "git",
+              url: "https://github.com/colbymchenry/codegraph.git",
+              ref: "main",
+            },
+          },
+        },
+      },
+    };
+  }
+
+  /**
    * Normalizes Hermes provider model catalogs.
    *
    * @param models - Dict-form or list-form model config.
@@ -172,29 +327,16 @@ export class ConfigService {
   }
 
   /**
-   * Loads the ignored project-local `.env` file without overriding the parent process.
+   * Loads the ignored project-local `.env` file through dotenv without overriding the parent process.
    *
-   * @returns Local environment values parsed from the project `.env` file.
+   * @returns Nothing.
    * @usage Runtime and tests can share `.env` credentials while committed config keeps secrets empty.
    */
-  private loadLocalEnvFiles(): Readonly<Record<string, string>> {
-    const localEnv: Record<string, string> = {};
+  private loadLocalEnvFiles(): void {
     for (const fileName of [".env"]) {
       const absolutePath = this.projectPaths.resolve(fileName);
-      if (!existsSync(absolutePath)) {
-        continue;
-      }
-      for (const line of readFileSync(absolutePath, "utf8").split("\n")) {
-        const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
-        if (!match?.[1] || match[2] === undefined || process.env[match[1]]) {
-          continue;
-        }
-        const value = match[2].trim().replace(/^["']|["']$/g, "");
-        localEnv[match[1]] = value;
-        process.env[match[1]] = value;
-      }
+      loadDotenv({ path: absolutePath, override: false, quiet: true });
     }
-    return localEnv;
   }
 
   /**
@@ -253,7 +395,7 @@ export class ConfigService {
     if (envName.startsWith("sk-")) {
       return envName;
     }
-    return process.env[envName] ?? this.localEnv[envName] ?? "";
+    return process.env[envName] ?? "";
   }
 }
 

@@ -26,5 +26,6 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
-  }
+  },
+  "exclude": ["plugins", ".worktrees", ".config", "node_modules"]
 }

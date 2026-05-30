@@ -59,11 +59,22 @@ export function Repo(base?: InjectionToken): FlyflorClassDecorator {
 }
 
 /**
+ * Registers a class as a plugin provider.
+ *
+ * @param base - Optional abstract token or base class that should resolve to the decorated plugin.
+ * @returns A class decorator that records plugin provider metadata.
+ * @usage Use under `src/plugins` for adapters that load or bridge optional external plugins from `./plugins`.
+ */
+export function Plugin(base?: InjectionToken): FlyflorClassDecorator {
+  return createProviderDecorator(ProviderKind.Plugin, base);
+}
+
+/**
  * Declares an explicit property injection.
  *
  * @param token - Class or symbol token to resolve for the property.
  * @returns A property decorator that records injection metadata.
- * @usage Use as `@Inject(ConfigService) public config!: ConfigService`; implicit type reflection is forbidden in v1.
+ * @usage Use as `@Inject(ConfigService) public config!: ConfigService`; implicit type reflection is forbidden.
  */
 export function Inject(token: InjectionToken) {
   return (target: object | undefined, propertyKeyOrContext: string | symbol | StandardDecoratorContextLike) => {

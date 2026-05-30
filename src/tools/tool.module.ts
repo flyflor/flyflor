@@ -1,13 +1,13 @@
 import { Module } from "../di";
 import { MemoryModule } from "../memory";
 import { SignalModule } from "../signal";
-import { CodeGraphTool, ContextCompactTool, RTKComponent, TaskTool } from "./adapters";
-import { ArtifactWriterComponent } from "./artifact-writer.component";
-import { EditTool, GlobTool, GrepTool, MultiEditTool, ReadTool, WriteTool } from "./file-tools";
-import { GitTool } from "./git-tool";
-import { MemoryForgetTool, MemoryRecallTool, MemoryStoreTool } from "./memory-tools";
+import { CodeGraphTool, ContextCompactTool, TaskTool } from "./adapters";
+import { ArtifactWriterComponent } from "./artifact.writer.component";
+import { EditTool, GlobTool, GrepTool, MultiEditTool, ReadTool, WriteTool } from "./file.tools";
+import { GitTool } from "./git.tool";
+import { MemoryForgetTool, MemoryRecallTool, MemoryStoreTool } from "./memory.tools";
 import { ToolRegistry } from "./registry";
-import { ShellTool } from "./shell-tool";
+import { ShellTool } from "./shell.tool";
 
 /**
  * Assembles project tool execution services.
@@ -32,7 +32,6 @@ import { ShellTool } from "./shell-tool";
     MemoryForgetTool,
     ContextCompactTool,
     TaskTool,
-    RTKComponent,
     CodeGraphTool,
   ],
   exports: [
@@ -51,7 +50,6 @@ import { ShellTool } from "./shell-tool";
     MemoryForgetTool,
     ContextCompactTool,
     TaskTool,
-    RTKComponent,
     CodeGraphTool,
   ],
 })

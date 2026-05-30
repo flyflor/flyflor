@@ -106,4 +106,5 @@ export enum ProviderKind {
   Service = "service",
   Component = "component",
   Repo = "repo",
+  Plugin = "plugin",
 }

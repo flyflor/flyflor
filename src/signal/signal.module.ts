@@ -1,5 +1,5 @@
 import { Module } from "../di";
-import { SignalBus } from "./signal-bus.service";
+import { SignalBus } from "./signal.bus.service";
 
 /**
  * Assembles the signal vascular layer for runtime coordination.

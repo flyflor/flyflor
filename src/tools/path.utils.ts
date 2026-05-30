@@ -55,7 +55,7 @@ export function normalizeRelativePath(pathValue: string): string {
  *
  * @param relativePath - Normalized project-relative path.
  * @returns True for `.config/config.jsonc`.
- * @usage Write and edit tools deny this path in v1 unless a future plan explicitly allows it.
+ * @usage Write and edit tools deny this path unless a current plan explicitly allows it.
  */
 export function isProtectedConfigPath(relativePath: string): boolean {
   return relativePath === ".config/config.jsonc";

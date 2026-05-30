@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { decoratorRegistry } from "./registry";
 import type { Constructor, InjectionToken } from "./types";
-import { SignalBus } from "../signal/signal-bus.service";
+import { SignalBus } from "../signal/signal.bus.service";
 
 /**
  * Represents a bootstrapped DI container.

@@ -34,8 +34,46 @@ export class SocketServerService {
     const host = options.host ?? config.socket.host;
     const port = options.port ?? config.socket.port;
     const testPagePath = this.configService.resolve(config.paths.socketTestPage);
-    this.server = Bun.serve<{ readonly clientId: string }>({
-      hostname: host,
+    this.server = this.serveWithPortRetry(host, port, testPagePath);
+    return this.server;
+  }
+
+  /**
+   * Starts Bun.serve, retrying explicit high ports when the caller asked for an ephemeral port.
+   *
+   * @param host - Hostname to bind.
+   * @param port - Configured port; `0` means choose an available local port.
+   * @param testPagePath - Absolute HTML test page path.
+   * @returns Bun server handle.
+   * @usage Bun's test runner can reject `port: 0`, so scenario tests use bounded explicit candidates.
+   */
+  private serveWithPortRetry(host: string, port: number, testPagePath: string): ReturnType<typeof Bun.serve> {
+    let lastError: unknown;
+    for (const candidate of this.listenCandidates(host, port)) {
+      try {
+        return this.createServer(candidate.host, candidate.port, testPagePath);
+      } catch (error) {
+        lastError = error;
+        if (port !== 0 || !this.isAddressInUse(error)) {
+          throw error;
+        }
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  }
+
+  /**
+   * Creates the Bun native HTTP/WebSocket server for one concrete port.
+   *
+   * @param host - Hostname to bind.
+   * @param port - Concrete port to bind.
+   * @param testPagePath - Absolute HTML test page path.
+   * @returns Bun server handle.
+   * @usage `serveWithPortRetry` owns port selection while this method owns adapter wiring.
+   */
+  private createServer(host: string | undefined, port: number, testPagePath: string): ReturnType<typeof Bun.serve> {
+    return Bun.serve<{ readonly clientId: string }>({
+      ...(host ? { hostname: host } : {}),
       port,
       fetch: (request, server) => {
         const url = new URL(request.url);
@@ -85,7 +123,6 @@ export class SocketServerService {
         },
       },
     });
-    return this.server;
   }
 
   /**
@@ -125,9 +162,21 @@ export class SocketServerService {
       "chat.final",
       "memory.store",
       "memory.recall",
+      "model.reasoning",
+      "model.tool_call",
       "context.ready",
+      "context.compacted",
+      "plugin.availability",
+      "plugin.diagnostic",
+      "plugin.unavailable",
+      "plugin.failed",
+      "recovery.scan",
+      "workmux.task.requested",
       "tool.call",
+      "tool.started",
       "tool.result",
+      "tool.completed",
+      "tool.failed",
       "tool.error",
       "tool.artifact",
       "guard.ask",
@@ -184,5 +233,40 @@ export class SocketServerService {
       payload,
       timestamp: Date.now(),
     };
+  }
+
+  /**
+   * Builds concrete host and port pairs to try for a requested listen endpoint.
+   *
+   * @param host - Requested bind host from config or start options.
+   * @param port - Requested port from config or start options.
+   * @returns One endpoint or bounded retry candidates for `0`.
+   * @usage Keeps tests from depending on one Bun ephemeral-port binding path.
+   */
+  private listenCandidates(host: string, port: number): readonly { readonly host?: string; readonly port: number }[] {
+    if (port !== 0) {
+      return [{ host, port }];
+    }
+    const base = 20_000 + ((process.pid * 131 + Date.now()) % 30_000);
+    const explicitPorts = Array.from({ length: 25 }, (_, index) => 20_000 + ((base + index) % 30_000));
+    return [
+      { port: 0 },
+      ...explicitPorts.map((candidatePort) => ({ host, port: candidatePort })),
+      ...explicitPorts.map((candidatePort) => ({ host: "localhost", port: candidatePort })),
+    ];
+  }
+
+  /**
+   * Checks whether a Bun.serve error came from a busy address.
+   *
+   * @param error - Unknown thrown value.
+   * @returns True when the error code indicates address/port reuse.
+   * @usage Ephemeral port retry should only hide expected bind collisions.
+   */
+  private isAddressInUse(error: unknown): boolean {
+    if (typeof error === "object" && error !== null && (error as { readonly code?: unknown }).code === "EADDRINUSE") {
+      return true;
+    }
+    return error instanceof Error && (error.message.includes("EADDRINUSE") || error.message.includes("in use"));
   }
 }

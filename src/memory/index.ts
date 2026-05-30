@@ -1,4 +1,31 @@
 export { MemoryComponent } from "./memory.component";
 export { MemoryModule } from "./memory.module";
-export { SqliteVecLoader } from "./sqlite-vec-loader";
-export type { MemoryCheckpoint, MemoryCheckpointInput, MemoryChunk, MemoryMessage, MemoryRecallOptions, MemoryRecallResult, MemoryStoreInput } from "./memory.types";
+export { SqliteVecLoader } from "./sqlite.vec.loader";
+export type {
+  MemoryCheckpoint,
+  MemoryCheckpointInput,
+  MemoryChunk,
+  MemoryArtifact,
+  MemoryArtifactInput,
+  MemoryClaim,
+  MemoryClaimInput,
+  MemoryConflict,
+  MemoryDecision,
+  MemoryDecisionInput,
+  MemoryEntity,
+  MemoryEntityInput,
+  MemoryFact,
+  MemoryFactInput,
+  MemoryMessage,
+  MemoryRecallOptions,
+  MemoryRecallResult,
+  MemoryRelation,
+  MemoryRelationInput,
+  MemoryRecoveryState,
+  MemoryRetrievalTrace,
+  MemoryStoreInput,
+  MemoryTask,
+  MemoryTaskInput,
+  MemoryTreeRecallItem,
+  MemoryTreeRecallResult,
+} from "./memory.types";

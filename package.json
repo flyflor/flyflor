@@ -8,5 +8,9 @@
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "jsonc-parser": "^3.3.1"
   }
 }

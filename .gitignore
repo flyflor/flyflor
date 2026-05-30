@@ -32,8 +32,14 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # flyflor local runtime data
 .config/memory
+.config/brain
 .config/runtime
 .config/codegraph
+.config/plugins
+.deepseek
+
+# external runtime plugins
+/plugins/
 
 # IntelliJ based IDEs
 .idea

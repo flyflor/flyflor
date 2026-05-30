@@ -8,150 +8,677 @@
       :root {
         color-scheme: light;
         font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #f5f6f8;
-        color: #1f2933;
+        background: #eef1f5;
+        color: #17202a;
+      }
+
+      * {
+        box-sizing: border-box;
       }
 
       body {
         margin: 0;
       }
 
-      main {
-        display: grid;
-        grid-template-rows: auto 1fr auto;
-        min-height: 100vh;
-      }
-
-      header,
-      form {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        padding: 12px;
-        background: #ffffff;
-        border-bottom: 1px solid #d8dee5;
-      }
-
-      form {
-        border-top: 1px solid #d8dee5;
-        border-bottom: 0;
-      }
-
+      button,
       input,
-      button {
-        height: 36px;
-        border: 1px solid #b8c2cc;
+      textarea {
+        border: 1px solid #bbc6d2;
         border-radius: 6px;
-        padding: 0 10px;
         font: inherit;
       }
 
-      input {
-        flex: 1;
-        min-width: 0;
-      }
-
       button {
-        background: #1565c0;
+        height: 36px;
+        padding: 0 14px;
+        background: #145ea8;
         color: #ffffff;
-        border-color: #1565c0;
+        border-color: #145ea8;
         cursor: pointer;
+        font-weight: 650;
       }
 
-      #log {
-        overflow: auto;
-        padding: 12px;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: 13px;
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+
+      input {
+        height: 36px;
+        min-width: 0;
+        padding: 0 10px;
+        background: #ffffff;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 58px;
+        max-height: 180px;
+        padding: 10px 12px;
+        resize: vertical;
+        background: #ffffff;
         line-height: 1.45;
       }
 
-      .line {
-        white-space: pre-wrap;
-        padding: 6px 8px;
-        margin-bottom: 6px;
+      .app {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        height: 100vh;
+        min-height: 0;
+      }
+
+      .toolbar {
+        display: grid;
+        grid-template-columns: auto minmax(220px, 1fr) minmax(160px, 240px) auto;
+        gap: 8px;
+        align-items: center;
+        padding: 10px 12px;
         background: #ffffff;
-        border: 1px solid #d8dee5;
-        border-radius: 6px;
+        border-bottom: 1px solid #d7dee8;
       }
 
       .status {
-        min-width: 96px;
-        font-weight: 700;
+        min-width: 82px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: #e7ebf0;
+        color: #536171;
+        font-size: 12px;
+        font-weight: 750;
+        text-transform: uppercase;
+      }
+
+      .status.online {
+        background: #dff3e7;
+        color: #126235;
+      }
+
+      .status.error {
+        background: #ffe4e1;
+        color: #9a251d;
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 36vw);
+        min-height: 0;
+      }
+
+      .chat-pane,
+      .debug-pane {
+        min-width: 0;
+        min-height: 0;
+      }
+
+      .chat-pane {
+        display: grid;
+        grid-template-rows: minmax(0, 1fr) auto;
+        background: #f7f8fa;
+      }
+
+      .debug-pane {
+        display: grid;
+        grid-template-rows: auto auto minmax(0, 1fr);
+        background: #101821;
+        color: #d9e2ec;
+        border-left: 1px solid #0b1118;
+      }
+
+      .debug-title {
+        height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 0 12px;
+        border-bottom: 1px solid #243242;
+        font-size: 13px;
+        font-weight: 750;
+      }
+
+      .debug-title button {
+        height: 28px;
+        padding: 0 10px;
+        background: #223044;
+        border-color: #304157;
+        color: #d9e2ec;
+        font-size: 12px;
+      }
+
+      .debug-toolbar {
+        display: grid;
+        gap: 8px;
+        padding: 8px 10px;
+        border-bottom: 1px solid #243242;
+      }
+
+      .debug-counts,
+      .debug-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .debug-chip {
+        min-height: 24px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border: 1px solid #304157;
+        border-radius: 6px;
+        padding: 0 8px;
+        background: #172332;
+        color: #c8d3df;
+        font-size: 11px;
+        line-height: 1;
+      }
+
+      .debug-filter {
+        height: 24px;
+        padding: 0 8px;
+        cursor: pointer;
+        font-weight: 650;
+      }
+
+      .debug-filter.active {
+        background: #2e5f99;
+        border-color: #5b92cf;
+        color: #ffffff;
+      }
+
+      .chat-log,
+      .debug-log {
+        overflow: auto;
+        min-height: 0;
+      }
+
+      .chat-log {
+        padding: 18px;
+      }
+
+      .message-row {
+        display: flex;
+        margin: 0 0 12px;
+      }
+
+      .message-row.user {
+        justify-content: flex-end;
+      }
+
+      .message-row.assistant,
+      .message-row.error {
+        justify-content: flex-start;
+      }
+
+      .bubble {
+        max-width: min(760px, 78%);
+        padding: 10px 12px;
+        border: 1px solid #d3dbe5;
+        border-radius: 8px;
+        background: #ffffff;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .message-row.user .bubble {
+        background: #145ea8;
+        border-color: #145ea8;
+        color: #ffffff;
+      }
+
+      .message-row.error .bubble {
+        background: #fff1ef;
+        border-color: #f3b8b1;
+        color: #8f241c;
+      }
+
+      .composer {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: end;
+        padding: 12px;
+        background: #ffffff;
+        border-top: 1px solid #d7dee8;
+      }
+
+      .debug-log {
+        padding: 10px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .debug-entry {
+        margin: 0 0 8px;
+        padding: 8px;
+        border: 1px solid #243242;
+        border-radius: 6px;
+        background: #151f2b;
+      }
+
+      .debug-entry.hidden {
+        display: none;
+      }
+
+      .debug-entry strong {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 4px;
+        color: #9ec5ff;
+        font-size: 12px;
+      }
+
+      .debug-entry .meta {
+        display: grid;
+        gap: 2px;
+        margin: 0 0 6px;
+        color: #b6c4d2;
+      }
+
+      .debug-entry .category {
+        color: #ffffff;
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+
+      .debug-entry pre {
+        margin: 0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      @media (max-width: 900px) {
+        .toolbar {
+          grid-template-columns: auto minmax(0, 1fr);
+        }
+
+        #conversation,
+        #connect {
+          grid-column: span 1;
+        }
+
+        .workspace {
+          grid-template-columns: 1fr;
+          grid-template-rows: minmax(0, 1fr) minmax(260px, 34vh);
+        }
+
+        .debug-pane {
+          border-left: 0;
+          border-top: 1px solid #0b1118;
+        }
+
+        .bubble {
+          max-width: 88%;
+        }
       }
     </style>
   </head>
   <body>
-    <main>
-      <header>
+    <main class="app">
+      <header class="toolbar">
         <span class="status" id="status">offline</span>
-        <input id="url" aria-label="WebSocket URL" />
+        <input id="url" aria-label="WebSocket URL" autocomplete="off" />
+        <input id="conversation" aria-label="Conversation id" autocomplete="off" value="local-test" />
         <button id="connect" type="button">Connect</button>
       </header>
-      <section id="log" aria-live="polite"></section>
-      <form id="form">
-        <input id="conversation" aria-label="Conversation id" value="local-test" />
-        <input id="message" aria-label="Message" value="记住我的项目代号是 flyflor-alpha" />
-        <button type="submit">Send</button>
-      </form>
+      <section class="workspace">
+        <section class="chat-pane" aria-label="Conversation">
+          <div class="chat-log" id="chat-log" aria-live="polite"></div>
+          <form class="composer" id="form">
+            <textarea id="message" aria-label="Message" autofocus></textarea>
+            <button id="send" type="submit">Send</button>
+          </form>
+        </section>
+        <aside class="debug-pane" aria-label="Debug">
+          <div class="debug-title">
+            <span>Debug</span>
+            <button id="clear-debug" type="button">Clear</button>
+          </div>
+          <div class="debug-toolbar" aria-label="Debug filters">
+            <div class="debug-counts" id="debug-counts"></div>
+            <div class="debug-filters" id="debug-filters"></div>
+          </div>
+          <div class="debug-log" id="debug-log" aria-live="polite"></div>
+        </aside>
+      </section>
     </main>
     <script>
       const statusEl = document.querySelector("#status");
       const urlEl = document.querySelector("#url");
-      const logEl = document.querySelector("#log");
+      const chatLogEl = document.querySelector("#chat-log");
+      const debugLogEl = document.querySelector("#debug-log");
+      const debugCountsEl = document.querySelector("#debug-counts");
+      const debugFiltersEl = document.querySelector("#debug-filters");
       const connectEl = document.querySelector("#connect");
+      const clearDebugEl = document.querySelector("#clear-debug");
       const formEl = document.querySelector("#form");
       const conversationEl = document.querySelector("#conversation");
       const messageEl = document.querySelector("#message");
+      const sendEl = document.querySelector("#send");
+      const assistantByTurn = new Map();
+      const debugEntries = [];
+      const debugCounts = new Map();
+      const debugCategories = ["all", "chat", "tool", "memory", "context", "model", "recovery", "workmux", "plugin", "socket", "error"];
+      const staticDefaultWsUrl = "ws://127.0.0.1:17361/ws";
+      let activeDebugCategory = "all";
       let socket;
+      let inFlight = false;
 
-      urlEl.value = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
+      urlEl.value = defaultWebSocketUrl();
 
-      function append(type, payload) {
-        const line = document.createElement("div");
-        line.className = "line";
-        line.textContent = `${new Date().toLocaleTimeString()} ${type}\n${JSON.stringify(payload, null, 2)}`;
-        logEl.append(line);
-        logEl.scrollTop = logEl.scrollHeight;
+      function setStatus(status) {
+        statusEl.textContent = status;
+        statusEl.className = `status ${status === "online" || status === "error" ? status : ""}`.trim();
+        sendEl.disabled = status !== "online" || inFlight;
+      }
+
+      function appendChatMessage(role, content) {
+        const row = document.createElement("div");
+        row.className = `message-row ${role}`;
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+        bubble.textContent = content;
+        row.append(bubble);
+        chatLogEl.append(row);
+        chatLogEl.scrollTop = chatLogEl.scrollHeight;
+        return bubble;
+      }
+
+      function appendDebug(type, payload) {
+        const category = categoryFor(type);
+        debugCounts.set(category, (debugCounts.get(category) || 0) + 1);
+        debugCounts.set("all", (debugCounts.get("all") || 0) + 1);
+        const entry = document.createElement("div");
+        entry.className = "debug-entry";
+        entry.dataset.category = category;
+        const title = document.createElement("strong");
+        const name = document.createElement("span");
+        name.textContent = `${new Date().toLocaleTimeString()} ${type}`;
+        const categoryEl = document.createElement("span");
+        categoryEl.className = "category";
+        categoryEl.textContent = category;
+        title.append(name, categoryEl);
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        for (const line of summarizePayload(payload)) {
+          const item = document.createElement("span");
+          item.textContent = line;
+          meta.append(item);
+        }
+        const pre = document.createElement("pre");
+        pre.textContent = JSON.stringify(payload, null, 2);
+        entry.append(title, meta, pre);
+        debugLogEl.append(entry);
+        debugEntries.push(entry);
+        while (debugLogEl.children.length > 200) {
+          debugLogEl.firstElementChild?.remove();
+          debugEntries.shift();
+        }
+        renderDebugControls();
+        applyDebugFilter();
+        debugLogEl.scrollTop = debugLogEl.scrollHeight;
+      }
+
+      function defaultWebSocketUrl() {
+        if (location.protocol === "file:" || !location.host) {
+          return staticDefaultWsUrl;
+        }
+        const protocol = location.protocol === "https:" ? "wss" : "ws";
+        return `${protocol}://${location.host}/ws`;
+      }
+
+      function categoryFor(type) {
+        if (type.startsWith("chat.") || type.startsWith("client.chat")) {
+          return "chat";
+        }
+        if (type.startsWith("tool.") || type.startsWith("guard.")) {
+          return "tool";
+        }
+        if (type.startsWith("memory.")) {
+          return "memory";
+        }
+        if (type.startsWith("context.")) {
+          return "context";
+        }
+        if (type.startsWith("model.")) {
+          return "model";
+        }
+        if (type.startsWith("recovery.")) {
+          return "recovery";
+        }
+        if (type.startsWith("workmux.")) {
+          return "workmux";
+        }
+        if (type.startsWith("plugin.")) {
+          return "plugin";
+        }
+        if (type.startsWith("socket.") || type.startsWith("agent.event")) {
+          return "socket";
+        }
+        if (type.includes("error") || type.includes("failed")) {
+          return "error";
+        }
+        return "socket";
+      }
+
+      function summarizePayload(payload) {
+        const lines = [];
+        const data = payload || {};
+        if (data.conversationId) {
+          lines.push(`conversation=${data.conversationId}`);
+        }
+        if (data.turnId) {
+          lines.push(`turn=${data.turnId}`);
+        }
+        if (data.phase && data.name) {
+          lines.push(`plugin=${data.name}`);
+        }
+        if (data.name && !data.phase) {
+          lines.push(`tool=${data.name}`);
+        }
+        if (data.status) {
+          lines.push(`status=${data.status}`);
+        }
+        if (data.fallback) {
+          lines.push(`fallback=${data.fallback}`);
+        }
+        if (data.reason) {
+          lines.push(`reason=${data.reason}`);
+        }
+        if (data.toolCall?.name) {
+          lines.push(`model_tool=${data.toolCall.name}`);
+        }
+        if (typeof data.recallCount === "number") {
+          lines.push(`recall=${data.recallCount}`);
+        }
+        if (Array.isArray(data.recall)) {
+          lines.push(`recall=${data.recall.length}`);
+        }
+        if (data.checkpointId) {
+          lines.push(`checkpoint=${data.checkpointId}`);
+        }
+        if (data.state) {
+          lines.push(`state=${data.state}`);
+        }
+        if (data.report?.interruptedTurns) {
+          lines.push(`interrupted_turns=${data.report.interruptedTurns.length}`);
+        }
+        if (data.request?.laneName) {
+          lines.push(`lane=${data.request.laneName}`);
+        }
+        if (data.error) {
+          lines.push(`error=${data.error}`);
+        }
+        return lines.length > 0 ? lines : ["raw event"];
+      }
+
+      function renderDebugControls() {
+        debugCountsEl.textContent = "";
+        debugFiltersEl.textContent = "";
+        for (const category of debugCategories) {
+          const count = debugCounts.get(category) || 0;
+          const countChip = document.createElement("span");
+          countChip.className = "debug-chip";
+          countChip.textContent = `${category}:${count}`;
+          debugCountsEl.append(countChip);
+
+          const filter = document.createElement("button");
+          filter.className = `debug-chip debug-filter ${activeDebugCategory === category ? "active" : ""}`.trim();
+          filter.type = "button";
+          filter.textContent = category;
+          filter.addEventListener("click", () => {
+            activeDebugCategory = category;
+            renderDebugControls();
+            applyDebugFilter();
+          });
+          debugFiltersEl.append(filter);
+        }
+      }
+
+      function applyDebugFilter() {
+        for (const entry of debugEntries) {
+          entry.classList.toggle("hidden", activeDebugCategory !== "all" && entry.dataset.category !== activeDebugCategory);
+        }
+      }
+
+      function createEnvelopeId() {
+        if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
+          return globalThis.crypto.randomUUID();
+        }
+        const random = Math.random().toString(16).slice(2);
+        return `local-${Date.now().toString(36)}-${random}`;
+      }
+
+      function assistantBubble(turnId) {
+        const pending = assistantByTurn.get("pending");
+        if (pending && turnId && !assistantByTurn.has(turnId)) {
+          assistantByTurn.delete("pending");
+          assistantByTurn.set(turnId, pending);
+          return pending;
+        }
+        if (turnId && assistantByTurn.has(turnId)) {
+          return assistantByTurn.get(turnId);
+        }
+        const bubble = appendChatMessage("assistant", "");
+        assistantByTurn.set(turnId || "pending", bubble);
+        return bubble;
+      }
+
+      function handleEnvelope(envelope) {
+        appendDebug(envelope.type, envelope.payload);
+        if (envelope.type === "chat.delta") {
+          const bubble = assistantBubble(envelope.payload?.turnId);
+          bubble.textContent += envelope.payload?.delta ?? "";
+          chatLogEl.scrollTop = chatLogEl.scrollHeight;
+          return;
+        }
+        if (envelope.type === "chat.final") {
+          const bubble = assistantBubble(envelope.payload?.turnId);
+          bubble.textContent = envelope.payload?.content ?? "";
+          inFlight = false;
+          setStatus(socket?.readyState === WebSocket.OPEN ? "online" : "offline");
+          return;
+        }
+        if (envelope.type === "chat.turn.complete") {
+          inFlight = false;
+          setStatus(socket?.readyState === WebSocket.OPEN ? "online" : "offline");
+          return;
+        }
+        if (envelope.type === "agent.error") {
+          const pending = assistantByTurn.get("pending");
+          if (pending) {
+            pending.parentElement.className = "message-row error";
+            pending.textContent = envelope.payload?.error ?? "agent error";
+            assistantByTurn.delete("pending");
+          } else {
+            appendChatMessage("error", envelope.payload?.error ?? "agent error");
+          }
+          inFlight = false;
+          setStatus("error");
+        }
       }
 
       function connect() {
         socket?.close();
         socket = new WebSocket(urlEl.value);
-        statusEl.textContent = "connecting";
+        inFlight = false;
+        setStatus("connecting");
         socket.addEventListener("open", () => {
-          statusEl.textContent = "online";
-          append("socket.open", {});
+          setStatus("online");
+          appendDebug("socket.open", {});
         });
         socket.addEventListener("message", (event) => {
-          const envelope = JSON.parse(event.data);
-          append(envelope.type, envelope.payload);
+          handleEnvelope(JSON.parse(event.data));
         });
         socket.addEventListener("close", () => {
-          statusEl.textContent = "offline";
-          append("socket.close", {});
+          inFlight = false;
+          setStatus("offline");
+          appendDebug("socket.close", {});
         });
         socket.addEventListener("error", () => {
-          statusEl.textContent = "error";
-          append("socket.error", {});
+          inFlight = false;
+          setStatus("error");
+          appendDebug("socket.error", {});
         });
       }
 
       connectEl.addEventListener("click", connect);
+      clearDebugEl.addEventListener("click", () => {
+        debugLogEl.textContent = "";
+        debugEntries.length = 0;
+        debugCounts.clear();
+        renderDebugControls();
+      });
+      messageEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          if (typeof formEl.requestSubmit === "function") {
+            formEl.requestSubmit();
+          } else {
+            sendEl.click();
+          }
+        }
+      });
       formEl.addEventListener("submit", (event) => {
         event.preventDefault();
+        const content = messageEl.value;
+        if (!content) {
+          appendDebug("client.send.blocked", { reason: "empty-message" });
+          return;
+        }
+        if (socket?.readyState !== WebSocket.OPEN) {
+          appendDebug("client.send.blocked", { reason: "socket-not-open", readyState: socket?.readyState ?? null, url: urlEl.value });
+          return;
+        }
+        if (inFlight) {
+          appendDebug("client.send.blocked", { reason: "turn-in-flight" });
+          return;
+        }
         const envelope = {
-          id: crypto.randomUUID(),
+          id: createEnvelopeId(),
           type: "chat.message",
           payload: {
             conversationId: conversationEl.value,
-            content: messageEl.value,
+            content,
           },
           timestamp: Date.now(),
         };
-        socket?.send(JSON.stringify(envelope));
-        append("client.chat.message", envelope.payload);
+        socket.send(JSON.stringify(envelope));
+        appendChatMessage("user", content);
+        assistantByTurn.set("pending", appendChatMessage("assistant", ""));
+        appendDebug("client.chat.message", envelope.payload);
+        messageEl.value = "";
+        inFlight = true;
+        setStatus("online");
       });
+      renderDebugControls();
       connect();
     </script>
   </body>

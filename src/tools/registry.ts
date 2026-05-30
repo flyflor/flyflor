@@ -1,4 +1,5 @@
-import type { Tool, ToolContext, ToolParameterSchema, ToolResult, ToolSchema } from "./tool.types";
+import { randomUUID } from "node:crypto";
+import type { Tool, ToolContext, ToolDefinition, ToolParameterSchema, ToolResult, ToolSchema } from "./tool.types";
 
 /**
  * Registers and executes project tools.
@@ -13,9 +14,12 @@ export class ToolRegistry {
    *
    * @param tool - Tool implementation.
    * @returns This registry for chaining.
-   * @usage ToolModule registers all v1 tools during startup.
+   * @usage ToolModule registers all built-in tools during startup.
    */
   public register(tool: Tool): this {
+    if (this.tools.has(tool.name)) {
+      return this;
+    }
     this.tools.set(tool.name, tool);
     return this;
   }
@@ -26,8 +30,15 @@ export class ToolRegistry {
    * @returns Tool definitions without executable internals.
    * @usage Context builders expose this to the model.
    */
-  public list(): readonly { readonly name: string; readonly description: string; readonly schema: Tool["schema"] }[] {
-    return [...this.tools.values()].map((tool) => ({ name: tool.name, description: tool.description, schema: tool.schema }));
+  public list(): readonly ToolDefinition[] {
+    return [...this.tools.values()]
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        schema: tool.schema,
+        execution: tool.execution,
+      }));
   }
 
   /**
@@ -44,19 +55,77 @@ export class ToolRegistry {
     if (!tool) {
       throw new Error(`Unknown tool: ${name}`);
     }
-    await context.signalBus.emit("tool.call", { name, input });
+    const toolCallId = randomUUID();
+    const startedAt = Date.now();
+    await context.signalBus.emit("tool.call", { id: toolCallId, turnId: context.turnId, name, input });
+    await context.signalBus.emit("tool.started", { id: toolCallId, turnId: context.turnId, name, input, startedAt });
+    context.brainComponent?.upsertToolCall({
+      id: toolCallId,
+      turnId: context.turnId,
+      toolName: name,
+      input,
+      status: "running",
+      startedAt,
+    });
     try {
       const validationError = this.validateInput(tool.schema, input);
       if (validationError) {
         const result = { ok: false, output: `tool input invalid: ${validationError}` };
-        await context.signalBus.emit("tool.result", { name, result });
+        const completedAt = Date.now();
+        context.brainComponent?.upsertToolCall({
+          id: toolCallId,
+          turnId: context.turnId,
+          toolName: name,
+          input,
+          status: "failed",
+          output: result.output,
+          error: validationError,
+          startedAt,
+          completedAt,
+        });
+        await context.signalBus.emit("tool.result", { id: toolCallId, turnId: context.turnId, name, result });
+        await context.signalBus.emit("tool.failed", { id: toolCallId, turnId: context.turnId, name, error: validationError, completedAt });
         return result;
       }
       const result = await tool.execute(input, context);
-      await context.signalBus.emit("tool.result", { name, result });
+      const completedAt = Date.now();
+      context.brainComponent?.upsertToolCall({
+        id: toolCallId,
+        turnId: context.turnId,
+        toolName: name,
+        input,
+        status: result.ok ? "completed" : "failed",
+        output: result.output,
+        artifactPath: result.artifactPath,
+        error: result.ok ? undefined : result.output,
+        startedAt,
+        completedAt,
+        metadata: this.safeMetadata(result.metadata),
+      });
+      await context.signalBus.emit("tool.result", { id: toolCallId, turnId: context.turnId, name, result });
+      await context.signalBus.emit(result.ok ? "tool.completed" : "tool.failed", {
+        id: toolCallId,
+        turnId: context.turnId,
+        name,
+        result,
+        completedAt,
+      });
       return result;
     } catch (error) {
-      await context.signalBus.emit("tool.error", { name, error: error instanceof Error ? error.message : String(error) });
+      const completedAt = Date.now();
+      const message = error instanceof Error ? error.message : String(error);
+      context.brainComponent?.upsertToolCall({
+        id: toolCallId,
+        turnId: context.turnId,
+        toolName: name,
+        input,
+        status: "failed",
+        error: message,
+        startedAt,
+        completedAt,
+      });
+      await context.signalBus.emit("tool.error", { id: toolCallId, turnId: context.turnId, name, error: message });
+      await context.signalBus.emit("tool.failed", { id: toolCallId, turnId: context.turnId, name, error: message, completedAt });
       throw error;
     }
   }
@@ -98,13 +167,32 @@ export class ToolRegistry {
   }
 
   /**
+   * Converts arbitrary tool metadata into a JSON-safe shallow record for brain audit storage.
+   *
+   * @param metadata - Tool result metadata.
+   * @returns JSON-safe metadata record.
+   * @usage BrainComponent accepts JSON payloads; this avoids leaking complex class instances.
+   */
+  private safeMetadata(metadata: Record<string, unknown> | undefined): Record<string, string | number | boolean | null> | undefined {
+    if (!metadata) {
+      return undefined;
+    }
+    return Object.fromEntries(Object.entries(metadata).map(([key, value]) => {
+      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) {
+        return [key, value];
+      }
+      return [key, JSON.stringify(value)];
+    }));
+  }
+
+  /**
    * Validates one nested schema value.
    *
    * @param schema - Property schema.
    * @param value - Unknown value supplied for this property.
    * @param path - Human-readable property path.
    * @returns Validation error text or undefined when valid.
-   * @usage Supports the subset of schema constructs used by v1 tools.
+   * @usage Supports the subset of schema constructs used by current built-in tools.
    */
   private validateValue(schema: ToolParameterSchema, value: unknown, path: string): string | undefined {
     if (!matchesType(schema.type, value)) {
