@@ -68,7 +68,7 @@ describe("no-session agent scenario", () => {
     const memory = new MemoryComponent(config);
     const signalBus = new SignalBus(true);
     const events: string[] = [];
-    for (const type of ["tool.call", "tool.result", "guard.ask"]) {
+    for (const type of ["tool.call", "tool.result", "tool.artifact", "guard.ask", "guard.answer"]) {
       signalBus.subscribe(type, async () => {
         events.push(type);
       });
@@ -86,10 +86,13 @@ describe("no-session agent scenario", () => {
     expect(result.toolResults[0]?.ok).toBe(true);
     expect(result.toolResults[0]?.output).toContain("flyflor-tool");
     expect(result.toolResults[0]?.artifactPath).toBeTruthy();
+    expect(result.toolResults[0]?.metadata).toMatchObject({ compression: "none" });
     expect(readFileSync(result.toolResults[0]?.artifactPath ?? "", "utf8")).toContain("flyflor-tool");
     expect(events).toContain("tool.call");
     expect(events).toContain("tool.result");
+    expect(events).toContain("tool.artifact");
     expect(events).toContain("guard.ask");
+    expect(events).toContain("guard.answer");
   });
 
   test("forgets stored memory and persists context checkpoints through tools", async () => {
@@ -131,6 +134,46 @@ describe("no-session agent scenario", () => {
     });
     expect(rebuiltContext.checkpoint?.summary).toContain("flyflor-compact");
     expect(rebuiltContext.messages[0]?.content).toContain("CONTEXT CHECKPOINT");
+  });
+
+  test("validates multi-edit atomically and grep empty searches", async () => {
+    const config = new ConfigService(profile.root, profile.configPath);
+    const memory = new MemoryComponent(config);
+    const runtime = new AgentRuntimeService(
+      config,
+      memory,
+      new ContextBuilderService(config, undefined, memory),
+      new SignalBus(true),
+    );
+    const toolContext = runtime.createToolContext("tool-edit");
+    const editFile = join(config.resolve(profile.profileDir), "edit-target.txt");
+    writeFileSync(editFile, "alpha\nbeta\ngamma\n", "utf8");
+
+    const dryRun = await runtime.getToolRegistry().execute("multi_edit", {
+      dryRun: true,
+      edits: [
+        { filePath: editFile, oldText: "alpha", newText: "one" },
+        { filePath: editFile, oldText: "gamma", newText: "three" },
+      ],
+    }, toolContext);
+    expect(dryRun.ok).toBe(true);
+    expect(readFileSync(editFile, "utf8")).toContain("alpha");
+
+    const failed = await runtime.getToolRegistry().execute("multi_edit", {
+      edits: [
+        { filePath: editFile, oldText: "alpha", newText: "one" },
+        { filePath: editFile, oldText: "missing", newText: "none" },
+      ],
+    }, toolContext);
+    expect(failed.ok).toBe(false);
+    expect(readFileSync(editFile, "utf8")).toBe("alpha\nbeta\ngamma\n");
+
+    const grep = await runtime.getToolRegistry().execute("grep", {
+      pattern: "not-present",
+      path: editFile,
+    }, toolContext);
+    expect(grep.ok).toBe(true);
+    expect(grep.output).toBe("");
   });
 
   test("registers the phase-one coding tool surface", () => {

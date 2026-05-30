@@ -15,6 +15,38 @@ export class RTKComponent {
   public isAvailable(): boolean {
     return Bun.spawnSync(["/bin/zsh", "-lc", "command -v rtk >/dev/null"]).exitCode === 0;
   }
+
+  /**
+   * Compresses tool output when RTK is available, otherwise returns bounded raw output.
+   *
+   * @param raw - Raw command output preserved in an artifact.
+   * @param context - Tool execution context.
+   * @returns Model-facing output and compression metadata.
+   * @usage ShellTool always calls this after writing raw artifacts.
+   */
+  public compress(raw: string, context: ToolContext): { readonly output: string; readonly metadata: Record<string, unknown> } {
+    if (!this.isAvailable()) {
+      return {
+        output: raw.slice(0, context.budget.outputChars),
+        metadata: { compression: "none", compressionReason: "rtk-unavailable" },
+      };
+    }
+    const proc = Bun.spawnSync(["/bin/zsh", "-lc", "rtk"], {
+      cwd: context.cwd,
+      stdin: new TextEncoder().encode(raw),
+    });
+    const compressed = proc.stdout.toString() || proc.stderr.toString();
+    if (proc.exitCode !== 0 || compressed.length === 0) {
+      return {
+        output: raw.slice(0, context.budget.outputChars),
+        metadata: { compression: "none", compressionReason: "rtk-failed", compressionExitCode: proc.exitCode },
+      };
+    }
+    return {
+      output: compressed.slice(0, context.budget.outputChars),
+      metadata: { compression: "rtk", compressionExitCode: proc.exitCode },
+    };
+  }
 }
 
 /**

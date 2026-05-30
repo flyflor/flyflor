@@ -75,6 +75,8 @@ RTK 用于压缩常见命令输出，提高模型读取效率。
 - 如果 RTK 可用，用 RTK 生成压缩视图给模型。
 - 如果 RTK 不可用，返回原始截断输出并标记 `compression=none`。
 - 不允许只保存压缩输出而丢弃原始输出。
+- ShellTool 必须始终走压缩管线：先 artifact，后 RTK 检测，最后 fallback。
+- RTK fallback 本身也要写入 metadata，便于测试和未来 TUI 展示。
 
 参考：`https://github.com/rtk-ai/rtk`。
 
@@ -104,11 +106,14 @@ CodeGraph 用于增强探索能力，减少纯文本 grep 的盲扫成本。
 
 Socket 层只订阅并广播这些事件，不直接执行工具。
 
+`ToolRegistry` 负责统一发出 `tool.call`、`tool.result`、`tool.error`。具体工具在写入 artifact 或完成 guard 决策时必须发出 `tool.artifact` 和 `guard.answer`。
+
 ## 验收标准
 
 - 每个工具都有 class、JSDoc、schema、结构化结果。
 - ShellTool 能执行只读命令并产生 artifact。
 - RTK 缺失不会阻断 ShellTool。
+- ShellTool 必须发出 `guard.answer` 和 `tool.artifact`。
 - MultiEditTool 能做到全成功或全失败。
 - CodeGraphTool 可报告可用性；不可用时明确 fallback。
 - 工具事件能在 WebSocket 测试页显示。
