@@ -377,14 +377,14 @@ describe("no-session agent scenario", () => {
     });
   });
 
-  test("loads local env files before resolving provider keys", () => {
+  test("loads project env before resolving and merging provider keys", () => {
     const envName = "FLYFLOR_SCENARIO_PROVIDER_KEY";
     const previous = process.env[envName];
     delete process.env[envName];
 
     const envRoot = join(process.cwd(), ".config/runtime/scenarios", `env-${Date.now()}-${Math.random().toString(16).slice(2)}`);
     mkdirSync(join(envRoot, ".config"), { recursive: true });
-    writeFileSync(join(envRoot, ".env.local"), `${envName}=env-file-secret\n`, "utf8");
+    writeFileSync(join(envRoot, ".env"), `${envName}=env-file-secret\n`, "utf8");
     writeFileSync(
       join(envRoot, ".config/config.jsonc"),
       JSON.stringify(
@@ -406,7 +406,7 @@ describe("no-session agent scenario", () => {
             default: "deepseek-v4-flash",
             provider: "deepseek",
             base_url: "",
-            api_key_env: envName,
+            api_key_env: "FLYFLOR_MISSING_MODEL_KEY",
             api_key: "",
             request_timeout_seconds: 300,
             stale_timeout_seconds: 900,
@@ -439,6 +439,8 @@ describe("no-session agent scenario", () => {
     try {
       const config = new ConfigService(envRoot);
       expect(config.getProvider("deepseek")?.api_key).toBe("env-file-secret");
+      expect(config.getConfig().model.api_key).toBe("env-file-secret");
+      expect(config.getConfig().providers.deepseek?.api_key).toBe("env-file-secret");
     } finally {
       if (previous === undefined) {
         delete process.env[envName];

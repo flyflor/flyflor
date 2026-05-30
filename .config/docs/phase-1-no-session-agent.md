@@ -112,7 +112,9 @@ recent tail 必须保留最近对话的原文。旧上下文通过 checkpoint su
 - `paths.socketTestPage`
 - `paths.runtimeDir`
 
-模型密钥不提交到 `.config/config.jsonc`。运行时启动时可读取项目根目录下被 git 忽略的 `.env.local` 和 `.env`，只填充当前进程尚未设置的环境变量；shell 显式传入的环境变量优先。`providers.<name>.api_key_env` 指向这些变量名，内测和 `bun run src/index.ts --serve` 使用同一套解析逻辑。
+模型密钥不提交到 `.config/config.jsonc`。运行时启动时默认读取项目根目录下被 git 忽略的 `.env`；只填充当前进程尚未设置的环境变量，shell 显式传入的环境变量优先。`providers.<name>.api_key_env` 指向这些变量名，内测和 `bun run src/index.ts --serve` 使用同一套解析逻辑。
+
+`ConfigService.getConfig()` 返回运行时合并后的 config 对象。合并只发生在内存中：当 `model.api_key_env` 或 `providers.<name>.api_key_env` 能从进程环境或项目 `.env` 解析到值时，对应 `api_key` 会出现在返回对象中；如果 direct model key 为空，则 `model.api_key` 会继承当前 active provider 的 key，但不会写回 `.config/config.jsonc`。
 
 ## 验收标准
 

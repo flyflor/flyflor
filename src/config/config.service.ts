@@ -13,15 +13,16 @@ import type { FlyflorConfig, NormalizedProviderConfig, ProviderConfig, ProviderM
 export class ConfigService {
   private readonly projectPaths: ProjectPaths;
   private readonly config: FlyflorConfig;
+  private readonly localEnv: Readonly<Record<string, string>>;
 
   public constructor(
     private readonly projectRoot = process.cwd(),
     private readonly configPath = "./.config/config.jsonc",
   ) {
     this.projectPaths = new ProjectPaths(projectRoot);
-    this.loadLocalEnvFiles();
+    this.localEnv = this.loadLocalEnvFiles();
     const raw = readFileSync(this.projectPaths.resolve(configPath), "utf8");
-    this.config = parseJsonc(raw) as FlyflorConfig;
+    this.config = this.mergeEnvIntoConfig(parseJsonc(raw) as FlyflorConfig);
   }
 
   /**
@@ -167,17 +168,18 @@ export class ConfigService {
     if (envName.startsWith("sk-")) {
       return envName;
     }
-    return envName ? process.env[envName] ?? "" : "";
+    return envName ? this.resolveEnvValue(envName) : "";
   }
 
   /**
-   * Loads ignored project-local environment files without overriding the parent process.
+   * Loads the ignored project-local `.env` file without overriding the parent process.
    *
-   * @returns Nothing.
-   * @usage Runtime and tests can share `.env.local` or `.env` credentials while committed config keeps secrets empty.
+   * @returns Local environment values parsed from the project `.env` file.
+   * @usage Runtime and tests can share `.env` credentials while committed config keeps secrets empty.
    */
-  private loadLocalEnvFiles(): void {
-    for (const fileName of [".env.local", ".env"]) {
+  private loadLocalEnvFiles(): Readonly<Record<string, string>> {
+    const localEnv: Record<string, string> = {};
+    for (const fileName of [".env"]) {
       const absolutePath = this.projectPaths.resolve(fileName);
       if (!existsSync(absolutePath)) {
         continue;
@@ -187,9 +189,71 @@ export class ConfigService {
         if (!match?.[1] || match[2] === undefined || process.env[match[1]]) {
           continue;
         }
-        process.env[match[1]] = match[2].trim().replace(/^["']|["']$/g, "");
+        const value = match[2].trim().replace(/^["']|["']$/g, "");
+        localEnv[match[1]] = value;
+        process.env[match[1]] = value;
       }
     }
+    return localEnv;
+  }
+
+  /**
+   * Merges resolved environment secrets into the in-memory runtime config.
+   *
+   * @param config - Parsed `.config/config.jsonc` value.
+   * @returns Runtime config with `api_key` values materialized from env when available.
+   * @usage `getConfig()` exposes a fully resolved view without mutating the committed config file.
+   */
+  private mergeEnvIntoConfig(config: FlyflorConfig): FlyflorConfig {
+    const providers = Object.fromEntries(
+      Object.entries(config.providers).map(([name, provider]) => [name, this.mergeEnvIntoProvider(provider)]),
+    );
+    const activeProvider = providers[config.model.provider];
+    const modelApiKey =
+      config.model.api_key ||
+      this.resolveEnvValue(config.model.api_key_env) ||
+      activeProvider?.api_key ||
+      activeProvider?.apiKey ||
+      "";
+    return {
+      ...config,
+      model: {
+        ...config.model,
+        api_key: modelApiKey,
+      },
+      providers,
+    };
+  }
+
+  /**
+   * Merges one provider's `api_key_env` into its `api_key` field.
+   *
+   * @param provider - Raw provider config.
+   * @returns Provider config with a resolved `api_key` when available.
+   * @usage Keeps provider normalization and raw config reads consistent.
+   */
+  private mergeEnvIntoProvider(provider: ProviderConfig): ProviderConfig {
+    return {
+      ...provider,
+      api_key: provider.api_key || provider.apiKey || this.resolveEnvValue(provider.api_key_env ?? ""),
+    };
+  }
+
+  /**
+   * Resolves an environment value from process env or parsed project env files.
+   *
+   * @param envName - Environment variable name or shorthand API key.
+   * @returns Resolved value or empty string.
+   * @usage Supports project `.env` without requiring shell exports.
+   */
+  private resolveEnvValue(envName: string): string {
+    if (!envName) {
+      return "";
+    }
+    if (envName.startsWith("sk-")) {
+      return envName;
+    }
+    return process.env[envName] ?? this.localEnv[envName] ?? "";
   }
 }
 

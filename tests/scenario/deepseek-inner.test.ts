@@ -61,13 +61,13 @@ describe("DeepSeek inner scenario", () => {
 });
 
 /**
- * Loads ignored local environment files for inner tests.
+ * Loads the ignored project `.env` file for inner tests.
  *
  * @returns Nothing.
- * @usage Allows `.env.local` or `.env` to provide `DEEPSEEK_API_KEY` without committing secrets.
+ * @usage Allows `.env` to provide `DEEPSEEK_API_KEY` without committing secrets.
  */
 function loadLocalEnv(): void {
-  for (const fileName of [".env.local", ".env"]) {
+  for (const fileName of [".env"]) {
     if (!existsSync(fileName)) {
       continue;
     }
