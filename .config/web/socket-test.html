@@ -103,12 +103,12 @@
 
       .workspace {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(320px, 36vw);
+        grid-template-columns: minmax(0, 1fr) minmax(360px, 40vw);
         min-height: 0;
       }
 
       .chat-pane,
-      .debug-pane {
+      .signals-pane {
         min-width: 0;
         min-height: 0;
       }
@@ -119,84 +119,247 @@
         background: #f7f8fa;
       }
 
-      .debug-pane {
+      /* ---- Signal panels ---- */
+
+      .signals-pane {
         display: grid;
-        grid-template-rows: auto auto minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
         background: #101821;
         color: #d9e2ec;
         border-left: 1px solid #0b1118;
       }
 
-      .debug-title {
-        height: 42px;
+      .signals-tabs {
+        display: flex;
+        overflow-x: auto;
+        border-bottom: 1px solid #243242;
+        background: #151f2b;
+        flex-shrink: 0;
+      }
+
+      .signals-tab-btn {
+        flex-shrink: 0;
+        height: 36px;
+        padding: 0 14px;
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        color: #889bb0;
+        font-size: 13px;
+        font-weight: 650;
+        cursor: pointer;
+        transition: color 0.15s;
+      }
+
+      .signals-tab-btn:hover {
+        color: #c8d3df;
+      }
+
+      .signals-tab-btn.active {
+        color: #ffffff;
+        border-bottom-color: #5b92cf;
+      }
+
+      .signals-tab-content {
+        overflow: auto;
+        min-height: 0;
+        padding: 10px;
+      }
+
+      .signals-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 8px;
-        padding: 0 12px;
-        border-bottom: 1px solid #243242;
-        font-size: 13px;
-        font-weight: 750;
+        margin-bottom: 10px;
       }
 
-      .debug-title button {
-        height: 28px;
+      .signals-header h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 750;
+        color: #d9e2ec;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .signals-header .badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 20px;
+        padding: 0 6px;
+        border-radius: 999px;
+        background: #243242;
+        color: #9ec5ff;
+        font-size: 11px;
+        font-weight: 750;
+        line-height: 1;
+      }
+
+      .signals-header button {
+        height: 26px;
         padding: 0 10px;
         background: #223044;
         border-color: #304157;
         color: #d9e2ec;
-        font-size: 12px;
+        font-size: 11px;
       }
 
-      .debug-toolbar {
-        display: grid;
-        gap: 8px;
+      .signal-event {
+        margin-bottom: 8px;
         padding: 8px 10px;
-        border-bottom: 1px solid #243242;
+        border: 1px solid #243242;
+        border-radius: 6px;
+        background: #151f2b;
       }
 
-      .debug-counts,
-      .debug-filters {
+      .signal-event-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        margin-bottom: 4px;
+      }
+
+      .signal-event-type {
+        font-weight: 750;
+        font-size: 12px;
+        color: #9ec5ff;
+      }
+
+      .signal-event-time {
+        font-size: 11px;
+        color: #6b8199;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      .signal-event-meta {
         display: flex;
         flex-wrap: wrap;
         gap: 6px;
+        margin-bottom: 4px;
       }
 
-      .debug-chip {
-        min-height: 24px;
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        border: 1px solid #304157;
-        border-radius: 6px;
-        padding: 0 8px;
-        background: #172332;
-        color: #c8d3df;
+      .signal-event-meta .tag {
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: #1e2d3d;
+        color: #b6c4d2;
         font-size: 11px;
-        line-height: 1;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       }
 
-      .debug-filter {
-        height: 24px;
-        padding: 0 8px;
-        cursor: pointer;
-        font-weight: 650;
+      .signal-event pre {
+        margin: 0;
+        font-size: 11px;
+        color: #889bb0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        max-height: 120px;
+        overflow-y: auto;
       }
 
-      .debug-filter.active {
-        background: #2e5f99;
-        border-color: #5b92cf;
+      .empty-state {
+        text-align: center;
+        padding: 32px 16px;
+        color: #5a6e82;
+        font-size: 13px;
+      }
+
+      /* ---- System panel ---- */
+
+      .system-grid {
+        display: grid;
+        gap: 10px;
+      }
+
+      .system-card {
+        padding: 12px;
+        border: 1px solid #243242;
+        border-radius: 8px;
+        background: #151f2b;
+      }
+
+      .system-card h4 {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 750;
+        color: #889bb0;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .system-card .value {
+        font-size: 22px;
+        font-weight: 750;
         color: #ffffff;
       }
 
-      .chat-log,
-      .debug-log {
-        overflow: auto;
-        min-height: 0;
+      .system-card .value.active-state {
+        color: #44c27d;
       }
+
+      .system-card .value.inactive-state {
+        color: #dc6a5e;
+      }
+
+      .system-card .detail {
+        margin-top: 4px;
+        font-size: 12px;
+        color: #6b8199;
+      }
+
+      .eq-weights {
+        display: grid;
+        gap: 6px;
+      }
+
+      .eq-weight-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .eq-weight-label {
+        font-size: 12px;
+        color: #b6c4d2;
+      }
+
+      .eq-weight-bar-bg {
+        flex: 1;
+        height: 8px;
+        border-radius: 4px;
+        background: #243242;
+        overflow: hidden;
+      }
+
+      .eq-weight-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        background: #5b92cf;
+        transition: width 0.3s;
+      }
+
+      .eq-weight-value {
+        font-size: 12px;
+        color: #9ec5ff;
+        font-weight: 650;
+        min-width: 36px;
+        text-align: right;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      /* ---- Chat log ---- */
 
       .chat-log {
         padding: 18px;
+        overflow: auto;
+        min-height: 0;
       }
 
       .message-row {
@@ -246,54 +409,6 @@
         border-top: 1px solid #d7dee8;
       }
 
-      .debug-log {
-        padding: 10px;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: 12px;
-        line-height: 1.45;
-      }
-
-      .debug-entry {
-        margin: 0 0 8px;
-        padding: 8px;
-        border: 1px solid #243242;
-        border-radius: 6px;
-        background: #151f2b;
-      }
-
-      .debug-entry.hidden {
-        display: none;
-      }
-
-      .debug-entry strong {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        margin-bottom: 4px;
-        color: #9ec5ff;
-        font-size: 12px;
-      }
-
-      .debug-entry .meta {
-        display: grid;
-        gap: 2px;
-        margin: 0 0 6px;
-        color: #b6c4d2;
-      }
-
-      .debug-entry .category {
-        color: #ffffff;
-        font-size: 11px;
-        text-transform: uppercase;
-      }
-
-      .debug-entry pre {
-        margin: 0;
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-      }
-
       @media (max-width: 900px) {
         .toolbar {
           grid-template-columns: auto minmax(0, 1fr);
@@ -306,10 +421,10 @@
 
         .workspace {
           grid-template-columns: 1fr;
-          grid-template-rows: minmax(0, 1fr) minmax(260px, 34vh);
+          grid-template-rows: minmax(0, 1fr) minmax(280px, 36vh);
         }
 
-        .debug-pane {
+        .signals-pane {
           border-left: 0;
           border-top: 1px solid #0b1118;
         }
@@ -336,40 +451,66 @@
             <button id="send" type="submit">Send</button>
           </form>
         </section>
-        <aside class="debug-pane" aria-label="Debug">
-          <div class="debug-title">
-            <span>Debug</span>
-            <button id="clear-debug" type="button">Clear</button>
-          </div>
-          <div class="debug-toolbar" aria-label="Debug filters">
-            <div class="debug-counts" id="debug-counts"></div>
-            <div class="debug-filters" id="debug-filters"></div>
-          </div>
-          <div class="debug-log" id="debug-log" aria-live="polite"></div>
+        <aside class="signals-pane" aria-label="Signals">
+          <nav class="signals-tabs" id="signals-tabs">
+            <button class="signals-tab-btn active" data-panel="worker">Worker</button>
+            <button class="signals-tab-btn" data-panel="sandbox">Sandbox</button>
+            <button class="signals-tab-btn" data-panel="scope">Scope</button>
+            <button class="signals-tab-btn" data-panel="crystal">Crystal</button>
+            <button class="signals-tab-btn" data-panel="forgetting">Forgetting</button>
+            <button class="signals-tab-btn" data-panel="system">System</button>
+          </nav>
+          <div class="signals-tab-content" id="signals-content"></div>
         </aside>
       </section>
     </main>
     <script>
+      /* ---- DOM refs ---- */
+
       const statusEl = document.querySelector("#status");
       const urlEl = document.querySelector("#url");
       const chatLogEl = document.querySelector("#chat-log");
-      const debugLogEl = document.querySelector("#debug-log");
-      const debugCountsEl = document.querySelector("#debug-counts");
-      const debugFiltersEl = document.querySelector("#debug-filters");
+      const signalsContentEl = document.querySelector("#signals-content");
+      const signalsTabsEl = document.querySelector("#signals-tabs");
       const connectEl = document.querySelector("#connect");
-      const clearDebugEl = document.querySelector("#clear-debug");
       const formEl = document.querySelector("#form");
       const conversationEl = document.querySelector("#conversation");
       const messageEl = document.querySelector("#message");
       const sendEl = document.querySelector("#send");
+
       const assistantByTurn = new Map();
-      const debugEntries = [];
-      const debugCounts = new Map();
-      const debugCategories = ["all", "chat", "tool", "memory", "context", "model", "recovery", "workmux", "plugin", "socket", "error"];
       const staticDefaultWsUrl = "ws://127.0.0.1:17361/ws";
-      let activeDebugCategory = "all";
+
+      let activePanel = "worker";
+      const debugCategories = ["chat", "tool", "memory", "context", "model", "recovery", "workmux", "plugin", "socket", "error", "worker", "sandbox", "scope", "crystal", "forgetting", "system"];
       let socket;
       let inFlight = false;
+
+      /* ---- Signal panel state ---- */
+
+      const panelDefs = [
+        { id: "worker",    label: "Worker",     prefix: "worker." },
+        { id: "sandbox",   label: "Sandbox",    prefix: "sandbox." },
+        { id: "scope",     label: "Scope",      prefix: "scope." },
+        { id: "crystal",   label: "Crystal",    prefix: "crystal." },
+        { id: "forgetting",label: "Forgetting", prefix: "forgetting." },
+      ];
+
+      // Ring buffer — last 10 events per signal panel
+      const signalEvents = new Map();
+      for (const def of panelDefs) {
+        signalEvents.set(def.id, []);
+      }
+
+      // System status derived from incoming signals
+      const systemStatus = {
+        activeWorkers: 0,
+        scopeActive: false,
+        scopeRecallMode: false,
+        eqWeights: {},
+      };
+
+      /* ---- Helpers ---- */
 
       urlEl.value = defaultWebSocketUrl();
 
@@ -378,6 +519,243 @@
         statusEl.className = `status ${status === "online" || status === "error" ? status : ""}`.trim();
         sendEl.disabled = status !== "online" || inFlight;
       }
+
+      function defaultWebSocketUrl() {
+        if (location.protocol === "file:" || !location.host) {
+          return staticDefaultWsUrl;
+        }
+        const protocol = location.protocol === "https:" ? "wss" : "ws";
+        return `${protocol}://${location.host}/ws`;
+      }
+
+      function createEnvelopeId() {
+        if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
+          return globalThis.crypto.randomUUID();
+        }
+        const random = Math.random().toString(16).slice(2);
+        return `local-${Date.now().toString(36)}-${random}`;
+      }
+
+      /* ---- Panel routing ---- */
+
+      function panelForType(type) {
+        for (const def of panelDefs) {
+          if (type.startsWith(def.prefix)) return def.id;
+        }
+        return null;
+      }
+
+      function pushSignalEvent(panelId, type, payload) {
+        const events = signalEvents.get(panelId);
+        if (!events) return;
+        events.push({ type, payload, time: new Date().toLocaleTimeString() });
+        while (events.length > 10) events.shift();
+      }
+
+      /* ---- System status derived from signals ---- */
+
+      function updateSystemStatus(type, payload) {
+        const data = payload || {};
+
+        // Worker counts
+        if (type === "worker.spawn" || type === "worker.started" || type === "worker.queued") {
+          systemStatus.activeWorkers += 1;
+        }
+        if (type === "worker.completed" || type === "worker.failed") {
+          systemStatus.activeWorkers = Math.max(0, systemStatus.activeWorkers - 1);
+        }
+
+        // Scope state
+        if (type === "scope.activated") systemStatus.scopeActive = true;
+        if (type === "scope.deactivated") systemStatus.scopeActive = false;
+        if (type === "scope.recall_mode.started") systemStatus.scopeRecallMode = true;
+        if (type === "scope.recall_mode.ended") systemStatus.scopeRecallMode = false;
+
+        // EQ weights — look in payload for weight-like keys
+        if (data.eqWeights && typeof data.eqWeights === "object") {
+          Object.assign(systemStatus.eqWeights, data.eqWeights);
+        }
+        if (data.weights && typeof data.weights === "object") {
+          Object.assign(systemStatus.eqWeights, data.weights);
+        }
+        // crystal.gem.elevated/loaded may carry weight info
+        if ((type === "crystal.gem.elevated" || type === "crystal.gem.loaded") && data.weight !== undefined) {
+          systemStatus.eqWeights[data.name || data.id || "gem"] = data.weight;
+        }
+      }
+
+      /* ---- Rendering ---- */
+
+      function renderActivePanel() {
+        signalsContentEl.innerHTML = "";
+        if (activePanel === "system") {
+          renderSystemPanel();
+          return;
+        }
+        const events = signalEvents.get(activePanel) || [];
+        const def = panelDefs.find(d => d.id === activePanel);
+        const label = def ? def.label : activePanel;
+
+        const header = document.createElement("div");
+        header.className = "signals-header";
+        const h3 = document.createElement("h3");
+        h3.textContent = label;
+        const badge = document.createElement("span");
+        badge.className = "badge";
+        badge.textContent = events.length;
+        const clearBtn = document.createElement("button");
+        clearBtn.type = "button";
+        clearBtn.textContent = "Clear";
+        clearBtn.addEventListener("click", () => {
+          signalEvents.set(activePanel, []);
+          if (activePanel === "worker") systemStatus.activeWorkers = 0;
+          renderActivePanel();
+        });
+        header.append(h3, badge, clearBtn);
+        signalsContentEl.append(header);
+
+        if (events.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "empty-state";
+          empty.textContent = "No events yet";
+          signalsContentEl.append(empty);
+          return;
+        }
+
+        for (const evt of events.slice().reverse()) {
+          signalsContentEl.append(buildSignalEventEl(evt));
+        }
+      }
+
+      function buildSignalEventEl(evt) {
+        const el = document.createElement("div");
+        el.className = "signal-event";
+
+        const header = document.createElement("div");
+        header.className = "signal-event-header";
+        const typeSpan = document.createElement("span");
+        typeSpan.className = "signal-event-type";
+        typeSpan.textContent = evt.type;
+        const timeSpan = document.createElement("span");
+        timeSpan.className = "signal-event-time";
+        timeSpan.textContent = evt.time;
+        header.append(typeSpan, timeSpan);
+
+        const meta = document.createElement("div");
+        meta.className = "signal-event-meta";
+        const tags = summarizeTags(evt.payload);
+        for (const tag of tags) {
+          const tagEl = document.createElement("span");
+          tagEl.className = "tag";
+          tagEl.textContent = tag;
+          meta.append(tagEl);
+        }
+
+        const pre = document.createElement("pre");
+        pre.textContent = JSON.stringify(evt.payload, null, 2);
+
+        el.append(header, meta, pre);
+        return el;
+      }
+
+      function summarizeTags(payload) {
+        const tags = [];
+        const data = payload || {};
+        if (data.workerId) tags.push(`worker=${data.workerId}`);
+        if (data.id) tags.push(`id=${data.id}`);
+        if (data.name) tags.push(`name=${data.name}`);
+        if (data.status) tags.push(`status=${data.status}`);
+        if (data.reason) tags.push(`reason=${data.reason}`);
+        if (data.conversationId) tags.push(`conv=${data.conversationId}`);
+        return tags.length > 0 ? tags : ["raw"];
+      }
+
+      function renderSystemPanel() {
+        const grid = document.createElement("div");
+        grid.className = "system-grid";
+
+        // Active workers
+        const workerCard = document.createElement("div");
+        workerCard.className = "system-card";
+        workerCard.innerHTML = `<h4>Active Workers</h4>
+          <div class="value">${systemStatus.activeWorkers}</div>
+          <div class="detail">tracked from spawn / started / completed / failed</div>`;
+        grid.append(workerCard);
+
+        // Scope state
+        const scopeCard = document.createElement("div");
+        scopeCard.className = "system-card";
+        const scopeClass = systemStatus.scopeActive ? "active-state" : "inactive-state";
+        const scopeLabel = systemStatus.scopeActive ? "Active" : "Inactive";
+        const recallInfo = systemStatus.scopeRecallMode ? " (recall mode)" : "";
+        scopeCard.innerHTML = `<h4>Scope Activation</h4>
+          <div class="value ${scopeClass}">${scopeLabel}${recallInfo}</div>
+          <div class="detail">updated from scope.activated / scope.deactivated</div>`;
+        grid.append(scopeCard);
+
+        // EQ weights
+        const eqCard = document.createElement("div");
+        eqCard.className = "system-card";
+        const eqTitle = document.createElement("h4");
+        eqTitle.textContent = "EQ Weights";
+        eqCard.append(eqTitle);
+
+        const weights = systemStatus.eqWeights;
+        const weightKeys = Object.keys(weights);
+        if (weightKeys.length === 0) {
+          const noData = document.createElement("div");
+          noData.className = "detail";
+          noData.textContent = "No EQ weights received yet";
+          eqCard.append(noData);
+        } else {
+          const eqList = document.createElement("div");
+          eqList.className = "eq-weights";
+          for (const key of weightKeys) {
+            const row = document.createElement("div");
+            row.className = "eq-weight-row";
+            const label = document.createElement("span");
+            label.className = "eq-weight-label";
+            label.textContent = key;
+            const barBg = document.createElement("div");
+            barBg.className = "eq-weight-bar-bg";
+            const barFill = document.createElement("div");
+            barFill.className = "eq-weight-bar-fill";
+            const pct = Math.min(100, Math.max(0, Number(weights[key]) * 100 || 0));
+            barFill.style.width = `${pct}%`;
+            barBg.append(barFill);
+            const val = document.createElement("span");
+            val.className = "eq-weight-value";
+            val.textContent = typeof weights[key] === "number" ? weights[key].toFixed(3) : String(weights[key]);
+            row.append(label, barBg, val);
+            eqList.append(row);
+          }
+          eqCard.append(eqList);
+        }
+        grid.append(eqCard);
+
+        // Connection info
+        const connCard = document.createElement("div");
+        connCard.className = "system-card";
+        connCard.innerHTML = `<h4>Connection</h4>
+          <div class="detail" style="font-size:13px;color:#b6c4d2;">${urlEl.value}</div>`;
+        grid.append(connCard);
+
+        signalsContentEl.append(grid);
+      }
+
+      /* ---- Tab switching ---- */
+
+      signalsTabsEl.addEventListener("click", (event) => {
+        const btn = event.target.closest(".signals-tab-btn");
+        if (!btn) return;
+        activePanel = btn.dataset.panel;
+        for (const b of signalsTabsEl.querySelectorAll(".signals-tab-btn")) {
+          b.classList.toggle("active", b === btn);
+        }
+        renderActivePanel();
+      });
+
+      /* ---- Chat handling ---- */
 
       function appendChatMessage(role, content) {
         const row = document.createElement("div");
@@ -389,171 +767,6 @@
         chatLogEl.append(row);
         chatLogEl.scrollTop = chatLogEl.scrollHeight;
         return bubble;
-      }
-
-      function appendDebug(type, payload) {
-        const category = categoryFor(type);
-        debugCounts.set(category, (debugCounts.get(category) || 0) + 1);
-        debugCounts.set("all", (debugCounts.get("all") || 0) + 1);
-        const entry = document.createElement("div");
-        entry.className = "debug-entry";
-        entry.dataset.category = category;
-        const title = document.createElement("strong");
-        const name = document.createElement("span");
-        name.textContent = `${new Date().toLocaleTimeString()} ${type}`;
-        const categoryEl = document.createElement("span");
-        categoryEl.className = "category";
-        categoryEl.textContent = category;
-        title.append(name, categoryEl);
-        const meta = document.createElement("div");
-        meta.className = "meta";
-        for (const line of summarizePayload(payload)) {
-          const item = document.createElement("span");
-          item.textContent = line;
-          meta.append(item);
-        }
-        const pre = document.createElement("pre");
-        pre.textContent = JSON.stringify(payload, null, 2);
-        entry.append(title, meta, pre);
-        debugLogEl.append(entry);
-        debugEntries.push(entry);
-        while (debugLogEl.children.length > 200) {
-          debugLogEl.firstElementChild?.remove();
-          debugEntries.shift();
-        }
-        renderDebugControls();
-        applyDebugFilter();
-        debugLogEl.scrollTop = debugLogEl.scrollHeight;
-      }
-
-      function defaultWebSocketUrl() {
-        if (location.protocol === "file:" || !location.host) {
-          return staticDefaultWsUrl;
-        }
-        const protocol = location.protocol === "https:" ? "wss" : "ws";
-        return `${protocol}://${location.host}/ws`;
-      }
-
-      function categoryFor(type) {
-        if (type.startsWith("chat.") || type.startsWith("client.chat")) {
-          return "chat";
-        }
-        if (type.startsWith("tool.") || type.startsWith("guard.")) {
-          return "tool";
-        }
-        if (type.startsWith("memory.")) {
-          return "memory";
-        }
-        if (type.startsWith("context.")) {
-          return "context";
-        }
-        if (type.startsWith("model.")) {
-          return "model";
-        }
-        if (type.startsWith("recovery.")) {
-          return "recovery";
-        }
-        if (type.startsWith("workmux.")) {
-          return "workmux";
-        }
-        if (type.startsWith("plugin.")) {
-          return "plugin";
-        }
-        if (type.startsWith("socket.") || type.startsWith("agent.event")) {
-          return "socket";
-        }
-        if (type.includes("error") || type.includes("failed")) {
-          return "error";
-        }
-        return "socket";
-      }
-
-      function summarizePayload(payload) {
-        const lines = [];
-        const data = payload || {};
-        if (data.conversationId) {
-          lines.push(`conversation=${data.conversationId}`);
-        }
-        if (data.turnId) {
-          lines.push(`turn=${data.turnId}`);
-        }
-        if (data.phase && data.name) {
-          lines.push(`plugin=${data.name}`);
-        }
-        if (data.name && !data.phase) {
-          lines.push(`tool=${data.name}`);
-        }
-        if (data.status) {
-          lines.push(`status=${data.status}`);
-        }
-        if (data.fallback) {
-          lines.push(`fallback=${data.fallback}`);
-        }
-        if (data.reason) {
-          lines.push(`reason=${data.reason}`);
-        }
-        if (data.toolCall?.name) {
-          lines.push(`model_tool=${data.toolCall.name}`);
-        }
-        if (typeof data.recallCount === "number") {
-          lines.push(`recall=${data.recallCount}`);
-        }
-        if (Array.isArray(data.recall)) {
-          lines.push(`recall=${data.recall.length}`);
-        }
-        if (data.checkpointId) {
-          lines.push(`checkpoint=${data.checkpointId}`);
-        }
-        if (data.state) {
-          lines.push(`state=${data.state}`);
-        }
-        if (data.report?.interruptedTurns) {
-          lines.push(`interrupted_turns=${data.report.interruptedTurns.length}`);
-        }
-        if (data.request?.laneName) {
-          lines.push(`lane=${data.request.laneName}`);
-        }
-        if (data.error) {
-          lines.push(`error=${data.error}`);
-        }
-        return lines.length > 0 ? lines : ["raw event"];
-      }
-
-      function renderDebugControls() {
-        debugCountsEl.textContent = "";
-        debugFiltersEl.textContent = "";
-        for (const category of debugCategories) {
-          const count = debugCounts.get(category) || 0;
-          const countChip = document.createElement("span");
-          countChip.className = "debug-chip";
-          countChip.textContent = `${category}:${count}`;
-          debugCountsEl.append(countChip);
-
-          const filter = document.createElement("button");
-          filter.className = `debug-chip debug-filter ${activeDebugCategory === category ? "active" : ""}`.trim();
-          filter.type = "button";
-          filter.textContent = category;
-          filter.addEventListener("click", () => {
-            activeDebugCategory = category;
-            renderDebugControls();
-            applyDebugFilter();
-          });
-          debugFiltersEl.append(filter);
-        }
-      }
-
-      function applyDebugFilter() {
-        for (const entry of debugEntries) {
-          entry.classList.toggle("hidden", activeDebugCategory !== "all" && entry.dataset.category !== activeDebugCategory);
-        }
-      }
-
-      function createEnvelopeId() {
-        if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
-          return globalThis.crypto.randomUUID();
-        }
-        const random = Math.random().toString(16).slice(2);
-        return `local-${Date.now().toString(36)}-${random}`;
       }
 
       function assistantBubble(turnId) {
@@ -571,39 +784,58 @@
         return bubble;
       }
 
+      /* ---- Envelope handling ---- */
+
       function handleEnvelope(envelope) {
-        appendDebug(envelope.type, envelope.payload);
-        if (envelope.type === "chat.delta") {
-          const bubble = assistantBubble(envelope.payload?.turnId);
-          bubble.textContent += envelope.payload?.delta ?? "";
+        const type = envelope.type;
+        const payload = envelope.payload || {};
+
+        // Route to signal panels
+        const panelId = panelForType(type);
+        if (panelId) {
+          pushSignalEvent(panelId, type, payload);
+          updateSystemStatus(type, payload);
+          // Re-render if this panel is currently active (or system panel)
+          if (activePanel === panelId || activePanel === "system") {
+            renderActivePanel();
+          }
+          return;
+        }
+
+        // Chat events (existing behaviour)
+        if (type === "chat.delta") {
+          const bubble = assistantBubble(payload?.turnId);
+          bubble.textContent += payload?.delta ?? "";
           chatLogEl.scrollTop = chatLogEl.scrollHeight;
           return;
         }
-        if (envelope.type === "chat.final") {
-          const bubble = assistantBubble(envelope.payload?.turnId);
-          bubble.textContent = envelope.payload?.content ?? "";
+        if (type === "chat.final") {
+          const bubble = assistantBubble(payload?.turnId);
+          bubble.textContent = payload?.content ?? "";
           inFlight = false;
           setStatus(socket?.readyState === WebSocket.OPEN ? "online" : "offline");
           return;
         }
-        if (envelope.type === "chat.turn.complete") {
+        if (type === "chat.turn.complete") {
           inFlight = false;
           setStatus(socket?.readyState === WebSocket.OPEN ? "online" : "offline");
           return;
         }
-        if (envelope.type === "agent.error") {
+        if (type === "agent.error") {
           const pending = assistantByTurn.get("pending");
           if (pending) {
             pending.parentElement.className = "message-row error";
-            pending.textContent = envelope.payload?.error ?? "agent error";
+            pending.textContent = payload?.error ?? "agent error";
             assistantByTurn.delete("pending");
           } else {
-            appendChatMessage("error", envelope.payload?.error ?? "agent error");
+            appendChatMessage("error", payload?.error ?? "agent error");
           }
           inFlight = false;
           setStatus("error");
         }
       }
+
+      /* ---- WebSocket ---- */
 
       function connect() {
         socket?.close();
@@ -612,7 +844,6 @@
         setStatus("connecting");
         socket.addEventListener("open", () => {
           setStatus("online");
-          appendDebug("socket.open", {});
         });
         socket.addEventListener("message", (event) => {
           handleEnvelope(JSON.parse(event.data));
@@ -620,22 +851,17 @@
         socket.addEventListener("close", () => {
           inFlight = false;
           setStatus("offline");
-          appendDebug("socket.close", {});
         });
         socket.addEventListener("error", () => {
           inFlight = false;
           setStatus("error");
-          appendDebug("socket.error", {});
         });
       }
 
+      /* ---- Event listeners ---- */
+
       connectEl.addEventListener("click", connect);
-      clearDebugEl.addEventListener("click", () => {
-        debugLogEl.textContent = "";
-        debugEntries.length = 0;
-        debugCounts.clear();
-        renderDebugControls();
-      });
+
       messageEl.addEventListener("keydown", (event) => {
         if (event.key === "Enter" && !event.shiftKey) {
           event.preventDefault();
@@ -646,19 +872,19 @@
           }
         }
       });
+
       formEl.addEventListener("submit", (event) => {
         event.preventDefault();
         const content = messageEl.value;
-        if (!content) {
-          appendDebug("client.send.blocked", { reason: "empty-message" });
-          return;
-        }
+        if (!content) return;
         if (socket?.readyState !== WebSocket.OPEN) {
-          appendDebug("client.send.blocked", { reason: "socket-not-open", readyState: socket?.readyState ?? null, url: urlEl.value });
+          pushSignalEvent("system", "client.send.blocked", { reason: "socket-not-open" });
+          renderActivePanel();
           return;
         }
         if (inFlight) {
-          appendDebug("client.send.blocked", { reason: "turn-in-flight" });
+          pushSignalEvent("system", "client.send.blocked", { reason: "turn-in-flight" });
+          renderActivePanel();
           return;
         }
         const envelope = {
@@ -673,12 +899,14 @@
         socket.send(JSON.stringify(envelope));
         appendChatMessage("user", content);
         assistantByTurn.set("pending", appendChatMessage("assistant", ""));
-        appendDebug("client.chat.message", envelope.payload);
         messageEl.value = "";
         inFlight = true;
         setStatus("online");
       });
-      renderDebugControls();
+
+      /* ---- Init ---- */
+
+      renderActivePanel();
       connect();
     </script>
   </body>

@@ -28,8 +28,8 @@ export class ShellTool implements Tool<{ readonly command: string }> {
   ) {}
 
   public async execute(input: { readonly command: string }, context: ToolContext): Promise<ToolResult> {
-    const approved = await context.signalBus.ask("guard.ask", { tool: this.name, command: input.command });
-    await context.signalBus.emit("guard.answer", { tool: this.name, approved });
+    const approved = await context.signalBus.ask("guard.ask", { toolName: this.name, toolInput: { command: input.command }, turnId: context.turnId });
+    await context.signalBus.emit("guard.answer", { toolName: this.name, approved, turnId: context.turnId });
     if (!approved) {
       return { ok: false, output: "shell denied" };
     }

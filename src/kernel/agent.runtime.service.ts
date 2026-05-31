@@ -132,6 +132,51 @@ export class AgentRuntimeService {
     await this.recordCluePacket(input.conversationId, turnId, intent);
     await this.recordIntentDiagnostic(input.conversationId, turnId, intent);
 
+    if (intent.needsClarification || intent.mode === "clarify_reference") {
+      const assistantMessage = intent.clarifyingQuestion ?? "请再明确一下你想继续的具体目标。";
+      this.memoryComponent.appendMessage(input.conversationId, {
+        id: `${turnId}:assistant`,
+        role: "assistant",
+        content: assistantMessage,
+        createdAt: Date.now(),
+      });
+      this.brainComponent.recordMessage({
+        id: `${turnId}:assistant`,
+        turnId,
+        conversationId: input.conversationId,
+        role: "assistant",
+        content: assistantMessage,
+        createdAt: Date.now(),
+      });
+      this.brainComponent.upsertTurn({
+        id: turnId,
+        runtimeSessionId: this.brainComponent.getRuntimeSessionId(),
+        conversationId: input.conversationId,
+        status: "completed",
+        startedAt: now,
+        completedAt: Date.now(),
+        metadata: {
+          provider: this.configService.getConfig().model.provider,
+          model: this.configService.getActiveModelName(),
+          clarification: true,
+        },
+      });
+      await this.signalBus.emit("chat.final", { conversationId: input.conversationId, turnId, content: assistantMessage });
+      return {
+        conversationId: input.conversationId,
+        turnId,
+        assistantMessage,
+        context: this.contextBuilder.build({
+          conversationId: input.conversationId,
+          userInput: input.content,
+          excludeMessageId: `${turnId}:user`,
+          intent,
+          runtimeState: `turn=${turnId}\nprovider=${this.configService.getConfig().model.provider}`,
+        }),
+        toolResults: [],
+      };
+    }
+
     const stored = this.storeDurableFacts(input.conversationId, turnId, input.content, intent);
     for (const chunk of stored) {
       await this.signalBus.emit("memory.store", { conversationId: input.conversationId, turnId, chunk });
@@ -817,7 +862,7 @@ export class AgentRuntimeService {
     if (intent.requiresProjectInspection && intent.projectPath && visibleToolNames.has("glob")) {
       results.push(...await this.inspectProject(turnId, intent.projectPath));
     }
-    if (intent.toolGroupsToExpose.includes("shell") && intent.shellCommand && visibleToolNames.has("shell")) {
+    if (intent.toolGroupsToExpose.includes("shell") && intent.shellCommand && visibleToolNames.has("shell") && this.userExplicitlyRequestedShellCommand(intent)) {
       const shellContext = intent.writeTargetRoot || intent.projectPath
         ? { ...this.createToolContext(turnId), cwd: intent.writeTargetRoot ?? intent.projectPath ?? this.configService.getProjectRoot() }
         : this.createToolContext(turnId);
@@ -968,6 +1013,18 @@ export class AgentRuntimeService {
       && "command" in input
       && typeof (input as { readonly command?: unknown }).command === "string"
       && (input as { readonly command: string }).command.trim() === expected.trim();
+  }
+
+  /**
+   * Checks that an inline shell command was explicitly present in the user turn.
+   *
+   * @param intent - Model turn decision containing the source clue packet.
+   * @returns True when the current user text contains the exact shell command.
+   * @usage The decider may expose tools, but it must not invent inline shell commands.
+   */
+  private userExplicitlyRequestedShellCommand(intent: ContextIntentDecision): boolean {
+    const command = intent.shellCommand?.trim();
+    return Boolean(command && intent.cluePacket.userInput.includes(command));
   }
 
   /**

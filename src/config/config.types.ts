@@ -28,6 +28,8 @@ export interface ConfigPaths {
   readonly pluginStateDir: string;
   readonly socketTestPage: string;
   readonly runtimeDir: string;
+  readonly scopeDir: string;
+  readonly crystalDb: string;
 }
 
 /**
@@ -301,6 +303,54 @@ export interface PluginsConfig {
 }
 
 /**
+ * Describes one agent profile configured by the user.
+ *
+ * @property description - Human-readable profile purpose.
+ * @property model - Optional model override; null means inherit from parent.
+ * @property provider - Optional provider override for this agent profile.
+ * @property tools - Tool names exposed to this agent profile.
+ * @property systemPrompt - Project-relative path to the agent's system prompt.
+ * @property maxSteps - Maximum tool-calling steps for this agent.
+ * @property mode - Agent mode: explore, discuss, investigate, code, or general.
+ * @usage WorkerService reads these profiles when spawning child agents.
+ */
+export interface AgentProfileConfig {
+  readonly description: string;
+  readonly model?: string | null;
+  readonly provider?: string;
+  readonly tools: readonly string[];
+  readonly systemPrompt: string;
+  readonly maxSteps: number;
+  readonly mode: "explore" | "discuss" | "investigate" | "code" | "general";
+}
+
+/**
+ * Describes agent system defaults.
+ *
+ * @property maxConcurrent - Maximum concurrent workers allowed.
+ * @property maxSteps - Default maximum tool-calling steps when a profile omits it.
+ * @property timeoutSeconds - Default worker timeout in seconds.
+ * @usage WorkerService uses these when a profile omits a value.
+ */
+export interface AgentsDefaultsConfig {
+  readonly maxConcurrent: number;
+  readonly maxSteps: number;
+  readonly timeoutSeconds: number;
+}
+
+/**
+ * Describes the agent worker configuration.
+ *
+ * @property profiles - User-defined agent profiles keyed by name.
+ * @property defaults - System-wide agent defaults.
+ * @usage ConfigService reads this from `.config/config.jsonc`.
+ */
+export interface AgentsConfig {
+  readonly profiles: Record<string, AgentProfileConfig>;
+  readonly defaults: AgentsDefaultsConfig;
+}
+
+/**
  * Describes the full Flyflor local configuration.
  *
  * @property paths - Unified `.config` path settings.
@@ -313,6 +363,7 @@ export interface PluginsConfig {
  * @property context - Context assembly settings.
  * @property tools - Tool execution settings.
  * @property plugins - External plugin loading settings.
+ * @property agents - Agent worker profile configuration.
  * @usage `ConfigService` exposes this shape to DI-managed services.
  */
 export interface FlyflorConfig {
@@ -326,4 +377,5 @@ export interface FlyflorConfig {
   readonly context: ContextConfig;
   readonly tools: ToolsConfig;
   readonly plugins: PluginsConfig;
+  readonly agents: AgentsConfig;
 }

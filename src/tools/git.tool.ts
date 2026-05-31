@@ -5,7 +5,7 @@ import type { Tool, ToolContext, ToolResult } from "./tool.types";
 /**
  * Runs safe git inspection commands.
  *
- * @usage Exposes status, diff, log, and show without allowing destructive operations.
+ * @usage Exposes status, diff, log, show, and read-only branch forms without allowing destructive operations.
  */
 export class GitTool implements Tool<{ readonly args: readonly string[] }> {
   public readonly name = "git";
@@ -18,7 +18,7 @@ export class GitTool implements Tool<{ readonly args: readonly string[] }> {
     properties: {
       args: {
         type: "array" as const,
-        description: "Git arguments; first argument must be one of status, diff, log, show, branch.",
+        description: "Git arguments; first argument must be a read-only status, diff, log, show, or branch form.",
         items: { type: "string" as const, description: "One git argument." },
       },
     },
@@ -30,13 +30,13 @@ export class GitTool implements Tool<{ readonly args: readonly string[] }> {
   ) {}
 
   public async execute(input: { readonly args: readonly string[] }, context: ToolContext): Promise<ToolResult> {
-    const allowed = new Set(["status", "diff", "log", "show", "branch"]);
-    const command = input.args[0] ?? "status";
-    if (!allowed.has(command)) {
-      return { ok: false, output: `git command denied: ${command}` };
+    const args = input.args.length > 0 ? [...input.args] : ["status", "--short"];
+    const denial = this.validateReadOnlyArgs(args);
+    if (denial) {
+      return { ok: false, output: denial };
     }
-    const proc = Bun.spawnSync(["git", ...input.args], { cwd: context.cwd });
-    const commandLabel = `git ${input.args.join(" ")}`.trim();
+    const proc = Bun.spawnSync(["git", ...args], { cwd: context.cwd });
+    const commandLabel = `git ${args.join(" ")}`.trim();
     const raw = [`$ ${commandLabel}`, proc.stdout.toString(), proc.stderr.toString()].join("\n");
     const artifactPath = this.artifactWriter.writeText(this.rtkComponent.artifactDir(context), "rtk-git-raw", raw);
     await context.signalBus.emit("tool.artifact", {
@@ -58,6 +58,54 @@ export class GitTool implements Tool<{ readonly args: readonly string[] }> {
       artifactPath,
       metadata: { exitCode: proc.exitCode, ...compressed.metadata },
     };
+  }
+
+  /**
+   * Validates git arguments against the read-only command contract.
+   *
+   * @param args - User/model supplied git arguments.
+   * @returns Denial text when unsafe, otherwise undefined.
+   * @usage GitTool is exposed as read-only, so mutating forms must be rejected before spawn.
+   */
+  private validateReadOnlyArgs(args: readonly string[]): string | undefined {
+    const command = args[0] ?? "status";
+    if (args.some((arg) => arg === "--no-index" || arg.startsWith("--output") || arg === "-o")) {
+      return "git command denied: unsafe output or no-index option";
+    }
+    if (args.some((arg) => arg.startsWith("/") || arg.includes(".."))) {
+      return "git command denied: path arguments must stay inside the repository";
+    }
+    switch (command) {
+      case "status":
+        return undefined;
+      case "diff":
+        return undefined;
+      case "log":
+        return undefined;
+      case "show":
+        return undefined;
+      case "branch":
+        return this.validateBranchArgs(args);
+      default:
+        return `git command denied: ${command}`;
+    }
+  }
+
+  /**
+   * Validates branch subcommands that do not create, delete, rename, or checkout refs.
+   *
+   * @param args - Git branch arguments.
+   * @returns Denial text when mutating, otherwise undefined.
+   * @usage `git branch <name>` mutates refs and must not be available through this tool.
+   */
+  private validateBranchArgs(args: readonly string[]): string | undefined {
+    const allowed = new Set(["branch", "--show-current", "--list", "-l", "--all", "-a", "--remotes", "-r", "--verbose", "-v", "--vv", "--no-color", "--color=never"]);
+    for (const arg of args) {
+      if (!allowed.has(arg) && !arg.startsWith("--format=")) {
+        return `git branch form denied: ${arg}`;
+      }
+    }
+    return undefined;
   }
 
   /**

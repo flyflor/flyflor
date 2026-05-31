@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 import { arch, platform, tmpdir } from "node:os";
 import { Database } from "bun:sqlite";
 import { ConfigService } from "../config/config.service";
+import sqliteDarwinArm64 from "../../.config/sqlite-vec/sqlite-darwin-arm64/libsqlite3.dylib" with { type: "file" };
 import sqliteDarwinX64 from "../../.config/sqlite-vec/sqlite-darwin-x64/libsqlite3.dylib" with { type: "file" };
 import vecDarwinArm64 from "../../.config/sqlite-vec/sqlite-vec-darwin-arm64/vec0.dylib" with { type: "file" };
 import vecDarwinX64 from "../../.config/sqlite-vec/sqlite-vec-darwin-x64/vec0.dylib" with { type: "file" };
@@ -24,13 +25,28 @@ export class SqliteVecLoader {
    * Prepares Bun SQLite before any database handle is created.
    *
    * @returns Nothing.
-   * @usage On macOS x64 Bun must use the vendored SQLite dylib before `new Database()`.
+   * @usage On macOS Bun must use a vendored SQLite dylib that supports
+   * extension loading before `new Database()` is called.
    */
   public prepare(): void {
-    if (platform() !== "darwin" || arch() !== "x64" || SqliteVecLoader.customSqlitePrepared) {
+    if (SqliteVecLoader.customSqlitePrepared) {
       return;
     }
-    const sqlitePath = this.materializeAssetFile(sqliteDarwinX64, "sqlite-darwin-x64/libsqlite3.dylib");
+    if (platform() !== "darwin") {
+      return;
+    }
+    let sqliteAssetPath: string;
+    let vendorPath: string;
+    if (arch() === "x64") {
+      sqliteAssetPath = sqliteDarwinX64;
+      vendorPath = "sqlite-darwin-x64/libsqlite3.dylib";
+    } else if (arch() === "arm64") {
+      sqliteAssetPath = sqliteDarwinArm64;
+      vendorPath = "sqlite-darwin-arm64/libsqlite3.dylib";
+    } else {
+      return;
+    }
+    const sqlitePath = this.materializeAssetFile(sqliteAssetPath, vendorPath);
     try {
       Database.setCustomSQLite(sqlitePath);
       SqliteVecLoader.customSqlitePrepared = true;

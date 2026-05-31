@@ -37,6 +37,12 @@
 
         // Runtime-only locks, scenario profiles, materialized binaries, and temporary build outputs.
         "runtimeDir": "./.config/runtime",
+
+        // Per-scope constitutional memory databases. Each scope gets its own scope.db under this directory.
+        "scopeDir": "./.config/scope",
+
+        // Crystal intelligence vector database for Gem storage and semantic matching.
+        "crystalDb": "./.config/crystal/crystal.db",
     },
     "runtime": {
         // Development guard behavior. Keep true until Rust TUI or another client answers `guard.ask`.
@@ -68,7 +74,7 @@
         "base_url": "",
 
         // Environment variable used to read the active provider API key.
-        "api_key_env": "FLYFLOR_LLM_API_KEY",
+        "api_key_env": "DEEPESEEK_API_KEY",
 
         // Local-only API key escape hatch. Keep empty in committed config.
         "api_key": "",
@@ -224,5 +230,54 @@
 
         // Number of runtime/tool-loop steps allowed before the agent must finish or report a loop guard.
         "maxToolSteps": 8,
+    },
+    "agents": {
+        // User-defined agent profiles for the multi-agent worker system.
+        // LLM can spawn workers with these profiles for exploration, discussion, investigation, and coding.
+        "profiles": {
+            "general": {
+                "description": "通用 agent，默认后备",
+                "tools": ["read", "glob", "grep", "codegraph", "shell", "memory_recall"],
+                "systemPrompt": "./prompts/agent-general.md",
+                "maxSteps": 8,
+                "mode": "general",
+            },
+            "explore": {
+                "description": "只读探索 agent，搜索代码库理解结构",
+                "tools": ["read", "glob", "grep", "codegraph", "memory_recall"],
+                "systemPrompt": "./prompts/agent-explore.md",
+                "maxSteps": 12,
+                "mode": "explore",
+            },
+            "discuss": {
+                "description": "多角度讨论角色 agent",
+                "tools": ["memory_recall"],
+                "systemPrompt": "./prompts/agent-discuss.md",
+                "maxSteps": 5,
+                "mode": "discuss",
+            },
+            "investigate": {
+                "description": "调查 agent，收集证据理解问题",
+                "tools": ["read", "glob", "grep", "codegraph", "shell", "memory_recall"],
+                "systemPrompt": "./prompts/agent-investigate.md",
+                "maxSteps": 15,
+                "mode": "investigate",
+            },
+            "code": {
+                "description": "编码执行 agent，可读写文件和执行 shell",
+                "tools": ["read", "write", "edit", "multi_edit", "glob", "grep", "shell", "git", "codegraph", "memory_recall", "memory_store"],
+                "systemPrompt": "./prompts/agent-code.md",
+                "maxSteps": 24,
+                "mode": "code",
+            },
+        },
+        "defaults": {
+            // Maximum concurrent workers allowed.
+            "maxConcurrent": 4,
+            // Default maximum tool-calling steps per worker.
+            "maxSteps": 8,
+            // Default worker timeout in seconds.
+            "timeoutSeconds": 300,
+        },
     },
 }

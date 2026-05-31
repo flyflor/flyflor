@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { MultiEditOperation, Tool, ToolContext, ToolResult } from "./tool.types";
 import { isProtectedConfigPath, resolveToolPath } from "./path.utils";
 
@@ -55,7 +56,8 @@ export class WriteTool implements Tool<{ readonly filePath: string; readonly con
     if (isProtectedConfigPath(resolved.relativePath)) {
       return { ok: false, output: "write denied: .config/config.jsonc requires explicit plan approval" };
     }
-    const approved = await context.signalBus.ask("guard.ask", { tool: this.name, filePath: resolved.relativePath });
+    const approved = await context.signalBus.ask("guard.ask", { toolName: this.name, toolInput: { filePath: resolved.relativePath }, turnId: context.turnId });
+    await context.signalBus.emit("guard.answer", { toolName: this.name, approved, turnId: context.turnId });
     if (!approved) {
       return { ok: false, output: "write denied" };
     }
@@ -138,7 +140,8 @@ export class MultiEditTool implements Tool<{ readonly edits: readonly MultiEditO
     if (input.dryRun) {
       return { ok: true, output: `dry-run ok for ${input.edits.length} edit(s)` };
     }
-    const approved = await context.signalBus.ask("guard.ask", { tool: this.name, edits: input.edits.length });
+    const approved = await context.signalBus.ask("guard.ask", { toolName: this.name, toolInput: { edits: input.edits.length }, turnId: context.turnId });
+    await context.signalBus.emit("guard.answer", { toolName: this.name, approved, turnId: context.turnId });
     if (!approved) {
       return { ok: false, output: "multi_edit denied" };
     }
@@ -175,28 +178,101 @@ export class GlobTool implements Tool<{ readonly pattern: string }> {
 }
 
 /**
- * Searches text using ripgrep.
+ * Searches text with a Bun-native implementation.
  *
- * @usage Use before broader file reads when searching the repo.
+ * @usage Internal grep avoids depending on a shell alias or global ripgrep binary.
  */
 export class GrepTool implements Tool<{ readonly pattern: string; readonly path?: string }> {
   public readonly name = "grep";
-  public readonly description = "Search text with rg.";
+  public readonly description = "Search text files with a project-owned grep implementation.";
   public readonly execution = { mutability: "read-only" as const, concurrency: "concurrent" as const };
   public readonly schema = {
     type: "object" as const,
     required: ["pattern"],
     additionalProperties: false,
     properties: {
-      pattern: { type: "string" as const, description: "Ripgrep search pattern." },
-      path: { type: "string" as const, description: "Optional path under cwd to search.", default: "." },
+      pattern: { type: "string" as const, description: "Regular expression pattern." },
+      path: { type: "string" as const, description: "Optional file or directory under cwd to search.", default: "." },
     },
   };
 
   public async execute(input: { readonly pattern: string; readonly path?: string }, context: ToolContext): Promise<ToolResult> {
-    const targetPath = input.path ? resolveToolPath(context.cwd, input.path).relativePath : ".";
-    const args = ["rg", "-n", input.pattern, targetPath];
-    const proc = Bun.spawnSync(args, { cwd: context.cwd });
-    return { ok: proc.exitCode === 0 || proc.exitCode === 1, output: proc.stdout.toString().slice(0, 8000) || proc.stderr.toString() };
+    const target = input.path ? resolveToolPath(context.cwd, input.path) : resolveToolPath(context.cwd, ".");
+    let regex: RegExp;
+    try {
+      regex = new RegExp(input.pattern);
+    } catch (error) {
+      return { ok: false, output: `grep pattern invalid: ${error instanceof Error ? error.message : String(error)}` };
+    }
+    const files = this.searchFiles(target.absolutePath).slice(0, 1000);
+    const lines: string[] = [];
+    for (const file of files) {
+      const text = this.readTextFile(file);
+      if (text === undefined) {
+        continue;
+      }
+      const relativeFile = resolveToolPath(context.cwd, file).relativePath;
+      const split = text.split(/\r\n|\r|\n/);
+      for (let index = 0; index < split.length; index += 1) {
+        if (regex.test(split[index] ?? "")) {
+          lines.push(`${relativeFile}:${index + 1}:${split[index]}`);
+        }
+        regex.lastIndex = 0;
+        if (lines.length >= 1000) {
+          return { ok: true, output: lines.join("\n").slice(0, 8000), metadata: { count: lines.length, truncated: true } };
+        }
+      }
+    }
+    return { ok: true, output: lines.join("\n").slice(0, 8000), metadata: { count: lines.length } };
+  }
+
+  /**
+   * Lists files below a target path, skipping common generated directories.
+   *
+   * @param path - Absolute target file or directory.
+   * @returns Absolute file paths to inspect.
+   * @usage GrepTool keeps traversal in-process and bounded.
+   */
+  private searchFiles(path: string): readonly string[] {
+    const stat = statSync(path);
+    if (stat.isFile()) {
+      return [path];
+    }
+    if (!stat.isDirectory()) {
+      return [];
+    }
+    const ignored = new Set([".git", "node_modules", ".worktrees"]);
+    const files: string[] = [];
+    for (const entry of readdirSync(path, { withFileTypes: true })) {
+      if (ignored.has(entry.name)) {
+        continue;
+      }
+      const child = join(path, entry.name);
+      if (entry.isDirectory()) {
+        files.push(...this.searchFiles(child));
+      } else if (entry.isFile()) {
+        files.push(child);
+      }
+      if (files.length >= 1000) {
+        break;
+      }
+    }
+    return files;
+  }
+
+  /**
+   * Reads a likely text file, returning undefined for binary or unreadable files.
+   *
+   * @param path - Absolute file path.
+   * @returns UTF-8 text when the file is suitable for grep.
+   * @usage Keeps binary/vendor files from polluting grep output.
+   */
+  private readTextFile(path: string): string | undefined {
+    try {
+      const text = readFileSync(path, "utf8");
+      return text.includes("\0") ? undefined : text;
+    } catch {
+      return undefined;
+    }
   }
 }

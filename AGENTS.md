@@ -37,6 +37,12 @@ When implementation and this file disagree, update this file through discussion 
 - `src/config`: config loader and typed config access.
 - `src/entities`: `@Repo()` classes for data model and SQL operations.
 - `src/plugins`: plugin host, plugin manifests, and external plugin adapters.
+- `src/prompts`: unified prompt registry and protocol layer.
+- `src/worker`: multi-agent worker system for concurrent exploration, discussion, investigation, and coding.
+- `src/sandbox`: RxJS sandbox guard that intercepts all Confirm and ASK requests through the SignalBus vascular layer.
+- `src/scope`: scope constitutional memory system with per-scope `scope.db` and vector recall mode.
+- `src/crystal`: crystal intelligence system managing ASK lifecycle, crystallization candidates, and Gem elevation.
+- `src/forgetting`: time-driven memory decay and drift system following the Ebbinghaus forgetting curve.
 - `src/shared`: shared types, errors, and small cross-cutting utilities.
 - `prompts`: runtime prompt files.
 - `sql`: initialization schema and seed SQL files.

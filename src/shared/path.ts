@@ -64,6 +64,10 @@ export class ProjectPaths {
    * @usage Use when writing generated files under config-owned folders.
    */
   public join(relativeDir: string, segment: string): string {
-    return join(this.resolve(relativeDir), segment);
+    if (segment.startsWith("/")) {
+      throw new Error(`Absolute config path segments are forbidden: ${segment}`);
+    }
+    const relativePath = join(relativeDir, segment);
+    return this.resolve(relativePath);
   }
 }

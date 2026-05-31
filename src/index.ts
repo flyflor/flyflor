@@ -1,11 +1,12 @@
 import type { RuntimeStatus } from "./shared/runtime";
-import { SocketServerService } from "./socket";
+import { createContainer } from "./di";
+import { SocketModule, SocketServerService } from "./socket";
 
 /**
- * Creates the minimal startup status for the current thin entrypoint.
+ * Creates the minimal startup status for the current runtime entrypoint.
  *
  * @returns Runtime status that confirms the project skeleton can start.
- * @usage This composition API is intentionally thin until the DI container bootstrap is implemented.
+ * @usage CLI startup reports this before either printing status or serving sockets.
  */
 export function createRuntimeStatus(): RuntimeStatus {
   return {
@@ -18,7 +19,8 @@ export function createRuntimeStatus(): RuntimeStatus {
 const status = createRuntimeStatus();
 
 if (Bun.argv.includes("--serve")) {
-  const service = new SocketServerService();
+  const container = createContainer(SocketModule);
+  const service = container.resolve(SocketServerService);
   const server = service.start();
   console.log(`[${status.name}] socket-ready url=http://${server.hostname}:${server.port}`);
 } else {
