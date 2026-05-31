@@ -43,6 +43,7 @@ When implementation and this file disagree, update this file through discussion 
 - `src/scope`: scope constitutional memory system with per-scope `scope.db` and vector recall mode.
 - `src/crystal`: crystal intelligence system managing ASK lifecycle, crystallization candidates, and Gem elevation.
 - `src/forgetting`: time-driven memory decay and drift system following the Ebbinghaus forgetting curve.
+- `src/constitution`: soul/user/memory constitutional layer — load, render, and audited model-assisted revision of the `SOUL`/`USER`/`MEMORY` charter.
 - `src/shared`: shared types, errors, and small cross-cutting utilities.
 - `prompts`: runtime prompt files.
 - `sql`: initialization schema and seed SQL files.
@@ -172,7 +173,31 @@ Required decorators:
 - RxJS may be used inside `src/signal`.
 - Do not expose RxJS as the default public API of the kernel.
 - External callers should use project-owned methods such as `emit`, `subscribe`, and `ask`.
-- Guard and confirm flows must pass through `SignalBus`, even when local development auto-approves.
+- Guard and confirm flows must pass through `SignalBus`.
+- A `guard.*` ask with no attached responder must NOT silently approve. It always
+  emits `guard.unattended` (audited), then resolves per the `autoApproveGuards`
+  policy: approve in dev, fail-safe deny in strict mode. The real `--serve` path
+  bootstraps `SandboxGuard`, so in production the responder is always present and
+  this fallback never runs. `autoApproveGuards` is a policy the responder applies
+  after inspecting the call, never a silent no-responder shortcut.
+
+## Kernel Purity And Coordination Red Lines
+
+- The kernel (`src/kernel`) is pure turn orchestration. It owns the turn loop,
+  the model call, and the tool loop. It must not embed cross-cutting capability
+  logic (memory writes, scope, crystal, forgetting, plugin install, worker
+  bookkeeping, guard policy) inline.
+- All cross-cutting capability coordination flows through the `SignalBus`
+  vascular layer (the scout/`侦查者` link). Long-lived capabilities attach with
+  `@Subscribe(...)` during DI lifecycle wiring and own their own state; the
+  kernel emits domain signals and awaits guard/ASK results, it does not reach
+  into those subsystems imperatively.
+- This keeps two properties simultaneously: DI gives each capability an
+  explicit, testable boundary, and the signal link is the single place runtime
+  state transitions are observed and audited.
+- A capability that needs to react to runtime events subscribes; it must not be
+  hand-wired into the kernel constructor or `runTurn` body. New imperative
+  kernel→subsystem calls require updating this file first.
 
 ## Prompt Red Lines
 
@@ -202,6 +227,25 @@ Required decorators:
 - `memory.db` must be rebuildable from `brain.db` for critical indexes, but `brain.db` must not be replaced by `memory.db`.
 - Context compaction may rewrite model-facing history, but it must never delete brain audit data.
 
+## Soul Constitution Red Lines
+
+- Flyflor has a constitutional layer modeled on hermes-agent's "soul": a stable,
+  injected identity/operating-charter that frames every turn.
+- The constitution has three tiers, injected in this fixed order at the top of
+  context: `SOUL` (who Flyflor is, its engineering red lines and refusals),
+  `USER` (durable owner profile and preferences), `MEMORY` (how to treat
+  memory.db authority). Scope adds a fourth, per-scope constitution when a scope
+  is active.
+- Constitution text lives in `.config/templates/*.md` with `.zh.cn.md` mirrors,
+  loaded by `TemplateLoaderComponent`; runtime loads only `.md`.
+- The constitution is durable and editable, not a static stub. A `@Service`
+  owns load, render, and model-assisted revision; every revision is audited to
+  brain.db and the prior version preserved. The model may propose revisions; the
+  host validates and applies them through the SignalBus link, never by silent
+  inline edit.
+- The constitution is authority context, not retrievable memory: it is always
+  present, never subject to forgetting decay, and never compacted away.
+
 ## Plugin Red Lines
 
 - `src/tools` is for internal tools compiled into the Bun binary.
@@ -210,6 +254,18 @@ Required decorators:
 - External plugins must not be Bun binary hard dependencies.
 - Missing external plugins must return explicit unavailable or failed diagnostics
   instead of silently substituting another execution path.
+- All external capabilities — RTK, CodeGraph, and future `browser-use` and
+  `computer-use` — install under `./plugins/<name>` and are isolated from the
+  global environment. They are not installed globally, not added to the user's
+  PATH, and their caches/state live under `.config/plugins` and `.config/<name>`,
+  never in shared system locations.
+- Availability inspection must be a pure read with no side effects. Installing,
+  cloning, or building a plugin is a separate explicit action; a status check
+  must never trigger an install, even when `autoInstall=true`.
+- Plugin executables must resolve to a path inside the plugin's own install
+  directory; candidates that escape it are rejected.
+- `@Plugin()` adapters bridge optional external plugins only. Internal tools stay
+  `@Tool`/registry classes in `src/tools` and must not be modeled as plugins.
 
 ## Repo And SQL Red Lines
 
@@ -225,6 +281,15 @@ Required decorators:
 - `src/socket` is an external adapter and must not own kernel behavior.
 - Use a project-owned JSON envelope with `id`, `type`, `payload`, and `timestamp`.
 - Keep the protocol ready for a future Rust TUI shell.
+- The WebSocket layer connects to exactly three surfaces and nothing else:
+  - the scout/guard (`侦查者`, `SandboxGuard`) for Confirm and ASK prompts and answers;
+  - the databases (`brain.db`, `memory.db`) for history, recovery, and debug projection reads;
+  - the conversation (`chat.*`) stream.
+- The WebSocket layer must not call kernel orchestration, tools, memory writes,
+  workers, scope, crystal, or forgetting directly. Everything beyond
+  guard/db/chat reaches the socket only as a `SignalBus` broadcast it subscribes
+  to for display. The socket may emit `chat.message` and guard answers; it must
+  not emit tool, worker, memory, scope, crystal, or forgetting commands.
 
 ## Documentation Red Lines
 

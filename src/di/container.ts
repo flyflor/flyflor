@@ -140,6 +140,7 @@ export class Container {
 export function createContainer(rootModule: Constructor, projectRoot = process.cwd()): Container {
   const container = new Container(projectRoot);
   const visited = new Set<Constructor>();
+  const bootstrap: Constructor[] = [];
   const visit = (moduleClass: Constructor): void => {
     if (visited.has(moduleClass)) {
       return;
@@ -155,7 +156,16 @@ export function createContainer(rootModule: Constructor, projectRoot = process.c
     for (const provider of moduleMetadata.providers) {
       container.register(provider);
     }
+    for (const eager of moduleMetadata.bootstrap) {
+      bootstrap.push(eager);
+    }
   };
   visit(rootModule);
+  // Eagerly resolve bootstrap providers AFTER every provider is registered so
+  // their `@Subscribe` handlers and `init()` hooks attach under the real
+  // executable path (e.g. SandboxGuard answering guard.ask in `--serve`).
+  for (const eager of bootstrap) {
+    container.resolve(eager);
+  }
   return container;
 }

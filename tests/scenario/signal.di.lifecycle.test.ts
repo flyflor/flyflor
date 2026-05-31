@@ -49,6 +49,46 @@ class ScenarioInjectedComponent {
 })
 class ScenarioSignalModule {}
 
+/**
+ * Eagerly-bootstrapped guard responder used to prove bootstrap wiring and
+ * require-responder semantics without an explicit `resolve` call.
+ *
+ * @usage The module lists this in `bootstrap`; the container must construct it
+ * and attach its `guard.ask` handler during `createContainer`.
+ */
+@Component()
+class ScenarioGuard {
+  @Inject(SignalBus)
+  public readonly signalBus!: SignalBus;
+
+  public asks = 0;
+
+  /**
+   * Approves any guard ask it sees.
+   *
+   * @param _payload - Guard ask payload.
+   * @returns Always true.
+   * @usage Wired via `@Subscribe('guard.ask')` only when the guard is constructed.
+   */
+  @Subscribe("guard.ask")
+  public onGuardAsk(_payload: unknown): boolean {
+    this.asks += 1;
+    return true;
+  }
+}
+
+/**
+ * Module that eagerly bootstraps {@link ScenarioGuard}.
+ *
+ * @usage Proves `bootstrap` providers are constructed and subscribed by `createContainer`.
+ */
+@Module({
+  providers: [SignalBus, ScenarioGuard],
+  exports: [SignalBus, ScenarioGuard],
+  bootstrap: [ScenarioGuard],
+})
+class ScenarioGuardModule {}
+
 describe("signal and DI lifecycle", () => {
   test("@Inject and @Prompt properties are resolved by the container", () => {
     const container = createContainer(ScenarioSignalModule);
@@ -67,6 +107,37 @@ describe("signal and DI lifecycle", () => {
     expect(sameSubscriber).toBe(subscriber);
     await signalBus.emit("scenario.event", { value: "flyflor-signal" });
     expect(subscriber.events).toEqual([{ value: "flyflor-signal" }]);
+  });
+
+  test("bootstrap providers are constructed and subscribed without an explicit resolve", async () => {
+    const container = createContainer(ScenarioGuardModule);
+    const signalBus = container.resolve(SignalBus);
+    // ScenarioGuard was never resolved by the test; bootstrap must have wired it.
+    const approved = await signalBus.ask("guard.ask", { toolName: "write", turnId: "t1" });
+    expect(approved).toBe(true);
+    expect(container.resolve(ScenarioGuard).asks).toBe(1);
+  });
+
+  test("guard.* ask with no responder is audited via guard.unattended and honors policy", async () => {
+    const strict = new SignalBus(false);
+    const unattended: unknown[] = [];
+    strict.subscribe("guard.unattended", (payload) => {
+      unattended.push(payload);
+    });
+
+    // Strict mode (no auto-approve): unattended guard ask fails safe to deny.
+    const denied = await strict.ask("guard.ask", { toolName: "shell", turnId: "t2" });
+    expect(denied).toBe(false);
+    expect(unattended).toHaveLength(1);
+    expect((unattended[0] as { signal: string }).signal).toBe("guard.ask");
+
+    // Dev mode (auto-approve): still audited as unattended, but approved.
+    const dev = new SignalBus(true);
+    const devUnattended: unknown[] = [];
+    dev.subscribe("guard.unattended", (payload) => devUnattended.push(payload));
+    const approved = await dev.ask("guard.ask", { toolName: "shell", turnId: "t3" });
+    expect(approved).toBe(true);
+    expect(devUnattended).toHaveLength(1);
   });
 
   test("SignalBus emits explicit lifecycle events", async () => {

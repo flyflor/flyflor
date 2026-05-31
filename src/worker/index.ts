@@ -3,7 +3,7 @@ export { WorkerModule } from "./worker.module";
 export type {
   WorkerSpawnPayload,
   WorkerCompletedPayload,
-  WorkerFailedPayload,
+  WorkerSettledPayload,
   WorkerQueuedPayload,
   WorkerResultInjectedPayload,
   WorkerRecord,

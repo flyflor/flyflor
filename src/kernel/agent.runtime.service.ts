@@ -14,6 +14,7 @@ import {
 } from "../context";
 import { MemoryComponent, type MemoryRecallResult } from "../memory";
 import { PluginRegistryComponent, CodeGraphPlugin, RtkCommandFilterComponent, RtkPlugin } from "../plugins";
+import { WorkspaceAllowlistComponent } from "../sandbox";
 import { SignalBus } from "../signal";
 import {
   ArtifactWriterComponent,
@@ -29,6 +30,7 @@ import {
   MultiEditTool,
   ReadTool,
   ShellTool,
+  SpawnAgentTool,
   TaskTool,
   ToolRegistry,
   WriteTool,
@@ -57,6 +59,7 @@ export class AgentRuntimeService {
   @Inject(ContextCompressorComponent) private contextCompressor!: ContextCompressorComponent;
   @Inject(ArtifactWriterComponent) private artifactWriter!: ArtifactWriterComponent;
   @Inject(ToolRegistry) private toolRegistry!: ToolRegistry;
+  @Inject(WorkspaceAllowlistComponent) private workspaceAllowlist!: WorkspaceAllowlistComponent;
 
   @Prompt("./prompts/clarify-default.md") private clarifyDefaultPrompt!: string;
   @Prompt("./prompts/tool-loop-config-limit.md") private toolLoopConfigLimitPrompt!: string;
@@ -91,6 +94,7 @@ export class AgentRuntimeService {
       this.contextCompressor = contextCompressor ?? new ContextCompressorComponent();
       this.artifactWriter = artifactWriter ?? new ArtifactWriterComponent();
       this.toolRegistry = toolRegistry ?? new ToolRegistry();
+      this.workspaceAllowlist = new WorkspaceAllowlistComponent(this.configService);
       this.modelProvider = modelProvider ?? new OpenAICompatibleModelProvider(this.configService);
       this.clarifyDefaultPrompt = "请再明确一下你想继续的具体目标。";
       this.toolLoopConfigLimitPrompt = "工具循环达到步数上限，已停止继续调用工具。";
@@ -271,46 +275,55 @@ export class AgentRuntimeService {
     modelMessages = await this.guardMidTurnContextBudget(input.conversationId, turnId, modelMessages, "inline-tool-results");
     let assistantMessage = "";
     const loopToolResults = [...toolResults];
-    const configuredMaxSteps = this.configService.getConfig().context.maxToolSteps;
-    const hasFiniteCap = Number.isFinite(configuredMaxSteps) && configuredMaxSteps > 0;
+    const contextConfig = this.configService.getConfig().context;
+    const configuredMaxSteps = contextConfig.maxToolSteps;
     const safetyCeiling = 4096;
-    const maxSteps = hasFiniteCap ? Math.min(configuredMaxSteps, safetyCeiling) : safetyCeiling;
+    const defaultSteps = 24;
+    // A configured positive cap wins (bounded by the safety ceiling); otherwise a
+    // sane default for real multi-file coding loops, never an effectively-unbounded run.
+    const maxSteps = configuredMaxSteps > 0 ? Math.min(configuredMaxSteps, safetyCeiling) : defaultSteps;
+    const wallClockMs = contextConfig.maxTurnWallClockMs ?? 300000;
+    const turnDeadline = wallClockMs > 0 ? now + wallClockMs : 0;
     for (let step = 0; step < maxSteps; step += 1) {
+      if (turnDeadline && Date.now() > turnDeadline) {
+        assistantMessage += `\n\n${this.toolLoopConfigLimitPrompt.trim()}`;
+        await this.signalBus.emit("tool.loop.exhausted", { conversationId: input.conversationId, turnId, reason: "wallclock", used: step, max: maxSteps });
+        this.brainComponent.recordEvent({ turnId, conversationId: input.conversationId, type: "tool.loop.exhausted", payload: { reason: "wallclock", used: step, max: maxSteps } });
+        break;
+      }
       const streamed = await this.streamModelStep(turnId, input.conversationId, input.content, modelMessages, context.recall, visibleTools);
       assistantMessage += streamed.text;
       if (streamed.toolCalls.length === 0) {
         assistantMessage = streamed.finalText || assistantMessage;
         break;
       }
-      if (streamed.text.length > 0) {
-        modelMessages = [...modelMessages, { role: "assistant", content: streamed.text }];
-      }
+      // Replay the assistant turn WITH its native tool_calls so the model sees
+      // its own request paired with each tool result on the next step.
+      modelMessages = [
+        ...modelMessages,
+        {
+          role: "assistant" as const,
+          content: streamed.text,
+          toolCalls: streamed.toolCalls.map((call) => ({ id: call.id, name: call.name, argumentsJson: call.argumentsJson })),
+        },
+      ];
       for (const toolCall of streamed.toolCalls) {
-        const result = await this.executeModelToolCall(turnId, toolCall, visibleTools, intent);
+        const result = await this.executeModelToolCall(turnId, input.conversationId, toolCall, visibleTools, intent);
         loopToolResults.push(result);
         modelMessages = [
           ...modelMessages,
           {
             role: "tool" as const,
-            content: [
-              `tool_call_id=${toolCall.id}`,
-              `tool=${toolCall.name}`,
-              result.ok ? "status=ok" : "status=failed",
-              `metadata=${JSON.stringify(result.metadata ?? {})}`,
-              ...(result.artifactPath ? [`artifactPath=${result.artifactPath}`] : []),
-              result.output,
-            ].join("\n"),
+            toolCallId: toolCall.id,
+            content: this.renderSingleToolResult(toolCall.name, result),
           },
         ];
         modelMessages = await this.guardMidTurnContextBudget(input.conversationId, turnId, modelMessages, "model-tool-results");
       }
-      if (hasFiniteCap && step === maxSteps - 1) {
+      if (step === maxSteps - 1) {
         assistantMessage += `\n\n${this.toolLoopConfigLimitPrompt.trim()}`;
-        await this.signalBus.emit("agent.error", { conversationId: input.conversationId, turnId, error: "tool loop step limit reached" });
-      }
-      if (!hasFiniteCap && step === safetyCeiling - 1) {
-        assistantMessage += `\n\n${this.toolLoopSafetyCeilingPrompt.trim()}`;
-        await this.signalBus.emit("agent.error", { conversationId: input.conversationId, turnId, error: "tool loop safety ceiling reached" });
+        await this.signalBus.emit("tool.loop.exhausted", { conversationId: input.conversationId, turnId, reason: "steps", used: maxSteps, max: maxSteps });
+        this.brainComponent.recordEvent({ turnId, conversationId: input.conversationId, type: "tool.loop.exhausted", payload: { reason: "steps", used: maxSteps, max: maxSteps } });
       }
     }
     this.memoryComponent.appendMessage(input.conversationId, {
@@ -391,10 +404,11 @@ export class AgentRuntimeService {
    * @returns ToolContext with cwd, artifact path, and SignalBus.
    * @usage Inline tools and future provider-driven tool calls use this helper.
    */
-  public createToolContext(turnId: string): ToolContext {
+  public createToolContext(turnId: string, conversationId?: string): ToolContext {
     const config = this.configService.getConfig();
     return {
       turnId,
+      conversationId,
       cwd: this.configService.getProjectRoot(),
       artifactDir: this.configService.ensureDir(config.paths.toolArtifacts),
       signalBus: this.signalBus,
@@ -427,6 +441,7 @@ export class AgentRuntimeService {
       .register(new MemoryStoreTool(this.memoryComponent))
       .register(new MemoryForgetTool())
       .register(new ContextCompactTool())
+      .register(new SpawnAgentTool())
       .register(new TaskTool())
       .register(new CodeGraphTool());
   }
@@ -858,13 +873,14 @@ export class AgentRuntimeService {
    * Executes one model-requested tool call.
    *
    * @param turnId - Current runtime turn id.
+   * @param conversationId - Local continuity id.
    * @param toolCall - Parsed model tool call.
-   * @param cwdOverride - Optional project cwd selected by structured intent.
    * @returns Tool execution result.
    * @usage Runtime loop feeds this result back into model messages.
    */
   private async executeModelToolCall(
     turnId: string,
+    conversationId: string,
     toolCall: ModelToolCall,
     visibleTools: readonly ToolDefinition[],
     intent: ContextIntentDecision,
@@ -890,10 +906,15 @@ export class AgentRuntimeService {
       this.brainComponent.recordEvent({ turnId, type: "tool.call.denied", payload: { tool: toolCall.name, reason: denial } });
       return { ok: false, output: denial };
     }
-    const cwdOverride = intent.writeTargetRoot ?? intent.projectPath;
-    const context = cwdOverride ? { ...this.createToolContext(turnId), cwd: cwdOverride } : this.createToolContext(turnId);
+    const cwdResult = this.canonicalToolCwd(intent.writeTargetRoot ?? intent.projectPath, toolCall.name === "shell" ? "shell.cwd" : "tool.cwd");
+    if (cwdResult && !cwdResult.ok) {
+      await this.signalBus.emit("workspace.denied", { turnId, tool: toolCall.name, reason: cwdResult.reason, path: cwdResult.path });
+      this.brainComponent.recordEvent({ turnId, type: "workspace.denied", payload: { tool: toolCall.name, reason: cwdResult.reason, path: cwdResult.path } });
+      return { ok: false, output: cwdResult.reason };
+    }
+    const context = cwdResult ? { ...this.createToolContext(turnId, conversationId), cwd: cwdResult.path } : this.createToolContext(turnId, conversationId);
     try {
-      return await this.toolRegistry.execute(toolCall.name, input, context);
+      return await this.toolRegistry.execute(toolCall.name, input, context, toolCall.id);
     } catch (error) {
       return {
         ok: false,
@@ -914,13 +935,21 @@ export class AgentRuntimeService {
     const results: ToolResult[] = [];
     const visibleToolNames = new Set(this.visibleToolsForDecision(intent).map((tool) => tool.name));
     if (intent.requiresProjectInspection && intent.projectPath && visibleToolNames.has("glob")) {
-      results.push(...await this.inspectProject(turnId, intent.projectPath));
+      const projectPath = await this.canonicalizeWorkspaceForTurn(turnId, intent.projectPath, "projectPath");
+      if (projectPath) {
+        results.push(...await this.inspectProject(turnId, projectPath));
+      }
     }
     if (intent.toolGroupsToExpose.includes("shell") && intent.shellCommand && visibleToolNames.has("shell") && this.userExplicitlyRequestedShellCommand(intent)) {
-      const shellContext = intent.writeTargetRoot || intent.projectPath
-        ? { ...this.createToolContext(turnId), cwd: intent.writeTargetRoot ?? intent.projectPath ?? this.configService.getProjectRoot() }
-        : this.createToolContext(turnId);
-      results.push(await this.toolRegistry.execute("shell", { command: intent.shellCommand }, shellContext));
+      const cwdResult = this.canonicalToolCwd(intent.writeTargetRoot ?? intent.projectPath, "shell.cwd");
+      if (cwdResult && !cwdResult.ok) {
+        await this.signalBus.emit("workspace.denied", { turnId, tool: "shell", reason: cwdResult.reason, path: cwdResult.path });
+        this.brainComponent.recordEvent({ turnId, type: "workspace.denied", payload: { tool: "shell", reason: cwdResult.reason, path: cwdResult.path } });
+        results.push({ ok: false, output: cwdResult.reason });
+      } else {
+        const shellContext = cwdResult ? { ...this.createToolContext(turnId), cwd: cwdResult.path } : this.createToolContext(turnId);
+        results.push(await this.toolRegistry.execute("shell", { command: intent.shellCommand }, shellContext));
+      }
     }
     return results;
   }
@@ -965,6 +994,7 @@ export class AgentRuntimeService {
     }
     if (groups.has("workmux")) {
       allowed.add("task");
+      allowed.add("spawn_agent");
     }
     if (groups.has("shell") && intent.shellCommand) {
       allowed.add("shell");
@@ -1035,6 +1065,29 @@ export class AgentRuntimeService {
       results.push(await this.toolRegistry.execute("read", { filePath: path, limit: 6000 }, context));
     }
     return results;
+  }
+
+  /**
+   * Emits and records a workspace denial for one model-selected path.
+   *
+   * @param turnId - Current runtime turn id.
+   * @param path - Model-selected workspace path.
+   * @param label - Diagnostic label for the path source.
+   * @returns Canonical path when allowed; otherwise undefined.
+   * @usage Inline project inspection uses this before a path becomes tool cwd.
+   */
+  private async canonicalizeWorkspaceForTurn(turnId: string, path: string, label: string): Promise<string | undefined> {
+    const result = this.workspaceAllowlist.validate(path, label);
+    if (result.ok) {
+      return result.path;
+    }
+    await this.signalBus.emit("workspace.denied", { turnId, reason: result.reason, path: result.path });
+    this.brainComponent.recordEvent({ turnId, type: "workspace.denied", payload: { reason: result.reason, path: result.path } });
+    return undefined;
+  }
+
+  private canonicalToolCwd(path: string | undefined, label: string): ReturnType<WorkspaceAllowlistComponent["validateOptional"]> {
+    return this.workspaceAllowlist.validateOptional(path, label);
   }
 
   /**
@@ -1131,5 +1184,22 @@ export class AgentRuntimeService {
         result.output.slice(0, 8000),
       ].join("\n")),
     ].join("\n\n").slice(0, 30000);
+  }
+
+  /**
+   * Renders one model-requested tool result as the body of a native `tool` message.
+   *
+   * @param toolName - Tool that produced the result.
+   * @param result - Structured tool execution result.
+   * @returns Bounded model-facing content; the tool_call_id lives in the message protocol field.
+   * @usage Paired with the assistant `tool_calls` replay so the OpenAI tool protocol round-trips.
+   */
+  private renderSingleToolResult(toolName: string, result: ToolResult): string {
+    return [
+      `tool=${toolName}`,
+      result.ok ? "status=ok" : "status=failed",
+      ...(result.artifactPath ? [`artifactPath=${result.artifactPath}`] : []),
+      result.output,
+    ].join("\n").slice(0, 8000);
   }
 }

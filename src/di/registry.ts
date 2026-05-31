@@ -25,6 +25,7 @@ export class DecoratorRegistry {
       imports: options.imports ?? [],
       providers: options.providers ?? [],
       exports: options.exports ?? [],
+      bootstrap: options.bootstrap ?? [],
     });
   }
 

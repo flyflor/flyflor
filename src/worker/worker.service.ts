@@ -8,12 +8,14 @@ import { PromptRegistryService } from "../prompts";
 import { SignalBus } from "../signal";
 import { ToolRegistry, type ToolContext, type ToolResult, type ToolSchema, ArtifactWriterComponent } from "../tools";
 import { OpenAICompatibleModelProvider, type ModelProvider, type ModelToolCall } from "../kernel/model.provider";
+import type { ContextMessage } from "../context";
 import type {
   WorkerSpawnPayload,
   WorkerCompletedPayload,
   WorkerFailedPayload,
   WorkerQueuedPayload,
   WorkerResultInjectedPayload,
+  WorkerSettledPayload,
   WorkerRecord,
   WorkerRunContext,
   WorkerToolDefinition,
@@ -227,19 +229,26 @@ export class WorkerService {
           break;
         }
 
-        if (streamed.text.length > 0) {
-          messages = [...messages, { role: "assistant" as const, content: streamed.text }];
-        }
+        // Replay the assistant turn with native tool_calls, then one native
+        // tool result per call keyed by tool_call_id.
+        messages = [
+          ...messages,
+          {
+            role: "assistant" as const,
+            content: streamed.text,
+            toolCalls: streamed.toolCalls.map((call) => ({ id: call.id, name: call.name, argumentsJson: call.argumentsJson })),
+          },
+        ];
 
         for (const toolCall of streamed.toolCalls) {
-          const result = await this.executeWorkerTool(turnId, toolCall, context.toolDefinitions);
+          const result = await this.executeWorkerTool(turnId, payload.parentConversationId, toolCall, context.toolDefinitions);
           toolResults.push(result);
           messages = [
             ...messages,
             {
               role: "tool" as const,
+              toolCallId: toolCall.id,
               content: [
-                `tool_call_id=${toolCall.id}`,
                 `tool=${toolCall.name}`,
                 result.ok ? "status=ok" : "status=failed",
                 result.output,
@@ -273,6 +282,12 @@ export class WorkerService {
         completedAt: Date.now(),
       };
       void this.signalBus.emit("worker.completed", completed);
+      void this.emitWorkerSettled({
+        workerId: payload.workerId,
+        status: "completed",
+        summary,
+        settledAt: completed.completedAt,
+      });
 
       const injected: WorkerResultInjectedPayload = {
         parentTurnId: payload.parentTurnId,
@@ -371,7 +386,7 @@ export class WorkerService {
   private async streamWorkerStep(
     turnId: string,
     conversationId: string,
-    messages: readonly { readonly role: string; readonly content: string }[],
+    messages: readonly ContextMessage[],
     tools: readonly WorkerToolDefinition[],
   ): Promise<{ readonly text: string; readonly finalText: string; readonly toolCalls: readonly ModelToolCall[] }> {
     if (!this.modelProvider) {
@@ -382,7 +397,7 @@ export class WorkerService {
     const toolCalls: ModelToolCall[] = [];
     for await (const event of this.modelProvider.stream({
       model: this.configService.getActiveModelName(),
-      messages: messages as readonly { readonly role: "system" | "user" | "assistant" | "tool"; readonly content: string }[],
+      messages,
       userInput: "",
       recall: [],
       tools: tools.map((tool) => ({
@@ -409,6 +424,7 @@ export class WorkerService {
    * Executes one tool call inside a worker.
    *
    * @param turnId - Worker turn id.
+   * @param conversationId - Parent conversation id.
    * @param toolCall - Parsed model tool call.
    * @param visibleTools - Tools available to this worker.
    * @returns Tool execution result.
@@ -416,6 +432,7 @@ export class WorkerService {
    */
   private async executeWorkerTool(
     turnId: string,
+    conversationId: string,
     toolCall: ModelToolCall,
     visibleTools: readonly WorkerToolDefinition[],
   ): Promise<ToolResult> {
@@ -433,6 +450,7 @@ export class WorkerService {
     }
     const toolContext: ToolContext = {
       turnId,
+      conversationId,
       cwd: this.configService.getProjectRoot(),
       artifactDir: this.configService.ensureDir(this.configService.getConfig().paths.toolArtifacts),
       signalBus: this.signalBus,
@@ -443,7 +461,7 @@ export class WorkerService {
       budget: { outputChars: 4000 },
     };
     try {
-      return await (this.injectedToolRegistry ?? this.toolRegistry).execute(toolCall.name, input, toolContext);
+      return await (this.injectedToolRegistry ?? this.toolRegistry).execute(toolCall.name, input, toolContext, toolCall.id);
     } catch (error) {
       return {
         ok: false,
@@ -468,12 +486,29 @@ export class WorkerService {
       payload: failed,
     });
     void this.signalBus.emit("worker.failed", failed);
+    void this.emitWorkerSettled({
+      workerId,
+      status: "failed",
+      error,
+      settledAt: failed.failedAt,
+    });
     this.records.set(workerId, {
       workerId,
       profileName: "unknown",
       status: "failed",
       startedAt,
     });
+  }
+
+  /**
+   * Emits the foreground settlement signal for completed or failed workers.
+   *
+   * @param payload - Terminal worker state.
+   * @returns Nothing.
+   * @usage SpawnAgentTool listens for this signal when foreground mode is requested.
+   */
+  private async emitWorkerSettled(payload: WorkerSettledPayload): Promise<void> {
+    void this.signalBus.emit("worker.settled", payload);
   }
 
   /**

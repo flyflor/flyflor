@@ -36,10 +36,12 @@ export interface ConfigPaths {
  * Describes runtime guard and execution settings.
  *
  * @property autoApproveGuards - Whether guard asks return true without external approval.
+ * @property workspaceRoots - Allowlisted roots (project-relative or absolute) a model-selected cwd/write root must stay inside. Defaults to the project root.
  * @usage Development uses auto approval until the Rust TUI shell answers guard requests.
  */
 export interface RuntimeConfig {
   readonly autoApproveGuards: boolean;
+  readonly workspaceRoots?: readonly string[];
 }
 
 /**
@@ -197,6 +199,7 @@ export interface MemoryConfig {
  * @property maxRecall - Maximum memory recall items injected into context.
  * @property maxContextChars - Approximate character budget before runtime compaction is requested.
  * @property maxToolSteps - Maximum model/tool loop steps allowed for one turn.
+ * @property maxTurnWallClockMs - Maximum wall-clock time for one turn's tool loop before explicit exhaustion. Defaults to 300000.
  * @usage ContextModule uses this to keep no-session context bounded and deterministic.
  */
 export interface ContextConfig {
@@ -204,6 +207,7 @@ export interface ContextConfig {
   readonly maxRecall: number;
   readonly maxContextChars: number;
   readonly maxToolSteps: number;
+  readonly maxTurnWallClockMs?: number;
 }
 
 /**

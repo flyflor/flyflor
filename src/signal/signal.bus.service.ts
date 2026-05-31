@@ -82,6 +82,10 @@ export class SignalBus {
   ): Promise<boolean> {
     const requestId = randomUUID();
     const enrichedPayload = this.enrichAskPayload(payload, requestId);
+    // Guard asks require a real responder. autoApproveGuards is a policy the
+    // responder applies after inspecting the call, never a no-responder shortcut.
+    const requireResponder = options.requireResponder ?? signal.startsWith("guard.");
+    const hasResponder = (this.handlers.get(signal)?.size ?? 0) > 0;
     const pending = new Promise<boolean>((resolve) => {
       const timeoutMs = options.timeoutMs ?? 0;
       const timer = timeoutMs > 0
@@ -89,7 +93,7 @@ export class SignalBus {
             const entry = this.pendingAsks.get(requestId);
             if (entry) {
               this.pendingAsks.delete(requestId);
-              entry.resolve(this.autoApproveGuards ? options.defaultValue ?? true : false);
+              entry.resolve(this.autoApproveGuards && !requireResponder ? options.defaultValue ?? true : false);
             }
           }, timeoutMs)
         : undefined;
@@ -101,7 +105,26 @@ export class SignalBus {
       this.resolveAsk(requestId, explicit);
       return explicit;
     }
+    if (requireResponder && !hasResponder) {
+      // Unattended guard ask: always observable (never silent). With the guard
+      // bootstrapped on the real --serve path this branch does not run; it only
+      // covers non-DI contexts. Honor autoApproveGuards as the policy: approve in
+      // dev, fail-safe deny in strict mode — but audit it either way.
+      await this.emit("guard.unattended", {
+        signal,
+        requestId,
+        reason: options.reason ?? "no responder attached for guard ask",
+        approved: this.autoApproveGuards,
+        payload: enrichedPayload,
+      });
+      const approved = this.autoApproveGuards;
+      this.resolveAsk(requestId, approved);
+      return approved;
+    }
     if (this.autoApproveGuards) {
+      // Observability subscribers may listen to guard.ask and return undefined.
+      // In dev auto-approve mode, absence of an explicit boolean still resolves
+      // instead of leaving the ask pending forever.
       const approved = options.defaultValue ?? true;
       this.resolveAsk(requestId, approved);
       return approved;

@@ -31,6 +31,22 @@ export interface ModelProvider {
   stream(request: ModelRequest): AsyncIterable<ModelStreamEvent>;
 }
 
+/**
+ * OpenAI-compatible chat message wire shape, including native tool protocol fields.
+ *
+ * @usage Produced by `normalizeMessages` so assistant `tool_calls` and `tool` results round-trip.
+ */
+interface OpenAiChatMessage {
+  readonly role: string;
+  readonly content: string;
+  readonly tool_calls?: ReadonlyArray<{
+    readonly id: string;
+    readonly type: "function";
+    readonly function: { readonly name: string; readonly arguments: string };
+  }>;
+  readonly tool_call_id?: string;
+}
+
 // Endpoint resolution cache keyed by base_url
 interface EndpointCache {
   chat: string | null;
@@ -232,8 +248,32 @@ export class OpenAICompatibleModelProvider implements ModelProvider {
     };
   }
 
-  private normalizeMessages(messages: readonly ContextMessage[]): Array<{ role: string; content: string }> {
-    return messages.map((m) => ({ role: m.role === "tool" ? "user" : m.role, content: m.content }));
+  private normalizeMessages(messages: readonly ContextMessage[]): Array<OpenAiChatMessage> {
+    return messages.map((m) => {
+      // Assistant turn that requested tools: emit native tool_calls so the model
+      // sees its own call alongside the paired tool result on the next step.
+      if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+        return {
+          role: "assistant",
+          content: m.content,
+          tool_calls: m.toolCalls.map((call) => ({
+            id: call.id,
+            type: "function" as const,
+            function: { name: call.name, arguments: call.argumentsJson || "{}" },
+          })),
+        };
+      }
+      // Model-requested tool result: native tool message keyed by tool_call_id.
+      if (m.role === "tool" && m.toolCallId) {
+        return { role: "tool", tool_call_id: m.toolCallId, content: m.content };
+      }
+      // Host-injected evidence with no paired tool_call (e.g. inline inspection)
+      // is plain user-visible evidence, not an orphan native tool result.
+      if (m.role === "tool") {
+        return { role: "user", content: m.content };
+      }
+      return { role: m.role, content: m.content };
+    });
   }
 
   private formatTools(tools: readonly ToolDefinition[]) {

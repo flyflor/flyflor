@@ -247,15 +247,33 @@ export interface ContextIntentModelClient {
 }
 
 /**
+ * Describes one tool call echoed back to the model on an assistant message.
+ *
+ * @property id - Provider tool-call id used to pair the matching tool result.
+ * @property name - Tool name requested by the model.
+ * @property argumentsJson - Raw JSON arguments string emitted by the model.
+ * @usage Carried on an assistant `ContextMessage` so the native OpenAI tool protocol round-trips.
+ */
+export interface ContextToolCall {
+  readonly id: string;
+  readonly name: string;
+  readonly argumentsJson: string;
+}
+
+/**
  * Describes one model-facing context message.
  *
  * @property role - Model message role used by the provider adapter.
  * @property content - Text content assembled from templates, prompts, memory, or conversation tail.
+ * @property toolCalls - Tool calls requested by an assistant turn, preserved for native protocol replay.
+ * @property toolCallId - Provider tool-call id this `tool` message answers; required for native tool results.
  * @usage ContextBuilderService returns these messages for AgentRuntimeService.
  */
 export interface ContextMessage {
   readonly role: "system" | "user" | "assistant" | "tool";
   readonly content: string;
+  readonly toolCalls?: readonly ContextToolCall[];
+  readonly toolCallId?: string;
 }
 
 /**

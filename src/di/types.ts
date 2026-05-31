@@ -38,12 +38,14 @@ export interface ProviderMetadata {
  * @property imports - Other modules that must be bootstrapped before this module.
  * @property providers - Provider classes owned by this module.
  * @property exports - Provider tokens or classes exposed to importing modules.
- * @usage Stored on module classes and consumed by the future bootstrapper.
+ * @property bootstrap - Providers eagerly resolved by `createContainer` so their `@Subscribe` listeners and `init()` hooks are live without an explicit `resolve`.
+ * @usage Read by the future DI container during module bootstrap.
  */
 export interface ModuleMetadata {
   readonly imports: readonly Constructor[];
   readonly providers: readonly Constructor[];
   readonly exports: readonly InjectionToken[];
+  readonly bootstrap: readonly Constructor[];
 }
 
 /**
@@ -52,12 +54,14 @@ export interface ModuleMetadata {
  * @property imports - Module classes this module depends on.
  * @property providers - Provider classes assembled by this module.
  * @property exports - Provider tokens or classes made visible to importers.
+ * @property bootstrap - Providers `createContainer` must eagerly resolve so their `@Subscribe` listeners attach under the real executable path (e.g. `SandboxGuard`).
  * @usage Keep module declarations convention-first and avoid large configuration objects.
  */
 export interface ModuleOptions {
   readonly imports?: readonly Constructor[];
   readonly providers?: readonly Constructor[];
   readonly exports?: readonly InjectionToken[];
+  readonly bootstrap?: readonly Constructor[];
 }
 
 /**

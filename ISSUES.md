@@ -1,5 +1,120 @@
 # Flyflor Issues
 
+## 2026-05-31 全量代码审查（第二次审查）
+
+**审查时间:** 2026-05-31
+**审查范围:** 全量阅读所有源文件（DI、信号、内核、沙箱、工具、插件、配置、内存、上下文、Socket、Worker、Scope、Crystal、Forgetting、Brain、Prompts、Entities），共 60+ 源文件。
+**审查方式:** 4 个子代理并行审查不同模块 + 直接阅读核心文件。
+**验证基准:** `bunx tsc --noEmit` 零错误通过；`bun test` 28/28 通过。
+
+### 新发现问题（未在已有 backlog 中覆盖）
+
+以下问题是在此次全量审查中新发现的，不属于已有 "Runtime Integration Audit Backlog" 中已记录的问题。
+
+#### [medium] config.jsonc 中 api_key_env 拼写错误
+
+**文件:** `.config/config.jsonc:77`
+
+`model.api_key_env` 字段值为 `"DEEPESEEK_API_KEY"`（多了字母 E），正确的环境变量名应为 `"DEEPSEEK_API_KEY"`。虽然正常运行时使用 `providers.deepseek.api_key_env`（正确拼写），但当 `model.provider` 切换为非 deepseek provider 或 fallback 路径使用时，会查找错误的环境变量导致 API key 解析失败。
+
+**修复方向:** 将 config.jsonc:77 改为 `"DEEPSEEK_API_KEY"`。添加启动诊断，当解析后的 API key 为空字符串时发出警告。
+
+#### [medium] RtkCommandFilterComponent 绕过 DI 直接构造
+
+**文件:** `src/kernel/agent.runtime.service.ts:428`
+
+`registerCoreTools()` 中用 `new RtkCommandFilterComponent(this.configService)` 直接构造。这绕过了 DI 系统，使得 RtkCommandFilterComponent 无法享受 DI 的生命周期管理、属性注入和 `@Subscribe` 接线。
+
+**修复方向:** 通过 `@Inject` 注入 `RtkCommandFilterComponent`，或将其注册到 `ToolModule` 的 providers 中。
+
+#### [medium] SandboxGuard 构造函数中绕过 DI 创建 ToolRegistry
+
+**文件:** `src/sandbox/sandbox.guard.service.ts:57-70`
+
+非 DI 构造函数路径创建了自己的 `new ToolRegistry()` 并手动注册 8 个工具类。这与 DI 管理的 `ToolRegistry` 是不同实例，可能导致 `riskLevelForTool` 使用的注册表与实际运行时注册表不同步。
+
+**修复方向:** 移除构造函数中的手动 ToolRegistry 创建，完全依赖 `@Inject(ToolRegistry)` 注入。
+
+#### [medium] probeEndpoint 发送真实 API 调用计入配额
+
+**文件:** `src/kernel/model.provider.ts:222-231`
+
+`probeEndpoint()` 在探测 chat/responses 端点时发送 `model: "ping"` 的 POST 请求，携带真实 API key。虽然 `max_tokens: 1` 和短超时限制了消耗，但每次启动和每次端点缓存失效都会消耗 API 配额。如果 model "ping" 是无效的模型名，部分提供商可能返回错误但计入请求。
+
+**修复方向:** 使用 HEAD 请求或 OPTIONS 探测替代 POST；或在 POST 中明确指定一个已知存在的模型名。
+
+#### [medium] GuardCoordinatorComponent 静默丢失审计数据
+
+**文件:** `src/sandbox/guard.coordinator.component.ts:38`
+
+`onUnattended()` 方法中使用 `this.brainComponent?.recordEvent(...)` 可选链调用。如果 DI 未能注入 `BrainComponent`（`brainComponent` 为 undefined），`guard.unattended` 安全事件会被静默丢弃，没有任何 fallback 日志或错误提示。
+
+**修复方向:** 至少添加 `console.error` 作为 fallback，或确保 `BrainComponent` 在 `SandboxModule` 的 imports 链中正确提供。
+
+#### [medium] BrainComponent 构造函数中无保护的数据库和文件操作
+
+**文件:** `src/brain/brain.component.ts:46,66`
+
+`new Database(...)` 和 `readFileSync(...)` 在构造函数中无 try-catch 保护。如果 schema SQL 文件缺失、磁盘满或数据库路径不可写，会导致裸堆栈跟踪崩溃。
+
+**修复方向:** 包装 try-catch 并抛出结构化错误信息，或在构造函数失败时降级为只读/无持久化模式。
+
+#### [medium] TemplateLoaderComponent 存在路径遍历风险
+
+**文件:** `src/config/template.loader.component.ts:29`
+
+`readTemplate()` 通过 `${config.paths.templatesDir}/${fileName}` 构建路径，仅验证了 `.md` 扩展名和排除 `.zh.cn.md`，但没有显式拒绝包含 `../` 的文件名。虽然 `ConfigService.resolve()` 可能阻止逃逸，但缺少防御深度。
+
+**修复方向:** 添加 `basename()` 检查或显式拒绝包含 `..` 的路径。
+
+#### [low] config.jsonc 注释与代码默认值不一致
+
+**文件:** `.config/config.jsonc:232`
+
+注释写 "Set 0 to use the default of 24 steps"，但 `config.service.ts:252` 中 `maxToolSteps` 的代码默认值是 `8`（`context.maxToolSteps ?? 8`），而 `agent.runtime.service.ts:281` 中的 `defaultSteps = 24`。注释引用的是运行时默认值 24，而配置默认值是 8。
+
+**修复方向:** 统一默认值或修正注释。
+
+#### [low] resolveApiKey 的 sk-* 前缀约定不明确
+
+**文件:** `src/config/config.service.ts:367-377`
+
+当 `api_key_env` 字段以 `"sk-"` 开头时，`resolveApiKey()` 直接将其作为 API key 返回，而不是将其视为环境变量名。这是一种本地简写约定，但如果用户误将 key 值写入 `api_key_env` 字段而非 `api_key` 字段，行为可能混淆。
+
+**修复方向:** 添加文档注释说明此行为，或考虑移除该约定仅保留显式 `api_key` 字段。
+
+#### [low] EntitiesModule 为空占位符
+
+**文件:** `src/entities/entities.module.ts`
+
+`@Module({})` 没有声明任何 providers 或 imports。模块存在但没有功能。AGENTS.md 描述 `src/entities` 应为 `@Repo()` 类存放数据模型，但没有实现。
+
+**修复方向:** 添加实体类或明确此模块为预留接口，待设计文档完成后实现。
+
+#### [low] inspectProject 硬编码 TS/TSX 文件模式
+
+**文件:** `src/kernel/agent.runtime.service.ts:1053-1056`
+
+项目检查的 glob 模式硬编码了 `src/**/*.ts`、`src/**/*.tsx`、`app/**/*.ts`、`app/**/*.tsx`。对于非 TypeScript 项目（如纯 JS、Rust、Python），这些模式会返回空结果，限制项目检查效果。
+
+**修复方向:** 从 `package.json` 或项目结构动态检测文件扩展名，或提供配置项。
+
+#### [low] src/config/index.ts barrel 文件缺失
+
+`src/config/` 目录缺少 `index.ts` barrel 文件。其他模块（如 `src/brain/`、`src/memory/`、`src/context/`）都有 `index.ts` 提供统一导出入口。虽然所有导入都使用了明确的文件路径而非 barrel 导入，但缺少 barrel 文件造成了不一致的项目结构。
+
+**修复方向:** 添加 `src/config/index.ts` 统一导出，或明确 barrel 文件不是项目规范。
+
+#### [low] 多个服务使用双构造函数模式产生不一致的默认值
+
+**文件:** `src/brain/brain.component.ts`、`src/config/template.loader.component.ts`、`src/sandbox/workspace.allowlist.component.ts` 等
+
+多个 `@Component` 类使用双构造函数模式（DI 路径 + 手工构造路径）。当 DI 以不同顺序解析这些组件时，可能产生不一致的默认依赖实例。DI 路径的语义应该是"依赖必须提供"，而非"依赖可以可选"。
+
+**修复方向:** 标准化为单一 DI 构造函数，缺少必需依赖时抛出错误，而非静默创建默认实例。
+
+---
+
 ## 2026-05-31 Runtime Integration Audit Backlog
 
 **Status:** Open. This section supersedes the previously resolved review below for the current working tree.

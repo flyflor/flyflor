@@ -166,3 +166,23 @@ memoryComponent.upsertFact({
 - 通过 `@Subscribe` 挂在 SignalBus ✅
 - 学习到的模式持久化到 MemoryComponent ✅
 - 不修改 AgentRuntimeService ✅
+
+## 2026-05-31 修订：守卫接线与无响应者拒绝
+
+之前 `SandboxGuard` 只是 provider + `@Subscribe('guard.ask')`，没有任何代码注入/解析它，
+`createContainer` 也不急切构造，导致 `--serve` 下 `guard.ask` **无人应答**，所有 mutating
+工具走 `SignalBus.ask` 的自动放行分支。这违反"侦查者阻断 Confirm/ASK"的定位。
+
+修订：
+
+- DI 增加模块 `bootstrap` 列表（见 signal-di-lifecycle.md 修订）。
+  `SandboxModule.bootstrap = [SandboxGuard, GuardCoordinatorComponent]`，使守卫在
+  `--serve` 真正构造并挂载订阅。`SandboxModule` 显式 `import BrainModule`。
+- `SignalBus.ask` 对 `guard.*`：无订阅者时**总是发 `guard.unattended`**（审计），再按
+  `autoApproveGuards` 策略解析（dev 放行 / strict 失败安全拒绝）。`--serve` 已 bootstrap 守卫，
+  生产恒有响应者，该回退分支不触发。`autoApproveGuards` 只在守卫 `inspect()` 看到调用后作为策略生效，绝非无响应者静默捷径。
+- 新增 `GuardCoordinatorComponent`（`@Component`，`@Subscribe('guard.unattended')`）：
+  把无人应答的守卫请求写入 brain 审计并广播诊断，使该情况可观测、不静默。
+- 新增信号 `guard.unattended { signal, toolName, turnId, reason }`。
+
+"不修改 AgentRuntimeService"仍然成立：本修订只动 DI 容器、SignalBus 与 SandboxModule。

@@ -105,3 +105,49 @@ Any pre-model project inspection or shell execution must be explicitly
 authorized by the structured turn decision and audited as tool evidence.
 Model-requested mutating tools must have either a unique write target or an
 exact shell command from the same decision.
+
+## 2026-05-31 Amendment: Native tool-call/result protocol
+
+Previously `normalizeMessages` flattened every `role:"tool"` message to
+`"user"` and never replayed the assistant's `tool_calls`, so on multi-step turns
+the model saw tool *outputs* with no record of its own tool *requests*, and the
+`tool_call_id` lived only inside string content. This is corrected:
+
+- `ContextMessage` gains optional `toolCalls` (assistant turn) and `toolCallId`
+  (tool result). The kernel and worker loops replay the assistant turn carrying
+  its native `tool_calls`, then one native `tool` message per call keyed by
+  `toolCallId`.
+- The provider emits OpenAI-native `assistant.tool_calls` and
+  `role:"tool"` + `tool_call_id` messages. A `role:"tool"` message *without* a
+  `toolCallId` (host-injected inline evidence with no paired call) is sent as a
+  `user` evidence message, never as an orphan native tool result.
+- `ToolRegistry.execute(name, input, context, providerCallId?)` uses the model's
+  tool-call id as the brain-audit/signal id, so audit rows align with the
+  protocol instead of a disconnected `randomUUID`.
+
+This makes the coding-first multi-step tool loop protocol-correct on strict
+OpenAI-compatible endpoints. Output budget consolidation, the single registration authority, and remaining tool
+hardening work land in later tool-invocation hardening tracks.
+
+## 2026-05-31 Amendment: Real step + wall-clock turn budget
+
+The loop previously ran an effectively-unbounded `4096`-step safety ceiling when
+`maxToolSteps` was `0`. It now bounds every turn:
+
+- `context.maxToolSteps` defaults to `24` (config `0` resolves to `24`); the
+  `4096` ceiling remains only as an absolute backstop on a configured value.
+- `context.maxTurnWallClockMs` (default `300000`) bounds wall-clock time across
+  the loop.
+- On exhaustion the runtime appends the loop-limit prompt and emits
+  `tool.loop.exhausted { conversationId, turnId, reason: 'steps'|'wallclock',
+  used, max }` plus a brain audit event, replacing the two ad-hoc
+  `agent.error` ceiling strings.
+
+Delivered in this track: native protocol (above) and the real step+wall-clock
+budget. Delivered in the first T4 piece: `WorkspaceAllowlistComponent`
+canonicalizes and allowlists model-selected `projectPath`/`writeTargetRoot`/shell
+cwd before it becomes a tool cwd. Denials emit `workspace.denied`, return a
+failed tool result for model-visible calls, and are recorded by the runtime brain
+audit path. Deferred refinements, tracked in ISSUES: single tool registration
+authority, `git` read/`git_write` split, output-budget consolidation into one
+config source, and the concurrent-read/serial-write scheduler.

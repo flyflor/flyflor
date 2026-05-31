@@ -229,8 +229,11 @@
         "maxContextChars": 90000,
 
         // Number of runtime/tool-loop steps allowed before the agent must finish or report a loop guard.
-        // Set 0 to disable the configurable cap; an internal safety ceiling still applies.
-        "maxToolSteps": 0,
+        // Set 0 to use the default of 24 steps; an internal safety ceiling (4096) still bounds any value.
+        "maxToolSteps": 24,
+
+        // Maximum wall-clock time for one turn's tool loop before explicit exhaustion (tool.loop.exhausted).
+        "maxTurnWallClockMs": 300000,
     },
     "agents": {
         // User-defined agent profiles for the multi-agent worker system.

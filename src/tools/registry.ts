@@ -47,15 +47,16 @@ export class ToolRegistry {
    * @param name - Registered tool name.
    * @param input - Structured tool input.
    * @param context - Tool execution context.
+   * @param providerCallId - Optional model tool-call id; used as the audit/signal id so brain audit aligns with the native protocol.
    * @returns Tool execution result.
    * @usage AgentRuntimeService uses this during tool loops.
    */
-  public async execute(name: string, input: unknown, context: ToolContext): Promise<ToolResult> {
+  public async execute(name: string, input: unknown, context: ToolContext, providerCallId?: string): Promise<ToolResult> {
     const tool = this.tools.get(name);
     if (!tool) {
       throw new Error(`Unknown tool: ${name}`);
     }
-    const toolCallId = randomUUID();
+    const toolCallId = providerCallId ?? randomUUID();
     const startedAt = Date.now();
     await context.signalBus.emit("tool.call", { id: toolCallId, turnId: context.turnId, name, input });
     await context.signalBus.emit("tool.started", { id: toolCallId, turnId: context.turnId, name, input, startedAt });

@@ -6,6 +6,7 @@ import { ConfigService } from "../../src/config/config.service";
 import { createContainer } from "../../src/di";
 import { ContextBuilderService } from "../../src/context";
 import { AgentRuntimeService } from "../../src/kernel";
+import { WorkspaceAllowlistComponent } from "../../src/sandbox";
 import { KernelModule } from "../../src/kernel/kernel.module";
 import { MemoryComponent } from "../../src/memory";
 import { SignalBus } from "../../src/signal";
@@ -862,6 +863,28 @@ describe("no-session agent scenario", () => {
     expect(turn).toMatchObject({ status: "failed", error: "Missing API key for provider deepseek" });
     expect(recovery).toMatchObject({ state: "turn.failed" });
   }, 60_000);
+
+  test("canonicalizes workspace roots and rejects model-selected cwd escapes", async () => {
+    const config = new ConfigService(profile.root, profile.configPath);
+    const allowlist = new WorkspaceAllowlistComponent(config);
+    const profileRoot = config.resolve(profile.profileDir);
+
+    expect(allowlist.allowedRoots()).toEqual([profile.root]);
+    expect(allowlist.validate(`${profile.profileDir}/sample-project/..`, "projectPath")).toEqual({ ok: true, path: profileRoot });
+    expect(allowlist.validate("/tmp/flyflor-outside", "projectPath")).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining("projectPath denied outside workspace allowlist"),
+    });
+
+    const narrowedProfile = createScenarioProfile(`workspace-root-${Date.now()}-${Math.random().toString(16).slice(2)}`, {
+      runtime: { autoApproveGuards: true, workspaceRoots: ["./.config/runtime"] },
+    });
+    const narrowedConfig = new ConfigService(narrowedProfile.root, narrowedProfile.configPath);
+    const narrowed = new WorkspaceAllowlistComponent(narrowedConfig);
+    expect(narrowed.allowedRoots()).toEqual([narrowedConfig.resolve("./.config/runtime")]);
+    expect(narrowed.validate("./.config/runtime/scenarios", "writeTargetRoot")).toMatchObject({ ok: true });
+    expect(narrowed.validate(".", "writeTargetRoot")).toMatchObject({ ok: false });
+  });
 
   test("rejects escaped file paths through the tool boundary", async () => {
     const config = new ConfigService(profile.root, profile.configPath);

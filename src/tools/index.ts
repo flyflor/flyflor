@@ -5,13 +5,14 @@ export { GitTool } from "./git.tool";
 export { MemoryForgetTool, MemoryRecallTool, MemoryStoreTool } from "./memory.tools";
 export { ToolRegistry } from "./registry";
 export { ShellTool } from "./shell.tool";
+export { SpawnAgentTool } from "./spawn.agent.tool";
 export { ToolModule } from "./tool.module";
 export type {
   MultiEditOperation,
   RtkFilterInput,
   RtkFilterResult,
   RtkResolutionDiagnostic,
-  TaskToolInput,
+  SpawnAgentToolInput,
   Tool,
   ToolContext,
   ToolDefinition,

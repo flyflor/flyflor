@@ -207,7 +207,10 @@ export class ConfigService {
         scopeDir: paths.scopeDir ?? "./.config/scope",
         crystalDb: paths.crystalDb ?? "./.config/crystal/crystal.db",
       },
-      runtime: config.runtime ?? { autoApproveGuards: true },
+      runtime: {
+        autoApproveGuards: config.runtime?.autoApproveGuards ?? true,
+        workspaceRoots: config.runtime?.workspaceRoots,
+      },
       socket: config.socket ?? { host: "127.0.0.1", port: 17361 },
       prompts: config.prompts ?? { system: "./prompts/system.md" },
       model: {
@@ -247,6 +250,7 @@ export class ConfigService {
         maxRecall: context.maxRecall ?? 6,
         maxContextChars: context.maxContextChars ?? 90000,
         maxToolSteps: context.maxToolSteps ?? 8,
+        maxTurnWallClockMs: context.maxTurnWallClockMs ?? 300000,
       },
       tools: {
         rtk: tools.rtk ?? { enabled: true, command: "./plugins/rtk/rtk" },

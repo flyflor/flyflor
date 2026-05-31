@@ -59,10 +59,12 @@ export interface SignalSubscription {
  * @property reason - Human-readable reason for the ask.
  * @property defaultValue - Value returned when auto approval is enabled and no subscriber answers.
  * @property timeoutMs - Optional pending timeout for asks that need an asynchronous client decision.
+ * @property requireResponder - When true, an ask with zero subscribers is denied (and emits `guard.unattended`) instead of auto-approving. Defaults to true for `guard.*` signals.
  * @usage Guard and confirm flows use this shape before Rust TUI approval exists.
  */
 export interface SignalAskOptions {
   readonly reason?: string;
   readonly defaultValue?: boolean;
   readonly timeoutMs?: number;
+  readonly requireResponder?: boolean;
 }

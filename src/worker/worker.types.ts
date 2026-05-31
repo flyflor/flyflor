@@ -17,6 +17,7 @@ export interface WorkerSpawnPayload {
   readonly prompt: string;
   readonly parentTurnId: string;
   readonly parentConversationId: string;
+  readonly background?: boolean;
 }
 
 /**
@@ -66,6 +67,24 @@ export interface WorkerFailedPayload {
   readonly workerId: string;
   readonly error: string;
   readonly failedAt: number;
+}
+
+/**
+ * Describes the terminal worker result used by foreground spawns.
+ *
+ * @property workerId - Worker run id.
+ * @property status - Terminal worker state.
+ * @property summary - Completed worker summary when successful.
+ * @property error - Failure message when unsuccessful.
+ * @property settledAt - Unix timestamp in milliseconds.
+ * @usage Emitted as `worker.settled` after `worker.completed` or `worker.failed`.
+ */
+export interface WorkerSettledPayload {
+  readonly workerId: string;
+  readonly status: "completed" | "failed";
+  readonly summary?: string;
+  readonly error?: string;
+  readonly settledAt: number;
 }
 
 /**

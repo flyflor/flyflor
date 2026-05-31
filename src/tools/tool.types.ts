@@ -90,12 +90,14 @@ export interface ToolDefinition {
 export interface ToolSignalPort {
   emit<TPayload = unknown>(signal: string, payload: TPayload): Promise<unknown>;
   ask<TPayload = unknown>(signal: string, payload: TPayload): Promise<boolean>;
+  subscribe<TPayload = unknown>(signal: string, handler: (payload: TPayload) => unknown): { readonly unsubscribe: () => void };
 }
 
 /**
  * Describes execution context shared by tools.
  *
  * @property turnId - Runtime turn id that owns the tool call.
+ * @property conversationId - Optional local conversation id for tools that coordinate with parent turns or sub-agents.
  * @property cwd - Working directory for filesystem and shell operations.
  * @property artifactDir - Directory where raw tool outputs are stored.
  * @property signalBus - Event and guard port.
@@ -108,6 +110,7 @@ export interface ToolSignalPort {
  */
 export interface ToolContext {
   readonly turnId: string;
+  readonly conversationId?: string;
   readonly cwd: string;
   readonly artifactDir: string;
   readonly signalBus: ToolSignalPort;
@@ -290,4 +293,18 @@ export interface WorkmuxTaskRequest {
   readonly forbiddenFiles: readonly string[];
   readonly validationCommands: readonly string[];
   readonly handoffConditions: readonly string[];
+}
+
+/**
+ * Describes input accepted by SpawnAgentTool for in-process worker delegation.
+ *
+ * @property agentProfile - Configured worker profile name such as explore, investigate, code, or general.
+ * @property prompt - Task prompt handed to the worker model loop.
+ * @property background - When true, return immediately after spawning; otherwise wait for `worker.settled`.
+ * @usage Exposed to the model as `spawn_agent` for lightweight sub-agent delegation.
+ */
+export interface SpawnAgentToolInput {
+  readonly agentProfile?: string;
+  readonly prompt: string;
+  readonly background?: boolean;
 }

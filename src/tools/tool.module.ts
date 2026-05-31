@@ -8,6 +8,7 @@ import { GitTool } from "./git.tool";
 import { MemoryForgetTool, MemoryRecallTool, MemoryStoreTool } from "./memory.tools";
 import { ToolRegistry } from "./registry";
 import { ShellTool } from "./shell.tool";
+import { SpawnAgentTool } from "./spawn.agent.tool";
 
 /**
  * Assembles project tool execution services.
@@ -31,6 +32,7 @@ import { ShellTool } from "./shell.tool";
     MemoryStoreTool,
     MemoryForgetTool,
     ContextCompactTool,
+    SpawnAgentTool,
     TaskTool,
     CodeGraphTool,
   ],
@@ -49,6 +51,7 @@ import { ShellTool } from "./shell.tool";
     MemoryStoreTool,
     MemoryForgetTool,
     ContextCompactTool,
+    SpawnAgentTool,
     TaskTool,
     CodeGraphTool,
   ],
