@@ -1,5 +1,5 @@
 import type { ContextMessage, ToolVisibilityGroup } from "../context";
-import type { ToolResult } from "../tools";
+import type { ToolExecutionMetadata, ToolResult } from "../tools";
 
 /**
  * Describes a request to spawn a worker agent.
@@ -138,4 +138,5 @@ export interface WorkerToolDefinition {
   readonly name: string;
   readonly description: string;
   readonly schema: Record<string, unknown>;
+  readonly execution: ToolExecutionMetadata;
 }

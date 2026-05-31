@@ -3,13 +3,15 @@ import { dirname, join } from "node:path";
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ConfigService } from "../../src/config/config.service";
+import { createContainer } from "../../src/di";
 import { ContextBuilderService } from "../../src/context";
 import { AgentRuntimeService } from "../../src/kernel";
+import { KernelModule } from "../../src/kernel/kernel.module";
 import { MemoryComponent } from "../../src/memory";
-import { RtkCommandFilterComponent } from "../../src/plugins";
 import { SignalBus } from "../../src/signal";
 import { SocketServerService, type SocketEnvelope } from "../../src/socket";
-import { ArtifactWriterComponent, GitTool } from "../../src/tools";
+import { ArtifactWriterComponent, GitTool, ToolRegistry } from "../../src/tools";
+import { RtkCommandFilterComponent } from "../../src/plugins";
 
 const rootScenarioConfig = new ConfigService();
 const rootDeepSeekProvider = rootScenarioConfig.getProvider("deepseek");
@@ -447,10 +449,12 @@ describe("no-session agent scenario", () => {
     expect(runtime.getToolRegistry().list().find((tool) => tool.name === "read")?.execution).toEqual({
       mutability: "read-only",
       concurrency: "concurrent",
+      riskLevel: "low",
     });
     expect(runtime.getToolRegistry().list().find((tool) => tool.name === "write")?.execution).toEqual({
       mutability: "mutating",
       concurrency: "serial",
+      riskLevel: "medium",
     });
   });
 
@@ -509,8 +513,8 @@ describe("no-session agent scenario", () => {
       new ContextBuilderService(config, undefined, memory),
       signalBus,
     );
-    const result = await new GitTool(new ArtifactWriterComponent(), new RtkCommandFilterComponent(config))
-      .execute({ args: ["status", "--short"] }, runtime.createToolContext("rtk-raw"));
+    const result = await runtime.getToolRegistry()
+      .execute("git", { args: ["status", "--short"] }, runtime.createToolContext("rtk-raw"));
 
     expect(result.ok).toBe(false);
     expect(result.artifactPath).toContain(`${profile.profileDir.replace("./", "")}/memory/artifacts/rtk`);
@@ -544,7 +548,7 @@ describe("no-session agent scenario", () => {
     );
     const codegraph = runtime.getToolRegistry().list().find((tool) => tool.name === "codegraph");
     expect(codegraph?.description).toContain("coding/codebase turns only");
-    expect(codegraph?.execution).toEqual({ mutability: "read-only", concurrency: "concurrent" });
+    expect(codegraph?.execution).toEqual({ mutability: "read-only", concurrency: "concurrent", riskLevel: "low" });
 
     const result = await runtime.getToolRegistry().execute("codegraph", {
       action: "index",

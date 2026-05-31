@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { Service } from "../di";
+import { Inject, Service } from "../di";
 import { ConfigService } from "../config/config.service";
 import { AgentRuntimeService } from "../kernel";
 import type { ChatMessagePayload, SocketEnvelope, SocketServerOptions } from "./socket.types";
@@ -13,13 +13,25 @@ import type { ChatMessagePayload, SocketEnvelope, SocketServerOptions } from "./
 @Service()
 export class SocketServerService {
   private server?: ReturnType<typeof Bun.serve>;
-  private readonly subscriptions: readonly { readonly unsubscribe: () => void }[];
+  private subscriptions?: readonly { readonly unsubscribe: () => void }[];
 
-  public constructor(
-    private readonly configService = new ConfigService(),
-    private readonly runtime = new AgentRuntimeService(configService),
-  ) {
-    this.subscriptions = this.attachRuntimeBroadcasts();
+  @Inject(ConfigService) private configService!: ConfigService;
+  @Inject(AgentRuntimeService) private runtime!: AgentRuntimeService;
+
+  public constructor();
+  public constructor(configService?: ConfigService, runtime?: AgentRuntimeService);
+  public constructor(configService?: ConfigService, runtime?: AgentRuntimeService) {
+    if (configService) {
+      this.configService = configService;
+      this.runtime = runtime ?? new AgentRuntimeService(configService);
+      this.subscriptions = this.attachRuntimeBroadcasts();
+    }
+  }
+
+  public init(): void {
+    if (!this.subscriptions) {
+      this.subscriptions = this.attachRuntimeBroadcasts();
+    }
   }
 
   /**
@@ -142,7 +154,7 @@ export class SocketServerService {
    * @usage Tests call this during teardown.
    */
   public stop(): void {
-    for (const subscription of this.subscriptions) {
+    for (const subscription of this.subscriptions ?? []) {
       subscription.unsubscribe();
     }
     this.server?.stop(true);

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { Component } from "../di";
+import { Component, Inject } from "../di";
 import { ConfigService } from "../config/config.service";
 import { MemoryComponent } from "../memory";
 import type {
@@ -26,10 +26,17 @@ import type {
  */
 @Component()
 export class ContextIntentAnalyzerComponent {
-  public constructor(
-    private readonly configService = new ConfigService(),
-    private readonly memoryComponent = new MemoryComponent(configService),
-  ) {}
+  @Inject(ConfigService) private configService!: ConfigService;
+  @Inject(MemoryComponent) private memoryComponent!: MemoryComponent;
+
+  public constructor();
+  public constructor(configService?: ConfigService, memoryComponent?: MemoryComponent);
+  public constructor(configService?: ConfigService, memoryComponent?: MemoryComponent) {
+    if (configService) {
+      this.configService = configService;
+      this.memoryComponent = memoryComponent ?? new MemoryComponent(configService);
+    }
+  }
 
   /**
    * Produces a model-backed turn decision from a structured clue packet.

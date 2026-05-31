@@ -11,7 +11,7 @@ import { isProtectedConfigPath, resolveToolPath } from "./path.utils";
 export class ReadTool implements Tool<{ readonly filePath: string; readonly offset?: number; readonly limit?: number }> {
   public readonly name = "read";
   public readonly description = "Read a bounded text file slice.";
-  public readonly execution = { mutability: "read-only" as const, concurrency: "concurrent" as const };
+  public readonly execution = { mutability: "read-only" as const, concurrency: "concurrent" as const, riskLevel: "low" as const };
   public readonly schema = {
     type: "object" as const,
     required: ["filePath"],
@@ -40,7 +40,7 @@ export class ReadTool implements Tool<{ readonly filePath: string; readonly offs
 export class WriteTool implements Tool<{ readonly filePath: string; readonly content: string }> {
   public readonly name = "write";
   public readonly description = "Write a complete text file after guard approval.";
-  public readonly execution = { mutability: "mutating" as const, concurrency: "serial" as const };
+  public readonly execution = { mutability: "mutating" as const, concurrency: "serial" as const, riskLevel: "medium" as const };
   public readonly schema = {
     type: "object" as const,
     required: ["filePath", "content"],
@@ -74,7 +74,7 @@ export class WriteTool implements Tool<{ readonly filePath: string; readonly con
 export class EditTool implements Tool<MultiEditOperation> {
   public readonly name = "edit";
   public readonly description = "Replace exact text in one file.";
-  public readonly execution = { mutability: "mutating" as const, concurrency: "serial" as const };
+  public readonly execution = { mutability: "mutating" as const, concurrency: "serial" as const, riskLevel: "medium" as const };
   public readonly schema = {
     type: "object" as const,
     required: ["filePath", "oldText", "newText"],
@@ -99,7 +99,7 @@ export class EditTool implements Tool<MultiEditOperation> {
 export class MultiEditTool implements Tool<{ readonly edits: readonly MultiEditOperation[]; readonly dryRun?: boolean }> {
   public readonly name = "multi_edit";
   public readonly description = "Apply multiple exact text replacements atomically.";
-  public readonly execution = { mutability: "mutating" as const, concurrency: "serial" as const };
+  public readonly execution = { mutability: "mutating" as const, concurrency: "serial" as const, riskLevel: "medium" as const };
   public readonly schema = {
     type: "object" as const,
     required: ["edits"],
@@ -160,7 +160,7 @@ export class MultiEditTool implements Tool<{ readonly edits: readonly MultiEditO
 export class GlobTool implements Tool<{ readonly pattern: string }> {
   public readonly name = "glob";
   public readonly description = "List files matching a glob pattern.";
-  public readonly execution = { mutability: "read-only" as const, concurrency: "concurrent" as const };
+  public readonly execution = { mutability: "read-only" as const, concurrency: "concurrent" as const, riskLevel: "low" as const };
   public readonly schema = {
     type: "object" as const,
     required: ["pattern"],
@@ -185,7 +185,7 @@ export class GlobTool implements Tool<{ readonly pattern: string }> {
 export class GrepTool implements Tool<{ readonly pattern: string; readonly path?: string }> {
   public readonly name = "grep";
   public readonly description = "Search text files with a project-owned grep implementation.";
-  public readonly execution = { mutability: "read-only" as const, concurrency: "concurrent" as const };
+  public readonly execution = { mutability: "read-only" as const, concurrency: "concurrent" as const, riskLevel: "low" as const };
   public readonly schema = {
     type: "object" as const,
     required: ["pattern"],

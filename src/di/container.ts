@@ -30,6 +30,19 @@ export class Container {
   }
 
   /**
+   * Registers a pre-built instance for a token, skipping construction and injection.
+   *
+   * @param token - InjectionToken to register.
+   * @param instance - Pre-built instance to return on resolve.
+   * @returns Nothing.
+   * @usage Tests use this to register custom ConfigService or mock instances.
+   */
+  public registerInstance<T>(token: InjectionToken<T>, instance: T): void {
+    this.instances.set(token, instance);
+    this.bindings.set(token, instance!.constructor as Constructor);
+  }
+
+  /**
    * Resolves a token to a singleton instance.
    *
    * @typeParam T - Expected instance type.
@@ -63,6 +76,10 @@ export class Container {
       });
     }
     this.wireSubscriptions(provider, instance as object);
+    const initFn = (instance as Record<string, unknown>).init;
+    if (typeof initFn === "function") {
+      (initFn as () => void).call(instance);
+    }
     this.instances.set(provider, instance);
     this.instances.set(token, instance);
     return instance as T;

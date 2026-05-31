@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { isAbsolute, join } from "node:path";
 import { Database } from "bun:sqlite";
-import { Component } from "../di";
+import { Component, Inject } from "../di";
 import { ConfigService } from "../config/config.service";
 import type {
   MemoryCheckpoint,
@@ -41,13 +41,28 @@ import { SqliteVecLoader } from "./sqlite.vec.loader";
  */
 @Component()
 export class MemoryComponent {
-  private readonly db: Database;
-  private readonly vectorEnabled: boolean;
+  private db!: Database;
+  private vectorEnabled!: boolean;
 
-  public constructor(
-    private readonly configService = new ConfigService(),
-    private readonly sqliteVecLoader = new SqliteVecLoader(configService),
-  ) {
+  @Inject(ConfigService) private configService!: ConfigService;
+  @Inject(SqliteVecLoader) private sqliteVecLoader!: SqliteVecLoader;
+
+  public constructor();
+  public constructor(configService?: ConfigService, sqliteVecLoader?: SqliteVecLoader);
+  public constructor(configService?: ConfigService, sqliteVecLoader?: SqliteVecLoader) {
+    if (configService) {
+      this.configService = configService;
+      this.sqliteVecLoader = sqliteVecLoader ?? new SqliteVecLoader(configService);
+      this.initFromConstructor();
+    }
+  }
+
+  public init(): void {
+    if (this.db) return;
+    this.initFromConstructor();
+  }
+
+  private initFromConstructor(): void {
     const config = this.configService.getConfig();
     const dbPath = this.configService.ensureFileParent(config.paths.memoryDb);
     if (config.memory.enableSqliteVec) {

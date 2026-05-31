@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { Service, Subscribe } from "../di";
+import { Inject, Service, Subscribe } from "../di";
 import { BrainComponent } from "../brain";
 import { ConfigService } from "../config/config.service";
 import { MemoryComponent } from "../memory/memory.component";
@@ -104,13 +104,23 @@ export class ScopeService {
    */
   private readonly pendingNominations = new Map<string, ScopeInput>();
 
-  public constructor(
-    private readonly scopeStore = new ScopeStore(),
-    private readonly memoryComponent = new MemoryComponent(),
-    private readonly signalBus = new SignalBus(),
-    private readonly configService = new ConfigService(),
-    private readonly brainComponent = new BrainComponent(),
-  ) {}
+  @Inject(ScopeStore) private scopeStore!: ScopeStore;
+  @Inject(MemoryComponent) private memoryComponent!: MemoryComponent;
+  @Inject(SignalBus) private signalBus!: SignalBus;
+  @Inject(ConfigService) private configService!: ConfigService;
+  @Inject(BrainComponent) private brainComponent!: BrainComponent;
+
+  public constructor();
+  public constructor(scopeStore?: ScopeStore, memoryComponent?: MemoryComponent, signalBus?: SignalBus, configService?: ConfigService, brainComponent?: BrainComponent);
+  public constructor(scopeStore?: ScopeStore, memoryComponent?: MemoryComponent, signalBus?: SignalBus, configService?: ConfigService, brainComponent?: BrainComponent) {
+    if (configService) {
+      this.scopeStore = scopeStore ?? new ScopeStore(configService);
+      this.memoryComponent = memoryComponent ?? new MemoryComponent(configService);
+      this.signalBus = signalBus ?? new SignalBus();
+      this.configService = configService;
+      this.brainComponent = brainComponent ?? new BrainComponent(configService);
+    }
+  }
 
   /**
    * Handles incoming chat messages to detect scope keywords and manage recall-mode turns.

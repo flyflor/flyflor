@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { Service } from "../di";
+import { Inject, Service } from "../di";
 import { ConfigService } from "../config/config.service";
 import { TemplateLoaderComponent } from "../config/template.loader.component";
 import { MemoryComponent } from "../memory";
@@ -12,15 +12,19 @@ import type { ContextBuildInput, ContextBuildResult, ContextMessage } from "./co
  */
 @Service()
 export class ContextBuilderService {
-  public constructor(
-    private readonly configService = new ConfigService(),
-    templateLoader?: TemplateLoaderComponent,
-    private readonly memoryComponent = new MemoryComponent(configService),
-  ) {
-    this.templateLoader = templateLoader ?? new TemplateLoaderComponent(configService);
-  }
+  @Inject(ConfigService) private configService!: ConfigService;
+  @Inject(TemplateLoaderComponent) private templateLoader!: TemplateLoaderComponent;
+  @Inject(MemoryComponent) private memoryComponent!: MemoryComponent;
 
-  private readonly templateLoader: TemplateLoaderComponent;
+  public constructor();
+  public constructor(configService?: ConfigService, templateLoader?: TemplateLoaderComponent, memoryComponent?: MemoryComponent);
+  public constructor(configService?: ConfigService, templateLoader?: TemplateLoaderComponent, memoryComponent?: MemoryComponent) {
+    if (configService) {
+      this.configService = configService;
+      this.templateLoader = templateLoader ?? new TemplateLoaderComponent(configService);
+      this.memoryComponent = memoryComponent ?? new MemoryComponent(configService);
+    }
+  }
 
   /**
    * Builds the full model input for one turn.

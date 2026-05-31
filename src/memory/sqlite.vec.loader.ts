@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { arch, platform, tmpdir } from "node:os";
 import { Database } from "bun:sqlite";
+import { Component, Inject } from "../di";
 import { ConfigService } from "../config/config.service";
 import sqliteDarwinArm64 from "../../.config/sqlite-vec/sqlite-darwin-arm64/libsqlite3.dylib" with { type: "file" };
 import sqliteDarwinX64 from "../../.config/sqlite-vec/sqlite-darwin-x64/libsqlite3.dylib" with { type: "file" };
@@ -19,7 +20,13 @@ import vecWindowsX64 from "../../.config/sqlite-vec/sqlite-vec-windows-x64/vec0.
 export class SqliteVecLoader {
   private static customSqlitePrepared = false;
 
-  public constructor(private readonly configService = new ConfigService()) {}
+  @Inject(ConfigService) private configService!: ConfigService;
+
+  public constructor();
+  public constructor(configService?: ConfigService);
+  public constructor(configService?: ConfigService) {
+    if (configService) this.configService = configService;
+  }
 
   /**
    * Prepares Bun SQLite before any database handle is created.

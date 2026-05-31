@@ -5,6 +5,7 @@ import { ConfigService } from "../config/config.service";
 import { MemoryComponent } from "../memory";
 import type { MemoryFactInput } from "../memory/memory.types";
 import { SignalBus } from "../signal";
+import { EditTool, GitTool, GlobTool, GrepTool, MultiEditTool, ReadTool, ShellTool, ToolRegistry, WriteTool } from "../tools";
 import type { SandboxInspection, SandboxEscalation } from "./sandbox.types";
 
 /**
@@ -49,6 +50,25 @@ export class SandboxGuard {
 
   @Inject(BrainComponent)
   public brainComponent!: BrainComponent;
+
+  @Inject(ToolRegistry)
+  public toolRegistry!: ToolRegistry;
+
+  public constructor();
+  public constructor(signalBus?: SignalBus, configService?: ConfigService, memoryComponent?: MemoryComponent, brainComponent?: BrainComponent, toolRegistry?: ToolRegistry);
+  public constructor(signalBus?: SignalBus, configService?: ConfigService, memoryComponent?: MemoryComponent, brainComponent?: BrainComponent, toolRegistry?: ToolRegistry) {
+    if (configService) {
+      this.signalBus = signalBus!;
+      this.configService = configService;
+      this.memoryComponent = memoryComponent!;
+      this.brainComponent = brainComponent!;
+      this.toolRegistry = toolRegistry ?? new ToolRegistry();
+      // Register core tools so riskLevelForTool can classify them by metadata
+      for (const ToolClass of [ReadTool, WriteTool, EditTool, MultiEditTool, ShellTool, GitTool, GlobTool, GrepTool]) {
+        this.toolRegistry.register(new ToolClass());
+      }
+    }
+  }
 
   // TODO: RxJS pipeline – BehaviorSubject<Map<string, SandboxPattern>> for
   // in-memory pattern cache synced from MemoryFacts on startup.
@@ -164,14 +184,15 @@ export class SandboxGuard {
   }
 
   private riskLevelForTool(toolName: string): { readonly riskLevel: "low" | "medium" | "high"; readonly riskScore: number } {
-    const highRisk = new Set(["shell", "bash", "exec", "run", "spawn"]);
-    const mediumRisk = new Set(["write", "edit", "multi_edit", "delete", "remove", "rm", "mv", "cp"]);
-    const lowRisk = new Set(["read", "glob", "grep", "codegraph", "memory_recall", "memory_store", "git"]);
-
-    const name = toolName.toLowerCase();
-    if (highRisk.has(name)) return { riskLevel: "high", riskScore: 0.9 };
-    if (mediumRisk.has(name)) return { riskLevel: "medium", riskScore: 0.5 };
-    if (lowRisk.has(name)) return { riskLevel: "low", riskScore: 0.1 };
+    if (this.toolRegistry) {
+      const def = this.toolRegistry.list().find((tool) => tool.name === toolName);
+      if (def) {
+        const level = def.execution.riskLevel;
+        if (level === "high") return { riskLevel: "high", riskScore: 0.9 };
+        if (level === "medium") return { riskLevel: "medium", riskScore: 0.5 };
+        return { riskLevel: "low", riskScore: 0.1 };
+      }
+    }
     return { riskLevel: "medium", riskScore: 0.5 };
   }
 

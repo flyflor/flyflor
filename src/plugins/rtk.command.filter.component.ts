@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
-import { Plugin } from "../di";
+import { Plugin, Inject } from "../di";
 import { ConfigService } from "../config/config.service";
 import type { RtkFilterInput, RtkFilterResult, RtkResolutionDiagnostic, ToolContext } from "../tools/tool.types";
 
@@ -13,7 +13,13 @@ import type { RtkFilterInput, RtkFilterResult, RtkResolutionDiagnostic, ToolCont
 export class RtkCommandFilterComponent {
   private readonly encoder = new TextEncoder();
 
-  public constructor(private readonly configService = new ConfigService()) {}
+  @Inject(ConfigService) private configService!: ConfigService;
+
+  public constructor();
+  public constructor(configService?: ConfigService);
+  public constructor(configService?: ConfigService) {
+    if (configService) this.configService = configService;
+  }
 
   /**
    * Returns the RTK artifact directory for preserved raw command evidence.

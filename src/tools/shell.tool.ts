@@ -12,7 +12,7 @@ import type { Tool, ToolContext, ToolResult } from "./tool.types";
 export class ShellTool implements Tool<{ readonly command: string }> {
   public readonly name = "shell";
   public readonly description = "Execute a shell command and preserve raw output.";
-  public readonly execution = { mutability: "mutating" as const, concurrency: "serial" as const };
+  public readonly execution = { mutability: "mutating" as const, concurrency: "serial" as const, riskLevel: "high" as const };
   public readonly schema = {
     type: "object" as const,
     required: ["command"],

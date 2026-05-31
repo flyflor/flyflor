@@ -76,6 +76,9 @@ RTK wraps noisy command families and returns a compact model-facing summary plus
 a raw artifact reference when available. CodeGraph runs only after the turn
 planner marks the turn as codebase or coding work. If an optional plugin is
 unavailable, the corresponding tool returns `ok=false` with explicit diagnostics.
+Built-in tools that delegate to plugin adapters, such as `shell` and `git`
+using RTK, must construct those adapters with the active runtime `ConfigService`
+so isolated scenario paths and project-local plugin resolution stay consistent.
 
 ## Events
 

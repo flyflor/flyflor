@@ -10,7 +10,7 @@ import type { Tool, ToolContext, ToolResult } from "./tool.types";
 export class GitTool implements Tool<{ readonly args: readonly string[] }> {
   public readonly name = "git";
   public readonly description = "Run safe git inspection commands.";
-  public readonly execution = { mutability: "read-only" as const, concurrency: "concurrent" as const };
+  public readonly execution = { mutability: "read-only" as const, concurrency: "concurrent" as const, riskLevel: "low" as const };
   public readonly schema = {
     type: "object" as const,
     required: ["args"],

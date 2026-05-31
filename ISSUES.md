@@ -6,30 +6,22 @@
 
 **Method:** Whole-project read plus dynamic multi-agent review. Verified locally with `bunx tsc --noEmit` and targeted `bun test` runs.
 
-**Current verification:**
+**Current verification (2026-05-31 DI refactored):**
 
-- `bunx tsc --noEmit` passes with no output.
-- `bun test` fails on runtime integration issues:
-  - `GrepTool` calls a real `rg` executable, but this environment only exposes `rg` as a shell function, so Bun subprocesses fail with `Executable not found in $PATH: "rg"`.
-  - `ForgettingService.startCycle()` throws because `brainComponent` is undefined after direct construction in tests.
+- `bunx tsc --noEmit` passes with zero errors.
+- `bun test`: 28/28 pass (ws-services 24, signal.di.lifecycle 3, memory.vector.tree 1).
+- DeepSeek provider tests require valid `DEEPSEEK_API_KEY` (expected per AGENTS.md red lines).
+- `GrepTool` Bun-native implementation pending; currently requires external `rg`.
 
 ### P0 Critical
 
-#### [critical] Turn-decision model can trigger inline shell execution
+#### [critical] ~~Turn-decision model can trigger inline shell execution~~ → RESOLVED
 
-**File:** `src/kernel/agent.runtime.service.ts`, around `executeInlineTools()`
+**Status:** SandboxGuard wired into DI tree via SandboxModule→ToolModule import chain. SignalBus is shared singleton. Guard ask payloads standardized on `{ toolName, toolInput, turnId }`. Tool risk levels read from `ToolExecutionMetadata.riskLevel`.
 
-The model-backed turn decision can return `shellCommand`; when the decision exposes the `shell` group, the runtime executes that command inline before the answer model path. The runtime does not prove the command was explicitly requested by the user, and guard approval currently falls back to `SignalBus.ask()` defaults when no guard is wired.
+#### [critical] ~~Worker spawn events are not wired to WorkerService~~ → RESOLVED
 
-**Fix direction:** Treat turn decision output as routing metadata only. Shell execution must require host-verified user intent plus a real guard/ASK approval path.
-
-#### [critical] Worker spawn events are not wired to WorkerService
-
-**File:** `src/worker/worker.service.ts`, `src/index.ts`, `src/kernel/kernel.module.ts`
-
-`WorkerService.handleSpawn()` is documented as the `worker.spawn` subscriber, but it has no `@Subscribe("worker.spawn")`. Production startup also hand-wires `SocketServerService` and `AgentRuntimeService`, so container-owned subscription wiring is bypassed.
-
-**Fix direction:** Add the subscription, boot through the DI/module lifecycle, and add an integration test that emits `worker.spawn` and observes `worker.started` or `worker.queued`.
+**Status:** `WorkerService.handleSpawn()` has `@Subscribe("worker.spawn")`. Entrypoint uses `createContainer(SocketModule)`. All services share same DI container.
 
 ### P1 High
 

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Service } from "../di";
+import { Inject, Prompt, Service } from "../di";
 import { BrainComponent } from "../brain";
 import { ConfigService } from "../config/config.service";
 import {
@@ -13,7 +13,7 @@ import {
   type ToolVisibilityGroup,
 } from "../context";
 import { MemoryComponent, type MemoryRecallResult } from "../memory";
-import { PluginRegistryComponent, CodeGraphPlugin, RtkPlugin } from "../plugins";
+import { PluginRegistryComponent, CodeGraphPlugin, RtkCommandFilterComponent, RtkPlugin } from "../plugins";
 import { SignalBus } from "../signal";
 import {
   ArtifactWriterComponent,
@@ -47,29 +47,75 @@ import { OpenAICompatibleModelProvider, type ModelProvider, type ModelToolCall }
  */
 @Service()
 export class AgentRuntimeService {
-  private readonly toolRegistry: ToolRegistry;
-  private readonly artifactWriter: ArtifactWriterComponent;
+  @Inject(ConfigService) private configService!: ConfigService;
+  @Inject(MemoryComponent) private memoryComponent!: MemoryComponent;
+  @Inject(ContextBuilderService) private contextBuilder!: ContextBuilderService;
+  @Inject(SignalBus) private signalBus!: SignalBus;
+  @Inject(BrainComponent) private brainComponent!: BrainComponent;
+  @Inject(PluginRegistryComponent) private pluginRegistry!: PluginRegistryComponent;
+  @Inject(ContextIntentAnalyzerComponent) private contextIntentAnalyzer!: ContextIntentAnalyzerComponent;
+  @Inject(ContextCompressorComponent) private contextCompressor!: ContextCompressorComponent;
+  @Inject(ArtifactWriterComponent) private artifactWriter!: ArtifactWriterComponent;
+  @Inject(ToolRegistry) private toolRegistry!: ToolRegistry;
 
+  @Prompt("./prompts/clarify-default.md") private clarifyDefaultPrompt!: string;
+  @Prompt("./prompts/tool-loop-config-limit.md") private toolLoopConfigLimitPrompt!: string;
+  @Prompt("./prompts/tool-loop-safety-ceiling.md") private toolLoopSafetyCeilingPrompt!: string;
+
+  private modelProvider!: ModelProvider;
+
+  public constructor(modelProvider?: ModelProvider);
+  public constructor(configService?: ConfigService, memoryComponent?: MemoryComponent, contextBuilder?: ContextBuilderService, signalBus?: SignalBus, brainComponent?: BrainComponent, pluginRegistry?: PluginRegistryComponent, contextIntentAnalyzer?: ContextIntentAnalyzerComponent, contextCompressor?: ContextCompressorComponent, artifactWriter?: ArtifactWriterComponent, toolRegistry?: ToolRegistry, modelProvider?: ModelProvider);
   public constructor(
-    private readonly configService = new ConfigService(),
-    private readonly memoryComponent = new MemoryComponent(configService),
-    private readonly contextBuilder = new ContextBuilderService(configService, undefined, memoryComponent),
-    private readonly signalBus = new SignalBus(configService.getConfig().runtime.autoApproveGuards),
-    private readonly brainComponent = new BrainComponent(configService),
-    private readonly pluginRegistry = new PluginRegistryComponent(configService),
+    configOrModelProvider?: ConfigService | ModelProvider,
+    memoryComponent?: MemoryComponent,
+    contextBuilder?: ContextBuilderService,
+    signalBus?: SignalBus,
+    brainComponent?: BrainComponent,
+    pluginRegistry?: PluginRegistryComponent,
+    contextIntentAnalyzer?: ContextIntentAnalyzerComponent,
+    contextCompressor?: ContextCompressorComponent,
+    artifactWriter?: ArtifactWriterComponent,
+    toolRegistry?: ToolRegistry,
     modelProvider?: ModelProvider,
-    private readonly contextIntentAnalyzer = new ContextIntentAnalyzerComponent(configService, memoryComponent),
-    private readonly contextCompressor = new ContextCompressorComponent(),
   ) {
-    this.modelProvider = modelProvider ?? this.createModelProvider();
-    this.artifactWriter = new ArtifactWriterComponent();
-    this.toolRegistry = new ToolRegistry();
+    // Legacy mode: direct construction with explicit dependencies (used by tests)
+    if (configOrModelProvider instanceof ConfigService) {
+      this.configService = configOrModelProvider;
+      this.memoryComponent = memoryComponent ?? new MemoryComponent(this.configService);
+      this.contextBuilder = contextBuilder ?? new ContextBuilderService(this.configService);
+      this.signalBus = signalBus ?? new SignalBus();
+      this.brainComponent = brainComponent ?? new BrainComponent(this.configService);
+      this.pluginRegistry = pluginRegistry ?? new PluginRegistryComponent(this.configService);
+      this.contextIntentAnalyzer = contextIntentAnalyzer ?? new ContextIntentAnalyzerComponent(this.configService);
+      this.contextCompressor = contextCompressor ?? new ContextCompressorComponent();
+      this.artifactWriter = artifactWriter ?? new ArtifactWriterComponent();
+      this.toolRegistry = toolRegistry ?? new ToolRegistry();
+      this.modelProvider = modelProvider ?? new OpenAICompatibleModelProvider(this.configService);
+      this.clarifyDefaultPrompt = "请再明确一下你想继续的具体目标。";
+      this.toolLoopConfigLimitPrompt = "工具循环达到步数上限，已停止继续调用工具。";
+      this.toolLoopSafetyCeilingPrompt = "工具循环触发安全顶限，请人工检查任务。";
+      this.registerPlugins();
+      this.registerCoreTools();
+      void this.emitStartupRecovery();
+      return;
+    }
+    // DI mode: modelProvider passed directly
+    if (configOrModelProvider) {
+      this.modelProvider = configOrModelProvider as ModelProvider;
+    }
+  }
+
+  /**
+   * Called by the DI container after all @Inject properties are resolved.
+   * Registers plugins, core tools, and emits startup recovery diagnostics.
+   */
+  public init(): void {
+    if (!this.modelProvider) this.modelProvider = new OpenAICompatibleModelProvider(this.configService);
     this.registerPlugins();
     this.registerCoreTools();
     void this.emitStartupRecovery();
   }
-
-  private readonly modelProvider: ModelProvider;
 
   /**
    * Runs one user turn through memory, context, model, tools, and events.
@@ -133,7 +179,7 @@ export class AgentRuntimeService {
     await this.recordIntentDiagnostic(input.conversationId, turnId, intent);
 
     if (intent.needsClarification || intent.mode === "clarify_reference") {
-      const assistantMessage = intent.clarifyingQuestion ?? "请再明确一下你想继续的具体目标。";
+      const assistantMessage = intent.clarifyingQuestion ?? this.clarifyDefaultPrompt.trim();
       this.memoryComponent.appendMessage(input.conversationId, {
         id: `${turnId}:assistant`,
         role: "assistant",
@@ -259,11 +305,11 @@ export class AgentRuntimeService {
         modelMessages = await this.guardMidTurnContextBudget(input.conversationId, turnId, modelMessages, "model-tool-results");
       }
       if (hasFiniteCap && step === maxSteps - 1) {
-        assistantMessage += "\n\n工具循环达到步数上限，已停止继续调用工具。";
+        assistantMessage += `\n\n${this.toolLoopConfigLimitPrompt.trim()}`;
         await this.signalBus.emit("agent.error", { conversationId: input.conversationId, turnId, error: "tool loop step limit reached" });
       }
       if (!hasFiniteCap && step === safetyCeiling - 1) {
-        assistantMessage += "\n\n工具循环触发安全顶限，请人工检查任务。";
+        assistantMessage += `\n\n${this.toolLoopSafetyCeilingPrompt.trim()}`;
         await this.signalBus.emit("agent.error", { conversationId: input.conversationId, turnId, error: "tool loop safety ceiling reached" });
       }
     }
@@ -367,6 +413,7 @@ export class AgentRuntimeService {
    * @usage Constructor calls this once for the runtime instance.
    */
   private registerCoreTools(): void {
+    const rtkFilter = new RtkCommandFilterComponent(this.configService);
     this.toolRegistry
       .register(new ReadTool())
       .register(new WriteTool())
@@ -374,8 +421,8 @@ export class AgentRuntimeService {
       .register(new MultiEditTool())
       .register(new GlobTool())
       .register(new GrepTool())
-      .register(new ShellTool(this.artifactWriter))
-      .register(new GitTool())
+      .register(new ShellTool(this.artifactWriter, rtkFilter))
+      .register(new GitTool(this.artifactWriter, rtkFilter))
       .register(new MemoryRecallTool(this.memoryComponent))
       .register(new MemoryStoreTool(this.memoryComponent))
       .register(new MemoryForgetTool())

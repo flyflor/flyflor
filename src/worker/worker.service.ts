@@ -35,20 +35,47 @@ export class WorkerService {
   @Inject(ToolRegistry)
   private injectedToolRegistry?: ToolRegistry;
 
+  @Inject(ConfigService) private configService!: ConfigService;
+  @Inject(SignalBus) private signalBus!: SignalBus;
+  @Inject(MemoryComponent) private memoryComponent!: MemoryComponent;
+  @Inject(BrainComponent) private brainComponent!: BrainComponent;
+  @Inject(PromptRegistryService) private promptRegistry!: PromptRegistryService;
+  @Inject(ToolRegistry) private toolRegistry!: ToolRegistry;
+  @Inject(ArtifactWriterComponent) private artifactWriter!: ArtifactWriterComponent;
+
+  private modelProvider!: ModelProvider;
+
+  public constructor(modelProvider?: ModelProvider);
+  public constructor(configService?: ConfigService, signalBus?: SignalBus, memoryComponent?: MemoryComponent, brainComponent?: BrainComponent, promptRegistry?: PromptRegistryService, toolRegistry?: ToolRegistry, artifactWriter?: ArtifactWriterComponent, modelProvider?: ModelProvider);
   public constructor(
-    private readonly configService = new ConfigService(),
-    private readonly signalBus = new SignalBus(),
-    private readonly memoryComponent = new MemoryComponent(configService),
-    private readonly brainComponent = new BrainComponent(configService),
-    private readonly promptRegistry = new PromptRegistryService(configService),
-    private readonly toolRegistry = new ToolRegistry(),
-    private readonly artifactWriter = new ArtifactWriterComponent(),
+    configOrModelProvider?: ConfigService | ModelProvider,
+    signalBus?: SignalBus,
+    memoryComponent?: MemoryComponent,
+    brainComponent?: BrainComponent,
+    promptRegistry?: PromptRegistryService,
+    toolRegistry?: ToolRegistry,
+    artifactWriter?: ArtifactWriterComponent,
     modelProvider?: ModelProvider,
   ) {
-    this.modelProvider = modelProvider ?? this.createModelProvider();
+    if (configOrModelProvider instanceof ConfigService) {
+      this.configService = configOrModelProvider;
+      this.signalBus = signalBus ?? new SignalBus();
+      this.memoryComponent = memoryComponent ?? new MemoryComponent(this.configService);
+      this.brainComponent = brainComponent ?? new BrainComponent(this.configService);
+      this.promptRegistry = promptRegistry ?? new PromptRegistryService(this.configService);
+      this.toolRegistry = toolRegistry ?? new ToolRegistry();
+      this.artifactWriter = artifactWriter ?? new ArtifactWriterComponent();
+      this.modelProvider = modelProvider ?? new OpenAICompatibleModelProvider(this.configService);
+      return;
+    }
+    if (configOrModelProvider) {
+      this.modelProvider = configOrModelProvider as ModelProvider;
+    }
   }
 
-  private readonly modelProvider: ModelProvider;
+  public init(): void {
+    if (!this.modelProvider) this.modelProvider = new OpenAICompatibleModelProvider(this.configService);
+  }
 
   /**
    * Handles a worker spawn signal. Queues workers when at capacity.
@@ -327,6 +354,7 @@ export class WorkerService {
         name: tool.name,
         description: tool.description,
         schema: tool.schema as unknown as Record<string, unknown>,
+        execution: tool.execution,
       }));
   }
 
@@ -361,7 +389,7 @@ export class WorkerService {
         name: tool.name,
         description: tool.description,
         schema: tool.schema as unknown as ToolSchema,
-        execution: { mutability: "read-only" as const, concurrency: "concurrent" as const },
+        execution: tool.execution,
       })),
     })) {
       if (event.type === "delta" && event.text) {

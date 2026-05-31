@@ -94,13 +94,16 @@ export class ForgettingService {
   /** Interval handle for the periodic timer-driven sweep. */
   private cycleTimer: ReturnType<typeof setInterval> | undefined;
 
+  public constructor() {
+    // Start the periodic forgetting cycle after a short delay to allow DI wiring.
+    setTimeout(() => this.startPeriodicCycle(), 5000);
+  }
+
   /** Number of currently executing tool calls. */
   private toolExecutionCount = 0;
 
   /** Debounce handle for compaction-triggered sweeps. */
   private compactionDebounceHandle: ReturnType<typeof setTimeout> | undefined;
-
-  public constructor() {}
 
   // -----------------------------------------------------------------------
   // Lifecycle

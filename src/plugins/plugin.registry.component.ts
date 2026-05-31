@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { Component } from "../di";
+import { Component, Inject } from "../di";
 import { ConfigService } from "../config/config.service";
 import type { PluginAvailability, PluginManifest, PluginProvider } from "./plugin.types";
 
@@ -13,7 +13,13 @@ import type { PluginAvailability, PluginManifest, PluginProvider } from "./plugi
 export class PluginRegistryComponent {
   private readonly providers = new Map<string, PluginProvider>();
 
-  public constructor(private readonly configService = new ConfigService()) {}
+  @Inject(ConfigService) private configService!: ConfigService;
+
+  public constructor();
+  public constructor(configService?: ConfigService);
+  public constructor(configService?: ConfigService) {
+    if (configService) this.configService = configService;
+  }
 
   /**
    * Registers one plugin provider instance.

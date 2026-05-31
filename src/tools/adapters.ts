@@ -326,7 +326,7 @@ class CodeGraphAdapter {
 export class CodeGraphTool implements Tool<CodeGraphToolInput> {
   public readonly name = "codegraph";
   public readonly description = "Query project-local CodeGraph status, context, impact, or trace for coding/codebase turns only.";
-  public readonly execution = { mutability: "read-only" as const, concurrency: "concurrent" as const };
+  public readonly execution = { mutability: "read-only" as const, concurrency: "concurrent" as const, riskLevel: "low" as const };
   public readonly schema = {
     type: "object" as const,
     required: ["action"],
@@ -387,7 +387,7 @@ export class CodeGraphTool implements Tool<CodeGraphToolInput> {
 export class ContextCompactTool implements Tool<{ readonly conversationId: string; readonly reason?: string; readonly limit?: number }> {
   public readonly name = "context_compact";
   public readonly description = "Request a context checkpoint compaction.";
-  public readonly execution = { mutability: "mutating" as const, concurrency: "serial" as const };
+  public readonly execution = { mutability: "mutating" as const, concurrency: "serial" as const, riskLevel: "medium" as const };
   public readonly schema = {
     type: "object" as const,
     required: ["conversationId"],
@@ -426,7 +426,7 @@ export class ContextCompactTool implements Tool<{ readonly conversationId: strin
 export class TaskTool implements Tool<TaskToolInput> {
   public readonly name = "task";
   public readonly description = "Request a visible workmux child task.";
-  public readonly execution = { mutability: "mutating" as const, concurrency: "serial" as const };
+  public readonly execution = { mutability: "mutating" as const, concurrency: "serial" as const, riskLevel: "medium" as const };
   public readonly schema = {
     type: "object" as const,
     required: ["description", "prompt"],

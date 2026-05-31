@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { Database } from "bun:sqlite";
-import { Component } from "../di";
+import { Component, Inject } from "../di";
 import { ConfigService } from "../config/config.service";
 import { MemoryComponent } from "../memory/memory.component";
 import { SqliteVecLoader } from "../memory/sqlite.vec.loader";
@@ -29,14 +29,30 @@ export interface MatchedScope {
  */
 @Component()
 export class ScopeStore {
-  private readonly db: Database;
-  private readonly vectorEnabled: boolean;
+  private db!: Database;
+  private vectorEnabled!: boolean;
 
-  public constructor(
-    private readonly configService = new ConfigService(),
-    private readonly sqliteVecLoader = new SqliteVecLoader(configService),
-    private readonly memoryComponent = new MemoryComponent(),
-  ) {
+  @Inject(ConfigService) private configService!: ConfigService;
+  @Inject(SqliteVecLoader) private sqliteVecLoader!: SqliteVecLoader;
+  @Inject(MemoryComponent) private memoryComponent!: MemoryComponent;
+
+  public constructor();
+  public constructor(configService?: ConfigService, sqliteVecLoader?: SqliteVecLoader, memoryComponent?: MemoryComponent);
+  public constructor(configService?: ConfigService, sqliteVecLoader?: SqliteVecLoader, memoryComponent?: MemoryComponent) {
+    if (configService) {
+      this.configService = configService;
+      this.sqliteVecLoader = sqliteVecLoader ?? new SqliteVecLoader(configService);
+      this.memoryComponent = memoryComponent ?? new MemoryComponent(configService);
+      this.initFromConstructor();
+    }
+  }
+
+  public init(): void {
+    if (this.db) return;
+    this.initFromConstructor();
+  }
+
+  private initFromConstructor(): void {
     const config = this.configService.getConfig();
     const dbPath = this.configService.ensureFileParent(`${config.paths.scopeDir}/scope.db`);
     if (config.memory.enableSqliteVec) {

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { Plugin } from "../di";
+import { Inject, Plugin } from "../di";
 import { ConfigService } from "../config/config.service";
 import type { Tool } from "../tools";
 import { PluginInstallerComponent } from "./plugin.installer.component";
@@ -15,11 +15,16 @@ import type { PluginAvailability, PluginManifest, PluginProvider } from "./plugi
 export class ExternalCommandPluginComponent implements PluginProvider {
   public readonly manifest: PluginManifest;
 
-  public constructor(
-    private readonly configService = new ConfigService(),
-    manifest?: PluginManifest,
-    private readonly installer = new PluginInstallerComponent(configService),
-  ) {
+  @Inject(ConfigService) private configService!: ConfigService;
+  @Inject(PluginInstallerComponent) private installer!: PluginInstallerComponent;
+
+  public constructor();
+  public constructor(configService?: ConfigService, manifest?: PluginManifest, installer?: PluginInstallerComponent);
+  public constructor(configService?: ConfigService, manifest?: PluginManifest, installer?: PluginInstallerComponent) {
+    if (configService) {
+      this.configService = configService;
+      this.installer = installer ?? new PluginInstallerComponent(configService);
+    }
     this.manifest = manifest ?? {
       name: "external-command",
       kind: "command",

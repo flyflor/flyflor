@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { Component } from "../di";
+import { Component, Inject } from "../di";
 import { ConfigService } from "./config.service";
 
 /**
@@ -9,7 +9,13 @@ import { ConfigService } from "./config.service";
  */
 @Component()
 export class TemplateLoaderComponent {
-  public constructor(private readonly configService = new ConfigService()) {}
+  @Inject(ConfigService) private configService!: ConfigService;
+
+  public constructor();
+  public constructor(configService?: ConfigService);
+  public constructor(configService?: ConfigService) {
+    if (configService) this.configService = configService;
+  }
 
   /**
    * Reads one template by filename from the configured templates directory.

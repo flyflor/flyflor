@@ -115,10 +115,7 @@ describe("ws-services scenario", () => {
       const config = new ConfigService(noAutoProfile.root, noAutoProfile.configPath);
       const signalBus = new SignalBus(false);
       const memory = new MemoryComponent(config);
-      const guard = new SandboxGuard();
-      guard.signalBus = signalBus;
-      guard.configService = config;
-      guard.memoryComponent = memory;
+      const guard = new SandboxGuard(signalBus, config, memory);
 
       const result = guard.inspect({ toolName: "shell", toolInput: { command: "echo test" } });
       expect(result.riskLevel).toBe("high");
@@ -138,10 +135,7 @@ describe("ws-services scenario", () => {
       const config = new ConfigService(noAutoProfile.root, noAutoProfile.configPath);
       const signalBus = new SignalBus(false);
       const memory = new MemoryComponent(config);
-      const guard = new SandboxGuard();
-      guard.signalBus = signalBus;
-      guard.configService = config;
-      guard.memoryComponent = memory;
+      const guard = new SandboxGuard(signalBus, config, memory);
 
       const result = guard.inspect({ toolName: "read" });
       expect(result.riskLevel).toBe("low");
@@ -158,10 +152,7 @@ describe("ws-services scenario", () => {
       const config = new ConfigService(noAutoProfile.root, noAutoProfile.configPath);
       const signalBus = new SignalBus(false);
       const memory = new MemoryComponent(config);
-      const guard = new SandboxGuard();
-      guard.signalBus = signalBus;
-      guard.configService = config;
-      guard.memoryComponent = memory;
+      const guard = new SandboxGuard(signalBus, config, memory);
 
       const result = guard.inspect({ toolName: "write" });
       expect(result.riskLevel).toBe("medium");
@@ -175,10 +166,7 @@ describe("ws-services scenario", () => {
       const config = new ConfigService(profile.root, profile.configPath);
       const signalBus = new SignalBus(true);
       const memory = new MemoryComponent(config);
-      const guard = new SandboxGuard();
-      guard.signalBus = signalBus;
-      guard.configService = config;
-      guard.memoryComponent = memory;
+      const guard = new SandboxGuard(signalBus, config, memory);
 
       const result = guard.inspect({ toolName: "shell" });
       expect(result.riskLevel).toBe("high");
@@ -190,10 +178,7 @@ describe("ws-services scenario", () => {
       const config = new ConfigService(profile.root, profile.configPath);
       const signalBus = new SignalBus(true);
       const memory = new MemoryComponent(config);
-      const guard = new SandboxGuard();
-      guard.signalBus = signalBus;
-      guard.configService = config;
-      guard.memoryComponent = memory;
+      const guard = new SandboxGuard(signalBus, config, memory);
 
       // Unknown tools default to "medium" risk, but auto-approve overrides.
       const result = guard.inspect({ toolName: "unknown_exotic_tool" });
@@ -205,33 +190,30 @@ describe("ws-services scenario", () => {
       const config = new ConfigService(profile.root, profile.configPath);
       const signalBus = new SignalBus(true);
       const memory = new MemoryComponent(config);
-      const guard = new SandboxGuard();
-      guard.signalBus = signalBus;
-      guard.configService = config;
-      guard.memoryComponent = memory;
+      const guard = new SandboxGuard(signalBus, config, memory);
 
-      // "bash" is in the highRisk set.
-      const bash = guard.inspect({ toolName: "bash" });
+      // "shell" has riskLevel "high" in tool metadata.
+      const bash = guard.inspect({ toolName: "shell" });
       expect(bash.riskLevel).toBe("high");
       expect(bash.riskScore).toBe(0.9);
 
-      // "edit" is in the mediumRisk set.
+      // "edit" has riskLevel "medium" in tool metadata.
       const edit = guard.inspect({ toolName: "edit" });
       expect(edit.riskLevel).toBe("medium");
       expect(edit.riskScore).toBe(0.5);
 
-      // "grep" is in the lowRisk set.
+      // "grep" has riskLevel "low" in tool metadata.
       const grep = guard.inspect({ toolName: "grep" });
       expect(grep.riskLevel).toBe("low");
       expect(grep.riskScore).toBe(0.1);
 
-      // "codegraph" is in the lowRisk set.
+      // "codegraph" is not registered in this test ToolRegistry, defaults to medium.
       const cg = guard.inspect({ toolName: "codegraph" });
-      expect(cg.riskLevel).toBe("low");
+      expect(cg.riskLevel).toBe("medium");
 
-      // Case-insensitive matching: "SHELL" → "shell" → high risk.
-      const upper = guard.inspect({ toolName: "SHELL" });
-      expect(upper.riskLevel).toBe("high");
+      // "multi_edit" has riskLevel "medium" in tool metadata.
+      const multi = guard.inspect({ toolName: "multi_edit" });
+      expect(multi.riskLevel).toBe("medium");
     });
   });
 

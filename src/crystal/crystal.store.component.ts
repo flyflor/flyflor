@@ -50,16 +50,18 @@ export interface CrystalGemInput {
  */
 @Component()
 export class CrystalStore {
-  private readonly db: Database;
-  private readonly vectorEnabled: boolean;
+  private db!: Database;
+  private vectorEnabled!: boolean;
 
   @Inject(MemoryComponent)
   private memory!: MemoryComponent;
 
-  public constructor(
-    private readonly configService = new ConfigService(),
-    private readonly sqliteVecLoader = new SqliteVecLoader(configService),
-  ) {
+  @Inject(ConfigService) private configService!: ConfigService;
+  @Inject(SqliteVecLoader) private sqliteVecLoader!: SqliteVecLoader;
+
+  public constructor() {}
+
+  public init(): void {
     const config = this.configService.getConfig();
     const dbPath = this.configService.ensureFileParent(config.paths.crystalDb);
     if (config.memory.enableSqliteVec) {

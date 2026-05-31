@@ -63,6 +63,7 @@ export interface ToolSchema {
 export interface ToolExecutionMetadata {
   readonly mutability: "read-only" | "mutating";
   readonly concurrency: "concurrent" | "serial";
+  readonly riskLevel: "low" | "medium" | "high";
 }
 
 /**

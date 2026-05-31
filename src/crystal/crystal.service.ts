@@ -515,7 +515,7 @@ export class CrystalService {
       reason,
     };
 
-    this.signalBus.emit("crystal.eq.adjusted", adjustment);
+    void this.signalBus.emit("crystal.eq.adjusted", adjustment);
     return adjustment;
   }
 

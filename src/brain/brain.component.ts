@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, join } from "node:path";
 import { Database } from "bun:sqlite";
-import { Component } from "../di";
+import { Component, Inject } from "../di";
 import { ConfigService } from "../config/config.service";
 import type {
   BrainEventInput,
@@ -23,10 +23,26 @@ import type {
  */
 @Component()
 export class BrainComponent {
-  private readonly db: Database;
+  private db!: Database;
   private readonly runtimeSessionId = randomUUID();
 
-  public constructor(private readonly configService = new ConfigService()) {
+  @Inject(ConfigService) private configService!: ConfigService;
+
+  public constructor();
+  public constructor(configService?: ConfigService);
+  public constructor(configService?: ConfigService) {
+    if (configService) {
+      this.configService = configService;
+      this.initFromConstructor();
+    }
+  }
+
+  public init(): void {
+    if (this.db) return;
+    this.initFromConstructor();
+  }
+
+  private initFromConstructor(): void {
     this.db = new Database(this.currentDatabasePath());
     this.initialize();
     this.recordRuntimeSession({
