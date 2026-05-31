@@ -457,6 +457,7 @@
             <button class="signals-tab-btn" data-panel="sandbox">Sandbox</button>
             <button class="signals-tab-btn" data-panel="scope">Scope</button>
             <button class="signals-tab-btn" data-panel="crystal">Crystal</button>
+            <button class="signals-tab-btn" data-panel="guard">Guard</button>
             <button class="signals-tab-btn" data-panel="forgetting">Forgetting</button>
             <button class="signals-tab-btn" data-panel="system">System</button>
           </nav>
@@ -489,6 +490,7 @@
       /* ---- Signal panel state ---- */
 
       const panelDefs = [
+        { id: "guard",     label: "Guard",      prefix: "guard." },
         { id: "worker",    label: "Worker",     prefix: "worker." },
         { id: "sandbox",   label: "Sandbox",    prefix: "sandbox." },
         { id: "scope",     label: "Scope",      prefix: "scope." },
@@ -502,12 +504,19 @@
         signalEvents.set(def.id, []);
       }
 
+      // Pending guard requests waiting for user approval
+      const pendingGuards = new Map();
+      // Learned guard patterns (in-memory whitelist)
+      const guardWhitelist = new Set();
+
       // System status derived from incoming signals
       const systemStatus = {
         activeWorkers: 0,
         scopeActive: false,
         scopeRecallMode: false,
         eqWeights: {},
+        autoApprove: true,
+        pendingCount: 0,
       };
 
       /* ---- Helpers ---- */
@@ -592,6 +601,10 @@
           renderSystemPanel();
           return;
         }
+        if (activePanel === "guard") {
+          renderGuardPanel();
+          return;
+        }
         const events = signalEvents.get(activePanel) || [];
         const def = panelDefs.find(d => d.id === activePanel);
         const label = def ? def.label : activePanel;
@@ -668,6 +681,151 @@
         if (data.reason) tags.push(`reason=${data.reason}`);
         if (data.conversationId) tags.push(`conv=${data.conversationId}`);
         return tags.length > 0 ? tags : ["raw"];
+      }
+
+      function renderGuardPanel() {
+        const grid = document.createElement("div");
+        grid.className = "system-grid";
+
+        // Auto-approve status
+        const autoCard = document.createElement("div");
+        autoCard.className = "system-card";
+        autoCard.innerHTML = `<h4>Auto-Approve</h4>
+          <div class="value ${systemStatus.autoApprove ? 'active-state' : 'inactive-state'}">${systemStatus.autoApprove ? 'ON' : 'OFF'}</div>
+          <div class="detail">Turn off in .config/config.jsonc runtime.autoApproveGuards</div>`;
+        grid.append(autoCard);
+
+        // Pending count
+        const pendingCard = document.createElement("div");
+        pendingCard.className = "system-card";
+        pendingCard.innerHTML = `<h4>Pending Requests</h4>
+          <div class="value ${systemStatus.pendingCount > 0 ? 'inactive-state' : ''}">${systemStatus.pendingCount}</div>
+          <div class="detail">awaiting approve / deny</div>`;
+        grid.append(pendingCard);
+
+        // Whitelist
+        const wlCard = document.createElement("div");
+        wlCard.className = "system-card";
+        const wlTitle = document.createElement("h4");
+        wlTitle.textContent = `Whitelist (${guardWhitelist.size})`;
+        wlCard.append(wlTitle);
+        if (guardWhitelist.size === 0) {
+          const noData = document.createElement("div");
+          noData.className = "detail";
+          noData.textContent = "No remembered patterns yet";
+          wlCard.append(noData);
+        } else {
+          const wlList = document.createElement("div");
+          wlList.className = "detail";
+          wlList.style.cssText = "max-height:120px;overflow:auto;";
+          for (const key of guardWhitelist) {
+            const row = document.createElement("div");
+            row.textContent = key;
+            wlList.append(row);
+          }
+          wlCard.append(wlList);
+        }
+        grid.append(wlCard);
+
+        signalsContentEl.append(grid);
+
+        // Pending guard cards
+        if (pendingGuards.size > 0) {
+          const header = document.createElement("div");
+          header.className = "signals-header";
+          header.style.marginTop = "14px";
+          const h3 = document.createElement("h3");
+          h3.textContent = `Pending (${pendingGuards.size})`;
+          header.append(h3);
+          signalsContentEl.append(header);
+
+          for (const [requestId, guard] of pendingGuards) {
+            const card = document.createElement("div");
+            card.className = "signal-event";
+            card.style.borderLeft = "3px solid #f0a45c";
+
+            const hdr = document.createElement("div");
+            hdr.className = "signal-event-header";
+            const toolSpan = document.createElement("span");
+            toolSpan.className = "signal-event-type";
+            toolSpan.textContent = `guard.ask: ${guard.toolName}`;
+            const timeSpan = document.createElement("span");
+            timeSpan.className = "signal-event-time";
+            timeSpan.textContent = guard.time;
+            hdr.append(toolSpan, timeSpan);
+
+            const meta = document.createElement("div");
+            meta.className = "signal-event-meta";
+            const tags = [
+              `risk=${guard.riskLevel ?? '?'}`,
+              `turn=${guard.turnId ?? '?'}`,
+              `id=${requestId.slice(0, 8)}`,
+            ];
+            for (const tag of tags) {
+              const tagEl = document.createElement("span");
+              tagEl.className = "tag";
+              tagEl.textContent = tag;
+              meta.append(tagEl);
+            }
+
+            const pre = document.createElement("pre");
+            pre.textContent = guard.toolInput ? JSON.stringify(guard.toolInput, null, 2) : "(no input)";
+
+            const actions = document.createElement("div");
+            actions.style.cssText = "display:flex;gap:8px;margin-top:8px;";
+
+            const approveBtn = document.createElement("button");
+            approveBtn.textContent = "Approve";
+            approveBtn.style.cssText = "background:#1a7a3a;border-color:#1a7a3a;";
+            approveBtn.addEventListener("click", () => sendGuardResponse(requestId, true));
+
+            const denyBtn = document.createElement("button");
+            denyBtn.textContent = "Deny";
+            denyBtn.style.cssText = "background:#a52a2a;border-color:#a52a2a;";
+            denyBtn.addEventListener("click", () => sendGuardResponse(requestId, false));
+
+            const rememberBtn = document.createElement("button");
+            rememberBtn.textContent = "Approve + Remember";
+            rememberBtn.style.cssText = "background:#1a6aaa;border-color:#1a6aaa;";
+            rememberBtn.addEventListener("click", () => {
+              guardWhitelist.add(`${guard.toolName}:${JSON.stringify(guard.toolInput ?? {}).slice(0, 60)}`);
+              sendGuardResponse(requestId, true, true);
+            });
+
+            actions.append(approveBtn, denyBtn, rememberBtn);
+            card.append(hdr, meta, pre, actions);
+            signalsContentEl.append(card);
+          }
+        }
+
+        // Recent guard events
+        const events = signalEvents.get("guard") || [];
+        if (events.length > 0) {
+          const historyHeader = document.createElement("div");
+          historyHeader.className = "signals-header";
+          historyHeader.style.marginTop = "14px";
+          const h3 = document.createElement("h3");
+          h3.textContent = `History (${events.length})`;
+          historyHeader.append(h3);
+          signalsContentEl.append(historyHeader);
+
+          for (const evt of events.slice().reverse()) {
+            signalsContentEl.append(buildSignalEventEl(evt));
+          }
+        }
+      }
+
+      function sendGuardResponse(requestId, approved, remember) {
+        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+        socket.send(JSON.stringify({
+          id: createEnvelopeId(),
+          type: "guard.response",
+          payload: { requestId, approved, remember: remember || false },
+          timestamp: Date.now(),
+        }));
+        pendingGuards.delete(requestId);
+        systemStatus.pendingCount = pendingGuards.size;
+        if (activePanel === "guard") renderActivePanel();
       }
 
       function renderSystemPanel() {
@@ -790,12 +948,66 @@
         const type = envelope.type;
         const payload = envelope.payload || {};
 
+        // Guard-specific handling
+        if (type === "guard.ask") {
+          pushSignalEvent("guard", type, payload);
+          const requestId = payload.requestId || payload.id;
+          if (requestId) {
+            pendingGuards.set(requestId, {
+              toolName: payload.toolName,
+              toolInput: payload.toolInput,
+              turnId: payload.turnId,
+              riskLevel: payload.riskLevel,
+              time: new Date().toLocaleTimeString(),
+            });
+            systemStatus.pendingCount = pendingGuards.size;
+          }
+          if (activePanel === "guard") renderActivePanel();
+          return;
+        }
+        if (type === "guard.answer") {
+          pushSignalEvent("guard", type, payload);
+          // guard.answer with approved/remember signals the final decision
+          if (payload.requestId) { pendingGuards.delete(payload.requestId); systemStatus.pendingCount = pendingGuards.size; }
+          if (activePanel === "guard") renderActivePanel();
+          return;
+        }
+        if (type === "guard.resolved" || type === "guard.denied") {
+          pushSignalEvent("guard", type, payload);
+          if (payload.requestId) { pendingGuards.delete(payload.requestId); systemStatus.pendingCount = pendingGuards.size; }
+          if (activePanel === "guard") renderActivePanel();
+          return;
+        }
+        if (type === "sandbox.approved" || type === "sandbox.denied") {
+          pushSignalEvent("sandbox", type, payload);
+          // Clear any pending guard for this tool
+          for (const [id, g] of pendingGuards) {
+            if (g.toolName === payload.toolName && g.turnId === payload.turnId) {
+              pendingGuards.delete(id);
+            }
+          }
+          systemStatus.pendingCount = pendingGuards.size;
+          if (activePanel === "sandbox" || activePanel === "guard") renderActivePanel();
+          return;
+        }
+        if (type === "sandbox.pattern.learned") {
+          pushSignalEvent("sandbox", type, payload);
+          if (payload.patternKey) guardWhitelist.add(payload.patternKey);
+          if (activePanel === "sandbox" || activePanel === "guard") renderActivePanel();
+          return;
+        }
+        if (type === "tool.completed" || type === "tool.failed" || type === "tool.denied") {
+          pushSignalEvent("guard", type, payload);
+          updateSystemStatus(type, payload);
+          if (activePanel === "guard") renderActivePanel();
+          return;
+        }
+
         // Route to signal panels
         const panelId = panelForType(type);
         if (panelId) {
           pushSignalEvent(panelId, type, payload);
           updateSystemStatus(type, payload);
-          // Re-render if this panel is currently active (or system panel)
           if (activePanel === panelId || activePanel === "system") {
             renderActivePanel();
           }

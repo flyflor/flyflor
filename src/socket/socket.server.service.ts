@@ -99,6 +99,16 @@ export class SocketServerService {
         message: async (ws, message) => {
           try {
             const envelope = this.parseEnvelope(message);
+            if (envelope.type === "guard.response") {
+              const payload = envelope.payload as { readonly requestId: string; readonly approved: boolean; readonly remember?: boolean };
+              if (typeof payload.requestId !== "string" || typeof payload.approved !== "boolean") {
+                ws.send(JSON.stringify(this.envelope("agent.error", { error: "invalid guard.response payload" })));
+                return;
+              }
+              const resolved = this.runtime.getSignalBus().resolveAsk(payload.requestId, payload.approved);
+              ws.send(JSON.stringify(this.envelope("guard.resolved", { requestId: payload.requestId, approved: payload.approved, resolved, remember: payload.remember ?? false })));
+              return;
+            }
             if (envelope.type !== "chat.message") {
               ws.send(JSON.stringify(this.envelope("agent.error", { error: `unsupported type: ${envelope.type}` })));
               return;
@@ -181,6 +191,9 @@ export class SocketServerService {
       "tool.artifact",
       "guard.ask",
       "guard.answer",
+      "guard.resolved",
+      "guard.denied",
+      "tool.denied",
       "worker.spawn",
       "worker.started",
       "worker.step",

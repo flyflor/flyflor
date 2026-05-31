@@ -229,7 +229,8 @@
         "maxContextChars": 90000,
 
         // Number of runtime/tool-loop steps allowed before the agent must finish or report a loop guard.
-        "maxToolSteps": 8,
+        // Set 0 to disable the configurable cap; an internal safety ceiling still applies.
+        "maxToolSteps": 0,
     },
     "agents": {
         // User-defined agent profiles for the multi-agent worker system.

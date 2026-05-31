@@ -95,7 +95,9 @@ export class SandboxGuard {
     }
 
     await this.emitEscalation(inspection, decision.reason);
-    return false;
+    // SignalBus.ask now supports pending asks; returning undefined
+    // keeps it waiting for an external responder such as the WebSocket UI.
+    return undefined as unknown as boolean;
   }
 
   /**

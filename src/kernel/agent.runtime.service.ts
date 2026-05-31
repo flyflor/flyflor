@@ -225,7 +225,10 @@ export class AgentRuntimeService {
     modelMessages = await this.guardMidTurnContextBudget(input.conversationId, turnId, modelMessages, "inline-tool-results");
     let assistantMessage = "";
     const loopToolResults = [...toolResults];
-    const maxSteps = this.configService.getConfig().context.maxToolSteps;
+    const configuredMaxSteps = this.configService.getConfig().context.maxToolSteps;
+    const hasFiniteCap = Number.isFinite(configuredMaxSteps) && configuredMaxSteps > 0;
+    const safetyCeiling = 4096;
+    const maxSteps = hasFiniteCap ? Math.min(configuredMaxSteps, safetyCeiling) : safetyCeiling;
     for (let step = 0; step < maxSteps; step += 1) {
       const streamed = await this.streamModelStep(turnId, input.conversationId, input.content, modelMessages, context.recall, visibleTools);
       assistantMessage += streamed.text;
@@ -255,9 +258,13 @@ export class AgentRuntimeService {
         ];
         modelMessages = await this.guardMidTurnContextBudget(input.conversationId, turnId, modelMessages, "model-tool-results");
       }
-      if (step === maxSteps - 1) {
+      if (hasFiniteCap && step === maxSteps - 1) {
         assistantMessage += "\n\n工具循环达到步数上限，已停止继续调用工具。";
         await this.signalBus.emit("agent.error", { conversationId: input.conversationId, turnId, error: "tool loop step limit reached" });
+      }
+      if (!hasFiniteCap && step === safetyCeiling - 1) {
+        assistantMessage += "\n\n工具循环触发安全顶限，请人工检查任务。";
+        await this.signalBus.emit("agent.error", { conversationId: input.conversationId, turnId, error: "tool loop safety ceiling reached" });
       }
     }
     this.memoryComponent.appendMessage(input.conversationId, {

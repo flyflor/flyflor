@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Service } from "../di";
 import type { SignalAskOptions, SignalHandler, SignalLifecyclePayload, SignalResult, SignalSubscription } from "./signal.types";
 
@@ -9,6 +10,7 @@ import type { SignalAskOptions, SignalHandler, SignalLifecyclePayload, SignalRes
 @Service()
 export class SignalBus {
   private readonly handlers = new Map<string, Set<SignalHandler>>();
+  private readonly pendingAsks = new Map<string, { readonly resolve: (value: boolean) => void; readonly timer?: ReturnType<typeof setTimeout> }>();
 
   public constructor(private readonly autoApproveGuards = true) {}
 
@@ -78,15 +80,71 @@ export class SignalBus {
     payload: TPayload,
     options: SignalAskOptions = {},
   ): Promise<boolean> {
-    const result = await this.emit<TPayload, boolean>(signal, payload);
+    const requestId = randomUUID();
+    const enrichedPayload = this.enrichAskPayload(payload, requestId);
+    const pending = new Promise<boolean>((resolve) => {
+      const timeoutMs = options.timeoutMs ?? 0;
+      const timer = timeoutMs > 0
+        ? setTimeout(() => {
+            const entry = this.pendingAsks.get(requestId);
+            if (entry) {
+              this.pendingAsks.delete(requestId);
+              entry.resolve(this.autoApproveGuards ? options.defaultValue ?? true : false);
+            }
+          }, timeoutMs)
+        : undefined;
+      this.pendingAsks.set(requestId, { resolve, timer });
+    });
+    const result = await this.emit<typeof enrichedPayload, boolean>(signal, enrichedPayload);
     const explicit = result.results.find((value) => typeof value === "boolean");
     if (typeof explicit === "boolean") {
+      this.resolveAsk(requestId, explicit);
       return explicit;
     }
     if (this.autoApproveGuards) {
-      return options.defaultValue ?? true;
+      const approved = options.defaultValue ?? true;
+      this.resolveAsk(requestId, approved);
+      return approved;
     }
-    return false;
+    return pending;
+  }
+
+  /**
+   * Resolves a pending ask by request id from an external responder such as the WebSocket UI.
+   *
+   * @param requestId - Ask correlation id assigned in {@link ask}.
+   * @param approved - Final approval decision.
+   * @returns True when a pending ask was resolved.
+   * @usage Socket adapters call this when a browser sends `guard.response`.
+   */
+  public resolveAsk(requestId: string, approved: boolean): boolean {
+    const entry = this.pendingAsks.get(requestId);
+    if (!entry) {
+      return false;
+    }
+    this.pendingAsks.delete(requestId);
+    if (entry.timer) {
+      clearTimeout(entry.timer);
+    }
+    entry.resolve(approved);
+    return true;
+  }
+
+  /**
+   * Lists pending ask correlation ids.
+   *
+   * @returns Snapshot of pending ids for diagnostics.
+   * @usage Diagnostics can show how many guard requests are awaiting a decision.
+   */
+  public pendingAskIds(): readonly string[] {
+    return [...this.pendingAsks.keys()];
+  }
+
+  private enrichAskPayload<TPayload>(payload: TPayload, requestId: string): TPayload & { readonly requestId: string } {
+    if (payload && typeof payload === "object") {
+      return { requestId, ...(payload as object) } as TPayload & { readonly requestId: string };
+    }
+    return { value: payload, requestId } as unknown as TPayload & { readonly requestId: string };
   }
 
   /**
