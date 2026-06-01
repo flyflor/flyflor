@@ -441,7 +441,7 @@ export class AgentRuntimeService {
       .register(new MemoryStoreTool(this.memoryComponent))
       .register(new MemoryForgetTool())
       .register(new ContextCompactTool())
-      .register(new SpawnAgentTool())
+      .register(new SpawnAgentTool(this.configService))
       .register(new TaskTool())
       .register(new CodeGraphTool());
   }

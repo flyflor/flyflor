@@ -75,6 +75,8 @@
 
 **修复方向:** 统一默认值或修正注释。
 
+> **质疑:** 该问题描述存在误导。注释 "Set 0 to use the default of 24 steps" 实际上是正确的。`config.service.ts:252` 的 `?? 8` 仅处理配置文件中**完全缺失** `maxToolSteps` 字段的情况（此时回退到配置层默认值 8）。当用户显式设置 `maxToolSteps: 0` 时，`0 ?? 8` 的值为 `0`（因为 0 不是 null/undefined）；随后 `agent.runtime.service.ts:284` 中 `configuredMaxSteps = 0`，`0 > 0` 为 false，因此使用 `defaultSteps = 24`。所以 "Set 0 to use the default of 24 steps" 与代码行为完全一致，不存在不一致。
+
 #### [low] resolveApiKey 的 sk-* 前缀约定不明确
 
 **文件:** `src/config/config.service.ts:367-377`
@@ -104,6 +106,8 @@
 `src/config/` 目录缺少 `index.ts` barrel 文件。其他模块（如 `src/brain/`、`src/memory/`、`src/context/`）都有 `index.ts` 提供统一导出入口。虽然所有导入都使用了明确的文件路径而非 barrel 导入，但缺少 barrel 文件造成了不一致的项目结构。
 
 **修复方向:** 添加 `src/config/index.ts` 统一导出，或明确 barrel 文件不是项目规范。
+
+> **质疑:** AGENTS.md 明确说明 "所有导入都使用了明确的文件路径而非 barrel 导入"，这意味着项目的设计规范就是避免 barrel 文件、使用显式文件路径导入。缺少 barrel 文件与这一规范完全一致，不是遗漏或结构不一致。将设计选择描述为 "问题" 是不合理的。
 
 #### [low] 多个服务使用双构造函数模式产生不一致的默认值
 
@@ -148,6 +152,8 @@ The executable path constructs `SocketServerService` directly instead of resolvi
 
 **Fix direction:** Use `createContainer(SocketModule)` in the entrypoint and progressively remove hidden default object graphs from service constructors.
 
+> **质疑:** 该问题描述不准确。`src/index.ts:22-24` 明确使用了 `createContainer(SocketModule)` 创建 DI 容器，并通过 `container.resolve(SocketServerService)` 解析服务——这是标准 DI 用法，而非 "directly constructs"。`SocketServerService` 的 DI 路径（无参构造）不会执行任何手动构造逻辑；DI 容器在构造后注入 `@Inject` 属性并调用 `init()`，因此 `@Subscribe` 生命周期接线在 `--serve` 路径上是完全有效的。
+
 #### [high] Main runtime bypasses SandboxGuard entirely
 
 **File:** `src/kernel/agent.runtime.service.ts`, `src/sandbox/sandbox.guard.service.ts`
@@ -155,6 +161,8 @@ The executable path constructs `SocketServerService` directly instead of resolvi
 `AgentRuntimeService` creates its own `SignalBus` and never wires `SandboxGuard` to that bus. Guard asks therefore use fallback approval/denial behavior instead of sandbox inspection, escalation, brain audit, and crystal ASK flow.
 
 **Fix direction:** Wire `SandboxGuard` through the same runtime `SignalBus` via DI, then assert guarded tools emit `sandbox.inspected`.
+
+> **质疑:** 该问题描述对主运行路径（`--serve`）不准确。在 DI 路径中，`AgentRuntimeService` 通过 `@Inject(SignalBus)` 接收 DI 容器的 `SignalBus` 单例；`SandboxGuard` 同样通过 `@Inject(SignalBus)` 注入同一个单例。`Container.resolve` 对 `SignalBus` 使用单例缓存（`instances` Map），因此两者共享同一实例。`SandboxGuard` 的 `@Subscribe('guard.ask')` 会在 DI 容器构造 `SandboxGuard` 时通过 `wireSubscriptions` 注册到该单例上。`guard.ask` 信号会被 `SandboxGuard.handleGuardAsk` 正确处理，不会落入 "fallback approval/denial"。该问题仅适用于手动构造路径（测试中的双构造函数模式），不适用于主运行路径。
 
 #### [high] Guard ask payload contract is incompatible with SandboxGuard
 
@@ -164,6 +172,8 @@ Tools emit `guard.ask` payloads shaped like `{ tool: this.name, ... }`, while `S
 
 **Fix direction:** Standardize on `{ toolName, toolInput, turnId }` and test shell/write/multi_edit through a DI-wired guard.
 
+> **质疑:** 该问题描述与代码不符。`ShellTool`（line 31）、`WriteTool`（line 59）和 `MultiEditTool`（line 143）发送的 `guard.ask` payload 均为 `{ toolName: this.name, toolInput: ..., turnId: context.turnId }`，这与 `GuardAskPayload` 接口（`toolName`, `toolInput`, `turnId`）完全匹配。`SandboxGuard.handleGuardAsk` 接收的 payload 直接解构为 `payload.toolName`，不存在 contract mismatch。issue 描述 "shaped like `{ tool: this.name, ... }`" 在代码中找不到对应证据。
+
 #### [high] Untrusted model `projectPath` becomes tool cwd and write root
 
 **File:** `src/context/context.intent.analyzer.component.ts`, `src/kernel/agent.runtime.service.ts`
@@ -171,6 +181,8 @@ Tools emit `guard.ask` payloads shaped like `{ tool: this.name, ... }`, while `S
 The decider's `projectPath` is accepted as a string and later used as cwd/write root for inspection, shell, and editing. `resolveToolPath()` protects paths relative to cwd, but cwd itself is not validated against an approved workspace.
 
 **Fix direction:** Canonicalize and allowlist `projectPath` before storing it on the decision. Derive `writeTargetRoot` only from a validated path.
+
+> **质疑:** 该问题描述 "cwd itself is not validated" 与代码不符。`AgentRuntimeService.executeInlineTools()` 在调用 `inspectProject()` 之前通过 `canonicalizeWorkspaceForTurn()` 调用 `workspaceAllowlist.validate()` 验证 `projectPath`。`AgentRuntimeService.executeModelToolCall()` 通过 `canonicalToolCwd()` 调用 `workspaceAllowlist.validateOptional()` 验证 `intent.writeTargetRoot ?? intent.projectPath`。`WorkspaceAllowlistComponent.validate()` 使用 `isInside()` 严格检查路径是否在配置的 workspace roots 内。因此 cwd 本身**已经**被验证，不是 "not validated"。
 
 #### [high] Clarification decisions are advisory instead of enforced
 
@@ -180,6 +192,8 @@ When intent says `clarify_reference` or `needsClarification`, the runtime still 
 
 **Fix direction:** Short-circuit ambiguous turns and persist/emit the clarifying question as the final assistant response. Add a regression test proving ambiguous turns never enter project/tool execution.
 
+> **质疑:** 该问题描述与代码行为不符。`AgentRuntimeService.runTurn()` 在 line 185-228 中检测到 `intent.needsClarification || intent.mode === "clarify_reference"` 时直接返回，不会进入模型调用、工具循环或项目检查。clarifying question 作为 `chat.final` 信号发出，并作为完整的 assistant message 存储到 `memory.db` 和 `brain.db` 中（`status: "completed"`）。这并非 "advisory" 或 "may be ignored"，而是 enforced short-circuit。issue 描述 "still builds normal context and streams the answer model" 是错误的——运行时并未调用 model provider。
+
 #### [high] ProjectPaths.join can bypass the project-root path guard
 
 **File:** `src/shared/path.ts`
@@ -187,6 +201,8 @@ When intent says `clarify_reference` or `needsClarification`, the runtime still 
 `ProjectPaths.join(relativeDir, segment)` validates only `relativeDir`, then appends an unchecked segment. A segment containing `../` can escape the project root.
 
 **Fix direction:** Validate the combined resolved path or reject absolute/parent/separator-bearing child segments.
+
+> **质疑:** 该问题描述错误。`ProjectPaths.join()` 在 `join(relativeDir, segment)` 之后立即调用 `this.resolve(relativePath)`，而 `resolve()` 会执行 `normalize(resolve(projectRoot, relativePath))` 并严格检查 `absolute !== root && !absolute.startsWith(`${root}/`)`。即使 segment 包含 `../`，组合后的路径仍然会通过 `resolve()` 的逃逸检查并在越界时抛出错误。因此 `join()` 不会绕过项目根路径守卫。添加 `basename()` 或显式拒绝 `..` 属于防御深度改进，而非修复现存的逃逸漏洞。
 
 #### [high] GrepTool hard-requires a real `rg` binary
 
@@ -196,6 +212,8 @@ When intent says `clarify_reference` or `needsClarification`, the runtime still 
 
 **Fix direction:** Because project red lines forbid silent fallback execution, either require and verify a configured project-local `rg` executable with explicit diagnostics, or replace the internal tool with a Bun-native grep implementation documented as the primary path.
 
+> **质疑:** 该问题描述与当前代码不符。`src/tools/file.tools.ts` 中的 `GrepTool` 已实现为纯 Bun-native 方案（`Bun.Glob` + `readdirSync` + `readFileSync` + `RegExp.test`），完全不依赖外部 `rg` 二进制文件。代码中没有任何 `Bun.spawnSync(["rg", ...])` 调用。该问题可能已经过时或基于早期代码版本。
+
 #### [high] Read-only GitTool can mutate repository state
 
 **File:** `src/tools/git.tool.ts`
@@ -203,6 +221,8 @@ When intent says `clarify_reference` or `needsClarification`, the runtime still 
 `GitTool` advertises `mutability: "read-only"` but allows top-level commands such as `branch` and forwards arguments directly to `git`. Some allowed forms can mutate refs or read surprising paths.
 
 **Fix direction:** Replace top-level allowlists with per-subcommand parsers. Restrict `branch` to non-mutating forms or move mutating git operations behind explicit guards.
+
+> **质疑:** 该问题标题 "can mutate repository state" 断言当前代码已允许变异操作，但 `GitTool.validateBranchArgs()` 的 allowlist 明确拒绝了所有变异参数：`git branch <name>`（创建分支）中的 `<name>` 不在 allowed set 中；`git branch -d/-D`（删除）、`git branch -m/-M`（重命名）、`git branch -f/--force`（强制）等参数均不在 allowed set 中。当前代码下无法通过 `GitTool` 执行变异 git 操作。issue 标题的 "can mutate" 断言不成立。虽然 per-subcommand parser 是合理的防御深度改进，但不应将其描述为已存在的安全漏洞。
 
 #### [high] Worker timeout/cancel lifecycle can leak side effects and capacity
 
@@ -227,6 +247,8 @@ The constructor starts periodic work while dependencies are property-injected la
 The base SQL schemas unconditionally create vec0 virtual tables. When `enableSqliteVec=false`, the extension is not loaded, so store construction can fail.
 
 **Fix direction:** Split base schemas from vector schemas and create vec0 tables only when vector mode is enabled. Keep the existing platform probing approach; do not rework it.
+
+> **质疑:** 该问题描述错误。`sql/scope-schema.sql` 和 `sql/crystal-schema.sql` 中均**不包含** `CREATE VIRTUAL TABLE` 语句。`vec0` 虚拟表仅在 `ScopeStore.initialize()`（line 78）和 `CrystalStore.initialize()`（line 99）中当 `this.vectorEnabled === true` 时条件创建。基础 schema 不会导致 `enableSqliteVec=false` 时的加载失败。当前代码已经实现了 "split base schemas from vector schemas" 的目标。
 
 #### [high] Forgetting scans use recall ranking instead of storage scans
 
@@ -269,6 +291,8 @@ Recent messages covered by the latest checkpoint are filtered even when `checkpo
 The provider sends native `tools`, but later tool messages are mapped to `user` text and do not preserve assistant `tool_calls` plus `tool_call_id` protocol.
 
 **Fix direction:** Use provider-native tool message shapes, or explicitly switch to text-only tool evidence without native `tools`.
+
+> **质疑:** 该问题描述与代码不符。`normalizeMessages()` 对 assistant tool_calls 保留了原生 `tool_calls` 数组（含 `id`, `type`, `function`），对 tool results 保留了 `role: "tool"` 和 `tool_call_id`。仅有当 `m.role === "tool"` 且**缺少** `toolCallId` 时（即无配对 tool_call 的 orphan tool 消息），才会降级为 `user` text。在正常的 model-requested tool calling 路径中，assistant `tool_calls` 和 `tool` result 的 `tool_call_id` 均完整保留并 round-trip 到 provider。
 
 #### [medium] Plugin checks can have installation side effects
 
@@ -377,6 +401,19 @@ Several docs describe behavior that is not implemented yet: recovery checkpoints
 Review of new systems added in: `src/prompts/`, `src/worker/`, `src/sandbox/`, `src/scope/`, `src/crystal/`, `src/forgetting/`, plus changes to `src/config/`, `src/kernel/kernel.module.ts`, and `src/socket/socket.server.service.ts`.
 
 **Verification:** TypeScript compilation 0 errors. Scenario tests 24/24 passing.
+
+> **质疑:** 经全量代码审查，"Previous Resolved Review" 中标记为 resolved 的多个问题在当前代码树中**实际上并未修复**，不应继续标记为 resolved：
+> - `[medium] Prompt files referenced by listProtocols may not exist on disk`: `blackboard-role.md`、`blackboard-synthesize.md`、`forgetting-compact.md`、`forgetting-drift.md` 仍然不存在于 `prompts/` 目录；`PromptRegistryService.load()` 仍会在文件缺失时抛出 `ENOENT`。
+> - `[medium] ScopeService.findRecentChunkId opens a new read-only Database connection per call`: `ScopeService.findRecentChunkId()` 仍然每次调用创建 `new Database(memoryDbPath, { readonly: true })`。
+> - `[medium] Tool schema cast in resolveWorkerTools is unsafe`: `WorkerService.resolveWorkerTools()` 仍然存在 `tool.schema as unknown as Record<string, unknown>`。
+> - `[medium] ForgettingService uses fixed scan limits`: `MAX_CHUNK_SCAN = 500` 和 `MAX_FACT_SCAN = 500` 仍然是硬编码常量。
+> - `[low] Duplicate ChatMessagePayload interfaces`: `CrystalService` 和 `ScopeService` 仍然各自定义独立的 `ChatMessagePayload` 接口，未提取到共享位置。
+> - `[low] PromptRegistryService.listProtocols is hardcoded`: 仍然是硬编码的 13 条目数组，未改为文件系统扫描。
+> - `[low] WorkerService: hardcoded budget`: `WorkerService.executeWorkerTool()` 仍然是 `budget: { outputChars: 4000 }`，未改为可配置。
+> - `[low] SandboxGuard.autoApproveGuards getter could throw`: `SandboxGuard.autoApproveGuards` 仍然没有 `this.configService?.getConfig()?.runtime?.autoApproveGuards ?? true` 的 null guard。
+> - `[critical] CrystalService: chat.message signal is emitted without role`: `AgentRuntimeService.runTurn()` 仍然没有按 recommendation 添加 `role: "user"`；`CrystalService` 只是添加了 `role?: string` 的 workaround，并未修复根本原因。
+>
+> 建议重新评估 "21/21 resolved" 的状态，将上述未修复问题移回 backlog 或明确为 "won't fix"。
 
 ---
 
