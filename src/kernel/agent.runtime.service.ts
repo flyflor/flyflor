@@ -10,6 +10,7 @@ import {
   type ContextBuildResult,
   type ContextIntentDecision,
   type ContextMessage,
+  type ContextToolCall,
   type ToolVisibilityGroup,
 } from "../context";
 import { MemoryComponent, type MemoryRecallResult } from "../memory";
@@ -272,6 +273,7 @@ export class AgentRuntimeService {
           content: this.renderToolResults(toolResults),
         },
       ];
+    modelMessages = this.sanitizeToolProtocolMessages(modelMessages);
     modelMessages = await this.guardMidTurnContextBudget(input.conversationId, turnId, modelMessages, "inline-tool-results");
     let assistantMessage = "";
     const loopToolResults = [...toolResults];
@@ -307,6 +309,7 @@ export class AgentRuntimeService {
           toolCalls: streamed.toolCalls.map((call) => ({ id: call.id, name: call.name, argumentsJson: call.argumentsJson })),
         },
       ];
+      modelMessages = this.sanitizeToolProtocolMessages(modelMessages);
       for (const toolCall of streamed.toolCalls) {
         const result = await this.executeModelToolCall(turnId, input.conversationId, toolCall, visibleTools, intent);
         loopToolResults.push(result);
@@ -318,6 +321,7 @@ export class AgentRuntimeService {
             content: this.renderSingleToolResult(toolCall.name, result),
           },
         ];
+        modelMessages = this.sanitizeToolProtocolMessages(modelMessages);
         modelMessages = await this.guardMidTurnContextBudget(input.conversationId, turnId, modelMessages, "model-tool-results");
       }
       if (step === maxSteps - 1) {
@@ -699,16 +703,18 @@ export class AgentRuntimeService {
     reason: string,
   ): Promise<readonly ContextMessage[]> {
     const maxContextChars = this.configService.getConfig().context.maxContextChars;
-    const estimatedChars = this.estimateMessageChars(messages);
-    if (estimatedChars <= maxContextChars || messages.length <= 1) {
-      return messages;
+    const sanitizedMessages = this.sanitizeToolProtocolMessages(messages);
+    const estimatedChars = this.estimateMessageChars(sanitizedMessages);
+    if (estimatedChars <= maxContextChars || sanitizedMessages.length <= 1) {
+      return sanitizedMessages;
     }
-    const first = messages[0];
-    const tailCount = messages.length > 4 ? 2 : 0;
-    const tail = tailCount > 0 ? messages.slice(-tailCount) : [];
-    const compactedMessages = tailCount > 0 ? messages.slice(1, -tailCount) : messages.slice(1);
+    const first = sanitizedMessages[0];
+    const tailCount = sanitizedMessages.length > 4 ? 2 : 0;
+    const tail = tailCount > 0 ? sanitizedMessages.slice(-tailCount) : [];
+    const headless = tailCount > 0 ? sanitizedMessages.slice(1, -tailCount) : sanitizedMessages.slice(1);
+    const compactedMessages = this.selectCompactableMessages(headless);
     if (!first || compactedMessages.length === 0) {
-      return messages;
+      return sanitizedMessages;
     }
     const sourceMessageIds = compactedMessages.map((_, index) => `${turnId}:model-context:${index}`);
     const checkpointDraft = this.contextCompressor.compactContextMessages(
@@ -749,7 +755,7 @@ export class AgentRuntimeService {
       checkpointId: checkpoint.id,
       sourceMessageIds,
     });
-    return [first, compactedContext, ...tail];
+    return this.sanitizeToolProtocolMessages([first, compactedContext, ...tail]);
   }
 
   /**
@@ -761,6 +767,87 @@ export class AgentRuntimeService {
    */
   private estimateMessageChars(messages: readonly ContextMessage[]): number {
     return messages.reduce((total, message) => total + message.content.length, 0);
+  }
+
+  /**
+   * Keeps assistant tool-call groups and matching tool results structurally valid.
+   *
+   * @param messages - Candidate model-facing messages.
+   * @returns Messages with orphan tool results downgraded to plain text evidence.
+   * @usage Called before provider requests and after compaction to avoid invalid native tool protocol sequences.
+   */
+  private sanitizeToolProtocolMessages(messages: readonly ContextMessage[]): readonly ContextMessage[] {
+    const liveToolCalls = new Map<string, ContextToolCall>();
+    const sanitized: ContextMessage[] = [];
+    for (const message of messages) {
+      if (message.role === "assistant" && message.toolCalls?.length) {
+        for (const call of message.toolCalls) {
+          liveToolCalls.set(call.id, call);
+        }
+        sanitized.push(message);
+        continue;
+      }
+      if (message.role === "tool" && message.toolCallId) {
+        const pairedCall = liveToolCalls.get(message.toolCallId);
+        if (!pairedCall) {
+          sanitized.push({
+            role: "tool",
+            content: this.renderSanitizedOrphanToolMessage(message),
+          });
+          continue;
+        }
+        liveToolCalls.delete(message.toolCallId);
+        sanitized.push(message);
+        continue;
+      }
+      sanitized.push(message);
+    }
+    return sanitized;
+  }
+
+  /**
+   * Selects a compactable middle slice without splitting assistant/tool result pairs.
+   *
+   * @param messages - Middle model loop messages excluding the protected head and tail.
+   * @returns Prefix that can be summarized safely.
+   * @usage Mid-turn compaction summarizes only complete protocol groups and leaves partial pairs in the live tail.
+   */
+  private selectCompactableMessages(messages: readonly ContextMessage[]): readonly ContextMessage[] {
+    if (messages.length === 0) {
+      return messages;
+    }
+    const liveToolCalls = new Set<string>();
+    let cutoff = messages.length;
+    for (let index = 0; index < messages.length; index += 1) {
+      const message = messages[index];
+      if (message?.role === "assistant" && message.toolCalls?.length) {
+        for (const call of message.toolCalls) {
+          liveToolCalls.add(call.id);
+        }
+      }
+      if (message?.role === "tool" && message.toolCallId && liveToolCalls.has(message.toolCallId)) {
+        liveToolCalls.delete(message.toolCallId);
+      }
+      if (liveToolCalls.size > 0) {
+        cutoff = index;
+      }
+    }
+    return messages.slice(0, cutoff);
+  }
+
+  /**
+   * Renders an orphan tool message as plain evidence after protocol cleanup.
+   *
+   * @param message - Tool message whose provider pairing no longer exists.
+   * @returns Stable text-only fallback content.
+   * @usage Prevents provider validation errors when earlier compaction removed the corresponding assistant tool call.
+   */
+  private renderSanitizedOrphanToolMessage(message: ContextMessage): string {
+    return [
+      "[sanitized orphan tool result]",
+      message.toolCallId ? `tool_call_id=${message.toolCallId}` : undefined,
+      message.content,
+    ].filter((part): part is string => Boolean(part)).join("\n");
   }
 
   /**

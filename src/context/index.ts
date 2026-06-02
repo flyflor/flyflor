@@ -13,6 +13,7 @@ export type {
   ContextIntentModelRequest,
   ContextSourceGroup,
   ContextMessage,
+  ContextToolCall,
   ToolVisibilityGroup,
   TurnCluePacket,
   TurnConversationClue,

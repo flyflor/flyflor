@@ -84,8 +84,26 @@ export class MemoryComponent {
    */
   public initialize(): void {
     this.db.exec(readFileSync(this.configService.resolve("./sql/memory-schema.sql"), "utf8"));
+    this.ensureToolProtocolColumns();
     if (this.vectorEnabled) {
       this.db.exec("create virtual table if not exists memory_vectors using vec0(embedding float[4])");
+    }
+  }
+
+  /**
+   * Ensures messages table has tool protocol columns for existing databases.
+   *
+   * @returns Nothing.
+   * @usage Called during initialize to migrate old schema without tool_calls_json/tool_call_id.
+   */
+  private ensureToolProtocolColumns(): void {
+    const columns = this.db.query("pragma table_info(messages)").all() as Array<{ readonly name: string }>;
+    const columnNames = new Set(columns.map((col) => col.name));
+    if (!columnNames.has("tool_calls_json")) {
+      this.db.exec("alter table messages add column tool_calls_json text");
+    }
+    if (!columnNames.has("tool_call_id")) {
+      this.db.exec("alter table messages add column tool_call_id text");
     }
   }
 
@@ -109,16 +127,29 @@ export class MemoryComponent {
   public rebuildCriticalIndexesFromBrain(brainDbPath: string): { readonly messages: number; readonly chunks: number; readonly facts: number } {
     const brain = new Database(isAbsolute(brainDbPath) ? brainDbPath : this.configService.resolve(brainDbPath), { readonly: true });
     const rows = brain.query(`
-      select id, conversation_id as conversationId, role, content, created_at as createdAt
+      select id, conversation_id as conversationId, role, content, created_at as createdAt, metadata
       from brain_messages
       order by created_at asc
-    `).all() as Array<MemoryMessage & { readonly conversationId: string }>;
+    `).all() as Array<MemoryMessage & { readonly conversationId: string; readonly metadata: string | null }>;
     for (const row of rows) {
+      let toolCalls: MemoryMessage["toolCalls"];
+      let toolCallId: string | undefined;
+      if (row.metadata) {
+        try {
+          const meta = JSON.parse(row.metadata);
+          toolCalls = meta.toolCalls;
+          toolCallId = meta.toolCallId;
+        } catch {
+          // ignore malformed metadata
+        }
+      }
       this.appendMessage(row.conversationId, {
         id: row.id,
         role: row.role,
         content: row.content,
         createdAt: row.createdAt,
+        toolCalls,
+        toolCallId,
       });
     }
     const { chunks, facts } = this.replayAuditedMemoryFacts(brain);
@@ -140,12 +171,15 @@ export class MemoryComponent {
       conversationId,
       message.createdAt,
     );
-    this.db.query("insert or replace into messages(id, conversation_id, role, content, created_at) values (?, ?, ?, ?, ?)").run(
+    const toolCallsJson = message.toolCalls ? JSON.stringify(message.toolCalls) : null;
+    this.db.query("insert or replace into messages(id, conversation_id, role, content, created_at, tool_calls_json, tool_call_id) values (?, ?, ?, ?, ?, ?, ?)").run(
       message.id,
       conversationId,
       message.role,
       message.content,
       message.createdAt,
+      toolCallsJson,
+      message.toolCallId ?? null,
     );
     return message;
   }
@@ -160,13 +194,20 @@ export class MemoryComponent {
    */
   public recentMessages(conversationId: string, limit: number): readonly MemoryMessage[] {
     const rows = this.db.query(`
-      select id, role, content, created_at as createdAt
+      select id, role, content, created_at as createdAt, tool_calls_json as toolCallsJson, tool_call_id as toolCallId
       from messages
       where conversation_id = ?
       order by created_at desc
       limit ?
-    `).all(conversationId, limit) as MemoryMessage[];
-    return rows.reverse();
+    `).all(conversationId, limit) as Array<Omit<MemoryMessage, "toolCalls"> & { readonly toolCallsJson: string | null; readonly toolCallId: string | null }>;
+    return rows.reverse().map((row) => ({
+      id: row.id,
+      role: row.role,
+      content: row.content,
+      createdAt: row.createdAt,
+      toolCalls: row.toolCallsJson ? JSON.parse(row.toolCallsJson) : undefined,
+      toolCallId: row.toolCallId ?? undefined,
+    }));
   }
 
   /**

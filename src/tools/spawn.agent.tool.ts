@@ -37,11 +37,20 @@ export class SpawnAgentTool implements Tool<SpawnAgentToolInput> {
       return { ok: false, output: "spawn_agent requires conversationId in ToolContext" };
     }
     const workerId = randomUUID();
-    const approved = await context.signalBus.ask("guard.spawn", {
+    const approved = await context.signalBus.ask("guard.ask", {
       toolName: this.name,
-      workerId,
-      agentProfile,
-      prompt: input.prompt,
+      toolInput: {
+        workerId,
+        agentProfile,
+        prompt: input.prompt,
+      },
+      parentTurnId: context.turnId,
+      parentConversationId: context.conversationId,
+    });
+    await context.signalBus.emit("guard.answer", {
+      toolName: this.name,
+      approved,
+      turnId: context.turnId,
       parentTurnId: context.turnId,
       parentConversationId: context.conversationId,
     });

@@ -236,6 +236,61 @@ describe("no-session agent scenario", () => {
     expect(events).toContain("guard.answer");
   });
 
+  test("routes spawn_agent guard approval through guard events with parent linkage", async () => {
+    const config = new ConfigService(profile.root, profile.configPath);
+    const memory = new MemoryComponent(config);
+    const signalBus = new SignalBus(true);
+    const asks: unknown[] = [];
+    const answers: unknown[] = [];
+    signalBus.subscribe("guard.ask", async (payload) => {
+      asks.push(payload);
+    });
+    signalBus.subscribe("guard.answer", async (payload) => {
+      answers.push(payload);
+    });
+    signalBus.subscribe("worker.spawn", async (payload) => {
+      const spawn = payload as { workerId: string };
+      await signalBus.emit("worker.settled", {
+        workerId: spawn.workerId,
+        status: "completed",
+        summary: "worker finished",
+      });
+    });
+    const runtime = new AgentRuntimeService(
+      config,
+      memory,
+      new ContextBuilderService(config, undefined, memory),
+      signalBus,
+    );
+
+    const result = await runtime.getToolRegistry().execute("spawn_agent", {
+      agentProfile: "general",
+      prompt: "Inspect the project",
+    }, runtime.createToolContext("spawn-guard", "test-conversation"));
+
+    expect(result.ok).toBe(true);
+    expect(result.output).toContain('state="completed"');
+    expect(result.output).toContain("worker finished");
+    expect(asks).toHaveLength(1);
+    expect(asks[0]).toMatchObject({
+      toolName: "spawn_agent",
+      parentTurnId: "spawn-guard",
+      parentConversationId: "test-conversation",
+      toolInput: expect.objectContaining({
+        agentProfile: "general",
+        prompt: "Inspect the project",
+      }),
+    });
+    expect(answers).toHaveLength(1);
+    expect(answers[0]).toMatchObject({
+      toolName: "spawn_agent",
+      approved: true,
+      turnId: "spawn-guard",
+      parentTurnId: "spawn-guard",
+      parentConversationId: "test-conversation",
+    });
+  });
+
   test("forgets stored memory and persists context checkpoints through tools", async () => {
     const config = new ConfigService(profile.root, profile.configPath);
     const memory = new MemoryComponent(config);

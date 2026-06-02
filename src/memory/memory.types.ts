@@ -7,11 +7,19 @@
  * @property createdAt - Unix timestamp in milliseconds.
  * @usage Runtime writes every no-session turn before rebuilding context.
  */
+export interface MemoryMessageToolCall {
+  readonly id: string;
+  readonly name: string;
+  readonly argumentsJson: string;
+}
+
 export interface MemoryMessage {
   readonly id: string;
   readonly role: "user" | "assistant" | "system" | "tool";
   readonly content: string;
   readonly createdAt: number;
+  readonly toolCalls?: readonly MemoryMessageToolCall[];
+  readonly toolCallId?: string;
 }
 
 /**

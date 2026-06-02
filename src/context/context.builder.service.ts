@@ -65,7 +65,12 @@ export class ContextBuilderService {
     ];
     const messages: ContextMessage[] = [
       { role: "system", content: systemSections.join("\n\n") },
-      ...recentMessages.map((message) => ({ role: message.role, content: message.content }) satisfies ContextMessage),
+      ...recentMessages.map((message) => ({
+        role: message.role,
+        content: message.content,
+        toolCalls: message.toolCalls,
+        toolCallId: message.toolCallId,
+      }) satisfies ContextMessage),
       { role: "user", content: input.userInput },
     ];
     return {

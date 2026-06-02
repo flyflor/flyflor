@@ -12,7 +12,9 @@ create table if not exists messages (
   conversation_id text not null,
   role text not null,
   content text not null,
-  created_at integer not null
+  created_at integer not null,
+  tool_calls_json text,
+  tool_call_id text
 );
 
 create index if not exists idx_messages_conversation_created
