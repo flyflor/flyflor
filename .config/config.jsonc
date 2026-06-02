@@ -18,5 +18,12 @@
     },
     "storage": {
         "schemaDirectory": "./sql"
+    },
+    // External capabilities (optional). Skills are directory-based; MCP servers use stdio (command/args) or url.
+    "skills": {
+        "directory": "./.config/skills"
+    },
+    "mcp": {
+        "servers": {}
     }
 }

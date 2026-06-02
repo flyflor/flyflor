@@ -3,14 +3,15 @@ import { CapillaryModule } from "@/capillary";
 import { GuardModule } from "@/guard";
 import { IPCModule } from "@/capillary/ipc";
 import { ShardModule } from "@/shard/module.ts";
+import { PluginModule } from "@/plugins";
 
 /**
  * The root Flyflor module.
- * Imports the state shard (config/memory/context), the capillary blood-vessel layer, guard policies, and IPC.
- * Bootstrap resolves this, building the whole DI tree and bringing the socket online.
+ * Imports the state shard (config/memory/context), the capillary blood-vessel layer, guard policies, IPC,
+ * and the external plugin boundary (skills + MCP). Bootstrap resolves this, building the whole DI tree.
  */
 @Module({
-    imports: [ShardModule, CapillaryModule, GuardModule, IPCModule],
+    imports: [ShardModule, CapillaryModule, GuardModule, IPCModule, PluginModule],
 })
 export class AppModule extends FModule {
     @Inject() private readonly ipc!: IPCModule;

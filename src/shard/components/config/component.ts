@@ -46,9 +46,36 @@ export interface StorageConfig {
 }
 
 /**
+ * Skills configuration.
+ * `directory` is the repo-relative directory holding skill sub-folders (each with a `SKILL.md`).
+ */
+export interface SkillsConfig {
+    directory: string;
+}
+
+/**
+ * One MCP (Model Context Protocol) server definition.
+ * stdio transport: `command` + `args` + `env`. http/sse transport: `url`.
+ */
+export interface MCPServerConfig {
+    command?: string;
+    args?: string[];
+    env?: Record<string, string>;
+    url?: string;
+}
+
+/**
+ * MCP configuration: a map of server name → server definition.
+ */
+export interface MCPConfig {
+    servers: Record<string, MCPServerConfig>;
+}
+
+/**
  * The single JSONC configuration object Flyflor consumes.
  * All business configuration flows through this object (rule 7); the IPC socket path is a convention,
  * not configuration, so it is not part of this shape (see `ConfigComponent.socketEndpoint`).
+ * `skills` and `mcp` are optional external-capability sections.
  */
 export interface FlyflorConfig {
     runtime: {
@@ -57,6 +84,8 @@ export interface FlyflorConfig {
     llm: LlmConfig;
     sandbox: SandboxConfig;
     storage: StorageConfig;
+    skills?: SkillsConfig;
+    mcp?: MCPConfig;
 }
 
 /**
