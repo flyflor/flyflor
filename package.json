@@ -1,11 +1,19 @@
 {
-  "name": "flyflor",
-  "module": "index.ts",
-  "type": "module",
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
-  }
+    "name": "flyflor",
+    "module": "app.ts",
+    "type": "module",
+    "scripts": {
+        "dev": "bun run --watch app.ts",
+        "check": "bunx tsc --noEmit && bun run scripts/check.ts",
+        "build:binary": "bun build --compile --outfile dist/flyflor app.ts"
+    },
+    "devDependencies": {
+        "@types/bun": "latest"
+    },
+    "peerDependencies": {
+        "typescript": "^5"
+    },
+    "dependencies": {
+        "reflect-metadata": "^0.2.2"
+    }
 }

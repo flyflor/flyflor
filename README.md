@@ -1,15 +1,17 @@
-# flyflor
+# Flyflor
 
-To install dependencies:
+Flyflor is a Bun + TypeScript intelligent agent kernel. The first milestone is a standalone binary-friendly core with explicit DI, a capillary event layer, socket interaction, repo-owned SQL, and prompt mirror rules.
+
+## Development
 
 ```bash
 bun install
+bun run dev
+bun run check
+bun run build:binary
 ```
 
-To run:
+## Documents
 
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.3.12. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+- [Boundaries](docs/boundaries.md)
+- [Development workflow](docs/development.workflow.md)

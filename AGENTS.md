@@ -1,111 +1,81 @@
-# Flyflor Agent Rules
+# AGENTS.md — Flyflor 工程红线（权威）
 
-本仓库使用 Bun + TypeScript 开发，并计划编译为独立二进制。所有自动化开发代理必须先遵守 [docs/boundaries.md](docs/boundaries.md)。
+> 本文件是 flyflor 的**唯一权威编程红线**。任何代码、重构、评审都以此为准。
+> 与历史 `LOGS.md` 早期决策冲突处，**以本文件为准**（见文末「架构反转」）。
+> 命名思想：**约定大于配置（convention over configuration）**。重复代码可以接受，**分层 / 文件夹 / 文件名 必须明确**。
 
-硬性规则：
+---
 
-- 只使用 Bun 命令管理依赖和脚本，不要求用户安装 Node.js。
-- 本仓库只承载 Bun + TypeScript 内核；Rust 外壳实现不在本仓库内规划、落地或验证，相关文档只作为后续独立 Rust 仓库的 `/ws` 契约交接材料。
-- 配置固定走 `~/.flyflor/.config/config.jsonc`，Docker dev 对应 `./docker/config/config.jsonc`；所有 JSON 配置必须兼容 JSONC。
-- 仓库根目录 `tools/` 与 `src/` 平级，作为外挂工具 registry 和包隔离区：`tools/external.tools.jsonc` 必须提交并由内核相对加载，`tools/packages` 放本地 payload 且保持 git ignored；内核禁止直接 import packages 实现文件，只能通过 manifest + process-json 执行。
-- 业务配置不能走环境变量；provider、模型、渠道凭据、沙箱策略和网关行为必须走 config/secrets provider。
-- 约定大于配置：默认目录、默认 provider、默认 channel registry、默认生命周期和默认 owner 必须在代码与目录里有清晰约定，配置只覆盖差异，不能用配置补救分层不清。
-- 分层先于复用：代码可以重复，但分层必须明确。宁可在正确 owner 的 class 内保留少量重复转换，也不要为了复用抽成跨域工具函数或无 owner helper；目录、生命周期、状态、IO 副作用和协议边界必须一眼可见。
-- 代码风格锁定 OOP + use Composition API：业务能力用 class / Component / Module / Repo 表达，跨 class 装配只允许放在对应目录 `composition.ts` 中，并统一用 `useXxx()` 命名。禁止新增函数式编程风格的业务模块；确需函数时，只能是 `composition.ts` 装配入口、薄 CLI/script/app 入口、框架强制 handler、测试 fixture、小型纯协议 adapter 或 TypeScript 类型守卫。
-- 目录表达语义，文件名保持短而稳定：优先使用 `module.ts`、`component.ts`、`composition.ts`、`store.ts`、`types.ts`、`repo.ts`、`worker.ts`、`manager.ts`。例如 `src/agent/blackboard/composition.ts` 与 `src/agent/blackboard/store.ts` 已由目录说明 blackboard owner；不要写回 `blackboard.store.ts`、`blackboard.module.ts`、`dependency.container.ts` 这类重复命名。整体结构参考 NestJS / Angular 的模块化边界，而不是散函数脚本集合。
-- Flyflor 是智能生命体内核，不是 chat/session agent。LLM 是流体智力，`MemoryComponent` 是热区记忆，`CrystalComponent` 是晶体智力，显式 `Scope` / `ContextFork` 是固化工作域，`ASK` 是不确定性、结晶、升格和长线 loop 的闭环器官。
-- Runtime 主路由只允许表达 `fast | thinking`。`fast` 是即时回答；`thinking` 承载 coding analysis、工具探索、计划、验证和按需子代理。Blackboard 只能作为 thinking 内部升级层，不能再作为入口级并列路由；升级条件必须来自结构化模型输出或资源指标。
-- `ASK` 与 `Confirm` 必须分层：ASK 是一级公民，可携带结晶候选；Confirm 只用于写入权限、工具授权、是否创建项目等确认交互，禁止进入 Crystal candidate，也禁止被 thin client 渲染成 ASK。
-- `brain.db` 是按月生命账本，只负责 ledger/query/replay/audit/detail；它不参与 prompt/context assembly，不是 session store，也不是 prompt 容器。上下文装配主语只能是当前输入、`MemoryComponent`、`CrystalComponent`、显式 `Scope/Fork` 和 Executive 可见能力面。
-- `MemoryComponent` 活跃上下文必须可恢复：进程内 Map/LRU 只是性能缓存，权威热记忆必须先写 snapshot/WAL 或 SQLite 再更新内存视图；启动恢复顺序固定为 snapshot → WAL replay → health snapshot → active-memory hydrate。断电、重启或进程崩溃不能造成整体失忆。
-- Scope 热记忆必须持久化到 scope-local `.flyflor/scope.db` context/index plane；禁止把 Scope 热记忆放进 `brain.db` prompt path，`brain.db` 原始 event stream 不得用于恢复 prompt。
-- `src/socket` 是外显 socket 血管层，承载 live turn、event、operation、ledger query/replay；WebSocket 只是当前默认 transport，不是目录主语。`gateway.*` wire 名称只作为 `flyflor.ws.v1` compatibility 保留，不代表架构仍是 Gateway/session/chat 模型。
-- `clientId`、`conversationKey`、`user.id`、`threadId`、connection 和 transport metadata 只允许用于 live peer、routing、audit、dedup、reply anchor；它们不承担认知连续性，也不能决定当前 scope、memory owner 或 prompt 装配。
-- 该使用枚举/常量对象时不要裸写字符串；新增协议值先放入 `src/protocol/contracts/enums.ts` 并经 `src/protocol/contracts/index.ts` 暴露，或放入对应 registry。
-- 新增内部结构化协议块必须先登记到 `src/protocol/structured.block.ts`；业务模块只做对应 JSON payload 校验，不得各自手写 tag、边界符或剥离逻辑。
-- 新增代码必须带必要注释说明边界、生命周期、副作用或协议意图；修改旧代码时同步补齐被触碰路径的关键注释，避免无上下文的隐式行为。
-- 目录入口统一为 `index.ts`；禁止新增 `*.exports.ts`。有明确角色的实现文件、脚本、提示词和内部模板必须使用点分后缀，例如 `module.ts`、`memory.component.ts`、`blackboard.ts`、`manager.ts`、`http.adapter.ts`、`sqlite.store.ts`、`blackboard.route.md`、`blackboard.route.zh.cn.md`。`templates/**` 中所有 Markdown 模板必须保持 canonical `.md` 与 `.zh.cn.md` 一一对应；运行时只加载 canonical `.md`，`.zh.cn.md` 只是中文镜像审查副本，不进入 manifest 或上下文装配。`README.md` 必须是英文入口并索引 `docs/*.md`，`README.zh.cn.md` 是中文对照并索引 `docs/*.zh.cn.md`；`AGENTS.md`、`TODO.md`、`LOGS.md` 是控制文件，根目录和所有 worktree 内都必须统一使用中文编写，不创建、不保留 `AGENTS.zh.cn.md`、`TODO.zh.cn.md`、`LOGS.zh.cn.md` 副本；旧内容本轮可翻译成中文，之后只能追加条目或修改状态标记，禁止删除、压缩或改写历史。目录已经表达职责时使用短名，例如 `composition/component.ts`、`factory/container.ts`、`streaming/visibility.ts`，大模块按生命周期/职责拆子目录，例如 `memory/dream/worker.ts`、`memory/consolidation/worker.ts`、`memory/lifecycle/scheduler.ts`；不要回退到 `component.metadata.ts`、`dependency.container.ts`、`protocol.visibility.ts`、`dream.worker.ts` 这类重复命名；不要新增连字符或下划线命名的仓库文件。
-- 只保留必要 decorator：`@Module`、`@Provide`、`@Inject`、`@Component`、`@Worker`、`@Channel`、`@Plugin`。
-- `@Provide` 是注入底座；Socket、Blackboard、Memory、Runtime、Sandbox 通过 `class XModule extends X` 表达边界语义；Gateway 只保留为 v1 wire/compatibility alias，不再新增专门 decorator。
-- 入口必须保持薄：`app.ts` 只启动 FlyFlor 主类；依赖注入只能在 composition root 使用显式 token/provider 容器，不做反射扫描或动态加载。
-- Docker dev 保持简单：挂载工作目录、`./docker/config` 和已编译 Linux 二进制；不要在 Compose 里安装依赖或构建项目。
-- Provider 必须支持内置默认 profile + 用户覆盖；新增厂商时先预留空配置和默认模型列表。
-- 新增运行时依赖前必须确认其兼容 `bun build --compile`，避免 native addon、postinstall、动态 require 和运行时读取 `node_modules` 资产。
-- 保持目录边界：入口只装配，`src/cognitive` 负责 mindstream、crystal、hippocampus 认知层，`src/executive` 负责 registry、planner、guard 执行层，`src/socket` 负责 socket 血管层，`src/agent` 负责 runtime、blackboard、sandbox、context、skills、worker、MCP 和 plugin，`src/events` 负责事件广播中枢，`src/protocol` 负责公共协议，`src/agent/di` 负责 metadata 和显式 provider 容器。历史旧物理路径 `src/fch`、旧执行层路径、`src/skills`、`src/context` 以及迁移后的 `src/agent/gateway` 已移除或待退场，禁止新增兼容壳或回写旧路径。
-- 不把密钥、`.env`、日志、运行态数据库、用户工作区数据编译进二进制。
-- 不绕过 sandbox 执行文件写入、shell、网络、插件或 MCP 工具。
-- 跨模块通信使用显式类型；公共事件和协议必须可 JSON 序列化。
-- 修改边界、高风险工具或依赖策略时，同步更新 `docs/boundaries.md`。
-- **零字符匹配红线**：业务语义判断（意图、路由、记忆动作、反馈分类、固化触发、矛盾检测、复杂度评估等）只能由模型同轮返回的结构化字段或专用提示词模板的 JSON 输出驱动。禁止任何 `text.includes(...)`、正则识别意图、关键词列表、句式启发式、情感词典、句末标点判断等硬编码语义规则。性能优化只能用资源指标（token 数、向量相似度、TTL、cluster size）短路，不得用关键词短路。详见 `docs/boundaries.md`「业务语义判断零字符匹配（全局红线）」章节。
+## 0. 项目定位
 
-常用验证：
+flyflor 是一个 **Bun + TypeScript**、可编译为**单二进制**的智能体内核（「无会话智能生命体」）。
+内核保持纯净；一切横切关注点（订阅、ASK/Confirm 中断、沙盒、IPC）经由**血管层 Capillary** 流动，对内核的上下文蒸馏 / 召回逻辑**零侵入**。
 
-```bash
-bun run check
-bun run build:binary
-```
+---
 
-协调者附加规则：
+## 1. 编程红线（10 条 + 2 补充）
 
-- 当前主线目标是完成“智能生命体内核”的大重构，而不是只维持局部 seal。
-- 当工作再次扩成多切片时，优先通过 `git worktree + tmux + Codex` 拆并行切片，提高吞吐。
-- 每次暂停、结束或准备切换环境前，必须先更新根目录 `TODO.md`、`LOGS.md` 和 `docs/development.workflow.md`，并 push 所有需要保留的分支。
-- 主线迭代优先收缩暴露面：能删的 HTTP 状态口优先删，若 WS 控制面已经提供同等结构化快照，就不要再保留重复 REST 入口。
-- HTTP surface 固定收缩为 `/ws` 与 `/health`；`/channels` 不恢复。需要状态、能力、历史、事件和 live turn 时走 socket control/event wire，不新增重复 REST 状态口。
-- 当前 release-seal 下一阶段聚焦 Bun 内核真实封板：OpenAPI/Apifox 契约、真实配置模型的 socket 场景、prompt 优化、DB/context guard、release/binary 验证；不得把精力转回本仓库内 Rust 实现。
+1. **DI 容器**：参考 NestJS / Angular 的依赖注入思想，**自研**实现（基于 `reflect-metadata`），不引入 InversifyJS / tsyringe / awilix。装饰器清单见 §2。
+2. **约定大于配置 + OOP + Composition API**：分层、文件夹、文件名必须明确；整体面向对象 + 组合式（每个领域目录配 `composition.ts` 暴露 `useXxx()`）。**禁止面向过程 function 泛滥**。
+3. **全局 CapillaryModule（血管层）**：实现 `subscribe` 与 `ask` / `confirm` 中断等待。内核遇到 Confirm / 沙盒 / ASK 等校验时 `await ask(...)` / `await confirm(...)`；订阅者可在 runtime constructor 或 `@Init` 中借 DI 注册。血管层让内核与外部解耦，对蒸馏召回影响最小。
+4. **强制备注**：每个 `class` / composition api（`useXxx`）/ `interface` / `enum` **必须**有详细备注——用途、入参含义、产物含义、使用场景。
+5. **0 魔法字符串工程**：业务代码中**不得散落硬编码字符串 / 数字字面量**，统一集中到 `enum` / `src/core/constants.ts` / 协议类型。**提示词**一律放顶层 `prompts/`，每份 `.md`（英文，**运行时唯一来源**）+ `.zh.cn.md`（中文副本，**项目不引用**）。
+6. **Bun 单二进制 + 性能是最高优先级**：`bun build --compile` 是硬需求；慎用伤性能的语法糖；二进制体积与启动/分发速度优先。
+7. **配置全相对路径**：单一文件 `./.config/config.jsonc`；模型 / agent / 工具配置形态参考 `../reference/hermes-agent`。运行时路径常量 `rootPath` / `appPath` 见 `src/core/paths.ts`。
+8. **IPC 统一对外**：智能体对话 / 行为 / 事件经 IPC 交互；跨 Windows / macOS / Linux；统一 IO，不给客户端造成负担。套接字文件 `./flyflor.sock`（Windows 用命名管道 `\\.\pipe\flyflor`）。IPC 是外部↔内核边界，**故血管层至关重要**。前期可不 await 直接放行 `true`，为后续 Rust TUI 壳做准备。
+9. **反射注入 + alias 路径**：开启 `reflect-metadata`；`@Inject() public a: A` 按类型**免 token** 直接注入。**仅 DI/IOC 入口（`container.get`）可 `new`，其余地方一律禁止 `new`**。
+10. **作用域装饰器 + Core 继承模式**：`@Component` `@Service` `@Module` `@Plugin` 标识作用域 / 生命周期。用 `class A extends B`（Core 模式）划分 Scope，**不堆枚举 / 配置，重在约定**。`listModule(B)` 取出 B 的全部子类实例；`getAsync(A)` 支持 `@Init` 异步初始化。
 
-## 并发 lane 附加规则归档：socket-tool-events
+**补充 1**：再次强调——**只有 IOC 初始化入口能 `new`，其余地方禁止 `new`**（`scripts/check.ts` 会扫描拦截）。
+**补充 2**：新增 `rootPath` / `appPath` 路径常量；新增 `@SandBox` 装饰器，**继承 `@Guard`**（装饰器组合），语义更清晰。
 
-- 只修改工具生命周期事件、socket control/event/read snapshot、WS 文档和直接测试。
-- 不修改电脑工具实现、Executive 预算循环、Scope/Memory/Crystal 主链。
-- 能通过 DB/read model 查询的内容只在 socket/query 层读取；需要实时性的内容只通过 event emit/subscribe 暴露。
-- 不新增 REST 状态口；HTTP surface 仍固定为 `/health` 和 `/ws`。
-- 新增 wire type 必须先进 `src/protocol/contracts/enums.ts` 或对应 registry，测试和文档示例必须同步。
+---
 
-## 并发 lane 附加规则归档：computer-coding-tools
+## 2. 装饰器清单
 
-- 只修改电脑控制工具能力、sandbox/approval/audit 直接边界和对应测试/文档。
-- 不修改 Executive 预算循环、Scope/Memory/Crystal、Socket query read model、OpenAPI/Apifox 主契约。
-- 跨平台能力优先走结构化文件/patch/process API；`shell.run` 不是跨平台抽象，只能作为高风险逃生口。
-- 不做 workspace 限制，但任何写入、删除、进程、shell、网络都必须保留 sandbox/approval/audit gate。
-- 禁止吞错；工具失败必须返回结构化失败结果，包含命令、退出码、stderr 摘要或文件错误原因。
-## xtools-ws-e2e-seal 本地附加红线
+> **不维护任何「装饰器描述符数组 / Kinds 清单 / 字符串匹配注册表」**——装饰器直接定义即可，约定自带语义。运行时注册表只保留 DI 真正需要的最小元数据（`@Inject` 属性键、`@Module` 元数据）。
 
-- 本 worktree 只处理 WS 场景、Apifox/文档示例、能力矩阵和最终封板报告。
-- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
-- 不实现业务 sidecar，只消费其他 lane 合入后的工具面。
-- 失败必须结构化暴露，禁止通过降低断言伪装通过。
+全部装饰器集中在 **`src/core/decorators.ts`**：
 
-## xtools-lsp-task-data 本地附加红线
+| 装饰器 | 目标 | 作用 |
+|---|---|---|
+| `@Module(meta?)` | class | 模块边界，声明 `imports` / `providers` / `exports` |
+| `@Service()` | class | 无状态可注入服务 |
+| `@Component()` | class | 有状态组件（持本地态 / 生命周期） |
+| `@Plugin()` | class | 外部插件边界 |
+| `@Repo()` | class | `src/entities` 数据仓库 |
+| `@Prompt(path)` | property | 绑定 `prompts/<name>.md` 模板路径 |
+| `@Inject()` | property | 按 `design:type` 反射注入（免 token） |
+| `@Init()` | method | 异步初始化钩子，`getAsync` 触发，幂等 |
+| `@Guard()` | class | 守护 / 策略订阅者（订阅血管层 consult） |
+| `@SandBox()` | class | **继承 `@Guard`** + 追加 sandbox 标记 |
 
-- 本 worktree 只处理 LSP、后台任务、archive、data convert 和 hash 能力。
-- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
-- 禁止重复实现 `workspace.*`、`git.*`、`process.run`、`shell.run`。
+> 角色装饰器（`@Service` / `@Component` / `@Plugin` / `@Repo` / `@Guard` / `@SandBox`）**不带 `name`、不写任何容器可匹配的 key**，是纯意图标记；行为由对应基类与结构提供。仅 `@Module` / `@Inject` / `@Init` / `@Prompt` 承载 DI 接线元数据。
 
-## xtools-computer-native 本地附加红线
+全部基类集中在 **`src/core/ioc/superclz.ts`**：`FService → FComponent → FModule`，并列 `FRepo` `FPlugin` `FGuard` `FSandBox extends FGuard`（agent 域基类按需补）。**装饰器标 DI 角色；基类提供 `listModule(Base)` 的继承式 Scope 分组。**
 
-- 本 worktree 只处理 `screen.*` 和 `computer.*` 外挂 sidecar。
-- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
-- 系统依赖缺失时必须明确 unavailable 或 failed，禁止静默降级。
-- 所有控制动作必须保留 computer approval、quota 和 audit 语义。
+**生命周期 / Scope（纯结构，禁止 key/枚举分类）**：容器把每个被解析的类视为 DI 树上的**唯一节点（全单例）**，不用任何 key/枚举做生命周期分类。Scope 由**继承**表达——`listModule(Base)` 按原型链取出某基类全部子类实例（如 `listModule(FGuard)` 取全部守卫）。**结构（类继承 + `@Module` 图 + `@Inject` 边）是 DI 的唯一真相。**
 
-## xtools-media 本地附加红线
+---
 
-- 本 worktree 只处理 `vision.*` 和 `audio.*` 外挂 sidecar。
-- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
-- 禁止引入 native addon、postinstall、大模型资产或运行时读取 node_modules 资产。
+## 3. 单 `new` 与 0 兜底
 
-## xtools-search-web 本地附加红线
+- 除 `src/core/container.ts` 容器内部，**全库禁止 `new`**。所有实例经 `@Inject` / `container.get` 获取。
+- **禁止吞错、禁止兜底返回**：失败必须抛出带结构化 `detail` 的错误，不得静默返回默认值。
+- 依赖只在 `@Init` 之后使用：构造函数内不得访问 `@Inject` 属性（两阶段「先建后注」期间可能为 `undefined`）。
 
-- 本 worktree 只处理搜索与网页工具：`web.search`、`web.fetch`、`web.extract`、`web.download`。
-- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
-- 搜索 provider 缺失时必须 unavailable 或 failed，禁止假数据兜底。
-- 失败必须结构化暴露，禁止吞错或伪成功。
+---
 
-## loop-kernel-ask-permission 本地附加红线
+## 4. 性能与打包
 
-- 本 worktree 只处理 `flyflor` 内核侧 ASK、公民权限、Executive 工具闭环、tool/subagent/process event 和 `brain.db` ledger 分类。
-- 禁止修改 `flyflor-cli`、`flyflor-front`、`reference` 和无关文档。
-- 公民权限 ASK 必须走结构化 metadata 与 socket/event 血管；禁止把 `continue-tools`、`keep-budget`、`keep-subagents` 等选择写成普通用户消息。
-- 不改变 Memory、Scope、Crystal 主链，除非是 ASK answer ledger 分类所必需。
-- 所有失败必须结构化暴露到 event / execution job detail / audit ledger，禁止吞错或只写 continuation。
+- 以 `bun build --compile` 可产出可运行 `dist/flyflor` 为验收门槛。
+- reflect-metadata 必须在 `--compile` 下存活（`design:type` 不被裁剪）——这是头号风险，每次涉及装饰器改动都要回归。
+- 热路径避免不必要的对象分配 / 闭包 / 深拷贝；JSON 序列化只在 IPC 边界发生。
+
+---
+
+## 5. 架构反转（覆盖 LOGS.md 早期决策）
+
+1. **DI**：由「自研显式 DI + WeakMap，避免 reflect-metadata」→ **自研 + reflect-metadata 反射注入**，移除 awilix。
+2. **血管层**：由 `CapillaryModule extends RxJS Observable` → **自研极简 typed pub/sub**，移除 RxJS。
+3. **唯一 `new` 站点**：由 `src/bootstrap.ts` → **`src/core/container.ts`（`Factory.create` 经容器构造）**。

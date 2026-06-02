@@ -1,0 +1,22 @@
+{
+    // Flyflor uses one JSONC config file. Secrets should be referenced through a provider, not stored here.
+    // The IPC socket path is a convention (./flyflor.sock), not configuration — see ConfigComponent.socketEndpoint.
+    "runtime": {
+        "mode": "fast"
+    },
+    "llm": {
+        "defaultProvider": "local-placeholder",
+        "providers": {
+            "local-placeholder": {
+                "defaultModel": "placeholder-model",
+                "models": ["placeholder-model"]
+            }
+        }
+    },
+    "sandbox": {
+        "defaultDecision": "allow"
+    },
+    "storage": {
+        "schemaDirectory": "./sql"
+    }
+}
