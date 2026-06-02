@@ -6,12 +6,11 @@ import { ShardModule } from "@/shard/module.ts";
 
 /**
  * The root Flyflor module.
- * Wires the capillary blood-vessel layer, IPC boundary, guard policies, and the state shard (config/memory/context).
- * Bootstrap resolves this, which transitively brings the socket online and exposes the IPC endpoint.
+ * Imports the state shard (config/memory/context), the capillary blood-vessel layer, guard policies, and IPC.
+ * Bootstrap resolves this, building the whole DI tree and bringing the socket online.
  */
 @Module({
     imports: [ShardModule, CapillaryModule, GuardModule, IPCModule],
-    exports: [CapillaryModule, IPCModule],
 })
 export class AppModule extends FModule {
     @Inject() private readonly ipc!: IPCModule;

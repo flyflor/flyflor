@@ -35,6 +35,14 @@ export class Container {
     }
 
     /**
+     * Returns every constructor registered so far, as a snapshot.
+     * The bootstrap uses this to eagerly build and initialize the whole DI tree.
+     */
+    public listRegistered(): Ctor[] {
+        return [...this.registered];
+    }
+
+    /**
      * Resolves the shared instance of `ctor`, constructing it and its `@Inject` dependencies on first use.
      * @param ctor - the class to resolve.
      * @returns the wired instance (dependencies assigned; `@Init` not awaited — use `getAsync` for that).

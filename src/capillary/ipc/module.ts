@@ -1,177 +1,110 @@
 import { FModule, Module, Inject, Init } from "@/core";
 import { ConfigComponent } from "@/shard/components/config";
-import { ContextComponent } from "@/shard/components/context";
+import { IPCService, type IPCMessage } from "./service.ts";
 
-interface IPCMessage {
-    kind: "user" | "agent" | "error";
-    content: string;
-}
-
-interface LLMMessage {
-    role: "system" | "user" | "assistant";
-    content: string;
-}
+/** Port the browser-facing WebSocket server listens on (the unix socket serves CLI / Rust TUI). */
+const WEB_PORT = 17878;
 
 /**
- * The IPC module: external↔kernel boundary via Unix socket / Windows named pipe.
- * Handles bidirectional LLM conversation with real DeepSeek API integration.
+ * The IPC module: external↔kernel boundary.
+ *
+ * Exposes two transports over one shared `IPCService` brain:
+ * - a Unix domain socket (`./flyflor.sock`) for CLI clients and the future Rust TUI;
+ * - a WebSocket server (`ws://127.0.0.1:17878`) for the browser test client.
+ * Both speak the same line-delimited JSON `IPCMessage` protocol.
  */
 @Module()
 export class IPCModule extends FModule {
     @Inject() private readonly config!: ConfigComponent;
-    @Inject() private readonly context!: ContextComponent;
+    @Inject() private readonly service!: IPCService;
 
-    private server?: any;
-    private llmConfig = {
-        baseURL: "https://api.deepseek.com",
-        apiKey: "sk-6a4dded5c5ab448581a07b241859835f",
-        model: "deepseek-chat", // DeepSeek V4 compatible endpoint
-    };
+    private socketServer?: unknown;
+    private webServer?: unknown;
 
+    /**
+     * Opens both transports after config has loaded.
+     */
     @Init()
     public async init(): Promise<void> {
-        const endpoint = this.config.socketEndpoint;
-        const isWindows = process.platform === "win32";
-
-        const handler = {
-            open: (socket: any) => {
-                console.log(`[IPC] Client connected`);
-                this.sendMessage(socket, {
-                    kind: "agent",
-                    content: "Flyflor ready (DeepSeek V4 Flash). Send: {\"kind\":\"user\",\"content\":\"your message\"}",
-                });
-            },
-            data: async (socket: any, data: any) => {
-                const frame = Buffer.from(data).toString("utf8").trim();
-                console.log(`[IPC] RX: ${frame}`);
-
-                try {
-                    const msg: IPCMessage = JSON.parse(frame);
-
-                    if (msg.kind === "user" && msg.content) {
-                        this.context.append("user", msg.content);
-
-                        // 调用真实 LLM (DeepSeek)
-                        const response = await this.callDeepSeek(msg.content);
-
-                        this.context.append("agent", response);
-                        this.sendMessage(socket, { kind: "agent", content: response });
-                    } else {
-                        this.sendMessage(socket, {
-                            kind: "error",
-                            content: 'Invalid format. Use: {"kind":"user","content":"..."}',
-                        });
-                    }
-                } catch (err: any) {
-                    console.error(`[IPC] Error:`, err);
-                    this.sendMessage(socket, { kind: "error", content: `Error: ${err.message}` });
-                }
-            },
-            close: () => console.log(`[IPC] Client disconnected`),
-            error: (_s: any, e: any) => console.error(`[IPC] Socket error:`, e),
-        };
-
-        if (isWindows) {
-            this.server = Bun.listen({ hostname: "127.0.0.1", port: 17878, socket: handler });
-        } else {
-            this.server = Bun.listen({ unix: endpoint, socket: handler });
-        }
-
-        console.log(`[IPC] Listening at ${endpoint} (DeepSeek V4 Flash)`);
+        this.startUnixSocket();
+        this.startWebSocket();
     }
 
     /**
-     * 调用 DeepSeek API (OpenAI 兼容接口，流式输出)
+     * Unix-domain socket transport for CLI / Rust TUI clients (POSIX) — falls back to TCP on Windows.
      */
-    private async callDeepSeek(userMessage: string): Promise<string> {
-        const contextSnapshot = this.context.snapshot();
-
-        // 构建消息历史 (取最近 10 条)
-        const messages: LLMMessage[] = [
-            {
-                role: "system",
-                content:
-                    "You are Flyflor, an autonomous coding assistant. Be concise, technical, and helpful. Respond in Chinese if the user writes in Chinese.",
+    private startUnixSocket(): void {
+        const endpoint = this.config.socketEndpoint;
+        const handler = {
+            open: (socket: { write: (s: string) => void }) => {
+                this.writeSocket(socket, { kind: "agent", content: "Flyflor ready (DeepSeek V4 Flash)." });
             },
-        ];
+            data: async (socket: { write: (s: string) => void }, data: Uint8Array) => {
+                const reply = await this.process(Buffer.from(data).toString("utf8").trim());
+                this.writeSocket(socket, reply);
+            },
+            close: () => {},
+            error: (_s: unknown, e: unknown) => console.error(`[IPC/socket] error:`, e),
+        };
 
-        // 添加历史上下文 (最近 10 条)
-        const recentContext = contextSnapshot.slice(-10);
-        for (const item of recentContext) {
-            messages.push({
-                role: item.role === "user" ? "user" : "assistant",
-                content: item.content,
-            });
+        if (process.platform === "win32") {
+            this.socketServer = Bun.listen({ hostname: "127.0.0.1", port: WEB_PORT + 1, socket: handler as never });
+        } else {
+            this.socketServer = Bun.listen({ unix: endpoint, socket: handler as never });
         }
+        console.log(`[IPC] Unix socket listening at ${endpoint}`);
+    }
 
-        // 添加当前用户消息
-        messages.push({ role: "user", content: userMessage });
-
-        try {
-            // DeepSeek API (OpenAI 兼容，使用流式输出)
-            const response = await fetch(`${this.llmConfig.baseURL}/chat/completions`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${this.llmConfig.apiKey}`,
-                },
-                body: JSON.stringify({
-                    model: this.llmConfig.model,
-                    messages,
-                    stream: true, // 流式输出
-                    temperature: 0.7,
-                    max_tokens: 2000,
-                }),
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`DeepSeek API error: ${response.status} - ${errorText}`);
-            }
-
-            // 解析流式响应 (SSE format: data: {...}\n\n)
-            const reader = response.body?.getReader();
-            if (!reader) throw new Error("No response body");
-
-            const decoder = new TextDecoder();
-            let fullContent = "";
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                const chunk = decoder.decode(value, { stream: true });
-                const lines = chunk.split("\n");
-
-                for (const line of lines) {
-                    if (line.startsWith("data: ")) {
-                        const data = line.slice(6).trim();
-                        if (data === "[DONE]") break;
-
-                        try {
-                            const parsed = JSON.parse(data);
-                            const delta = parsed.choices?.[0]?.delta?.content;
-                            if (delta) {
-                                fullContent += delta;
-                            }
-                        } catch (e) {
-                            // 忽略解析错误的行
-                        }
-                    }
+    /**
+     * WebSocket transport for the browser test client.
+     */
+    private startWebSocket(): void {
+        const self = this;
+        this.webServer = Bun.serve({
+            port: WEB_PORT,
+            fetch(req, server) {
+                if (server.upgrade(req)) {
+                    return undefined;
                 }
-            }
+                return new Response("Flyflor IPC WebSocket. Connect via ws://", { status: 426 });
+            },
+            websocket: {
+                open(ws) {
+                    ws.send(JSON.stringify({ kind: "agent", content: "Flyflor ready (DeepSeek V4 Flash)." }));
+                },
+                async message(ws, raw) {
+                    const reply = await self.process(String(raw).trim());
+                    ws.send(JSON.stringify(reply));
+                },
+            },
+        });
+        console.log(`[IPC] WebSocket listening at ws://127.0.0.1:${WEB_PORT}`);
+    }
 
-            return fullContent || "(DeepSeek returned empty response)";
-        } catch (err: any) {
-            console.error(`[LLM] DeepSeek API call failed:`, err);
-            return `[LLM Error] ${err.message}. Using mock response: 收到你的消息 "${userMessage}"（DeepSeek 暂时不可用）`;
+    /**
+     * Parses an inbound frame and routes a `user` message through the conversation service.
+     * @param frame - the raw inbound JSON line.
+     * @returns the reply message to send back.
+     */
+    private async process(frame: string): Promise<IPCMessage> {
+        try {
+            const msg = JSON.parse(frame) as IPCMessage;
+            if (msg.kind === "user" && msg.content) {
+                const reply = await this.service.handleUserMessage(msg.content);
+                return { kind: "agent", content: reply };
+            }
+            return { kind: "error", content: 'Expected {"kind":"user","content":"..."}' };
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            return { kind: "error", content: `Parse error: ${message}` };
         }
     }
 
-    private sendMessage(socket: any, msg: IPCMessage): void {
+    private writeSocket(socket: { write: (s: string) => void }, msg: IPCMessage): void {
         socket.write(JSON.stringify(msg) + "\n");
     }
 
+    /** The resolved IPC endpoint address (for AppModule to expose as `endpoint`). */
     public get endpoint(): string {
         return this.config.socketEndpoint;
     }

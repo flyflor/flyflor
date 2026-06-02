@@ -18,15 +18,12 @@ export type AbstractCtor<T = unknown> = abstract new (...args: never[]) => T;
 export type ModuleReference = Ctor;
 
 /**
- * Declarative description of a module boundary, modelled on NestJS.
- * - `imports`: upstream modules whose exports this module depends on.
- * - `providers`: injectable classes this module owns.
- * - `exports`: classes this module makes available to importers.
+ * Declarative module boundary. Only `imports` — base classes auto-classify each entry (service/component/
+ * repo/guard/module), so there is no need for separate `providers`/`exports` buckets.
+ * Anything listed in `imports` is registered into the DI tree; dependencies are wired via `@Inject` edges.
  */
 export interface ModuleMetadata {
     imports?: ModuleReference[];
-    providers?: ModuleReference[];
-    exports?: ModuleReference[];
 }
 
 /**
@@ -101,8 +98,8 @@ export function SandBox(): ClassDecorator {
 // --- structural wiring decorators (the edges and hooks of the DI tree; required by rules 9 & 10) ---
 
 /**
- * Declares a class as a module boundary and stores its `imports`/`providers`/`exports`.
- * The bootstrap reads this to register the module graph — this metadata *is* the DI tree, not a classifier.
+ * Declares a class as a module boundary and stores its `imports` (the DI subtree to register).
+ * Base classes auto-classify each import, so no `providers`/`exports` are needed.
  * @param metadata - the module declaration; defaults to an empty boundary.
  */
 export function Module(metadata: ModuleMetadata = {}): ClassDecorator {
