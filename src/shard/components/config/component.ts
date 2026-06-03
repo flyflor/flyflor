@@ -26,7 +26,7 @@ export interface FProviderConfiguration {
 }
 
 /**
- * Main model selection and endpoint configuration.
+ * flyflor model selection and endpoint configuration.
  * `default` and `model` identify the default model; `provider` selects a provider entry; `apiKeyEnv` names
  * the environment variable used for auth; `baseUrl` is the OpenAI-compatible endpoint root.
  */
@@ -145,10 +145,10 @@ export class ConfigComponent extends FComponent implements FConfiguration {
             nudgeInterval: 10,
             flushMinTurns: 6,
         };
-        this.agent = 'main';
+        this.agent = 'flyflor';
         this.agents = {
-            main: {
-                name: 'main',
+            flyflor: {
+                name: 'flyflor',
                 model: '',
                 provider: '',
             },
