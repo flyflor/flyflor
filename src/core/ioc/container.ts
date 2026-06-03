@@ -48,9 +48,10 @@ export class Container {
      * 获取异步依赖注入容器实例
      *
      * @param Module 依赖注入类类型
+     * @param props 传给构造函数和 `@Init` 初始化钩子的兼容参数
      * @returns 依赖注入类实例
      */
-    public async getAsync<T extends ClassType>(Module: T): Promise<InstanceType<T>> {
+    public async getAsync<T extends ClassType, P extends unknown[]>(Module: T, ...props: P): Promise<InstanceType<T>> {
         if (!this.classList.includes(Module)) this.classList.push(Module);
         if (this.singletons.has(Module)) return this.singletons.get(Module) as InstanceType<T>;
         const config = getMetadata(MODULE_METADATA_KEY, Module);
@@ -59,7 +60,7 @@ export class Container {
                 await this.getAsync(importModule);
             }
         }
-        const clz = new Module();
+        const clz = new Module(...props);
         this.singletons.set(Module, clz);
         try {
             /**
@@ -84,7 +85,7 @@ export class Container {
              * 如果有 执行 @Init 方法
              */
             const actionPropertyKey = getMetadata(INIT_METADATA_KEY, Module.prototype) || getMetadata(INIT_METADATA_KEY, clz);
-            if (actionPropertyKey) await clz[actionPropertyKey]?.apply(clz);
+            if (actionPropertyKey) await clz[actionPropertyKey]?.apply(clz, props);
             return clz;
         } catch (error) {
             this.singletons.delete(Module);

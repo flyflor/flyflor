@@ -1,10 +1,19 @@
-import { INIT_METADATA_KEY, INJECT_METADATA_KEY, MODULE_METADATA_KEY, PROVIDER_SINGLETON_KEY, type ClassType, type InjectMetadata } from './ioc/types';
-import { defineMetadata, getMetadata } from './ioc/container';
+import {
+    INIT_METADATA_KEY,
+    INJECT_METADATA_INSTANCE_KEY,
+    INJECT_METADATA_KEY,
+    MODULE_METADATA_KEY,
+    PROVIDER_SINGLETON_KEY,
+    type ClassType,
+    type InjectInstanceMetadata,
+    type InjectMetadata,
+} from './ioc/types';
+import { defineMetadata, getMetadata, useContainer } from './ioc/container';
 import type { FModule } from './ioc/superclz';
 import { join } from 'path';
 import { ROOT_PATH } from '@/constants';
 import { existsSync, globSync, readFileSync, statSync } from 'fs';
-import { set } from 'lodash-es';
+import { get, set } from 'lodash-es';
 
 export type Ctor<T = unknown> = new (...args: never[]) => T;
 
@@ -21,9 +30,9 @@ export type ModuleReference = Ctor;
 export interface ModuleMetadata {
     imports?: ModuleReference[];
 }
-export interface PromptBinding {
-    propertyKey: string | symbol;
-    path: string;
+
+export function Provide(): ClassDecorator {
+    return (target) => { }
 }
 
 export function Singleton(): ClassDecorator {
@@ -31,15 +40,15 @@ export function Singleton(): ClassDecorator {
 }
 
 export function Service(): ClassDecorator {
-    return (target) => { };
+    return (target) => Provide()(target);
 }
 
 export function Component(): ClassDecorator {
-    return (target) => { };
+    return (target) => Provide()(target);
 }
 
 export function Plugin(): ClassDecorator {
-    return (target) => { };
+    return (target) => Provide()(target);
 }
 
 export function Repo(): ClassDecorator {
@@ -89,22 +98,77 @@ export function Init(): MethodDecorator {
     return (target, propertyKey) => defineMetadata(INIT_METADATA_KEY, propertyKey, target);
 }
 
-export function Prompt(path?: string): PropertyDecorator {
-    return (target, propertyKey) => {
-        const promptPath = join(ROOT_PATH, 'prompts', path || '');
-        let value: string | object = '';
-        if (statSync(promptPath).isDirectory()) {
-            const paths = globSync(join(promptPath, '**/**.md'));
-            value = {};
-            paths.forEach(path => {
-                const key = path.replace(promptPath, '').slice(1).replace(/\.md/, '').replace('/', '.');
-                const prompt = readFileSync(path, 'utf-8');
-                set(value as object, key, prompt);
-            });
-        } else if (existsSync(promptPath)) {
-            value = readFileSync(promptPath, 'utf-8');
-        }
+export enum PromptScope {
+    GLOBAL,
+    AGENT,
+}
 
-        Object.defineProperty(target, propertyKey, { value, writable: false });
+export function Prompt(path?: string): PropertyDecorator;
+export function Prompt(path?: string, scope?: PromptScope.GLOBAL): PropertyDecorator;
+export function Prompt(path: string | undefined, scope: PromptScope.AGENT, agentName: string): PropertyDecorator;
+export function Prompt<TThis>(path: string | undefined, scope: PromptScope.AGENT, agentName: (this: TThis) => string): PropertyDecorator;
+export function Prompt(path?: string, scope: PromptScope = PromptScope.GLOBAL, agentName?: string | ((this: any) => string)): PropertyDecorator {
+    return (target, propertyKey) => {
+        if (scope === PromptScope.AGENT) {
+            if (agentName === undefined) {
+                throw Object.assign(Error('Agent prompt requires agentName'), { detail: { path, scope } });
+            }
+            Object.defineProperty(target, propertyKey, {
+                configurable: true,
+                enumerable: true,
+                get() {
+                    const resolvedAgentName = typeof agentName === 'function' ? agentName.call(this) : agentName;
+                    return readPromptValue(join(ROOT_PATH, '.config/agents', resolvedAgentName));
+                },
+            });
+            return;
+        }
+        Object.defineProperty(target, propertyKey, { value: readPromptValue(join(ROOT_PATH, 'prompts', path || '')), writable: false });
     };
+}
+
+function readPromptValue(promptPath: string): string | object {
+    let value: string | object = '';
+    if (!existsSync(promptPath)) {
+        return value;
+    }
+    if (statSync(promptPath).isDirectory()) {
+        const paths = globSync(join(promptPath, '**/**.md'));
+        value = {};
+        paths.forEach(path => {
+            const key = path.replace(promptPath, '').slice(1).replace(/\.md/, '').replace('/', '.');
+            const prompt = readFileSync(path, 'utf-8');
+            set(value as object, key, prompt);
+        });
+    } else {
+        value = readFileSync(promptPath, 'utf-8');
+    }
+    return value;
+}
+
+export function Config(key?: string): PropertyDecorator {
+    return (target, propertyKey) => {
+        const configStorageKey = Symbol(String(propertyKey));
+        const data: InjectInstanceMetadata[] = getMetadata(INJECT_METADATA_INSTANCE_KEY, target.constructor) || [];
+        data.push({
+            propertyKey,
+            instance: async () => {
+                const { ConfigComponent } = await import('@/shard/components');
+                return useContainer().getAsync(ConfigComponent);
+            },
+        });
+        defineMetadata(INJECT_METADATA_INSTANCE_KEY, data, target.constructor);
+        Object.defineProperty(target, propertyKey, {
+            configurable: true,
+            enumerable: true,
+            get() {
+                const config = this[configStorageKey];
+                if (!key) return config;
+                return get(config, key);
+            },
+            set(value) {
+                this[configStorageKey] = value;
+            },
+        });
+    }
 }

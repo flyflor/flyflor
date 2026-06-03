@@ -1,45 +1,45 @@
 import { readFile } from 'fs/promises';
 import { join, resolve } from 'path';
-import { Component, FComponent, Init } from '@/core';
+import { Component, FComponent, Init, Singleton } from '@/core';
 import { ROOT_PATH } from '@/constants';
 import { JSON5 } from 'bun';
 import { readFileSync } from 'fs';
 
 /**
  * One provider/model timeout override.
- * `timeout_seconds` controls a single model request; `stale_timeout_seconds` controls idle-call detection.
+ * `timeoutSeconds` controls a single model request; `staleTimeoutSeconds` controls idle-call detection.
  */
 export interface FProviderModelConfiguration {
-    timeout_seconds: number;
-    stale_timeout_seconds: number;
+    timeoutSeconds: number;
+    staleTimeoutSeconds: number;
 }
 
 /**
  * One inference provider configuration.
- * `request_timeout_seconds` and `stale_timeout_seconds` are provider defaults; `models` stores per-model
+ * `requestTimeoutSeconds` and `staleTimeoutSeconds` are provider defaults; `models` stores per-model
  * overrides keyed by provider model name.
  */
 export interface FProviderConfiguration {
-    request_timeout_seconds: number;
-    stale_timeout_seconds: number;
+    requestTimeoutSeconds: number;
+    staleTimeoutSeconds: number;
     models: Record<string, FProviderModelConfiguration>;
 }
 
 /**
  * Main model selection and endpoint configuration.
- * `default` and `model` identify the default model; `provider` selects a provider entry; `api_key_env` names
- * the environment variable used for auth; `base_url` is the OpenAI-compatible endpoint root.
+ * `default` and `model` identify the default model; `provider` selects a provider entry; `apiKeyEnv` names
+ * the environment variable used for auth; `baseUrl` is the OpenAI-compatible endpoint root.
  */
 export interface FModelConfiguration {
     default: string;
     model: string;
     provider: string;
-    api_key_env: string;
-    base_url: string;
-    auth_mode: 'api_key' | 'entra_id' | string;
+    apiKeyEnv: string;
+    baseUrl: string;
+    authMode: 'apiKey' | 'entraId' | string;
     entra: object;
-    context_length: number;
-    max_tokens: number;
+    contextLength: number;
+    maxTokens: number;
 }
 
 /**
@@ -47,12 +47,12 @@ export interface FModelConfiguration {
  * It controls agent memory, user profile memory, character budgets, periodic nudges, and flush timing.
  */
 export interface FMemoryConfiguration {
-    memory_enabled: boolean;
-    user_profile_enabled: boolean;
-    memory_char_limit: number;
-    user_char_limit: number;
-    nudge_interval: number;
-    flush_min_turns: number;
+    memoryEnabled: boolean;
+    userProfileEnabled: boolean;
+    memoryCharLimit: number;
+    userCharLimit: number;
+    nudgeInterval: number;
+    flushMinTurns: number;
 }
 
 /**
@@ -104,14 +104,15 @@ export interface MCPConfig {
  */
 export interface ActiveLlmProviderConfig {
     name: string;
-    baseURL: string;
+    baseUrl: string;
     apiKeyEnv: string;
     defaultModel: string;
     models: string[];
 }
 
-@Component()
+@Singleton()
 export class ConfigComponent extends FComponent implements FConfiguration {
+    public path: string;
     public configPath: string;
     public model: FModelConfiguration;
     public providers: Record<string, FProviderConfiguration>;
@@ -128,21 +129,21 @@ export class ConfigComponent extends FComponent implements FConfiguration {
             default: '',
             model: '',
             provider: '',
-            api_key_env: '',
-            base_url: '',
-            auth_mode: '',
+            apiKeyEnv: '',
+            baseUrl: '',
+            authMode: '',
             entra: {},
-            context_length: 131072,
-            max_tokens: 8192,
+            contextLength: 131072,
+            maxTokens: 8192,
         };
         this.providers = {};
         this.memory = {
-            memory_enabled: true,
-            user_profile_enabled: true,
-            memory_char_limit: 2200,
-            user_char_limit: 1375,
-            nudge_interval: 10,
-            flush_min_turns: 6,
+            memoryEnabled: true,
+            userProfileEnabled: true,
+            memoryCharLimit: 2200,
+            userCharLimit: 1375,
+            nudgeInterval: 10,
+            flushMinTurns: 6,
         };
         this.agent = 'main';
         this.agents = {
@@ -153,6 +154,7 @@ export class ConfigComponent extends FComponent implements FConfiguration {
             },
         };
         this.socket = './flyflor.sock';
+        this.path = join(ROOT_PATH, './.config');
         this.configPath = join(ROOT_PATH, './.config/config.jsonc');
         this.skills = {
             directory: join(ROOT_PATH, './.config/skills'),
@@ -161,19 +163,5 @@ export class ConfigComponent extends FComponent implements FConfiguration {
         };
         this.mcp = {};
         Object.assign(this, JSON5.parse(readFileSync(this.configPath, 'utf-8')));
-    }
-
-    public get activeLlmProvider(): ActiveLlmProviderConfig {
-        return {
-            name: this.model.provider,
-            baseURL: this.model.base_url,
-            apiKeyEnv: this.model.api_key_env,
-            defaultModel: this.model.default,
-            models: [this.model.model],
-        };
-    }
-
-    public resolveFromRoot(relative: string): string {
-        return resolve(ROOT_PATH, relative);
     }
 }

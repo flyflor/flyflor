@@ -1,33 +1,116 @@
 {
-    // Flyflor uses one JSONC config file. Secrets stay in environment variables, never in this file.
-    // The IPC socket path is a convention (./flyflor.sock), not configuration — see ConfigComponent.socketEndpoint.
-    "runtime": {
-        "mode": "fast",
+    // Flyflor 单一运行时配置文件。
+    // 约定：
+    // - 密钥只放环境变量，不写入本文件。
+    // - 代码已有默认值、通常不需要改的配置项保留为注释示例。
+    // - 需要运行时明确选择的模型与 provider 保持启用。
+
+    // 当前默认模型配置。
+    // default: 对外语义上的默认模型名。
+    // model: 当前实际调用的模型名。
+    // provider: providers 中的 provider key。
+    // apiKeyEnv: 读取 API key 的环境变量名。
+    // baseUrl: OpenAI-compatible 接口根地址。
+    // authMode: 鉴权模式；当前常用 apiKey，保留 entraId 兼容位。
+    // entra: Entra ID 鉴权参数；authMode=entraId 时使用。
+    // contextLength: 模型上下文窗口长度。
+    // maxTokens: 单次生成最大 token 数。
+    "model": {
+        "default": "deepseek-v4-flush",
+        "model": "deepseek-v4-flush",
+        "provider": "deepseek",
+        "apiKeyEnv": "DEEPSEEK_API_KEY",
+        "baseUrl": "https://api.deepseek.com",
+        "authMode": "",
+        "entra": {},
+        "contextLength": 131072,
+        "maxTokens": 8192,
     },
-    "llm": {
-        "defaultProvider": "deepseek",
-        "providers": {
-            "deepseek": {
-                "baseURL": "https://api.deepseek.com",
-                "apiKeyEnv": "DEEPSEEK_API_KEY",
-                "defaultModel": "deepseek-chat",
-                "models": [
-                    "deepseek-chat"
-                ],
+
+    // Provider 列表，key 必须能被 model.provider 引用。
+    // requestTimeoutSeconds: provider 默认请求超时秒数。
+    // staleTimeoutSeconds: provider 默认空闲/卡住判定秒数。
+    // models: provider 下每个模型的细粒度覆盖配置。
+    // timeoutSeconds: 单模型请求超时秒数。
+    // staleTimeoutSeconds: 单模型空闲/卡住判定秒数。
+    "providers": {
+        "deepseek": {
+            "requestTimeoutSeconds": 60,
+            "staleTimeoutSeconds": 30,
+            "models": {
+                "deepseek-v4-flush": {
+                    "timeoutSeconds": 60,
+                    "staleTimeoutSeconds": 30,
+                },
             },
         },
     },
-    "sandbox": {
-        "defaultDecision": "allow",
-    },
-    "storage": {
-        "schemaDirectory": "./sql",
-    },
-    // External capabilities (optional). Skills are directory-based; MCP servers use stdio (command/args) or url.
-    "skills": {
-        "directory": "./.config/skills",
-    },
-    "mcp": {
-        "servers": {},
-    },
+
+    // 记忆系统配置。
+    // 这些值在 ConfigComponent 中已有默认值，通常不需要配置；需要覆盖时取消注释。
+    // memoryEnabled: 是否启用长期记忆。
+    // userProfileEnabled: 是否启用用户画像记忆。
+    // memoryCharLimit: 单次记忆内容字符预算。
+    // userCharLimit: 用户画像内容字符预算。
+    // nudgeInterval: 记忆写入/整理提示间隔。
+    // flushMinTurns: 触发记忆 flush 的最少对话轮数。
+    // "memory": {
+    //     "memoryEnabled": true,
+    //     "userProfileEnabled": true,
+    //     "memoryCharLimit": 2200,
+    //     "userCharLimit": 1375,
+    //     "nudgeInterval": 10,
+    //     "flushMinTurns": 6,
+    // },
+
+    // 当前启用的 agent profile 名称。
+    // ConfigComponent 默认值为 main；需要切换多 agent profile 时取消注释。
+    // "agent": "main",
+
+    // Agent profile 列表。
+    // name: profile 名称。
+    // model: profile 使用的模型名。
+    // provider: profile 使用的 provider key。
+    // ConfigComponent 已有 main 占位默认值；需要多 agent 或覆盖模型时取消注释。
+    // "agents": {
+    //     "main": {
+    //         "name": "main",
+    //         "model": "deepseek-chat",
+    //         "provider": "deepseek",
+    //     },
+    // },
+
+    // IPC socket 路径。
+    // 默认值为 ./flyflor.sock；通常不需要配置。
+    // Windows 运行时内部会转换为命名管道。
+    // "socket": "./flyflor.sock",
+
+    // Skill 插件目录配置。
+    // directory: skill 根目录。
+    // creationNudgeInterval: skill 创建提示间隔。
+    // externalDirs: 额外 skill 搜索目录。
+    // ConfigComponent 中已有默认值；需要自定义 skill 目录时取消注释。
+    // "skills": {
+    //     "directory": "./.config/skills",
+    //     "creationNudgeInterval": 15,
+    //     "externalDirs": [],
+    // },
+
+    // MCP server 配置。
+    // servers: MCP server 列表，key 为 server 名称。
+    // command: stdio server 启动命令。
+    // args: stdio server 启动参数。
+    // env: 传给 server 进程的环境变量覆盖。
+    // url: 预留给 http/sse transport。
+    // 当前没有 MCP server 时不需要启用。
+    // "mcp": {
+    //     "servers": {
+    //         "example": {
+    //             "command": "node",
+    //             "args": ["./server.js"],
+    //             "env": {},
+    //             "url": "",
+    //         },
+    //     },
+    // },
 }
