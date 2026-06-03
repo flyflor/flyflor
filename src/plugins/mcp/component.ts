@@ -1,5 +1,5 @@
-import { Plugin, FPlugin, Inject, Init } from "@/core";
-import { ConfigComponent, type MCPServerConfig } from "@/shard/components/config";
+import { Plugin, FPlugin, Inject, Init } from '@/core';
+import { ConfigComponent, type MCPConfig } from '@/shard/components/config';
 
 /**
  * One tool exposed by a connected MCP server.
@@ -17,7 +17,7 @@ export interface MCPTool {
 
 /** A JSON-RPC request/response envelope used over the MCP stdio transport. */
 interface JsonRpcMessage {
-    jsonrpc: "2.0";
+    jsonrpc: '2.0';
     id?: number;
     method?: string;
     params?: unknown;
@@ -48,7 +48,7 @@ export class MCPComponent extends FPlugin {
      */
     @Init()
     public async init(): Promise<void> {
-        const servers = this.config.value.mcp?.servers ?? {};
+        const servers = this.config.mcp?.servers ?? {};
         for (const [name, cfg] of Object.entries(servers)) {
             try {
                 await this.connect(name, cfg);
@@ -78,9 +78,9 @@ export class MCPComponent extends FPlugin {
     public async callTool(server: string, tool: string, args: unknown): Promise<unknown> {
         const proc = this.processes.get(server);
         if (proc === undefined) {
-            throw Object.assign(new Error("MCP server not connected"), { detail: { server } });
+            throw Object.assign(new Error('MCP server not connected'), { detail: { server } });
         }
-        const response = await this.rpc(proc, "tools/call", { name: tool, arguments: args });
+        const response = await this.rpc(proc, 'tools/call', { name: tool, arguments: args });
         return response.result;
     }
 
@@ -89,33 +89,32 @@ export class MCPComponent extends FPlugin {
      * @param name - the server name.
      * @param cfg - the server config (stdio fields used; http/sse skipped for now).
      */
-    private async connect(name: string, cfg: MCPServerConfig): Promise<void> {
+    private async connect(name: string, cfg: MCPConfig): Promise<void> {
         if (cfg.command === undefined) {
             console.log(`[MCP] server '${name}' has no stdio command (http/sse not yet implemented) — skipped`);
             return;
         }
         const proc = Bun.spawn([cfg.command, ...(cfg.args ?? [])], {
-            stdin: "pipe",
-            stdout: "pipe",
-            stderr: "inherit",
+            stdin: 'pipe',
+            stdout: 'pipe',
+            stderr: 'inherit',
             env: { ...process.env, ...cfg.env },
         });
         this.processes.set(name, proc);
 
-        await this.rpc(proc, "initialize", {
-            protocolVersion: "2024-11-05",
+        await this.rpc(proc, 'initialize', {
+            protocolVersion: '2024-11-05',
             capabilities: {},
-            clientInfo: { name: "flyflor", version: "0.1.0" },
+            clientInfo: { name: 'flyflor', version: '0.1.0' },
         });
 
-        const listed = await this.rpc(proc, "tools/list", {});
-        const toolList: Array<{ name: string; description?: string; inputSchema?: unknown }> =
-            listed.result?.tools ?? [];
+        const listed = await this.rpc(proc, 'tools/list', {});
+        const toolList: Array<{ name: string; description?: string; inputSchema?: unknown }> = listed.result?.tools ?? [];
         for (const tool of toolList) {
             this.tools.push({
                 server: name,
                 name: tool.name,
-                description: tool.description ?? "",
+                description: tool.description ?? '',
                 inputSchema: tool.inputSchema ?? {},
             });
         }
@@ -129,25 +128,21 @@ export class MCPComponent extends FPlugin {
      * @param params - the method params.
      * @returns the response message.
      */
-    private async rpc(
-        proc: ReturnType<typeof Bun.spawn>,
-        method: string,
-        params: unknown,
-    ): Promise<JsonRpcMessage> {
+    private async rpc(proc: ReturnType<typeof Bun.spawn>, method: string, params: unknown): Promise<JsonRpcMessage> {
         const id = this.nextId++;
-        const request: JsonRpcMessage = { jsonrpc: "2.0", id, method, params };
+        const request: JsonRpcMessage = { jsonrpc: '2.0', id, method, params };
 
         const stdin = proc.stdin as { write: (s: string) => void; flush: () => void } | undefined;
         const stdout = proc.stdout as ReadableStream<Uint8Array> | undefined;
         if (stdin === undefined || stdout === undefined) {
-            throw new Error("MCP server has no stdio pipes");
+            throw new Error('MCP server has no stdio pipes');
         }
-        stdin.write(JSON.stringify(request) + "\n");
+        stdin.write(JSON.stringify(request) + '\n');
         stdin.flush();
 
         const reader = stdout.getReader();
         const decoder = new TextDecoder();
-        let buffer = "";
+        let buffer = '';
         try {
             while (true) {
                 const { done, value } = await reader.read();
@@ -155,8 +150,8 @@ export class MCPComponent extends FPlugin {
                     throw new Error(`MCP server closed before responding to '${method}'`);
                 }
                 buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split("\n");
-                buffer = lines.pop() ?? "";
+                const lines = buffer.split('\n');
+                buffer = lines.pop() ?? '';
                 for (const line of lines) {
                     const trimmed = line.trim();
                     if (!trimmed) {

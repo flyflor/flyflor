@@ -1,12 +1,12 @@
-import { Component, FComponent } from "@/core";
+import { Component, FComponent } from '@/core';
 
 /**
  * Roles stored in the agent's live working context.
  * `User` is inbound human text; `Agent` is the model-backed reply produced by Flyflor.
  */
 export enum ContextRole {
-    User = "user",
-    Agent = "agent",
+    User = 'user',
+    Agent = 'agent',
 }
 
 /**

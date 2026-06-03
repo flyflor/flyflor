@@ -1,6 +1,6 @@
-import { FModule, Module } from "@/core";
-import { SkillComponent } from "./skill";
-import { MCPComponent } from "./mcp";
+import { FModule, Module } from '@/core';
+import { SkillComponent } from './skill';
+import { MCPComponent } from './mcp';
 
 /**
  * The plugins module: external capability boundaries kept isolated from the kernel.

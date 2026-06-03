@@ -2,7 +2,7 @@
     // Flyflor uses one JSONC config file. Secrets stay in environment variables, never in this file.
     // The IPC socket path is a convention (./flyflor.sock), not configuration — see ConfigComponent.socketEndpoint.
     "runtime": {
-        "mode": "fast"
+        "mode": "fast",
     },
     "llm": {
         "defaultProvider": "deepseek",
@@ -11,21 +11,23 @@
                 "baseURL": "https://api.deepseek.com",
                 "apiKeyEnv": "DEEPSEEK_API_KEY",
                 "defaultModel": "deepseek-chat",
-                "models": ["deepseek-chat"]
-            }
-        }
+                "models": [
+                    "deepseek-chat"
+                ],
+            },
+        },
     },
     "sandbox": {
-        "defaultDecision": "allow"
+        "defaultDecision": "allow",
     },
     "storage": {
-        "schemaDirectory": "./sql"
+        "schemaDirectory": "./sql",
     },
     // External capabilities (optional). Skills are directory-based; MCP servers use stdio (command/args) or url.
     "skills": {
-        "directory": "./.config/skills"
+        "directory": "./.config/skills",
     },
     "mcp": {
-        "servers": {}
-    }
+        "servers": {},
+    },
 }

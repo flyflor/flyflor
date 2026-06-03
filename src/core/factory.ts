@@ -1,6 +1,8 @@
-import { useContainer } from "./ioc/container.ts";
-import type { Ctor } from "./decorators.ts";
-import type { FModule } from "./ioc/superclz.ts";
+import { useContainer } from './ioc/container';
+const container = useContainer();
+
+import type { Ctor } from './decorators';
+import type { FModule } from './ioc/superclz';
 
 /**
  * Bootstraps the Flyflor kernel from a root `@Module`.
@@ -15,7 +17,6 @@ export class Factory {
      * @returns the initialized root module instance.
      */
     public static async create<T extends Ctor<FModule>>(rootModule: T) {
-        const container = useContainer();
         return container.getAsync(rootModule);
     }
 }

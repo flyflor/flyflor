@@ -1,16 +1,19 @@
-import { FModule, Module, Inject, Init } from "@/core";
-import { ConfigComponent } from "@/shard/components/config";
-import { IPCService, type IPCMessage } from "./service.ts";
-import type { UnixSocketListener } from "bun";
+import { FModule, Module, Inject, Init } from '@/core';
+import { unlink } from 'fs/promises';
+import { ConfigComponent } from '@/shard/components/config';
+import { IPCService, type IPCMessage } from './service';
+import type { UnixSocketListener } from 'bun';
+import { join } from 'path';
+import { ROOT_PATH } from '@/constants';
 
 /** Windows named-pipe prefix used internally while the public endpoint remains `./flyflor.sock`. */
-const WINDOWS_NAMED_PIPE_PREFIX = "\\\\.\\pipe\\";
+const WINDOWS_NAMED_PIPE_PREFIX = '\\\\.\\pipe\\';
 
 /** Relative prefix used by the public socket endpoint. */
-const RELATIVE_PATH_PREFIX = "./";
+const RELATIVE_PATH_PREFIX = './';
 
 /** Ready message sent once a client connects to any IPC transport. */
-const READY_MESSAGE = "Flyflor ready.";
+const READY_MESSAGE = 'Flyflor ready.';
 
 /**
  * The IPC module: external↔kernel boundary.
@@ -34,26 +37,27 @@ export class IPCModule extends FModule {
      */
     @Init()
     public async init(): Promise<void> {
-        this.startSocket();
+        await this.startSocket();
     }
 
     /**
      * Socket transport for CLI / Rust TUI clients. Consumers always use `./flyflor.sock`.
      */
-    private startSocket(): void {
-        const endpoint = this.config.socketEndpoint;
+    private async startSocket() {
+        const endpoint = join(ROOT_PATH, this.config.socket);
         const handler = {
             open: (socket: { write: (s: string) => void }) => {
-                this.writeSocket(socket, { kind: "agent", content: READY_MESSAGE });
+                this.writeSocket(socket, { kind: 'agent', content: READY_MESSAGE });
             },
             data: async (socket: { write: (s: string) => void }, data: Uint8Array) => {
-                const reply = await this.process(Buffer.from(data).toString("utf8").trim());
+                const reply = await this.process(Buffer.from(data).toString('utf8').trim());
                 this.writeSocket(socket, reply);
             },
-            close: () => {},
+            close: () => { },
             error: (_s: unknown, e: unknown) => console.error(`[IPC/socket] error:`, e),
         };
 
+        await unlink(this.toListenEndpoint(endpoint));
         this.socketServer = Bun.listen({ unix: this.toListenEndpoint(endpoint), socket: handler as never });
         console.log(`[IPC] Socket listening at ${endpoint}`);
     }
@@ -64,10 +68,10 @@ export class IPCModule extends FModule {
      * @returns the endpoint passed to Bun's socket listener.
      */
     private toListenEndpoint(endpoint: string): string {
-        if (process.platform !== "win32") {
+        if (process.platform !== 'win32') {
             return endpoint;
         }
-        return WINDOWS_NAMED_PIPE_PREFIX + endpoint.replace(RELATIVE_PATH_PREFIX, "");
+        return WINDOWS_NAMED_PIPE_PREFIX + endpoint.replace(RELATIVE_PATH_PREFIX, '');
     }
 
     /**
@@ -78,19 +82,19 @@ export class IPCModule extends FModule {
     private async process(frame: string): Promise<IPCMessage> {
         try {
             const msg = JSON.parse(frame) as IPCMessage;
-            if (msg.kind === "user" && msg.content) {
+            if (msg.kind === 'user' && msg.content) {
                 const reply = await this.service.handleUserMessage(msg.content);
-                return { kind: "agent", content: reply };
+                return { kind: 'agent', content: reply };
             }
-            return { kind: "error", content: 'Expected {"kind":"user","content":"..."}' };
+            return { kind: 'error', content: 'Expected {"kind":"user","content":"..."}' };
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            return { kind: "error", content: message };
+            return { kind: 'error', content: message };
         }
     }
 
     private writeSocket(socket: { write: (s: string) => void }, msg: IPCMessage): void {
-        socket.write(JSON.stringify(msg) + "\n");
+        socket.write(JSON.stringify(msg) + '\n');
     }
 
     /** The resolved IPC endpoint address (for AppModule to expose as `endpoint`). */

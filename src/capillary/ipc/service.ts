@@ -1,11 +1,11 @@
-import { FService, Inject, Service } from "@/core";
+import { FService, Inject, Service } from '@/core';
 
 /**
  * One IPC message exchanged with a client (CLI, Web, or future Rust TUI).
  * `kind` is the protocol direction/status; `content` is the user input, agent output, or error text.
  */
 export interface IPCMessage {
-    kind: "user" | "agent" | "error";
+    kind: 'user' | 'agent' | 'error';
     content: string;
 }
 

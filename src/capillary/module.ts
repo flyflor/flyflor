@@ -1,6 +1,6 @@
-import { FModule, Module } from "@/core";
-import { IPCModule } from "@/capillary/ipc";
-import { GuardModule } from "@/capillary/guard";
+import { FModule, Module } from '@/core';
+import { IPCModule } from '@/capillary/ipc';
+import { GuardModule } from '@/capillary/guard';
 
 /**
  * Categories of packet that move through the capillary blood-vessel layer.
@@ -10,9 +10,9 @@ import { GuardModule } from "@/capillary/guard";
  * - `DecisionResult`: the resolved outcome of a `Decision`, emitted for observers.
  */
 export enum CapillaryPacketKind {
-    Notice = "notice",
-    Decision = "decision",
-    DecisionResult = "decision-result",
+    Notice = 'notice',
+    Decision = 'decision',
+    DecisionResult = 'decision-result',
 }
 
 /**
@@ -20,8 +20,8 @@ export enum CapillaryPacketKind {
  * `Allow` lets the action proceed; `Deny` blocks it with an optional structured reason.
  */
 export enum CapillaryDecision {
-    Allow = "allow",
-    Deny = "deny",
+    Allow = 'allow',
+    Deny = 'deny',
 }
 
 /**

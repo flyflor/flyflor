@@ -1,15 +1,15 @@
 // 流体智力
-import { FService, Inject, Service, Singleton } from "@/core";
-import { ConfigComponent } from "@/shard/components/config";
+import { FService, Inject, Service, Singleton } from '@/core';
+import { ConfigComponent } from '@/shard/components/config';
 
 /**
  * Roles accepted by the OpenAI-compatible chat-completions endpoint.
  * These values are protocol strings, not Flyflor context role names.
  */
 export enum AgentChatRole {
-    System = "system",
-    User = "user",
-    Assistant = "assistant",
+    System = 'system',
+    User = 'user',
+    Assistant = 'assistant',
 }
 
 /**
@@ -51,11 +51,11 @@ interface LlmByteStreamReader {
 @Service()
 export class IntelligenceService extends FService {
     /** Provider endpoint suffix for chat completions. */
-    private static readonly CHAT_COMPLETIONS_PATH = "/chat/completions";
+    private static readonly CHAT_COMPLETIONS_PATH = '/chat/completions';
     /** HTTP authorization scheme prefix. */
-    private static readonly AUTHORIZATION_PREFIX = "Bearer ";
+    private static readonly AUTHORIZATION_PREFIX = 'Bearer ';
     /** Server-sent-event marker that ends a streaming completion. */
-    private static readonly STREAM_DONE = "[DONE]";
+    private static readonly STREAM_DONE = '[DONE]';
     /** Sampling temperature used by the default agent. */
     private static readonly DEFAULT_TEMPERATURE = 0.7;
     /** Completion token budget for the first LLM integration milestone. */
@@ -73,15 +73,15 @@ export class IntelligenceService extends FService {
         const provider = this.config.activeLlmProvider;
         const apiKey = process.env[provider.apiKeyEnv];
         if (apiKey === undefined || apiKey.length === 0) {
-            throw Object.assign(Error("LLM API key environment variable is missing"), {
+            throw Object.assign(Error('LLM API key environment variable is missing'), {
                 detail: { provider: provider.name, apiKeyEnv: provider.apiKeyEnv },
             });
         }
 
         const response = await fetch(this.chatCompletionsUrl(provider.baseURL), {
-            method: "POST",
+            method: 'POST',
             headers: {
-                "Content-Type": "application/json",
+                'Content-Type': 'application/json',
                 Authorization: IntelligenceService.AUTHORIZATION_PREFIX + apiKey,
             },
             body: JSON.stringify({
@@ -95,21 +95,21 @@ export class IntelligenceService extends FService {
 
         if (!response.ok) {
             const errorText = await response.text();
-            throw Object.assign(Error("LLM provider request failed"), {
+            throw Object.assign(Error('LLM provider request failed'), {
                 detail: { provider: provider.name, status: response.status, body: errorText },
             });
         }
 
         const reader = response.body?.getReader();
         if (reader === undefined) {
-            throw Object.assign(Error("LLM provider returned no response body"), {
+            throw Object.assign(Error('LLM provider returned no response body'), {
                 detail: { provider: provider.name },
             });
         }
 
         const content = await this.readStreamingContent(reader);
         if (content.length === 0) {
-            throw Object.assign(Error("LLM provider returned an empty response"), {
+            throw Object.assign(Error('LLM provider returned an empty response'), {
                 detail: { provider: provider.name, model: provider.defaultModel },
             });
         }
@@ -122,7 +122,7 @@ export class IntelligenceService extends FService {
      * @returns a full endpoint URL with exactly one slash before the path.
      */
     private chatCompletionsUrl(baseURL: string): string {
-        return baseURL.replace(/\/$/, "") + LlmService.CHAT_COMPLETIONS_PATH;
+        return baseURL.replace(/\/$/, '') + IntelligenceService.CHAT_COMPLETIONS_PATH;
     }
 
     /**
@@ -132,8 +132,8 @@ export class IntelligenceService extends FService {
      */
     private async readStreamingContent(reader: LlmByteStreamReader): Promise<string> {
         const decoder = new TextDecoder();
-        let full = "";
-        let buffer = "";
+        let full = '';
+        let buffer = '';
 
         while (true) {
             const { done, value } = await reader.read();
@@ -141,8 +141,8 @@ export class IntelligenceService extends FService {
                 break;
             }
             buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() ?? "";
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';
             for (const line of lines) {
                 const delta = this.parseStreamingLine(line);
                 if (delta !== undefined) {
@@ -161,15 +161,15 @@ export class IntelligenceService extends FService {
      */
     private parseStreamingLine(line: string): string | undefined {
         const trimmed = line.trim();
-        if (!trimmed.startsWith("data:")) {
+        if (!trimmed.startsWith('data:')) {
             return undefined;
         }
-        const data = trimmed.slice("data:".length).trim();
-        if (data === LlmService.STREAM_DONE) {
+        const data = trimmed.slice('data:'.length).trim();
+        if (data === IntelligenceService.STREAM_DONE) {
             return undefined;
         }
         const parsed = JSON.parse(data) as ChatCompletionChunk;
         const delta = parsed.choices?.[0]?.delta?.content;
-        return typeof delta === "string" ? delta : undefined;
+        return typeof delta === 'string' ? delta : undefined;
     }
 }

@@ -1,7 +1,7 @@
-import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { Plugin, FPlugin, Inject, Init } from "@/core";
-import { ConfigComponent } from "@/shard/components/config";
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { Plugin, FPlugin, Inject, Init } from '@/core';
+import { ConfigComponent } from '@/shard/components/config';
 
 /**
  * A discovered skill: a directory-based capability described by its `SKILL.md` frontmatter.
@@ -25,9 +25,9 @@ export interface SkillManifest {
 @Plugin()
 export class SkillComponent extends FPlugin {
     /** Default skills directory when config omits one. */
-    private static readonly DEFAULT_DIR = "./.config/skills";
+    private static readonly DEFAULT_DIR = './.config/skills';
     /** The canonical skill descriptor file inside each skill folder. */
-    private static readonly MANIFEST_FILE = "SKILL.md";
+    private static readonly MANIFEST_FILE = 'SKILL.md';
 
     @Inject() private readonly config!: ConfigComponent;
 
@@ -46,7 +46,7 @@ export class SkillComponent extends FPlugin {
      * (Re)scans the skills directory, parsing each sub-folder's `SKILL.md` frontmatter.
      */
     public async scan(): Promise<void> {
-        const dir = this.config.resolveFromRoot(this.config.value.skills?.directory ?? SkillComponent.DEFAULT_DIR);
+        const dir = this.config.resolveFromRoot(this.config.skills?.directory ?? SkillComponent.DEFAULT_DIR);
         this.manifests = [];
         try {
             const entries = await readdir(dir, { withFileTypes: true });
@@ -81,9 +81,9 @@ export class SkillComponent extends FPlugin {
     public async load(name: string): Promise<string> {
         const manifest = this.manifests.find((skill) => skill.name === name);
         if (manifest === undefined) {
-            throw Object.assign(new Error("Skill not found"), { detail: { name } });
+            throw Object.assign(new Error('Skill not found'), { detail: { name } });
         }
-        return readFile(join(manifest.directory, SkillComponent.MANIFEST_FILE), "utf8");
+        return readFile(join(manifest.directory, SkillComponent.MANIFEST_FILE), 'utf8');
     }
 
     /**
@@ -94,9 +94,9 @@ export class SkillComponent extends FPlugin {
      */
     private async readManifest(directory: string, fallbackName: string): Promise<SkillManifest | undefined> {
         try {
-            const markdown = await readFile(join(directory, SkillComponent.MANIFEST_FILE), "utf8");
+            const markdown = await readFile(join(directory, SkillComponent.MANIFEST_FILE), 'utf8');
             const name = markdown.match(/^name:\s*(.+)$/m)?.[1]?.trim() ?? fallbackName;
-            const description = markdown.match(/^description:\s*(.+)$/m)?.[1]?.trim() ?? "";
+            const description = markdown.match(/^description:\s*(.+)$/m)?.[1]?.trim() ?? '';
             return { name, description, directory };
         } catch {
             return undefined;

@@ -7,7 +7,7 @@ import {
     type ClassType,
     type InjectInstanceMetadata,
     type InjectMetadata,
-} from "./types";
+} from './types';
 
 export interface InjectConfig {
     key?: string;
@@ -22,7 +22,7 @@ export interface MetadataQueue {
     propertyKey?: string | symbol;
 }
 
-export const CONST_METADATA_KEY = "CONST_METADATA_KEY";
+export const CONST_METADATA_KEY = 'CONST_METADATA_KEY';
 
 /**
  * 依赖注入容器类，用于管理应用程序的依赖注入 - 单例
@@ -65,10 +65,7 @@ export class Container {
             /**
              * 提前注入 register 实例
              */
-            const injectInstances: InjectInstanceMetadata[] =
-                getMetadata(INJECT_METADATA_INSTANCE_KEY, Module) ||
-                getMetadata(INJECT_METADATA_INSTANCE_KEY, Module.prototype) ||
-                [];
+            const injectInstances: InjectInstanceMetadata[] = getMetadata(INJECT_METADATA_INSTANCE_KEY, Module) || getMetadata(INJECT_METADATA_INSTANCE_KEY, Module.prototype) || [];
             for (const inject of injectInstances) {
                 const instance = await inject.instance?.();
                 clz[inject.propertyKey] = instance;
@@ -86,8 +83,7 @@ export class Container {
              * 判断是否有 @Init
              * 如果有 执行 @Init 方法
              */
-            const actionPropertyKey =
-                getMetadata(INIT_METADATA_KEY, Module.prototype) || getMetadata(INIT_METADATA_KEY, clz);
+            const actionPropertyKey = getMetadata(INIT_METADATA_KEY, Module.prototype) || getMetadata(INIT_METADATA_KEY, clz);
             if (actionPropertyKey) await clz[actionPropertyKey]?.apply(clz);
             return clz;
         } catch (error) {
@@ -104,10 +100,7 @@ export class Container {
      * @returns 去重后的属性注入元数据
      */
     private getInjectMetadata(Module: ClassType): InjectMetadata[] {
-        const injects: InjectMetadata[] = [
-            ...(getMetadata(INJECT_METADATA_KEY, Module) || []),
-            ...(getMetadata(INJECT_METADATA_KEY, Module.prototype) || []),
-        ];
+        const injects: InjectMetadata[] = [...(getMetadata(INJECT_METADATA_KEY, Module) || []), ...(getMetadata(INJECT_METADATA_KEY, Module.prototype) || [])];
         const unique: InjectMetadata[] = [];
         for (const inject of injects) {
             if (unique.some((item) => item.propertyKey === inject.propertyKey)) {
@@ -161,12 +154,7 @@ export function useContainer() {
 
 // 定义依赖注入容器元数据
 export function defineMetadata(metadataKey: any, metadataValue: any, target: Object): void;
-export function defineMetadata(
-    metadataKey: any,
-    metadataValue: any,
-    target: Object,
-    propertyKey: string | symbol,
-): void;
+export function defineMetadata(metadataKey: any, metadataValue: any, target: Object, propertyKey: string | symbol): void;
 export function defineMetadata(...props: any) {
     return Reflect.defineMetadata.apply(undefined, props);
 }

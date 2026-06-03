@@ -24,13 +24,13 @@ Factory.create(RootModule)
 
 `CapillaryModule` 不再继承 RxJS。内部维护 `Set<listener>` 通道：
 
-| 方法 | 语义 |
-|---|---|
-| `subscribe(topic, listener)` | 订阅广播，返回取消函数 |
-| `broadcast(packet)` / `notice(topic, payload)` | 广播副作用事件，await 监听器 |
+| 方法                                                   | 语义                                   |
+| ------------------------------------------------------ | -------------------------------------- |
+| `subscribe(topic, listener)`                           | 订阅广播，返回取消函数                 |
+| `broadcast(packet)` / `notice(topic, payload)`         | 广播副作用事件，await 监听器           |
 | `ask(topic, payload): Promise<CapillaryConsultResult>` | 开放式询问（沙盒 ASK），首个 Deny 阻断 |
-| `confirm(topic, payload): Promise<boolean>` | 是/否确认；`await confirm(...).then` |
-| `packet(kind, topic, payload)` | 造 JSON 安全包（randomUUID + clock） |
+| `confirm(topic, payload): Promise<boolean>`            | 是/否确认；`await confirm(...).then`   |
+| `packet(kind, topic, payload)`                         | 造 JSON 安全包（randomUUID + clock）   |
 
 - **前期放行**：无 consult 监听器 **或** `config.sandbox.defaultDecision === "allow"` 时，`ask` 返回 `{ decision: Allow }`、`confirm` 返回 `true`，**不抛错**。
 - 包结构 `CapillaryPacket` 全程 JSON 可序列化，可镜像到 IPC / 审计日志。

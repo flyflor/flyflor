@@ -1,4 +1,4 @@
-import { ConfigComponent } from "./component.ts";
+import { ConfigComponent } from './component';
 
 /**
  * Returns the container-resolved config component.

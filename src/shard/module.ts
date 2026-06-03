@@ -1,7 +1,7 @@
-import { FModule, Module } from "@/core";
-import { ConfigComponent } from "./components/config";
-import { MemoryComponent } from "./components/memory";
-import { ContextComponent } from "./components/context";
+import { FModule, Module } from '@/core';
+import { ConfigComponent } from './components/config';
+import { MemoryComponent } from './components/memory';
+import { ContextComponent } from './components/context';
 
 /**
  * The state "shard": the agent's working-state slice — configuration, memory access, and live context.

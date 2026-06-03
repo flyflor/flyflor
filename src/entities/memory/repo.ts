@@ -1,5 +1,5 @@
-import { Repo } from "@/core";
-import { MemoryEntity } from "./entity";
+import { Repo } from '@/core';
+import { MemoryEntity } from './entity';
 
 /**
  * Owns SQL operations for the `memories` table.
@@ -7,7 +7,7 @@ import { MemoryEntity } from "./entity";
  */
 @Repo()
 export class MemoryRepo extends MemoryEntity {
-    public readonly tableName = "memories";
+    public readonly tableName = 'memories';
 
     /**
      * Produces the parameterized insert statement for one memory row.
@@ -15,7 +15,7 @@ export class MemoryRepo extends MemoryEntity {
      */
     public insertMemory(record: MemoryEntity): { sql: string; params: string[] } {
         return {
-            sql: "INSERT INTO memories (id, scope_id, content, created_at) VALUES (?, ?, ?, ?)",
+            sql: 'INSERT INTO memories (id, scope_id, content, created_at) VALUES (?, ?, ?, ?)',
             params: [record.id, record.scopeId, record.content, record.createdAt],
         };
     }
@@ -26,7 +26,7 @@ export class MemoryRepo extends MemoryEntity {
      */
     public selectByScope(scopeId: string): { sql: string; params: string[] } {
         return {
-            sql: "SELECT id, scope_id, content, created_at FROM memories WHERE scope_id = ? ORDER BY created_at DESC",
+            sql: 'SELECT id, scope_id, content, created_at FROM memories WHERE scope_id = ? ORDER BY created_at DESC',
             params: [scopeId],
         };
     }

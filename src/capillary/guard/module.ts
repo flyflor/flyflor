@@ -1,4 +1,4 @@
-import { FModule, Module } from "@/core";
+import { FModule, Module } from '@/core';
 
 /**
  * The guard module: permission/policy subscribers that consult capillary decisions (Confirm / ASK / sandbox).

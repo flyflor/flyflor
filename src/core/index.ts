@@ -1,4 +1,5 @@
-import "reflect-metadata";
-export * from "./ioc/index.ts";
-export * from "./decorators.ts";
-export * from "./factory.ts";
+import 'reflect-metadata';
+export * from './ioc/index';
+export * from './decorators';
+export * from './factory';
+export * from './runtime';

@@ -1,9 +1,9 @@
-import { readFile } from "fs/promises";
-import { join, resolve } from "path";
-import { Component, FComponent, Init } from "@/core";
-import { ROOT_PATH } from "@/constants";
-import { JSON5 } from "bun";
-import { readFileSync } from "fs";
+import { readFile } from 'fs/promises';
+import { join, resolve } from 'path';
+import { Component, FComponent, Init } from '@/core';
+import { ROOT_PATH } from '@/constants';
+import { JSON5 } from 'bun';
+import { readFileSync } from 'fs';
 
 /**
  * One provider/model timeout override.
@@ -36,7 +36,7 @@ export interface FModelConfiguration {
     provider: string;
     api_key_env: string;
     base_url: string;
-    auth_mode: "api_key" | "entra_id" | string;
+    auth_mode: 'api_key' | 'entra_id' | string;
     entra: object;
     context_length: number;
     max_tokens: number;
@@ -78,13 +78,20 @@ export interface FConfiguration {
     agent: string;
     agents: Record<string, FAgentProfileConfiguration>;
     socket: string;
+    skills: SkillsConfig;
+    mcp: MCPServerConfig;
 }
 
-/**
- * One MCP server definition accepted by the current MCP plugin.
- * This compatibility export remains here because MCP plugin types import it from the config component.
- */
+export interface SkillsConfig {
+    directory: string,
+    creationNudgeInterval: number,
+    externalDirs: string[];
+}
+
 export interface MCPServerConfig {
+    servers?: { [mcpName: string]: MCPConfig };
+}
+export interface MCPConfig {
     command?: string;
     args?: string[];
     env?: Record<string, string>;
@@ -112,16 +119,18 @@ export class ConfigComponent extends FComponent implements FConfiguration {
     public agent: string;
     public agents: Record<string, FAgentProfileConfiguration>;
     public socket: string;
+    public skills: SkillsConfig;
+    public mcp: MCPServerConfig;
 
     constructor() {
         super();
         this.model = {
-            default: "",
-            model: "",
-            provider: "",
-            api_key_env: "",
-            base_url: "",
-            auth_mode: "",
+            default: '',
+            model: '',
+            provider: '',
+            api_key_env: '',
+            base_url: '',
+            auth_mode: '',
             entra: {},
             context_length: 131072,
             max_tokens: 8192,
@@ -135,25 +144,23 @@ export class ConfigComponent extends FComponent implements FConfiguration {
             nudge_interval: 10,
             flush_min_turns: 6,
         };
-        this.agent = "main";
+        this.agent = 'main';
         this.agents = {
             main: {
-                name: "main",
-                model: "",
-                provider: "",
+                name: 'main',
+                model: '',
+                provider: '',
             },
         };
-        this.socket = "./flyflor.sock";
-        this.configPath = join(ROOT_PATH, "./.config/config.jsonc");
-        Object.assign(this, JSON5.parse(readFileSync(this.configPath, "utf-8")));
-    }
-
-    public get value(): FConfiguration & Record<string, any> {
-        return this;
-    }
-
-    public get socketEndpoint(): string {
-        return this.socket;
+        this.socket = './flyflor.sock';
+        this.configPath = join(ROOT_PATH, './.config/config.jsonc');
+        this.skills = {
+            directory: join(ROOT_PATH, './.config/skills'),
+            creationNudgeInterval: 15,
+            externalDirs: [],
+        };
+        this.mcp = {};
+        Object.assign(this, JSON5.parse(readFileSync(this.configPath, 'utf-8')));
     }
 
     public get activeLlmProvider(): ActiveLlmProviderConfig {

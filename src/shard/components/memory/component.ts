@@ -1,5 +1,5 @@
-import { Component, FComponent, Inject } from "@/core";
-import { MemoryRepo, type MemoryEntity } from "@/entities";
+import { Component, FComponent, Inject } from '@/core';
+import { MemoryRepo, type MemoryEntity } from '@/entities';
 
 /**
  * The agent's memory access component (shard slice).

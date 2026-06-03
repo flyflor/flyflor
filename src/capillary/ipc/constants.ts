@@ -15,10 +15,10 @@
  * - `sqlDir`: directory holding `NNN-*.sql` schema-init scripts.
  */
 export const PATHS = {
-    configFile: "./.config/config.jsonc",
-    socketFile: "./flyflor.sock",
-    promptsDir: "./prompts",
-    sqlDir: "./sql",
+    configFile: './.config/config.jsonc',
+    socketFile: './flyflor.sock',
+    promptsDir: './prompts',
+    sqlDir: './sql',
 } as const;
 
 /**
@@ -27,4 +27,4 @@ export const PATHS = {
  * The decorator writes the key set onto the constructor; the container reads it back during resolution.
  * Kept as one shared constant so decorator and container never drift apart.
  */
-export const INJECT_METADATA_KEY = "flyflor:inject";
+export const INJECT_METADATA_KEY = 'flyflor:inject';

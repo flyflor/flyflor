@@ -1,8 +1,7 @@
-import { FModule, Module } from "@/core";
-import { CapillaryModule } from "@/capillary";
-import { ShardModule } from "@/shard/module.ts";
-import { PluginModule } from "@/plugins";
-import { AgentModule } from "@/agent";
+import { FModule, Init, Inject, Module, Runtime } from '@/core';
+import { CapillaryModule } from '@/capillary';
+import { ShardModule } from '@/shard/module';
+import { PluginModule } from '@/plugins';
 
 /**
  * The root Flyflor module.
@@ -10,6 +9,9 @@ import { AgentModule } from "@/agent";
  * and the external plugin boundary (skills + MCP). Bootstrap resolves this, building the whole DI tree.
  */
 @Module({
-    imports: [ShardModule, CapillaryModule, AgentModule, PluginModule],
+    imports: [ShardModule, CapillaryModule, PluginModule],
 })
-export class AppModule extends FModule {}
+export class AppModule extends FModule {
+    @Inject()
+    public runtime!: Runtime;
+}

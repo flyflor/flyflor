@@ -1,4 +1,4 @@
-import { FService, Service } from "@/core";
+import { FService, Service } from '@/core';
 
 // 晶体智力
 @Service()

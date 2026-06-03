@@ -1,3 +1,3 @@
-export * from "./skill/index.ts";
-export * from "./mcp/index.ts";
-export * from "./module.ts";
+export * from './skill/index';
+export * from './mcp/index';
+export * from './module';

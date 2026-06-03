@@ -32,9 +32,9 @@
         "noPropertyAccessFromIndexSignature": false,
         "baseUrl": ".",
         "paths": {
-            "@/*": ["src/*"],
-        },
+            "@/*": ["src/*"]
+        }
     },
     "include": ["app.ts", "src/**/*.ts", "scripts/**/*.ts"],
-    "exclude": ["node_modules", "dist", "plugins", ".agents"],
+    "exclude": ["node_modules", "dist", "plugins", ".agents"]
 }

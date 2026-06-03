@@ -37,18 +37,18 @@ flyflor 是一个 **Bun + TypeScript**、可编译为**单二进制**的智能�
 
 全部装饰器集中在 **`src/core/decorators.ts`**：
 
-| 装饰器 | 目标 | 作用 |
-|---|---|---|
-| `@Module(meta?)` | class | 模块边界，声明 `imports` / `providers` / `exports` |
-| `@Service()` | class | 无状态可注入服务 |
-| `@Component()` | class | 有状态组件（持本地态 / 生命周期） |
-| `@Plugin()` | class | 外部插件边界 |
-| `@Repo()` | class | `src/entities` 数据仓库 |
-| `@Prompt(path)` | property | 绑定 `prompts/<name>.md` 模板路径 |
-| `@Inject()` | property | 按 `design:type` 反射注入（免 token） |
-| `@Init()` | method | 异步初始化钩子，`getAsync` 触发，幂等 |
-| `@Guard()` | class | 守护 / 策略订阅者（订阅血管层 consult） |
-| `@SandBox()` | class | **继承 `@Guard`** + 追加 sandbox 标记 |
+| 装饰器           | 目标     | 作用                                               |
+| ---------------- | -------- | -------------------------------------------------- |
+| `@Module(meta?)` | class    | 模块边界，声明 `imports` / `providers` / `exports` |
+| `@Service()`     | class    | 无状态可注入服务                                   |
+| `@Component()`   | class    | 有状态组件（持本地态 / 生命周期）                  |
+| `@Plugin()`      | class    | 外部插件边界                                       |
+| `@Repo()`        | class    | `src/entities` 数据仓库                            |
+| `@Prompt(path)`  | property | 绑定 `prompts/<name>.md` 模板路径                  |
+| `@Inject()`      | property | 按 `design:type` 反射注入（免 token）              |
+| `@Init()`        | method   | 异步初始化钩子，`getAsync` 触发，幂等              |
+| `@Guard()`       | class    | 守护 / 策略订阅者（订阅血管层 consult）            |
+| `@SandBox()`     | class    | **继承 `@Guard`** + 追加 sandbox 标记              |
 
 > 角色装饰器（`@Service` / `@Component` / `@Plugin` / `@Repo` / `@Guard` / `@SandBox`）**不带 `name`、不写任何容器可匹配的 key**，是纯意图标记；行为由对应基类与结构提供。仅 `@Module` / `@Inject` / `@Init` / `@Prompt` 承载 DI 接线元数据。
 

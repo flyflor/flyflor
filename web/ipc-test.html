@@ -1,236 +1,266 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flyflor 对话测试</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: #0d1117;
-            color: #c9d1d9;
-            padding: 2rem;
-        }
-        .container { max-width: 900px; margin: 0 auto; }
-        h1 { font-size: 1.75rem; margin-bottom: 0.5rem; color: #58a6ff; }
-        .status {
-            padding: 0.75rem;
-            border-radius: 6px;
-            margin: 1rem 0;
-            border: 1px solid #30363d;
-        }
-        .status.connected { background: #0d4429; border-color: #2ea043; }
-        .status.disconnected { background: #3d1818; border-color: #f85149; }
-        .controls { display: flex; gap: 0.5rem; margin: 1rem 0; }
-        button {
-            padding: 0.5rem 1rem;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            background: #21262d;
-            color: #c9d1d9;
-            cursor: pointer;
-            font-size: 0.9rem;
-        }
-        button:hover { background: #30363d; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .chat {
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 1rem;
-            height: 500px;
-            overflow-y: auto;
-            margin-bottom: 1rem;
-        }
-        .message {
-            padding: 0.75rem;
-            margin: 0.5rem 0;
-            border-radius: 6px;
-            max-width: 80%;
-        }
-        .message.user {
-            background: #1c2128;
-            border-left: 3px solid #58a6ff;
-            margin-left: auto;
-        }
-        .message.agent {
-            background: #161b22;
-            border-left: 3px solid #2ea043;
-        }
-        .message.error {
-            background: #3d1818;
-            border-left: 3px solid #f85149;
-        }
-        .message.system {
-            background: #21262d;
-            border-left: 3px solid #8b949e;
-            font-style: italic;
-            opacity: 0.8;
-        }
-        .input-row { display: flex; gap: 0.5rem; }
-        input[type="text"] {
-            flex: 1;
-            padding: 0.75rem;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            background: #0d1117;
-            color: #c9d1d9;
-            font-size: 1rem;
-        }
-        .quick-actions {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-            flex-wrap: wrap;
-        }
-        .quick-btn {
-            padding: 0.5rem 0.75rem;
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            color: #8b949e;
-            cursor: pointer;
-            font-size: 0.85rem;
-        }
-        .quick-btn:hover { background: #21262d; color: #c9d1d9; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Flyflor 对话测试</h1>
-        <p style="color: #8b949e; margin-bottom: 1rem;">与 Flyflor 内核进行模型对话测试</p>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Flyflor 对话测试</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                background: #0d1117;
+                color: #c9d1d9;
+                padding: 2rem;
+            }
+            .container {
+                max-width: 900px;
+                margin: 0 auto;
+            }
+            h1 {
+                font-size: 1.75rem;
+                margin-bottom: 0.5rem;
+                color: #58a6ff;
+            }
+            .status {
+                padding: 0.75rem;
+                border-radius: 6px;
+                margin: 1rem 0;
+                border: 1px solid #30363d;
+            }
+            .status.connected {
+                background: #0d4429;
+                border-color: #2ea043;
+            }
+            .status.disconnected {
+                background: #3d1818;
+                border-color: #f85149;
+            }
+            .controls {
+                display: flex;
+                gap: 0.5rem;
+                margin: 1rem 0;
+            }
+            button {
+                padding: 0.5rem 1rem;
+                border: 1px solid #30363d;
+                border-radius: 6px;
+                background: #21262d;
+                color: #c9d1d9;
+                cursor: pointer;
+                font-size: 0.9rem;
+            }
+            button:hover {
+                background: #30363d;
+            }
+            button:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+            .chat {
+                background: #0d1117;
+                border: 1px solid #30363d;
+                border-radius: 6px;
+                padding: 1rem;
+                height: 500px;
+                overflow-y: auto;
+                margin-bottom: 1rem;
+            }
+            .message {
+                padding: 0.75rem;
+                margin: 0.5rem 0;
+                border-radius: 6px;
+                max-width: 80%;
+            }
+            .message.user {
+                background: #1c2128;
+                border-left: 3px solid #58a6ff;
+                margin-left: auto;
+            }
+            .message.agent {
+                background: #161b22;
+                border-left: 3px solid #2ea043;
+            }
+            .message.error {
+                background: #3d1818;
+                border-left: 3px solid #f85149;
+            }
+            .message.system {
+                background: #21262d;
+                border-left: 3px solid #8b949e;
+                font-style: italic;
+                opacity: 0.8;
+            }
+            .input-row {
+                display: flex;
+                gap: 0.5rem;
+            }
+            input[type='text'] {
+                flex: 1;
+                padding: 0.75rem;
+                border: 1px solid #30363d;
+                border-radius: 6px;
+                background: #0d1117;
+                color: #c9d1d9;
+                font-size: 1rem;
+            }
+            .quick-actions {
+                display: flex;
+                gap: 0.5rem;
+                margin-bottom: 1rem;
+                flex-wrap: wrap;
+            }
+            .quick-btn {
+                padding: 0.5rem 0.75rem;
+                background: #161b22;
+                border: 1px solid #30363d;
+                border-radius: 6px;
+                color: #8b949e;
+                cursor: pointer;
+                font-size: 0.85rem;
+            }
+            .quick-btn:hover {
+                background: #21262d;
+                color: #c9d1d9;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Flyflor 对话测试</h1>
+            <p style="color: #8b949e; margin-bottom: 1rem">与 Flyflor 内核进行模型对话测试</p>
 
-        <div id="status" class="status disconnected">
-            状态：<span id="statusText">未连接</span>
+            <div id="status" class="status disconnected">状态：<span id="statusText">未连接</span></div>
+
+            <div class="controls">
+                <button id="connectBtn">连接</button>
+                <button id="disconnectBtn" disabled>断开</button>
+                <button id="clearBtn" disabled>清空对话</button>
+            </div>
+
+            <div class="quick-actions" id="quickActions" style="display: none">
+                <span style="color: #8b949e; font-size: 0.85rem">快速测试：</span>
+                <button class="quick-btn" data-msg="你好">你好</button>
+                <button class="quick-btn" data-msg="显示上下文">显示上下文</button>
+                <button class="quick-btn" data-msg="帮我写代码">帮我写代码</button>
+                <button class="quick-btn" data-msg="解释 Flyflor 架构">解释架构</button>
+            </div>
+
+            <div class="chat" id="chat"></div>
+
+            <div class="input-row">
+                <input type="text" id="messageInput" placeholder="输入消息..." disabled />
+                <button id="sendBtn" disabled>发送</button>
+            </div>
         </div>
 
-        <div class="controls">
-            <button id="connectBtn">连接</button>
-            <button id="disconnectBtn" disabled>断开</button>
-            <button id="clearBtn" disabled>清空对话</button>
-        </div>
+        <script>
+            let ws = null;
+            const status = document.getElementById('status');
+            const statusText = document.getElementById('statusText');
+            const chat = document.getElementById('chat');
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            const sendBtn = document.getElementById('sendBtn');
+            const messageInput = document.getElementById('messageInput');
+            const quickActions = document.getElementById('quickActions');
 
-        <div class="quick-actions" id="quickActions" style="display: none;">
-            <span style="color: #8b949e; font-size: 0.85rem;">快速测试：</span>
-            <button class="quick-btn" data-msg="你好">你好</button>
-            <button class="quick-btn" data-msg="显示上下文">显示上下文</button>
-            <button class="quick-btn" data-msg="帮我写代码">帮我写代码</button>
-            <button class="quick-btn" data-msg="解释 Flyflor 架构">解释架构</button>
-        </div>
+            function addMessage(content, type) {
+                const msg = document.createElement('div');
+                msg.className = `message ${type}`;
+                msg.textContent = content;
+                chat.appendChild(msg);
+                chat.scrollTop = chat.scrollHeight;
+            }
 
-        <div class="chat" id="chat"></div>
+            function sendUserMessage(text) {
+                if (!text || !ws) return;
+                const payload = { kind: 'user', content: text };
+                ws.send(JSON.stringify(payload) + '\n');
+                addMessage(text, 'user');
+            }
 
-        <div class="input-row">
-            <input type="text" id="messageInput" placeholder="输入消息..." disabled>
-            <button id="sendBtn" disabled>发送</button>
-        </div>
-    </div>
+            connectBtn.onclick = () => {
+                ws = new WebSocket('ws://127.0.0.1:17878');
 
-    <script>
-        let ws = null;
-        const status = document.getElementById('status');
-        const statusText = document.getElementById('statusText');
-        const chat = document.getElementById('chat');
-        const connectBtn = document.getElementById('connectBtn');
-        const disconnectBtn = document.getElementById('disconnectBtn');
-        const clearBtn = document.getElementById('clearBtn');
-        const sendBtn = document.getElementById('sendBtn');
-        const messageInput = document.getElementById('messageInput');
-        const quickActions = document.getElementById('quickActions');
+                ws.onopen = () => {
+                    status.className = 'status connected';
+                    statusText.textContent = '已连接 (ws://127.0.0.1:17878)';
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    clearBtn.disabled = false;
+                    sendBtn.disabled = false;
+                    messageInput.disabled = false;
+                    quickActions.style.display = 'flex';
+                    addMessage('WebSocket 已连接，等待欢迎消息...', 'system');
+                };
 
-        function addMessage(content, type) {
-            const msg = document.createElement('div');
-            msg.className = `message ${type}`;
-            msg.textContent = content;
-            chat.appendChild(msg);
-            chat.scrollTop = chat.scrollHeight;
-        }
+                ws.onmessage = (event) => {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        if (msg.kind === 'agent') {
+                            addMessage(msg.content, 'agent');
+                        } else if (msg.kind === 'error') {
+                            addMessage('错误: ' + msg.content, 'error');
+                        } else {
+                            addMessage('收到: ' + event.data, 'system');
+                        }
+                    } catch (e) {
+                        addMessage('解析错误: ' + event.data, 'system');
+                    }
+                };
 
-        function sendUserMessage(text) {
-            if (!text || !ws) return;
-            const payload = { kind: "user", content: text };
-            ws.send(JSON.stringify(payload) + '\n');
-            addMessage(text, 'user');
-        }
+                ws.onclose = () => {
+                    status.className = 'status disconnected';
+                    statusText.textContent = '未连接';
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    clearBtn.disabled = true;
+                    sendBtn.disabled = true;
+                    messageInput.disabled = true;
+                    quickActions.style.display = 'none';
+                    addMessage('WebSocket 已断开', 'system');
+                    ws = null;
+                };
 
-        connectBtn.onclick = () => {
-            ws = new WebSocket('ws://127.0.0.1:17878');
-
-            ws.onopen = () => {
-                status.className = 'status connected';
-                statusText.textContent = '已连接 (ws://127.0.0.1:17878)';
-                connectBtn.disabled = true;
-                disconnectBtn.disabled = false;
-                clearBtn.disabled = false;
-                sendBtn.disabled = false;
-                messageInput.disabled = false;
-                quickActions.style.display = 'flex';
-                addMessage('WebSocket 已连接，等待欢迎消息...', 'system');
+                ws.onerror = (err) => {
+                    addMessage(`连接错误: ${err.message || 'WebSocket error'}`, 'error');
+                };
             };
 
-            ws.onmessage = (event) => {
-                try {
-                    const msg = JSON.parse(event.data);
-                    if (msg.kind === 'agent') {
-                        addMessage(msg.content, 'agent');
-                    } else if (msg.kind === 'error') {
-                        addMessage('错误: ' + msg.content, 'error');
-                    } else {
-                        addMessage('收到: ' + event.data, 'system');
-                    }
-                } catch (e) {
-                    addMessage('解析错误: ' + event.data, 'system');
+            disconnectBtn.onclick = () => {
+                if (ws) ws.close();
+            };
+
+            clearBtn.onclick = () => {
+                chat.innerHTML = '';
+            };
+
+            sendBtn.onclick = () => {
+                const text = messageInput.value.trim();
+                if (text) {
+                    sendUserMessage(text);
+                    messageInput.value = '';
                 }
             };
 
-            ws.onclose = () => {
-                status.className = 'status disconnected';
-                statusText.textContent = '未连接';
-                connectBtn.disabled = false;
-                disconnectBtn.disabled = true;
-                clearBtn.disabled = true;
-                sendBtn.disabled = true;
-                messageInput.disabled = true;
-                quickActions.style.display = 'none';
-                addMessage('WebSocket 已断开', 'system');
-                ws = null;
+            messageInput.onkeydown = (e) => {
+                if (e.key === 'Enter' && !sendBtn.disabled) {
+                    sendBtn.click();
+                }
             };
 
-            ws.onerror = (err) => {
-                addMessage(`连接错误: ${err.message || 'WebSocket error'}`, 'error');
-            };
-        };
-
-        disconnectBtn.onclick = () => {
-            if (ws) ws.close();
-        };
-
-        clearBtn.onclick = () => {
-            chat.innerHTML = '';
-        };
-
-        sendBtn.onclick = () => {
-            const text = messageInput.value.trim();
-            if (text) {
-                sendUserMessage(text);
-                messageInput.value = '';
-            }
-        };
-
-        messageInput.onkeydown = (e) => {
-            if (e.key === 'Enter' && !sendBtn.disabled) {
-                sendBtn.click();
-            }
-        };
-
-        // 快速按钮
-        document.querySelectorAll('.quick-btn').forEach(btn => {
-            btn.onclick = () => {
-                const msg = btn.getAttribute('data-msg');
-                sendUserMessage(msg);
-            };
-        });
-    </script>
-</body>
+            // 快速按钮
+            document.querySelectorAll('.quick-btn').forEach((btn) => {
+                btn.onclick = () => {
+                    const msg = btn.getAttribute('data-msg');
+                    sendUserMessage(msg);
+                };
+            });
+        </script>
+    </body>
 </html>
