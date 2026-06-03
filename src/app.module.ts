@@ -1,6 +1,5 @@
-import { FModule, Module, Inject } from "@/core";
+import { FModule, Module } from "@/core";
 import { CapillaryModule } from "@/capillary";
-import { IPCModule } from "@/capillary/ipc";
 import { ShardModule } from "@/shard/module.ts";
 import { PluginModule } from "@/plugins";
 import { AgentModule } from "@/agent";
