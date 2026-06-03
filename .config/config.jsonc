@@ -1,15 +1,17 @@
 {
-    // Flyflor uses one JSONC config file. Secrets should be referenced through a provider, not stored here.
+    // Flyflor uses one JSONC config file. Secrets stay in environment variables, never in this file.
     // The IPC socket path is a convention (./flyflor.sock), not configuration — see ConfigComponent.socketEndpoint.
     "runtime": {
         "mode": "fast"
     },
     "llm": {
-        "defaultProvider": "local-placeholder",
+        "defaultProvider": "deepseek",
         "providers": {
-            "local-placeholder": {
-                "defaultModel": "placeholder-model",
-                "models": ["placeholder-model"]
+            "deepseek": {
+                "baseURL": "https://api.deepseek.com",
+                "apiKeyEnv": "DEEPSEEK_API_KEY",
+                "defaultModel": "deepseek-chat",
+                "models": ["deepseek-chat"]
             }
         }
     },

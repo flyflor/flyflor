@@ -1,9 +1,9 @@
 import { FModule, Module, Inject } from "@/core";
 import { CapillaryModule } from "@/capillary";
-import { GuardModule } from "@/guard";
 import { IPCModule } from "@/capillary/ipc";
 import { ShardModule } from "@/shard/module.ts";
 import { PluginModule } from "@/plugins";
+import { AgentModule } from "@/agent";
 
 /**
  * The root Flyflor module.
@@ -11,13 +11,6 @@ import { PluginModule } from "@/plugins";
  * and the external plugin boundary (skills + MCP). Bootstrap resolves this, building the whole DI tree.
  */
 @Module({
-    imports: [ShardModule, CapillaryModule, GuardModule, IPCModule, PluginModule],
+    imports: [ShardModule, CapillaryModule, AgentModule, PluginModule],
 })
-export class AppModule extends FModule {
-    @Inject() private readonly ipc!: IPCModule;
-
-    /** The IPC socket endpoint, delegated from IPCModule after it initializes (satisfies FlyflorRoot). */
-    public get endpoint(): string {
-        return this.ipc.endpoint;
-    }
-}
+export class AppModule extends FModule {}

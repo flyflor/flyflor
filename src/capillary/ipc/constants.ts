@@ -10,15 +10,13 @@
  *
  * All paths are relative (rule 7) and resolved against `rootPath` via `resolveFromRoot()` in `paths.ts`.
  * - `configFile`: the single JSONC config file, needed to bootstrap config loading before config is known.
- * - `socketFile`: POSIX Unix-domain socket file for IPC.
- * - `windowsPipe`: Windows named-pipe endpoint used in place of the socket file.
+ * - `socketFile`: public socket endpoint for IPC on every supported platform.
  * - `promptsDir`: directory holding `<name>.md` prompt sources (the `.zh.cn.md` mirrors are never read).
  * - `sqlDir`: directory holding `NNN-*.sql` schema-init scripts.
  */
 export const PATHS = {
     configFile: "./.config/config.jsonc",
     socketFile: "./flyflor.sock",
-    windowsPipe: "\\\\.\\pipe\\flyflor",
     promptsDir: "./prompts",
     sqlDir: "./sql",
 } as const;

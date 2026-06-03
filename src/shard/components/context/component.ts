@@ -1,7 +1,20 @@
 import { Component, FComponent } from "@/core";
 
+/**
+ * Roles stored in the agent's live working context.
+ * `User` is inbound human text; `Agent` is the model-backed reply produced by Flyflor.
+ */
+export enum ContextRole {
+    User = "user",
+    Agent = "agent",
+}
+
+/**
+ * One item in the agent's live working context.
+ * `role` names who produced the content; `content` is the raw turn text; `createdAt` is ISO wall-clock time.
+ */
 export interface ContextItem {
-    role: string;
+    role: ContextRole;
     content: string;
     createdAt: string;
 }
@@ -15,10 +28,19 @@ export interface ContextItem {
 export class ContextComponent extends FComponent {
     private readonly items: ContextItem[] = [];
 
-    public append(role: string, content: string): void {
+    /**
+     * Appends one observed turn to the in-memory context shard.
+     * @param role - the producer of the content.
+     * @param content - the raw text produced by that role.
+     */
+    public append(role: ContextRole, content: string): void {
         this.items.push({ role, content, createdAt: new Date().toISOString() });
     }
 
+    /**
+     * Returns a snapshot of the current context shard.
+     * @returns ordered context items copied out of the component's local state.
+     */
     public snapshot(): readonly ContextItem[] {
         return [...this.items];
     }

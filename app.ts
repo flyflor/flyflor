@@ -2,7 +2,7 @@
 // so this side-effect import stays at the very top of the entry file.
 import "reflect-metadata";
 
-import { Factory } from "@/core";
+import { Factory, useContainer } from "@/core";
 import { AppModule } from "@/module.ts";
 
 const socketUrl = await Factory.create(AppModule);

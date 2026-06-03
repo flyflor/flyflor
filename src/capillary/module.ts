@@ -1,5 +1,6 @@
 import { FModule, Module } from "@/core";
 import { IPCModule } from "@/capillary/ipc";
+import { GuardModule } from "@/capillary/guard";
 
 /**
  * Categories of packet that move through the capillary blood-vessel layer.
@@ -65,7 +66,7 @@ export interface CapillaryConsultListener {
  * This keeps the kernel's context-distillation/recall logic decoupled from where decisions actually come from.
  */
 @Module({
-    imports: [IPCModule],
+    imports: [GuardModule, IPCModule],
 })
 export class CapillaryModule extends FModule {
     private readonly broadcastListeners = new Set<CapillaryBroadcastListener>();

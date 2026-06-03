@@ -1,43 +1,50 @@
 import { FModule, Module, Inject, Init } from "@/core";
 import { ConfigComponent } from "@/shard/components/config";
 import { IPCService, type IPCMessage } from "./service.ts";
+import type { UnixSocketListener } from "bun";
 
-/** Port the browser-facing WebSocket server listens on (the unix socket serves CLI / Rust TUI). */
-const WEB_PORT = 17878;
+/** Windows named-pipe prefix used internally while the public endpoint remains `./flyflor.sock`. */
+const WINDOWS_NAMED_PIPE_PREFIX = "\\\\.\\pipe\\";
+
+/** Relative prefix used by the public socket endpoint. */
+const RELATIVE_PATH_PREFIX = "./";
+
+/** Ready message sent once a client connects to any IPC transport. */
+const READY_MESSAGE = "Flyflor ready.";
 
 /**
  * The IPC module: external↔kernel boundary.
  *
- * Exposes two transports over one shared `IPCService` brain:
- * - a Unix domain socket (`./flyflor.sock`) for CLI clients and the future Rust TUI;
- * - a WebSocket server (`ws://127.0.0.1:17878`) for the browser test client.
- * Both speak the same line-delimited JSON `IPCMessage` protocol.
+ * Exposes one socket transport over the shared `IPCService` brain. The public endpoint is always
+ * `./flyflor.sock`; platform-specific listen details stay encapsulated inside this module.
  */
-@Module()
+@Module({
+    imports: [IPCService],
+})
 export class IPCModule extends FModule {
-    @Inject() private readonly config!: ConfigComponent;
-    @Inject() private readonly service!: IPCService;
+    @Inject()
+    public readonly config!: ConfigComponent;
 
-    private socketServer?: unknown;
-    private webServer?: unknown;
+    @Inject()
+    public readonly service!: IPCService;
 
+    public socketServer?: UnixSocketListener<IPCMessage>;
     /**
-     * Opens both transports after config has loaded.
+     * Opens the socket transport after config has loaded.
      */
     @Init()
     public async init(): Promise<void> {
-        this.startUnixSocket();
-        this.startWebSocket();
+        this.startSocket();
     }
 
     /**
-     * Unix-domain socket transport for CLI / Rust TUI clients (POSIX) — falls back to TCP on Windows.
+     * Socket transport for CLI / Rust TUI clients. Consumers always use `./flyflor.sock`.
      */
-    private startUnixSocket(): void {
+    private startSocket(): void {
         const endpoint = this.config.socketEndpoint;
         const handler = {
             open: (socket: { write: (s: string) => void }) => {
-                this.writeSocket(socket, { kind: "agent", content: "Flyflor ready (DeepSeek V4 Flash)." });
+                this.writeSocket(socket, { kind: "agent", content: READY_MESSAGE });
             },
             data: async (socket: { write: (s: string) => void }, data: Uint8Array) => {
                 const reply = await this.process(Buffer.from(data).toString("utf8").trim());
@@ -47,38 +54,20 @@ export class IPCModule extends FModule {
             error: (_s: unknown, e: unknown) => console.error(`[IPC/socket] error:`, e),
         };
 
-        if (process.platform === "win32") {
-            this.socketServer = Bun.listen({ hostname: "127.0.0.1", port: WEB_PORT + 1, socket: handler as never });
-        } else {
-            this.socketServer = Bun.listen({ unix: endpoint, socket: handler as never });
-        }
-        console.log(`[IPC] Unix socket listening at ${endpoint}`);
+        this.socketServer = Bun.listen({ unix: this.toListenEndpoint(endpoint), socket: handler as never });
+        console.log(`[IPC] Socket listening at ${endpoint}`);
     }
 
     /**
-     * WebSocket transport for the browser test client.
+     * Converts the public socket endpoint into the platform listen address without changing what clients see.
+     * @param endpoint - the public `./flyflor.sock` endpoint.
+     * @returns the endpoint passed to Bun's socket listener.
      */
-    private startWebSocket(): void {
-        const self = this;
-        this.webServer = Bun.serve({
-            port: WEB_PORT,
-            fetch(req, server) {
-                if (server.upgrade(req)) {
-                    return undefined;
-                }
-                return new Response("Flyflor IPC WebSocket. Connect via ws://", { status: 426 });
-            },
-            websocket: {
-                open(ws) {
-                    ws.send(JSON.stringify({ kind: "agent", content: "Flyflor ready (DeepSeek V4 Flash)." }));
-                },
-                async message(ws, raw) {
-                    const reply = await self.process(String(raw).trim());
-                    ws.send(JSON.stringify(reply));
-                },
-            },
-        });
-        console.log(`[IPC] WebSocket listening at ws://127.0.0.1:${WEB_PORT}`);
+    private toListenEndpoint(endpoint: string): string {
+        if (process.platform !== "win32") {
+            return endpoint;
+        }
+        return WINDOWS_NAMED_PIPE_PREFIX + endpoint.replace(RELATIVE_PATH_PREFIX, "");
     }
 
     /**
@@ -96,7 +85,7 @@ export class IPCModule extends FModule {
             return { kind: "error", content: 'Expected {"kind":"user","content":"..."}' };
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            return { kind: "error", content: `Parse error: ${message}` };
+            return { kind: "error", content: message };
         }
     }
 

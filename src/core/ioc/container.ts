@@ -1,142 +1,185 @@
-import "reflect-metadata";
-import { collectInjectKeys, getInitMethod } from "../decorators.ts";
-import type { AbstractCtor, Ctor } from "../decorators.ts";
+import {
+    INIT_METADATA_KEY,
+    INJECT_METADATA_INSTANCE_KEY,
+    INJECT_METADATA_KEY,
+    MODULE_METADATA_KEY,
+    PROVIDER_SINGLETON_KEY,
+    type ClassType,
+    type InjectInstanceMetadata,
+    type InjectMetadata,
+} from "./types";
 
-/** reflect-metadata key the TypeScript/Bun transpiler fills with a property's declared type. */
-const DESIGN_TYPE = "design:type";
+export interface InjectConfig {
+    key?: string;
+    propertyName: string;
+    ClassType: ClassType;
+}
+
+export interface MetadataQueue {
+    metadataKey: any;
+    metadataValue: any;
+    target: any;
+    propertyKey?: string | symbol;
+}
+
+export const CONST_METADATA_KEY = "CONST_METADATA_KEY";
 
 /**
- * Flyflor's inversion-of-control container and the ONLY place in the codebase allowed to call `new` (rule 9).
- *
- * The DI tree is purely structural — no enums, no classification keys:
- * - identity is the class constructor (no string/symbol tokens);
- * - edges are `@Inject() public dep: Dep` properties, resolved from reflect-metadata `design:type`;
- * - scope groups are class inheritance, read back via `listModule(Base)`;
- * - every resolved class is a single shared node (one cached instance) — there is no per-class lifecycle flag.
- *
- * Construction is two-phase (build, cache, then inject) so dependency cycles resolve to the cached instance;
- * therefore injected dependencies must only be used after `@Init`, never inside a constructor.
+ * 依赖注入容器类，用于管理应用程序的依赖注入 - 单例
  */
 export class Container {
-    /** One shared instance per class — the nodes of the DI tree, keyed by constructor. */
-    private readonly instances = new Map<AbstractCtor, unknown>();
-    /** Every constructor the container has seen, so `listModule` can scan by base class. */
-    private readonly registered = new Set<Ctor>();
-    /** Constructors whose `@Init` hook already ran, keeping initialization idempotent. */
-    private readonly initialized = new Set<AbstractCtor>();
-
     /**
-     * Records a constructor as part of the resolvable graph without instantiating it.
-     * The bootstrap calls this while walking `@Module` metadata so `listModule` can later find subclasses.
-     * @param ctor - the concrete class to track.
+     * 依赖注入容器单例实例
      */
-    public register(ctor: Ctor): void {
-        this.registered.add(ctor);
+    protected static instance: Container;
+    // 依赖注入容器实例缓存存储
+    public singletons!: Map<ClassType | symbol, InstanceType<ClassType>>;
+    // 注入的所有依赖
+    public classList!: ClassType[];
+
+    constructor() {
+        if (Container.instance) return Container.instance;
+        this.singletons = new Map();
+        this.classList = [];
+        Container.instance = this;
     }
 
     /**
-     * Returns every constructor registered so far, as a snapshot.
-     * The bootstrap uses this to eagerly build and initialize the whole DI tree.
+     * 获取异步依赖注入容器实例
+     *
+     * @param Module 依赖注入类类型
+     * @returns 依赖注入类实例
      */
-    public listRegistered(): Ctor[] {
-        return [...this.registered];
-    }
-
-    /**
-     * Resolves the shared instance of `ctor`, constructing it and its `@Inject` dependencies on first use.
-     * @param ctor - the class to resolve.
-     * @returns the wired instance (dependencies assigned; `@Init` not awaited — use `getAsync` for that).
-     */
-    public get<T>(ctor: Ctor<T>): T {
-        const cached = this.instances.get(ctor);
-        if (cached !== undefined) {
-            return cached as T;
-        }
-        // The single permitted `new` site: every other instance in Flyflor originates here.
-        const instance = new ctor();
-        this.instances.set(ctor, instance); // cache before injecting so dependency cycles resolve to this instance
-        this.registered.add(ctor);
-        this.injectProperties(instance as object, ctor);
-        return instance;
-    }
-
-    /**
-     * Resolves an instance and awaits the `@Init` hooks of its dependencies (first) and then itself.
-     * The bootstrap uses this so, e.g., config is loaded before the module that depends on it initializes.
-     * @param ctor - the class to resolve and initialize.
-     * @returns the fully initialized instance.
-     */
-    public async getAsync<T>(ctor: Ctor<T>): Promise<T> {
-        const instance = this.get(ctor);
-        await this.initialize(ctor);
-        return instance;
-    }
-
-    /**
-     * Returns one resolved instance per registered class that extends `base` — the inheritance Scope of rule 10.
-     * Example: `listModule(FGuard)` returns every guard so each can subscribe to the capillary layer.
-     * @param base - the (usually abstract) base class defining the scope.
-     * @returns the resolved subclass instances.
-     */
-    public listModule<T>(base: AbstractCtor<T>): T[] {
-        const instances: T[] = [];
-        for (const ctor of this.registered) {
-            if (base.prototype.isPrototypeOf(ctor.prototype)) {
-                instances.push(this.get(ctor as unknown as Ctor<T>));
+    public async getAsync<T extends ClassType>(Module: T): Promise<InstanceType<T>> {
+        if (!this.classList.includes(Module)) this.classList.push(Module);
+        if (this.singletons.has(Module)) return this.singletons.get(Module) as InstanceType<T>;
+        const config = getMetadata(MODULE_METADATA_KEY, Module);
+        if ((config?.imports || []).length !== 0) {
+            for (const importModule of config.imports) {
+                await this.getAsync(importModule);
             }
         }
-        return instances;
+        const clz = new Module();
+        this.singletons.set(Module, clz);
+        try {
+            /**
+             * 提前注入 register 实例
+             */
+            const injectInstances: InjectInstanceMetadata[] =
+                getMetadata(INJECT_METADATA_INSTANCE_KEY, Module) ||
+                getMetadata(INJECT_METADATA_INSTANCE_KEY, Module.prototype) ||
+                [];
+            for (const inject of injectInstances) {
+                const instance = await inject.instance?.();
+                clz[inject.propertyKey] = instance;
+            }
+            /**
+             * 通过 INJECT_METADATA_KEY 注入依赖
+             * 为实例化 new Module
+             */
+            const injects: InjectMetadata[] = this.getInjectMetadata(Module);
+            for (const inject of injects) {
+                const instance = await this.getAsync(inject.classType);
+                clz[inject.propertyKey] = instance;
+            }
+            /**
+             * 判断是否有 @Init
+             * 如果有 执行 @Init 方法
+             */
+            const actionPropertyKey =
+                getMetadata(INIT_METADATA_KEY, Module.prototype) || getMetadata(INIT_METADATA_KEY, clz);
+            if (actionPropertyKey) await clz[actionPropertyKey]?.apply(clz);
+            return clz;
+        } catch (error) {
+            this.singletons.delete(Module);
+            throw error;
+        }
     }
 
     /**
-     * Wires every `@Inject` property of `instance` by resolving the property's reflected type.
-     * @param instance - the freshly constructed object whose dependencies must be assigned.
-     * @param ctor - the constructor, used to read accumulated `@Inject` keys and reflected types.
+     * Reads dependency metadata from the constructor first, then the prototype for compatibility with both
+     * decorator storage styles. Duplicate property bindings keep the first declaration.
+     *
+     * @param Module 依赖注入类类型
+     * @returns 去重后的属性注入元数据
      */
-    private injectProperties(instance: object, ctor: Ctor): void {
-        for (const key of collectInjectKeys(ctor)) {
-            const dependency = Reflect.getMetadata(DESIGN_TYPE, ctor.prototype, key) as Ctor | undefined;
-            if (dependency === undefined) {
-                throw Object.assign(new Error("Missing design:type metadata for @Inject property"), {
-                    detail: { owner: ctor.name, property: String(key) },
-                });
+    private getInjectMetadata(Module: ClassType): InjectMetadata[] {
+        const injects: InjectMetadata[] = [
+            ...(getMetadata(INJECT_METADATA_KEY, Module) || []),
+            ...(getMetadata(INJECT_METADATA_KEY, Module.prototype) || []),
+        ];
+        const unique: InjectMetadata[] = [];
+        for (const inject of injects) {
+            if (unique.some((item) => item.propertyKey === inject.propertyKey)) {
+                continue;
             }
-            (instance as Record<string | symbol, unknown>)[key] = this.get(dependency);
+            unique.push(inject);
         }
+        return unique;
     }
 
     /**
-     * Runs `@Init` hooks bottom-up: a class's injected dependencies are initialized before the class itself.
-     * Idempotent per constructor.
-     * @param ctor - the class whose initialization (and its dependencies') must complete.
+     * 获取依赖注入容器元数据
+     *
+     * @param metadataKey 元数据键名
+     * @param target 元数据目标对象
+     * @param propertyKey 元数据属性键名（可选）
+     * @returns 元数据值
      */
-    private async initialize(ctor: AbstractCtor): Promise<void> {
-        if (this.initialized.has(ctor)) {
-            return;
-        }
-        this.initialized.add(ctor);
-        for (const key of collectInjectKeys(ctor)) {
-            const dependency = Reflect.getMetadata(DESIGN_TYPE, ctor.prototype, key) as Ctor | undefined;
-            if (dependency !== undefined) {
-                await this.initialize(dependency);
-            }
-        }
-        const initMethod = getInitMethod(ctor);
-        if (initMethod !== undefined) {
-            const instance = this.get(ctor as Ctor) as Record<string | symbol, unknown>;
-            const hook = instance[initMethod];
-            if (typeof hook === "function") {
-                await (hook as () => unknown).call(instance);
-            }
-        }
+    public getMetadata(metadataKey: any, target: Object): any;
+    public getMetadata(metadataKey: any, target: Object, propertyKey: string | symbol): any;
+    public getMetadata(): any {
+        const [metadataKey, target, propertyKey] = arguments;
+        return getMetadata(metadataKey, target, propertyKey);
+    }
+
+    /**
+     * 定义依赖注入容器元数据
+     *
+     * @param metadataKey 元数据键名
+     * @param metadataValue 元数据值
+     * @param target 元数据目标对象
+     * @param propertyKey 元数据属性键名（可选）
+     */
+    public defineMetadata(metadataKey: any, metadataValue: any, target: Object): void;
+    public defineMetadata(metadataKey: any, metadataValue: any, target: Object, propertyKey: string | symbol): void;
+    public defineMetadata(): void {
+        const [metadataKey, metadataValue, target, propertyKey] = arguments;
+        return defineMetadata(metadataKey, metadataValue, target, propertyKey);
+    }
+
+    public registerObject(key: ClassType | symbol, instance: any) {
+        this.singletons.set(key, instance);
+        return this;
     }
 }
 
-/**
- * Creates a fresh IoC container.
- * Defined here so the `new Container()` call lives inside the container module — the only `new` site (rule 9).
- * @returns a new, empty `Container`.
- */
-export function createContainer(): Container {
+// 创建依赖注入容器实例
+export function useContainer() {
     return new Container();
+}
+
+// 定义依赖注入容器元数据
+export function defineMetadata(metadataKey: any, metadataValue: any, target: Object): void;
+export function defineMetadata(
+    metadataKey: any,
+    metadataValue: any,
+    target: Object,
+    propertyKey: string | symbol,
+): void;
+export function defineMetadata(...props: any) {
+    return Reflect.defineMetadata.apply(undefined, props);
+}
+
+// 获取依赖注入容器元数据
+export function getMetadata(metadataKey: any, target: Object): any;
+export function getMetadata(metadataKey: any, target: Object, propertyKey: string | symbol): any;
+export function getMetadata(...props: any): any {
+    return Reflect.getMetadata.apply(undefined, props);
+}
+
+export function getOwnMetadata(metadataKey: any, target: Object): any;
+export function getOwnMetadata(metadataKey: any, target: Object, propertyKey: string | symbol): any;
+export function getOwnMetadata(...props: any): any {
+    return Reflect.getOwnMetadata.apply(undefined, props);
 }
