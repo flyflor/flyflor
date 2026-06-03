@@ -78,6 +78,7 @@ export interface FConfiguration {
     agent: string;
     agents: Record<string, FAgentProfileConfiguration>;
     socket: string;
+    socketEndpoint: string;
     skills: SkillsConfig;
     mcp: MCPServerConfig;
 }
@@ -163,5 +164,13 @@ export class ConfigComponent extends FComponent implements FConfiguration {
         };
         this.mcp = {};
         Object.assign(this, JSON5.parse(readFileSync(this.configPath, 'utf-8')));
+    }
+
+    /**
+     * Public IPC socket endpoint consumed by transports and diagnostics.
+     * @returns Repo-relative socket path from the active configuration.
+     */
+    public get socketEndpoint(): string {
+        return this.socket;
     }
 }

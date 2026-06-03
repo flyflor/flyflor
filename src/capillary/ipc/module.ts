@@ -88,13 +88,29 @@ export class IPCModule extends FModule {
             }
             return { kind: 'error', content: 'Expected {"kind":"user","content":"..."}' };
         } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
+            const message = this.errorMessage(err);
             return { kind: 'error', content: message };
         }
     }
 
     private writeSocket(socket: { write: (s: string) => void }, msg: IPCMessage): void {
         socket.write(JSON.stringify(msg) + '\n');
+    }
+
+    /**
+     * Formats thrown errors for IPC clients without changing the JSONL envelope.
+     * @param err - Unknown value thrown by runtime or transport handling.
+     * @returns A compact error string including structured detail when available.
+     */
+    private errorMessage(err: unknown): string {
+        if (!(err instanceof Error)) {
+            return String(err);
+        }
+        const detail = (err as Error & { detail?: unknown }).detail;
+        if (detail === undefined) {
+            return err.message;
+        }
+        return `${err.message}: ${JSON.stringify(detail)}`;
     }
 
     /** The resolved IPC endpoint address (for AppModule to expose as `endpoint`). */

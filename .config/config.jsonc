@@ -16,8 +16,8 @@
     // contextLength: 模型上下文窗口长度。
     // maxTokens: 单次生成最大 token 数。
     "model": {
-        "default": "deepseek-v4-flush",
-        "model": "deepseek-v4-flush",
+        "default": "deepseek-v4-flash",
+        "model": "deepseek-v4-flash",
         "provider": "deepseek",
         "apiKeyEnv": "DEEPSEEK_API_KEY",
         "baseUrl": "https://api.deepseek.com",
@@ -38,7 +38,7 @@
             "requestTimeoutSeconds": 60,
             "staleTimeoutSeconds": 30,
             "models": {
-                "deepseek-v4-flush": {
+                "deepseek-v4-flash": {
                     "timeoutSeconds": 60,
                     "staleTimeoutSeconds": 30,
                 },

@@ -53,12 +53,14 @@ export class IntelligenceService extends FService {
     /** Provider endpoint suffix for chat completions. */
     private static readonly CHAT_COMPLETIONS_PATH = '/chat/completions';
 
+    /** Terminal data marker emitted by OpenAI-compatible SSE streams. */
+    private static readonly STREAM_DONE_MARKER = '[DONE]';
+
     @Config('model')
     private readonly llm!: FModelConfiguration;
 
     @Init()
     public async init() {
-        console.log(123, this.llm);
     }
 
     /**
@@ -67,11 +69,17 @@ export class IntelligenceService extends FService {
      * @returns the model-produced assistant content.
      */
     public async complete(messages: AgentChatMessage[]): Promise<string> {
+        const apiKey = process.env[this.llm.apiKeyEnv];
+        if (apiKey === undefined || apiKey.length === 0) {
+            throw Object.assign(Error('LLM provider API key is missing'), {
+                detail: { provider: this.llm.provider, apiKeyEnv: this.llm.apiKeyEnv },
+            });
+        }
         const response = await fetch(this.chatCompletionsUrl(this.llm.baseUrl), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${this.llm.apiKeyEnv}`,
+                Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
                 model: this.llm.model || this.llm.default,
@@ -153,6 +161,9 @@ export class IntelligenceService extends FService {
             return undefined;
         }
         const data = trimmed.slice('data:'.length).trim();
+        if (data === IntelligenceService.STREAM_DONE_MARKER) {
+            return undefined;
+        }
         const parsed = JSON.parse(data) as ChatCompletionChunk;
         const delta = parsed.choices?.[0]?.delta?.content;
         return typeof delta === 'string' ? delta : undefined;
