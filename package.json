@@ -3,7 +3,7 @@
     "module": "app.ts",
     "type": "module",
     "scripts": {
-        "dev": "bun run --watch app.ts",
+        "dev": "bun run --watch src/app.ts",
         "check": "bunx tsc --noEmit && bun run scripts/check.ts",
         "build:binary": "bun build --compile --outfile dist/flyflor app.ts"
     },

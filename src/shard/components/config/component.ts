@@ -144,7 +144,7 @@ export class ConfigComponent extends FComponent implements FConfiguration {
             },
         };
         this.socket = "./flyflor.sock";
-        this.configPath = join(ROOT_PATH, "./.config/config.json");
+        this.configPath = join(ROOT_PATH, "./.config/config.jsonc");
         Object.assign(this, JSON5.parse(readFileSync(this.configPath, "utf-8")));
     }
 

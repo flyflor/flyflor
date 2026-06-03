@@ -3,7 +3,7 @@
 import "reflect-metadata";
 
 import { Factory, useContainer } from "@/core";
-import { AppModule } from "@/module.ts";
+import { AppModule } from "./app.module.ts";
 
 const socketUrl = await Factory.create(AppModule);
 console.log(`Flyflor socket listening at ${socketUrl}`);
