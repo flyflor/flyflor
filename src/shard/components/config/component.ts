@@ -28,11 +28,13 @@ export interface FProviderConfiguration {
 /**
  * flyflor model selection and endpoint configuration.
  * `default` and `model` identify the default model; `provider` selects a provider entry; `apiKeyEnv` names
- * the environment variable used for auth; `baseUrl` is the OpenAI-compatible endpoint root.
+ * the environment variable used for auth; `baseUrl` is the OpenAI-compatible endpoint root;
+ * `fastModel` is the cheap model used by the conductor's route-decision oracle (falls back to `default`).
  */
 export interface FModelConfiguration {
     default: string;
     model: string;
+    fastModel: string;
     provider: string;
     apiKeyEnv: string;
     baseUrl: string;
@@ -129,6 +131,7 @@ export class ConfigComponent extends FComponent implements FConfiguration {
         this.model = {
             default: '',
             model: '',
+            fastModel: '',
             provider: '',
             apiKeyEnv: '',
             baseUrl: '',

@@ -98,6 +98,31 @@ export function Init(): MethodDecorator {
     return (target, propertyKey) => defineMetadata(INIT_METADATA_KEY, propertyKey, target);
 }
 
+/**
+ * Class decorator marking a class as a capillary guard (permission / policy subscriber).
+ *
+ * The decorator is a pure intent marker (per AGENTS.md red line 2 / §2): the runtime grouping is
+ * expressed structurally by extending `FGuard` (or `FSandBox` for the sandbox specialization), and
+ * `listModule(FGuard)` discovers all guards via the prototype chain.
+ */
+export function Guard(): ClassDecorator {
+    return (target) => {
+        Singleton()(target);
+    };
+}
+
+/**
+ * Class decorator marking a class as a sandbox policy subscriber.
+ *
+ * Composes with `@Guard()` so a sandbox class is also discovered by `listModule(FGuard)`. The
+ * specialization is expressed by extending `FSandBox` (which extends `FGuard`).
+ */
+export function SandBox(): ClassDecorator {
+    return (target) => {
+        Guard()(target);
+    };
+}
+
 export enum PromptScope {
     GLOBAL,
     AGENT,

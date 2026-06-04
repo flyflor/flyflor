@@ -1,24 +1,24 @@
 # User Profile
 
-姓名：Jason
+Name: Jason
 
 # Preferences
 
-喜欢简洁回答
+Likes concise answers
 
 # Expertise
 
-高级程序员
+Senior engineer
 
 # Goals
 
-构建Agent OS
+Build an Agent OS
 
 # Communication
 
-先结论
-后细节
+Conclusion first
+Details after
 
 # Avoid
 
-避免废话
+No filler

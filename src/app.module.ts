@@ -5,8 +5,10 @@ import { PluginModule } from '@/plugins';
 
 /**
  * The root Flyflor module.
- * Imports the state shard (config/memory/context), the capillary blood-vessel layer, guard policies, IPC,
- * and the external plugin boundary (skills + MCP). Bootstrap resolves this, building the whole DI tree.
+ * Imports the state shard (config/memory/context), the capillary blood-vessel layer, guard policies,
+ * IPC, and the external plugin boundary (skills + MCP). The runtime itself is the master agent's
+ * orchestrator; the agent is constructed by the runtime via `Runtime.spawn` and is not a module
+ * import (convention > configuration: `listModule(FAgent)` is the discovery surface for agents).
  */
 @Module({
     imports: [ShardModule, CapillaryModule, PluginModule],

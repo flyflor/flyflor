@@ -19,7 +19,7 @@ flyflor 是一个 **Bun + TypeScript**、可编译为**单二进制**的智能�
 2. **约定大于配置 + OOP + Composition API**：分层、文件夹、文件名必须明确；整体面向对象 + 组合式（每个领域目录配 `composition.ts` 暴露 `useXxx()`）。**禁止面向过程 function 泛滥**。
 3. **全局 CapillaryModule（血管层）**：实现 `subscribe` 与 `ask` / `confirm` 中断等待。内核遇到 Confirm / 沙盒 / ASK 等校验时 `await ask(...)` / `await confirm(...)`；订阅者可在 runtime constructor 或 `@Init` 中借 DI 注册。血管层让内核与外部解耦，对蒸馏召回影响最小。
 4. **强制备注**：每个 `class` / composition api（`useXxx`）/ `interface` / `enum` **必须**有详细备注——用途、入参含义、产物含义、使用场景。
-5. **0 魔法字符串工程**：业务代码中**不得散落硬编码字符串 / 数字字面量**，统一集中到 `enum` / `src/core/constants.ts` / 协议类型。**提示词**一律放顶层 `prompts/`，每份 `.md`（英文，**运行时唯一来源**）+ `.zh.cn.md`（中文副本，**项目不引用**）。
+5. **0 魔法字符串工程**：业务代码中**不得散落硬编码字符串 / 数字字面量**，统一集中到 `enum` / `src/core/constants.ts` / 协议类型。**提示词**一律放顶层 `prompts/`，每份 `.md`（英文，**运行时唯一来源**）+ `.zh.cn.md`（中文副本，**项目不引用**）。`prompts/**/*.md` 必须有对应的 `.zh.cn.md` 兄弟，反之亦然；**任何 `*.ts` 不得 `import` 或 `readFileSync` 任何 `.zh.cn.md`**——`scripts/check.ts` 扫描拦截。提示词章节顺序以 `enum` 声明（如 `SoulSection`），不写死静态字符串。
 6. **Bun 单二进制 + 性能是最高优先级**：`bun build --compile` 是硬需求；慎用伤性能的语法糖；二进制体积与启动/分发速度优先。
 7. **配置全相对路径**：单一文件 `./.config/config.jsonc`；模型 / agent / 工具配置形态参考 `../reference/hermes-agent`。运行时路径常量 `rootPath` / `appPath` 见 `src/core/paths.ts`。
 8. **IPC 统一对外**：智能体对话 / 行为 / 事件经 IPC 交互；跨 Windows / macOS / Linux；统一 IO，不给客户端造成负担。套接字文件 `./flyflor.sock`（Windows 用命名管道 `\\.\pipe\flyflor`）。IPC 是外部↔内核边界，**故血管层至关重要**。前期可不 await 直接放行 `true`，为后续 Rust TUI 壳做准备。
@@ -52,7 +52,7 @@ flyflor 是一个 **Bun + TypeScript**、可编译为**单二进制**的智能�
 
 > 角色装饰器（`@Service` / `@Component` / `@Plugin` / `@Repo` / `@Guard` / `@SandBox`）**不带 `name`、不写任何容器可匹配的 key**，是纯意图标记；行为由对应基类与结构提供。仅 `@Module` / `@Inject` / `@Init` / `@Prompt` 承载 DI 接线元数据。
 
-全部基类集中在 **`src/core/ioc/superclz.ts`**：`FService → FComponent → FModule`，并列 `FRepo` `FPlugin` `FGuard` `FSandBox extends FGuard`（agent 域基类按需补）。**装饰器标 DI 角色；基类提供 `listModule(Base)` 的继承式 Scope 分组。**
+全部基类集中在 **`src/core/ioc/superclz.ts`**：`FService → FComponent → FModule`，并列 `FRepo` `FPlugin` `FGuard` `FSandBox extends FGuard`，并与 FService 平级增 **`FAgent`**（自主智能体 / "人" 语义的同源基类，平行于 FService；`listModule(FAgent)` 暴露所有主人格与子人格）。**装饰器标 DI 角色；基类提供 `listModule(Base)` 的继承式 Scope 分组。**
 
 **生命周期 / Scope（纯结构，禁止 key/枚举分类）**：容器把每个被解析的类视为 DI 树上的**唯一节点（全单例）**，不用任何 key/枚举做生命周期分类。Scope 由**继承**表达——`listModule(Base)` 按原型链取出某基类全部子类实例（如 `listModule(FGuard)` 取全部守卫）。**结构（类继承 + `@Module` 图 + `@Inject` 边）是 DI 的唯一真相。**
 

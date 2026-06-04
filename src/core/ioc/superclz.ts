@@ -34,3 +34,25 @@ export abstract class FGuard extends FService { }
  * Appears in both `listModule(FGuard)` and `listModule(FSandBox)`.
  */
 export abstract class FSandBox extends FGuard { }
+
+/**
+ * Base class for autonomous intelligent agents ("person" semantic).
+ *
+ * Parallel to `FService`: an agent is NOT a stateless service — it has its own mind (soul), its own
+ * memory, its own capillary subscriptions. The runtime uses `FAgent` to discover every active agent
+ * via `listModule(FAgent)` and to manage their lifecycles. An agent's `chat` is the canonical
+ * entry point: the runtime never inspects or rewrites the agent's system prompt.
+ */
+export abstract class FAgent extends FlyFlor {
+    /**
+     * Runs one user turn through the agent and returns the agent's reply.
+     * @param content - the raw user turn text.
+     */
+    public abstract chat(content: string): Promise<string>;
+
+    /**
+     * Identity metadata the runtime uses to log and route. The agent's name comes from the
+     * profile that constructed it; the runtime never invents a different name.
+     */
+    public abstract get profile(): { name: string };
+}

@@ -66,15 +66,18 @@ export class IntelligenceService extends FService {
     /**
      * Sends messages to the configured provider and returns the completed assistant text.
      * @param messages - ordered chat messages for the current stateless agent turn.
+     * @param modelOverride - optional model name overriding the configured one (used by the conductor's
+     *   route-decision oracle to call the cheap `fastModel`).
      * @returns the model-produced assistant content.
      */
-    public async complete(messages: AgentChatMessage[]): Promise<string> {
+    public async complete(messages: AgentChatMessage[], modelOverride?: string): Promise<string> {
         const apiKey = process.env[this.llm.apiKeyEnv];
         if (apiKey === undefined || apiKey.length === 0) {
             throw Object.assign(Error('LLM provider API key is missing'), {
                 detail: { provider: this.llm.provider, apiKeyEnv: this.llm.apiKeyEnv },
             });
         }
+        const resolvedModel = modelOverride ?? this.llm.model ?? this.llm.default;
         const response = await fetch(this.chatCompletionsUrl(this.llm.baseUrl), {
             method: 'POST',
             headers: {
@@ -82,7 +85,7 @@ export class IntelligenceService extends FService {
                 Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-                model: this.llm.model || this.llm.default,
+                model: resolvedModel,
                 messages,
                 stream: true,
                 max_tokens: this.llm.maxTokens,
@@ -106,7 +109,7 @@ export class IntelligenceService extends FService {
         const content = await this.readStreamingContent(reader);
         if (content.length === 0) {
             throw Object.assign(Error('LLM provider returned an empty response'), {
-                detail: { provider: this.llm.provider, model: this.llm.model || this.llm.default },
+                detail: { provider: this.llm.provider, model: resolvedModel },
             });
         }
         return content;

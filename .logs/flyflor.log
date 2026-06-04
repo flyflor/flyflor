@@ -1,0 +1,175 @@
+[INFO ]  2026-06-04T03:35:08.628Z  agent.soul
+  | memory template written
+  | {
+  |   path: '/Users/yi./Desktop/yi/flyflors/flyflor/.config/agents/flyflor/MEMORY.md'
+  | }
+[INFO ]  2026-06-04T03:35:08.629Z  agent.soul
+  | soul loaded
+  | {
+  |   promptDir: '/Users/yi./Desktop/yi/flyflors/flyflor/.config/agents/flyflor',
+  |   sections: [
+  |     'SOUL',
+  |     'USER',
+  |     'AGENTS',
+  |     'MEMORY'
+  |   ]
+  | }
+[INFO ]  2026-06-04T03:35:08.630Z  agent
+  | agent worker ready
+  | {
+  |   name: 'flyflor'
+  | }
+[INFO ]  2026-06-04T03:35:08.630Z  conductor
+  | conductor ready
+  | {
+  |   activeAgent: 'flyflor',
+  |   fastModel: 'deepseek-v4-flash',
+  |   llmModel: 'deepseek-v4-flash',
+  |   systemPromptChars: 855,
+  |   workerName: 'flyflor'
+  | }
+[INFO ]  2026-06-04T03:35:19.260Z  agent.soul
+  | memory template written
+  | {
+  |   path: '/Users/yi./Desktop/yi/flyflors/flyflor/.config/agents/flyflor/MEMORY.md'
+  | }
+[INFO ]  2026-06-04T03:35:19.261Z  agent.soul
+  | soul loaded
+  | {
+  |   promptDir: '/Users/yi./Desktop/yi/flyflors/flyflor/.config/agents/flyflor',
+  |   sections: [
+  |     'SOUL',
+  |     'USER',
+  |     'AGENTS',
+  |     'MEMORY'
+  |   ]
+  | }
+[INFO ]  2026-06-04T03:35:19.261Z  agent
+  | agent worker ready
+  | {
+  |   name: 'flyflor'
+  | }
+[INFO ]  2026-06-04T03:35:19.261Z  conductor
+  | conductor ready
+  | {
+  |   activeAgent: 'flyflor',
+  |   fastModel: 'deepseek-v4-flash',
+  |   llmModel: 'deepseek-v4-flash',
+  |   systemPromptChars: 855,
+  |   workerName: 'flyflor'
+  | }
+[INFO ]  2026-06-04T03:35:56.007Z  agent.soul
+  | memory template written
+  | {
+  |   path: '/Users/yi./Desktop/yi/flyflors/flyflor/.config/agents/flyflor/MEMORY.md'
+  | }
+[INFO ]  2026-06-04T03:35:56.008Z  agent.soul
+  | soul loaded
+  | {
+  |   promptDir: '/Users/yi./Desktop/yi/flyflors/flyflor/.config/agents/flyflor',
+  |   sections: [
+  |     'SOUL',
+  |     'USER',
+  |     'AGENTS',
+  |     'MEMORY'
+  |   ]
+  | }
+[INFO ]  2026-06-04T03:35:56.009Z  agent
+  | agent worker ready
+  | {
+  |   name: 'flyflor'
+  | }
+[INFO ]  2026-06-04T03:35:56.009Z  conductor
+  | conductor ready
+  | {
+  |   activeAgent: 'flyflor',
+  |   fastModel: 'deepseek-v4-flash',
+  |   llmModel: 'deepseek-v4-flash',
+  |   systemPromptChars: 855,
+  |   workerName: 'flyflor'
+  | }
+[INFO ]  2026-06-04T03:36:17.299Z  agent.soul
+  | memory template written
+  | {
+  |   path: '/Users/yi./Desktop/yi/flyflors/flyflor/.config/agents/flyflor/MEMORY.md'
+  | }
+[INFO ]  2026-06-04T03:36:17.301Z  agent.soul
+  | soul loaded
+  | {
+  |   promptDir: '/Users/yi./Desktop/yi/flyflors/flyflor/.config/agents/flyflor',
+  |   sections: [
+  |     'SOUL',
+  |     'USER',
+  |     'AGENTS',
+  |     'MEMORY'
+  |   ]
+  | }
+[INFO ]  2026-06-04T03:36:17.303Z  agent
+  | agent worker ready
+  | {
+  |   name: 'flyflor'
+  | }
+[INFO ]  2026-06-04T03:36:17.303Z  conductor
+  | conductor ready
+  | {
+  |   activeAgent: 'flyflor',
+  |   fastModel: 'deepseek-v4-flash',
+  |   llmModel: 'deepseek-v4-flash',
+  |   systemPromptChars: 855,
+  |   workerName: 'flyflor'
+  | }
+[INFO ]  2026-06-04T03:36:42.966Z  agent.soul
+  | soul loaded
+  | {
+  |   promptDir: '/Users/yi./Desktop/yi/flyflors/flyflor/.config/agents/flyflor',
+  |   sections: [
+  |     'SOUL',
+  |     'USER',
+  |     'AGENTS',
+  |     'MEMORY'
+  |   ]
+  | }
+[INFO ]  2026-06-04T03:36:42.968Z  agent
+  | agent worker ready
+  | {
+  |   name: 'flyflor'
+  | }
+[INFO ]  2026-06-04T03:36:42.968Z  conductor
+  | conductor ready
+  | {
+  |   activeAgent: 'flyflor',
+  |   fastModel: 'deepseek-v4-flash',
+  |   llmModel: 'deepseek-v4-flash',
+  |   systemPromptChars: 855,
+  |   workerName: 'flyflor'
+  | }
+[INFO ]  2026-06-04T04:05:06.451Z  agent
+  | memory template written
+  | {
+  |   agent: 'flyflor',
+  |   path: '/Users/yi./Desktop/yi/flyflors/flyflor/.config/agents/flyflor/MEMORY.md'
+  | }
+[INFO ]  2026-06-04T04:05:06.452Z  agent
+  | agent ready
+  | {
+  |   name: 'flyflor',
+  |   promptDir: '/Users/yi./Desktop/yi/flyflors/flyflor/.config/agents/flyflor',
+  |   soulSections: [
+  |     'SOUL',
+  |     'USER',
+  |     'AGENTS',
+  |     'MEMORY'
+  |   ]
+  | }
+[INFO ]  2026-06-04T04:05:06.453Z  runtime
+  | agent spawned
+  | {
+  |   profile: 'flyflor'
+  | }
+[INFO ]  2026-06-04T04:05:06.453Z  runtime
+  | runtime ready
+  | {
+  |   fastModel: 'deepseek-v4-flash',
+  |   llmModel: 'deepseek-v4-flash',
+  |   master: 'flyflor'
+  | }
