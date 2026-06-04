@@ -23,7 +23,6 @@ export class Agent extends FlyFlor {
     /** Separator used between prompt documents in the combined system prompt. */
     private static readonly PROMPT_SEPARATOR = '\n\n';
 
-
     @Config('path')
     public configPath!: string;
 
@@ -36,7 +35,9 @@ export class Agent extends FlyFlor {
     public crystall!: CrystallService;
 
     // 灵魂 - 心灵智慧/宪法层
-    @Prompt('agent', PromptScope.AGENT, function (this: Agent) { return this.config.name; })
+    @Prompt('agent', PromptScope.AGENT, function (this: Agent) {
+        return this.config.name;
+    })
     public prompt!: { [x: string]: string };
 
     constructor(public config: FAgentProfileConfiguration) {
@@ -63,6 +64,7 @@ export class Agent extends FlyFlor {
             { role: AgentChatRole.System, content: this.systemPrompt() },
             { role: AgentChatRole.User, content },
         ];
+        console.log(111, messages);
         return this.intelligence.complete(messages);
     }
 
@@ -72,10 +74,8 @@ export class Agent extends FlyFlor {
      */
     private systemPrompt(): string {
         const prompt = this.prompt;
-        return [
-            prompt[Agent.PROMPT_SOUL_KEY],
-            prompt[Agent.PROMPT_USER_KEY],
-            prompt[Agent.PROMPT_AGENTS_KEY],
-        ].filter((value): value is string => typeof value === 'string' && value.length > 0).join(Agent.PROMPT_SEPARATOR);
+        return [prompt[Agent.PROMPT_SOUL_KEY], prompt[Agent.PROMPT_USER_KEY], prompt[Agent.PROMPT_AGENTS_KEY]]
+            .filter((value): value is string => typeof value === 'string' && value.length > 0)
+            .join(Agent.PROMPT_SEPARATOR);
     }
 }
