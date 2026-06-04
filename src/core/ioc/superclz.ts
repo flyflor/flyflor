@@ -44,15 +44,4 @@ export abstract class FSandBox extends FGuard { }
  * entry point: the runtime never inspects or rewrites the agent's system prompt.
  */
 export abstract class FAgent extends FlyFlor {
-    /**
-     * Runs one user turn through the agent and returns the agent's reply.
-     * @param content - the raw user turn text.
-     */
-    public abstract chat(content: string): Promise<string>;
-
-    /**
-     * Identity metadata the runtime uses to log and route. The agent's name comes from the
-     * profile that constructed it; the runtime never invents a different name.
-     */
-    public abstract get profile(): { name: string };
 }

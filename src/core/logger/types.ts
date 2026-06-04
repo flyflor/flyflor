@@ -41,7 +41,7 @@ export interface LoggerConfigurationInput {
  * Every method accepts variadic `props` because callers may pass plain strings, errors, JS objects, arrays,
  * or JSON-like records without pre-serializing them.
  */
-export interface LoggerApi {
+export interface FLogger {
     debug(...props: unknown[]): void;
     info(...props: unknown[]): void;
     warn(...props: unknown[]): void;

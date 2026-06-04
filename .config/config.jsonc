@@ -21,7 +21,6 @@
         "provider": "deepseek",
         "apiKeyEnv": "DEEPSEEK_API_KEY",
         "baseUrl": "https://api.deepseek.com",
-        "authMode": "",
         "entra": {},
         "contextLength": 131072,
         "maxTokens": 8192,

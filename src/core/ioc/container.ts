@@ -23,6 +23,8 @@ export interface MetadataQueue {
 }
 
 export const CONST_METADATA_KEY = 'CONST_METADATA_KEY';
+const CONSTRUCTOR_PARAM_METADATA_KEY = 'design:paramtypes';
+const CONSTRUCTOR_DEPENDENCY_NOT_FOUND = 'Constructor dependency not found';
 
 /**
  * 依赖注入容器类，用于管理应用程序的依赖注入 - 单例
@@ -60,7 +62,8 @@ export class Container {
                 await this.getAsync(importModule);
             }
         }
-        const clz = new Module(...props);
+        const constructorProps = this.getConstructorProps(Module, this.getModuleImportInstances(Module), props);
+        const clz = new Module(...constructorProps);
         this.singletons.set(Module, clz);
         try {
             /**
@@ -91,6 +94,88 @@ export class Container {
             this.singletons.delete(Module);
             throw error;
         }
+    }
+
+    /**
+     * Collects initialized instances reachable from a module's `imports` graph.
+     *
+     * @param Module 依赖注入类类型
+     * @returns 当前模块 imports 图中已经实例化完成的对象
+     */
+    private getModuleImportInstances(Module: ClassType): Array<{ classType: ClassType; instance: InstanceType<ClassType> }> {
+        const instances: Array<{ classType: ClassType; instance: InstanceType<ClassType> }> = [];
+        for (const classType of this.getModuleImportClassTypes(Module)) {
+            if (!this.singletons.has(classType)) continue;
+            instances.push({ classType, instance: this.singletons.get(classType) as InstanceType<ClassType> });
+        }
+        return instances;
+    }
+
+    /**
+     * Walks a module's `imports` graph so constructor injection can resolve direct and nested imports.
+     *
+     * @param Module 依赖注入类类型
+     * @param visited 已访问的 import 类型集合，用于避免重复递归
+     * @returns 去重后的 imports 图类型列表
+     */
+    private getModuleImportClassTypes(Module: ClassType, visited = new Set<ClassType>()): ClassType[] {
+        const config = getMetadata(MODULE_METADATA_KEY, Module);
+        const imports: ClassType[] = config?.imports || [];
+        const classTypes: ClassType[] = [];
+        for (const importModule of imports) {
+            if (visited.has(importModule)) continue;
+            visited.add(importModule);
+            classTypes.push(importModule, ...this.getModuleImportClassTypes(importModule, visited));
+        }
+        return classTypes;
+    }
+
+    /**
+     * Resolves constructor arguments from explicit `getAsync` props first, then from the module `imports` graph
+     * by reflected parameter type.
+     *
+     * @param Module 依赖注入类类型
+     * @param importInstances 当前模块 imports 中已经实例化完成的对象
+     * @param props 调用方显式传入的构造函数参数
+     * @returns 最终传给构造函数的参数列表
+     */
+    private getConstructorProps<P extends unknown[]>(
+        Module: ClassType,
+        importInstances: Array<{ classType: ClassType; instance: InstanceType<ClassType> }>,
+        props: P,
+    ): unknown[] {
+        const paramTypes: ClassType[] = getMetadata(CONSTRUCTOR_PARAM_METADATA_KEY, Module) || [];
+        if (paramTypes.length === 0) return props;
+        const constructorProps = paramTypes.map((paramType, index) => {
+            if (index < props.length) return props[index];
+            const instance = this.getConstructorImportInstance(paramType, importInstances);
+            if (instance !== undefined) return instance;
+            throw Object.assign(Error(CONSTRUCTOR_DEPENDENCY_NOT_FOUND), {
+                detail: {
+                    module: Module.name,
+                    index,
+                    paramType: paramType?.name,
+                    imports: importInstances.map((item) => item.classType.name),
+                },
+            });
+        });
+        if (props.length > paramTypes.length) constructorProps.push(...props.slice(paramTypes.length));
+        return constructorProps;
+    }
+
+    /**
+     * Finds an import-graph instance for a constructor parameter by exact reflected class type.
+     *
+     * @param paramType 构造函数参数的反射类型
+     * @param importInstances 当前模块 imports 中已经实例化完成的对象
+     * @returns 匹配到的 import 实例；未匹配时返回 `undefined` 交由调用方抛错
+     */
+    private getConstructorImportInstance(
+        paramType: ClassType,
+        importInstances: Array<{ classType: ClassType; instance: InstanceType<ClassType> }>,
+    ): InstanceType<ClassType> | undefined {
+        const exactImport = importInstances.find((item) => item.classType === paramType);
+        return exactImport?.instance;
     }
 
     /**

@@ -34,11 +34,9 @@ export interface FProviderConfiguration {
 export interface FModelConfiguration {
     default: string;
     model: string;
-    fastModel: string;
     provider: string;
     apiKeyEnv: string;
     baseUrl: string;
-    authMode: 'apiKey' | 'entraId' | string;
     entra: object;
     contextLength: number;
     maxTokens: number;
@@ -66,6 +64,8 @@ export interface FAgentProfileConfiguration {
     name: string;
     model: string;
     provider: string;
+    contextLength: number;
+    maxTokens: number;
 }
 
 /**
@@ -131,11 +131,9 @@ export class ConfigComponent extends FComponent implements FConfiguration {
         this.model = {
             default: '',
             model: '',
-            fastModel: '',
             provider: '',
             apiKeyEnv: '',
             baseUrl: '',
-            authMode: '',
             entra: {},
             contextLength: 131072,
             maxTokens: 8192,
@@ -155,6 +153,8 @@ export class ConfigComponent extends FComponent implements FConfiguration {
                 name: 'flyflor',
                 model: '',
                 provider: '',
+                contextLength: 0,
+                maxTokens: 0,
             },
         };
         this.socket = './flyflor.sock';

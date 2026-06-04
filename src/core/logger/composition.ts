@@ -1,7 +1,7 @@
 import { LOGGER_DEFAULT_SCOPE, LOGGER_LEVEL_WEIGHT } from './constants';
 import { resolveLoggerConfiguration } from './configuration';
 import { formatLogRecord } from './format';
-import { LoggerLevel, type LoggerApi, type LoggerConfigurationInput, type LoggerOptions } from './types';
+import { LoggerLevel, type FLogger, type LoggerConfigurationInput, type LoggerOptions } from './types';
 import { writeLogRecord } from './writer';
 
 /**
@@ -10,7 +10,7 @@ import { writeLogRecord } from './writer';
  * @param configuration - optional per-logger configuration override when the first argument is a scope string.
  * @returns logger methods for debug/info/warn/error with variadic object-safe `props` formatting.
  */
-export function useLogger(scopeOrOptions: string | LoggerOptions = LOGGER_DEFAULT_SCOPE, configuration?: LoggerConfigurationInput): LoggerApi {
+export function useLogger(scopeOrOptions: string | LoggerOptions = LOGGER_DEFAULT_SCOPE, configuration?: LoggerConfigurationInput): FLogger {
     const scope = typeof scopeOrOptions === 'string' ? scopeOrOptions : scopeOrOptions.scope ?? LOGGER_DEFAULT_SCOPE;
     const resolvedConfiguration = resolveLoggerConfiguration(typeof scopeOrOptions === 'string' ? configuration : scopeOrOptions.configuration);
     return {

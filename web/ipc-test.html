@@ -179,7 +179,7 @@
 
             function sendUserMessage(text) {
                 if (!text || !ws) return;
-                const payload = { kind: 'user', content: text };
+                const payload = { action: 'user', data: text };
                 ws.send(JSON.stringify(payload) + '\n');
                 addMessage(text, 'user');
             }
@@ -202,10 +202,10 @@
                 ws.onmessage = (event) => {
                     try {
                         const msg = JSON.parse(event.data);
-                        if (msg.kind === 'agent') {
-                            addMessage(msg.content, 'agent');
-                        } else if (msg.kind === 'error') {
-                            addMessage('错误: ' + msg.content, 'error');
+                        if (msg.action === 'agent') {
+                            addMessage(msg.data, 'agent');
+                        } else if (msg.action === 'error') {
+                            addMessage('错误: ' + msg.data, 'error');
                         } else {
                             addMessage('收到: ' + event.data, 'system');
                         }

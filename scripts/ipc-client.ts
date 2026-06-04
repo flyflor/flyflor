@@ -13,12 +13,25 @@ interface IpcClientBridgeConfig {
     pagePath: string;
 }
 
+export enum SocketEvent {
+    Constructor = 'constructor',
+    Close = 'close',
+    Error = 'error',
+    Open = 'open',
+    Data = 'data',
+    Drain = 'drain',
+    Handshake = 'handshake',
+    End = 'end',
+    ConnectError = 'connectError',
+    Timeout = 'timeout',
+}
+
 /**
  * One IPC frame exchanged with the Flyflor kernel and mirrored to the browser test page.
  */
 interface IPCMessage {
-    kind: 'user' | 'agent' | 'error';
-    content: string;
+    action: SocketEvent;
+    data: string;
 }
 
 /** WebSocket connection state stored by Bun for each browser client. */
@@ -63,7 +76,7 @@ const server = Bun.serve<BrowserSocketData>({
         message(browser, message) {
             const ipc = browser.data.ipc;
             if (ipc === undefined) {
-                browser.send(JSON.stringify({ kind: 'error', content: 'IPC socket is not connected' } satisfies IPCMessage));
+                browser.send(JSON.stringify({ action: SocketEvent.Error, data: 'IPC socket is not connected' } satisfies IPCMessage));
                 return;
             }
             ipc.write(normalizeFrame(message));
@@ -92,7 +105,7 @@ async function connectKernelSocket(browser: ServerWebSocket<BrowserSocketData>, 
                 forwardJsonLines(browser, data);
             },
             error(_socket, error) {
-                browser.send(JSON.stringify({ kind: 'error', content: error.message } satisfies IPCMessage));
+                browser.send(JSON.stringify({ action: SocketEvent.Error, data: error.message } satisfies IPCMessage));
             },
             close() {
                 browser.close();

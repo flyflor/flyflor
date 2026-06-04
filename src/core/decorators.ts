@@ -14,6 +14,7 @@ import { join } from 'path';
 import { ROOT_PATH } from '@/constants';
 import { existsSync, globSync, readFileSync, statSync } from 'fs';
 import { get, set } from 'lodash-es';
+import { Observable } from 'rxjs';
 
 export type Ctor<T = unknown> = new (...args: never[]) => T;
 
@@ -59,6 +60,12 @@ export function Module<T extends FModule>(metadata: ModuleMetadata = {}): ClassD
     return (target) => {
         Singleton()(target);
         defineMetadata(MODULE_METADATA_KEY, metadata, target);
+    };
+}
+
+export function Controller() {
+    return <T extends new <C>() => Observable<C>>(target: T) => {
+        Singleton()(target as unknown as Function);
     };
 }
 

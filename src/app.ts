@@ -5,5 +5,5 @@ import 'reflect-metadata';
 import { Factory } from '@/core';
 import { AppModule } from './app.module';
 
-const socketUrl = await Factory.create(AppModule);
-console.log(`Flyflor socket listening at ${socketUrl}`);
+const app = await Factory.create(AppModule);
+console.log(`Flyflor socket listening at ${app.ipc.config.socketEndpoint}`);
