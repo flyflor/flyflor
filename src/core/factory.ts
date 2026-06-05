@@ -1,8 +1,8 @@
-import { useContainer } from './ioc/ioc.container';
+import { useContainer } from './ioc';
 const container = useContainer();
 
-import type { Ctor } from './core.decorator';
-import type { FModule } from './ioc/scope.base';
+import type { Ctor } from './decorator';
+import type { FModule } from './ioc';
 
 /**
  * Bootstraps the Flyflor kernel from a root `@Module`.

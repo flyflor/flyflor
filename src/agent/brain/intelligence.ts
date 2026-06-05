@@ -1,5 +1,5 @@
 // 流体智力
-import { Config, FService, Init, Service, Singleton } from '@/core';
+import { Config, FService, Init, Singleton } from '@/core';
 import { type FModelConfiguration } from '@/config';
 
 /**
@@ -48,8 +48,7 @@ interface LlmByteStreamReader {
  * streams the response, and returns the assembled assistant text. It does not own agent routing or context.
  */
 @Singleton()
-@Service()
-export class IntelligenceService extends FService {
+export class Intelligence extends FService {
     /** Provider endpoint suffix for chat completions. */
     private static readonly CHAT_COMPLETIONS_PATH = '/chat/completions';
 
@@ -120,7 +119,7 @@ export class IntelligenceService extends FService {
      * @returns a full endpoint URL with exactly one slash before the path.
      */
     private chatCompletionsUrl(baseURL: string): string {
-        return baseURL.replace(/\/$/, '') + IntelligenceService.CHAT_COMPLETIONS_PATH;
+        return baseURL.replace(/\/$/, '') + Intelligence.CHAT_COMPLETIONS_PATH;
     }
 
     /**
@@ -163,7 +162,7 @@ export class IntelligenceService extends FService {
             return undefined;
         }
         const data = trimmed.slice('data:'.length).trim();
-        if (data === IntelligenceService.STREAM_DONE_MARKER) {
+        if (data === Intelligence.STREAM_DONE_MARKER) {
             return undefined;
         }
         const parsed = JSON.parse(data) as ChatCompletionChunk;

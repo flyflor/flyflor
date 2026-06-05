@@ -10,6 +10,11 @@ export abstract class FService extends FlyFlor {}
 export abstract class FComponent extends FService {}
 
 /**
+ * Base class for path-bound file objects. A file object owns a concrete filesystem path and its loaded state.
+ */
+export abstract class FFile extends FComponent {}
+
+/**
  * Base class for module boundaries declared with `@Module()` (capillary, ipc, guard, agent, root).
  */
 export abstract class FModule extends FComponent {}

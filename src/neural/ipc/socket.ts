@@ -62,12 +62,20 @@ export class FSocket<Data = SocketPacket> implements SocketHandler<Data, 'buffer
     }
 
     public async data(socket: Socket<Data>, data: Uint8Array) {
-        const result = this.packet.decode(socket, data);
+        const result = this.packet.decode<SocketPacket>(socket, data);
         for (const error of result.errors) {
             this.log.error(SocketEvent.Data, error.error, { frame: error.frame });
+            socket.write(this.packet.encode({ action: SocketEvent.Error, data: error.error.message }));
         }
         for (const packet of result.packets) {
-            this.synapse.next({ action: SocketEvent.Data, data: packet });
+            try {
+                const response = await this.synapse.dispatch(packet);
+                socket.write(this.packet.encode(response));
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                this.log.error(SocketEvent.Data, error);
+                socket.write(this.packet.encode({ action: SocketEvent.Error, data: message }));
+            }
         }
     }
 

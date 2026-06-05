@@ -1,2 +1,2 @@
-export * from './crystall.service';
-export * from './intelligence.service';
+export * from './crystall';
+export * from './intelligence';

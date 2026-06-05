@@ -1,53 +1,116 @@
 # Architecture
 
-Flyflor uses code-first architecture. This document describes the current code; planned concepts should not be treated as implemented.
+Flyflor is code-first. This document describes the current implementation only.
+
+## Philosophy
+
+Flyflor uses a semantic object model:
+
+- `Agent` is the person. It has a profile, prompt, memory component, intelligence services, and a message context.
+- `Prompt` is the agent's constitution and application protocol. It is loaded through `@Prompt()` as a file object.
+- `FileService` is the physical object. It owns one filesystem path plus loaded state.
+- `Neural` is signal transmission. `Synapse` owns active-agent routing.
+- `IPC` is the external sensory boundary. Socket and packet classes translate outside bytes into kernel packets.
+- `IOC` is creation and lifecycle. The container is the only application-class construction point.
+
+The point of the metaphor is not decoration. It decides where code belongs. If a behavior cannot be named as an object with ownership, it probably belongs on an existing object.
 
 ## Bootstrap
 
-`src/bootstrap.ts` imports `reflect-metadata`, then calls `Factory.create(AppModule)`. `Factory` delegates construction to the shared IOC container.
+`src/bootstrap.ts` imports `reflect-metadata` before decorated classes load, then calls `Factory.create(AppModule)`.
+
+`Factory` delegates to `useContainer().getAsync(rootModule)`. The root module is `AppModule`, which imports `PluginModule` and injects `IPCService` plus `Synapse`.
 
 ## IOC
 
-`src/core/ioc/ioc.container.ts` is the single application-class construction point. It:
+`src/core/ioc/container.ts` owns object construction and lifecycle:
 
-- builds imports before dependents;
-- stores every resolved class as a singleton;
-- injects `@Config()` instance providers before ordinary `@Inject()` dependencies;
+- resolves module imports before dependents;
+- caches singleton instances;
+- resolves constructor props from explicit arguments or imported module instances;
+- injects `@Config()` providers before ordinary `@Inject()` dependencies;
+- injects reflected property dependencies;
 - runs one `@Init()` method after injection;
-- removes a failed singleton if initialization throws.
+- removes failed singletons when initialization throws;
+- creates fresh path-bound objects through `create()` when singleton state would be wrong.
 
-Constructor arguments are explicit props first, then matching imported module instances by reflected parameter type.
+Business code must not construct project classes directly. If an object is part of the runtime, the container creates it.
 
-## Decorators And Scopes
+## Core Scopes
 
-Decorators live in `src/core/core.decorator.ts`. Scope is expressed by both a decorator and a base class:
+Core base classes live in `src/core/ioc/abstracts.ts`:
 
-- `@Module()` with `FModule`;
-- `@Service()` with `FService`;
-- `@Component()` with `FComponent`;
-- `@Repo()` with `FRepo`;
-- `@Plugin()` with `FPlugin`;
-- `@Guard()` / `@SandBox()` with guard base classes;
-- `FAgent` for autonomous agent classes.
+- `FlyFlor`: root object.
+- `FService`: stateless or behavior-owning service object.
+- `FComponent`: stateful component or lifecycle owner.
+- `FFile`: path-bound file object.
+- `FModule`: module boundary.
+- `FRepo`: repository/entity SQL owner.
+- `FPlugin`: plugin boundary.
+- `FGuard` and `FSandBox`: policy scopes.
+- `FAgent`: autonomous agent object backed by an RxJS subject.
 
-Business code should use class boundaries instead of exported process-style functions.
+Decorators live in core module files:
 
-## Runtime Flow
+- `src/core/decorator.ts`: general runtime decorators such as `@Module`, `@Inject`, `@Init`, `@Config`.
+- `src/core/prompt/decorator.ts`: `@Prompt`.
+- `src/core/logger/decorator.ts`: `@Logger`.
 
-`AppModule` imports `PluginModule` and injects `IPCService` plus `Synapse`. `IPCService` starts the socket. `Synapse` creates the configured active `Agent`, then routes socket packets into the active agent subject.
+The decorator says intent; the base class says object kind. Use both when adding a new runtime scope.
 
-`Agent` currently logs packets. `IntelligenceService` contains an OpenAI-compatible streaming chat-completions client, but full conversation orchestration is not implemented yet.
+## Prompt And File Layer
 
-## IPC
+`@Prompt()` binds an agent property to a loaded `FileService`.
 
-IPC uses 8-byte big-endian length-prefixed JSON frames. `PacketService` owns frame encoding and per-connection stream decoding, so partial chunks, coalesced frames, and split UTF-8 bytes are handled before packets reach business code. `FSocket` owns the Bun socket lifecycle and emits decoded frames to `Synapse`. The public socket path is configured through `ConfigComponent.socket`.
+`FileService` loads one file or directory. For directories, canonical markdown files become object keys such as `SOUL.md -> data.SOUL`. Files with extra dotted stems are skipped by runtime, so human mirrors stay out of execution.
+
+Prompt protocol blocks use `<flyflor:name>` tags with a JSONC payload. The renderable content goes to `data`; parsed controls go to `blocks`. Malformed protocol throws during load because prompt configuration should fail early.
+
+## Agent Runtime
+
+`Synapse` reads the active profile from `ConfigComponent`, resolves defaults from model config, then asks the container to create `Agent`.
+
+`Agent` owns:
+
+- injected brain services;
+- injected memory component;
+- injected loaded prompt object;
+- user/assistant context turns.
+
+The provider-facing message list is built with one `system` message first, followed by user/assistant history. Flyflor sections such as `SOUL`, `USER`, `AGENTS`, and `MEMORY` are internal tags inside the system message; they are not model chat roles.
+
+## Neural And IPC
+
+`IPCService` starts the public socket endpoint from configuration. On Windows the endpoint is converted to a named pipe internally.
+
+`FSocket` owns Bun socket callbacks. It logs lifecycle events, writes the open event, decodes inbound bytes, reports malformed frames, and routes valid packets into `Synapse`.
+
+`PacketService` owns the frame protocol:
+
+- 8-byte unsigned big-endian body length;
+- UTF-8 JSON body;
+- per-connection decode buffers;
+- partial headers and partial bodies;
+- multiple frames in one chunk;
+- oversized and malformed JSON frames.
+
+## Logger
+
+`src/core/logger` is compact by design:
+
+- `service.ts`: `useLogger`, shared configuration, formatting, writing.
+- `decorator.ts`: `@Logger`.
+- `types.ts`: logger API and configuration types.
+- `constants.ts`: formatting and default constants.
+
+Formatting and writing are private implementation details inside `service.ts` unless they become large enough to justify a new object.
 
 ## Validation
 
-`scripts/check.script.ts` enforces key red lines:
+`scripts/check.script.ts` enforces the red lines:
 
-- no project-class `new` outside the IOC container;
-- no runtime references to `.zh.cn.md` prompt mirrors;
-- prompt English/mirror pairs stay in sync;
-- source files use dotted Angular/Nest-style names;
-- exported function APIs stay in decorator/composition/bootstrap/tooling surfaces.
+- application-class construction stays in the IOC container;
+- runtime code does not reference human prompt mirrors;
+- canonical prompt files and human mirrors stay paired under `prompts/`;
+- source filenames follow approved role conventions;
+- exported functions stay limited to decorator/container/logger/tooling surfaces.

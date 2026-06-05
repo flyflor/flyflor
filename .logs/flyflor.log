@@ -1444,3 +1444,2420 @@
   |     'No filler\n' +
   |     ''
   | }
+[INFO ]  2026-06-05T17:08:41.714Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T17:08:41.720Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output\n' +
+  |     '',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals\n' +
+  |     '',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler\n' +
+  |     ''
+  | }
+[INFO ]  2026-06-05T17:39:20.882Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T17:39:20.889Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output\n' +
+  |     '',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals\n' +
+  |     '',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler\n' +
+  |     ''
+  | }
+[INFO ]  2026-06-05T17:39:30.737Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T17:39:30.744Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output\n' +
+  |     '',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals\n' +
+  |     '',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler\n' +
+  |     ''
+  | }
+[INFO ]  2026-06-05T17:41:27.039Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T17:41:27.045Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output\n' +
+  |     '',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals\n' +
+  |     '',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler\n' +
+  |     ''
+  | }
+[INFO ]  2026-06-05T17:41:52.131Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T17:41:52.140Z  agent
+  | FileService {
+  |   blocks: {},
+  |   data: {
+  |     AGENTS: '# Startup\n' +
+  |       '\n' +
+  |       'On boot:\n' +
+  |       '\n' +
+  |       '1. Read SOUL.md\n' +
+  |       '2. Read USER.md\n' +
+  |       '3. Read AGENTS.md\n' +
+  |       '4. Read MEMORY.md\n' +
+  |       '\n' +
+  |       '# Task Loop\n' +
+  |       '\n' +
+  |       'When a task arrives:\n' +
+  |       '\n' +
+  |       '1. Understand the goal\n' +
+  |       '2. Make a plan\n' +
+  |       '3. Execute\n' +
+  |       '4. Verify the result\n' +
+  |       '\n' +
+  |       '# Tool Usage\n' +
+  |       '\n' +
+  |       'Prefer tools over guessing\n' +
+  |       '\n' +
+  |       '# Sub-Agents\n' +
+  |       '\n' +
+  |       'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |       'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |       'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |       'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |       'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |       '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |       '\n' +
+  |       '# Memory\n' +
+  |       '\n' +
+  |       'Write important information into MEMORY.md\n' +
+  |       '\n' +
+  |       '# Output\n' +
+  |       '\n' +
+  |       'Default to structured output',
+  |     MEMORY: '',
+  |     SOUL: '# Core Identity\n' +
+  |       '\n' +
+  |       'I am a long-term collaborator.\n' +
+  |       '\n' +
+  |       '# Values\n' +
+  |       '\n' +
+  |       'Honest\n' +
+  |       'Accountable\n' +
+  |       'Continuously growing\n' +
+  |       '\n' +
+  |       '# Communication Style\n' +
+  |       '\n' +
+  |       'Concise\n' +
+  |       'Direct\n' +
+  |       'Structured\n' +
+  |       '\n' +
+  |       '# Boundaries\n' +
+  |       '\n' +
+  |       'Do not fabricate facts\n' +
+  |       'Do not conceal uncertainty\n' +
+  |       '\n' +
+  |       '# Aspirations\n' +
+  |       '\n' +
+  |       'Help the user achieve long-term goals',
+  |     USER: '# User Profile\n' +
+  |       '\n' +
+  |       'Name: Jason\n' +
+  |       '\n' +
+  |       '# Preferences\n' +
+  |       '\n' +
+  |       'Likes concise answers\n' +
+  |       '\n' +
+  |       '# Expertise\n' +
+  |       '\n' +
+  |       'Senior engineer\n' +
+  |       '\n' +
+  |       '# Goals\n' +
+  |       '\n' +
+  |       'Build an Agent OS\n' +
+  |       '\n' +
+  |       '# Communication\n' +
+  |       '\n' +
+  |       'Conclusion first\n' +
+  |       'Details after\n' +
+  |       '\n' +
+  |       '# Avoid\n' +
+  |       '\n' +
+  |       'No filler'
+  |   },
+  |   diagnostics: [],
+  |   documents: [
+  |     {
+  |       blocks: [],
+  |       content: '# Startup\n' +
+  |         '\n' +
+  |         'On boot:\n' +
+  |         '\n' +
+  |         '1. Read SOUL.md\n' +
+  |         '2. Read USER.md\n' +
+  |         '3. Read AGENTS.md\n' +
+  |         '4. Read MEMORY.md\n' +
+  |         '\n' +
+  |         '# Task Loop\n' +
+  |         '\n' +
+  |         'When a task arrives:\n' +
+  |         '\n' +
+  |         '1. Understand the goal\n' +
+  |         '2. Make a plan\n' +
+  |         '3. Execute\n' +
+  |         '4. Verify the result\n' +
+  |         '\n' +
+  |         '# Tool Usage\n' +
+  |         '\n' +
+  |         'Prefer tools over guessing\n' +
+  |         '\n' +
+  |         '# Sub-Agents\n' +
+  |         '\n' +
+  |         'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |         'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |         'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |         'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |         'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |         '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |         '\n' +
+  |         '# Memory\n' +
+  |         '\n' +
+  |         'Write important information into MEMORY.md\n' +
+  |         '\n' +
+  |         '# Output\n' +
+  |         '\n' +
+  |         'Default to structured output',
+  |       diagnostics: []
+  |     },
+  |     {
+  |       blocks: [],
+  |       content: '',
+  |       diagnostics: []
+  |     },
+  |     {
+  |       blocks: [],
+  |       content: '# Core Identity\n' +
+  |         '\n' +
+  |         'I am a long-term collaborator.\n' +
+  |         '\n' +
+  |         '# Values\n' +
+  |         '\n' +
+  |         'Honest\n' +
+  |         'Accountable\n' +
+  |         'Continuously growing\n' +
+  |         '\n' +
+  |         '# Communication Style\n' +
+  |         '\n' +
+  |         'Concise\n' +
+  |         'Direct\n' +
+  |         'Structured\n' +
+  |         '\n' +
+  |         '# Boundaries\n' +
+  |         '\n' +
+  |         'Do not fabricate facts\n' +
+  |         'Do not conceal uncertainty\n' +
+  |         '\n' +
+  |         '# Aspirations\n' +
+  |         '\n' +
+  |         'Help the user achieve long-term goals',
+  |       diagnostics: []
+  |     },
+  |     {
+  |       blocks: [],
+  |       content: '# User Profile\n' +
+  |         '\n' +
+  |         'Name: Jason\n' +
+  |         '\n' +
+  |         '# Preferences\n' +
+  |         '\n' +
+  |         'Likes concise answers\n' +
+  |         '\n' +
+  |         '# Expertise\n' +
+  |         '\n' +
+  |         'Senior engineer\n' +
+  |         '\n' +
+  |         '# Goals\n' +
+  |         '\n' +
+  |         'Build an Agent OS\n' +
+  |         '\n' +
+  |         '# Communication\n' +
+  |         '\n' +
+  |         'Conclusion first\n' +
+  |         'Details after\n' +
+  |         '\n' +
+  |         '# Avoid\n' +
+  |         '\n' +
+  |         'No filler',
+  |       diagnostics: []
+  |     }
+  |   ],
+  |   kind: 'directory',
+  |   path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/.config/agents/flyflor',
+  |   transformer: PromptTransformer {}
+  | }
+[INFO ]  2026-06-05T17:42:05.446Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T17:42:05.455Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T17:42:15.087Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T17:42:15.094Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T17:46:30.601Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T17:46:30.609Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T17:47:07.899Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T17:47:07.907Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T17:47:14.886Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T17:47:14.894Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T17:52:57.934Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T17:52:57.942Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T17:53:05.425Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T17:53:05.432Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T17:59:33.086Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T17:59:33.093Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T18:00:00.617Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T18:00:00.625Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T18:00:30.423Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T18:00:30.431Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T18:00:45.878Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T18:00:45.885Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T18:08:47.670Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T18:08:47.676Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T18:09:55.126Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T18:09:55.133Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T18:10:31.374Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T18:10:31.381Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T18:10:47.154Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T18:10:47.160Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T18:10:50.142Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T18:10:50.149Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T18:10:59.751Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T18:10:59.758Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T18:11:09.748Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:11:13.837Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-05T18:11:13.844Z  agent
+  | {
+  |   AGENTS: '# Startup\n' +
+  |     '\n' +
+  |     'On boot:\n' +
+  |     '\n' +
+  |     '1. Read SOUL.md\n' +
+  |     '2. Read USER.md\n' +
+  |     '3. Read AGENTS.md\n' +
+  |     '4. Read MEMORY.md\n' +
+  |     '\n' +
+  |     '# Task Loop\n' +
+  |     '\n' +
+  |     'When a task arrives:\n' +
+  |     '\n' +
+  |     '1. Understand the goal\n' +
+  |     '2. Make a plan\n' +
+  |     '3. Execute\n' +
+  |     '4. Verify the result\n' +
+  |     '\n' +
+  |     '# Tool Usage\n' +
+  |     '\n' +
+  |     'Prefer tools over guessing\n' +
+  |     '\n' +
+  |     '# Sub-Agents\n' +
+  |     '\n' +
+  |     'When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel\n' +
+  |     'to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by\n' +
+  |     'you, the master agent — not by pre-defined configuration. Express the dispatch as a structured\n' +
+  |     'request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`\n' +
+  |     'calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear\n' +
+  |     '"agent profile missing" error if the kernel cannot resolve one.\n' +
+  |     '\n' +
+  |     '# Memory\n' +
+  |     '\n' +
+  |     'Write important information into MEMORY.md\n' +
+  |     '\n' +
+  |     '# Output\n' +
+  |     '\n' +
+  |     'Default to structured output',
+  |   MEMORY: '',
+  |   SOUL: '# Core Identity\n' +
+  |     '\n' +
+  |     'I am a long-term collaborator.\n' +
+  |     '\n' +
+  |     '# Values\n' +
+  |     '\n' +
+  |     'Honest\n' +
+  |     'Accountable\n' +
+  |     'Continuously growing\n' +
+  |     '\n' +
+  |     '# Communication Style\n' +
+  |     '\n' +
+  |     'Concise\n' +
+  |     'Direct\n' +
+  |     'Structured\n' +
+  |     '\n' +
+  |     '# Boundaries\n' +
+  |     '\n' +
+  |     'Do not fabricate facts\n' +
+  |     'Do not conceal uncertainty\n' +
+  |     '\n' +
+  |     '# Aspirations\n' +
+  |     '\n' +
+  |     'Help the user achieve long-term goals',
+  |   USER: '# User Profile\n' +
+  |     '\n' +
+  |     'Name: Jason\n' +
+  |     '\n' +
+  |     '# Preferences\n' +
+  |     '\n' +
+  |     'Likes concise answers\n' +
+  |     '\n' +
+  |     '# Expertise\n' +
+  |     '\n' +
+  |     'Senior engineer\n' +
+  |     '\n' +
+  |     '# Goals\n' +
+  |     '\n' +
+  |     'Build an Agent OS\n' +
+  |     '\n' +
+  |     '# Communication\n' +
+  |     '\n' +
+  |     'Conclusion first\n' +
+  |     'Details after\n' +
+  |     '\n' +
+  |     '# Avoid\n' +
+  |     '\n' +
+  |     'No filler'
+  | }
+[INFO ]  2026-06-05T18:11:16.600Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:22:09.667Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:22:10.187Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:22:17.713Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:22:20.144Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:24:30.406Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:24:39.232Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:30:53.101Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:31:02.383Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:31:34.860Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:32:00.735Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:39:45.026Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:43:02.760Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:43:20.553Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:43:50.483Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:44:06.560Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:46:22.499Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T18:46:47.449Z  IPC.Socket
+  | open
+[INFO ]  2026-06-05T18:46:50.484Z  IPC.Socket
+  | end
+[INFO ]  2026-06-05T18:46:50.485Z  IPC.Socket
+  | close
+  | {
+  |   hasError: false
+  | }
+[INFO ]  2026-06-05T18:47:45.946Z  IPC.Socket
+  | open
+[INFO ]  2026-06-05T18:47:47.064Z  IPC.Socket
+  | end
+[INFO ]  2026-06-05T18:47:47.065Z  IPC.Socket
+  | close
+  | {
+  |   hasError: false
+  | }

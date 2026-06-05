@@ -18,6 +18,8 @@ export enum SocketEvent {
     Close = 'close',
     Error = 'error',
     Open = 'open',
+    User = 'user',
+    Agent = 'agent',
     Data = 'data',
     Drain = 'drain',
     Handshake = 'handshake',
@@ -80,7 +82,12 @@ const server = Bun.serve<BrowserSocketData>({
     },
     websocket: {
         async open(browser) {
-            browser.data.ipc = await connectKernelSocket(browser, config.socketEndpoint);
+            try {
+                browser.data.ipc = await connectKernelSocket(browser, config.socketEndpoint);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                browser.send(JSON.stringify({ action: SocketEvent.Error, data: `Kernel socket connection failed: ${message}` } satisfies IPCMessage));
+            }
         },
         message(browser, message) {
             const ipc = browser.data.ipc;

@@ -6,6 +6,8 @@ export enum SocketEvent {
     Close = 'close',
     Error = 'error',
     Open = 'open',
+    User = 'user',
+    Agent = 'agent',
     Data = 'data',
     Drain = 'drain',
     Handshake = 'handshake',

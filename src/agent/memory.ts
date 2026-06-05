@@ -1,4 +1,4 @@
 import { FService, Service } from '@/core';
 
 @Service()
-export class MemoryService extends FService {}
+export class Memory extends FService {}

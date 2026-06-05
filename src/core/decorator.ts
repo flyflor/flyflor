@@ -7,13 +7,10 @@ import {
     type ClassType,
     type InjectInstanceMetadata,
     type InjectMetadata,
-} from './ioc/ioc.types';
-import { defineMetadata, getMetadata, useContainer } from './ioc/ioc.container';
-import type { FModule } from './ioc/scope.base';
-import { join } from 'path';
-import { ROOT_PATH } from '@/core/core.constants';
-import { existsSync, globSync, readFileSync, statSync } from 'fs';
-import { get, set } from 'lodash-es';
+} from './ioc/types';
+import { defineMetadata, getMetadata, useContainer } from './ioc/container';
+import type { FModule } from './ioc/abstracts';
+import { get } from 'lodash-es';
 
 export type Ctor<T = unknown> = new (...args: never[]) => T;
 
@@ -127,54 +124,6 @@ export function SandBox(): ClassDecorator {
     return (target) => {
         Guard()(target);
     };
-}
-
-export enum PromptScope {
-    GLOBAL,
-    AGENT,
-}
-
-export function Prompt(path?: string): PropertyDecorator;
-export function Prompt(path?: string, scope?: PromptScope.GLOBAL): PropertyDecorator;
-export function Prompt(path: string | undefined, scope: PromptScope.AGENT, agentName: string): PropertyDecorator;
-export function Prompt<TThis>(path: string | undefined, scope: PromptScope.AGENT, agentName: (this: TThis) => string): PropertyDecorator;
-export function Prompt(path?: string, scope: PromptScope = PromptScope.GLOBAL, agentName?: string | ((this: any) => string)): PropertyDecorator {
-    return (target, propertyKey) => {
-        if (scope === PromptScope.AGENT) {
-            if (agentName === undefined) {
-                throw Object.assign(Error('Agent prompt requires agentName'), { detail: { path, scope } });
-            }
-            Object.defineProperty(target, propertyKey, {
-                configurable: true,
-                enumerable: true,
-                get() {
-                    const resolvedAgentName = typeof agentName === 'function' ? agentName.call(this) : agentName;
-                    return readPromptValue(join(ROOT_PATH, '.config/agents', resolvedAgentName));
-                },
-            });
-            return;
-        }
-        Object.defineProperty(target, propertyKey, { value: readPromptValue(join(ROOT_PATH, 'prompts', path || '')), writable: false });
-    };
-}
-
-function readPromptValue(promptPath: string): string | object {
-    let value: string | object = '';
-    if (!existsSync(promptPath)) {
-        return value;
-    }
-    if (statSync(promptPath).isDirectory()) {
-        const paths = globSync(join(promptPath, '**/**.md'));
-        value = {};
-        paths.forEach(path => {
-            const key = path.replace(promptPath, '').slice(1).replace(/\.md/, '').replace('/', '.');
-            const prompt = readFileSync(path, 'utf-8');
-            set(value as object, key, prompt);
-        });
-    } else {
-        value = readFileSync(promptPath, 'utf-8');
-    }
-    return value;
 }
 
 export function Config(key?: string): PropertyDecorator {

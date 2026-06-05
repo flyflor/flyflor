@@ -7,7 +7,7 @@ import {
     type ClassType,
     type InjectInstanceMetadata,
     type InjectMetadata,
-} from './ioc.types';
+} from './types';
 
 export interface InjectConfig {
     key?: string;
@@ -94,6 +94,22 @@ export class Container {
             this.singletons.delete(Module);
             throw error;
         }
+    }
+
+    /**
+     * Creates a fresh IOC-owned instance without registering it as a singleton.
+     *
+     * Path-bound objects such as prompt files need independent state per property, but construction still stays
+     * inside the container boundary rather than leaking `new` into business code.
+     *
+     * @param Module 依赖注入类类型
+     * @param props 显式传给构造函数的参数
+     * @returns 未缓存的新实例
+     */
+    public create<T extends ClassType, P extends unknown[]>(Module: T, ...props: P): InstanceType<T> {
+        if (!this.classList.includes(Module)) this.classList.push(Module);
+        const constructorProps = this.getConstructorProps(Module, this.getModuleImportInstances(Module), props);
+        return new Module(...constructorProps);
     }
 
     /**

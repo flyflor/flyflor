@@ -1,6 +1,6 @@
 import { FService, Service } from '@/core';
-import { PACKET_LENGTH_HEADER_BYTES, PACKET_MAX_CONTENT_BYTES, PACKET_TEXT_ENCODING } from './packet.constants';
-import type { PacketDecodeError, PacketDecodeResult, PacketDecodeState, SocketPacket } from './packet.types';
+import { PACKET_LENGTH_HEADER_BYTES, PACKET_MAX_CONTENT_BYTES, PACKET_TEXT_ENCODING } from './constants';
+import type { PacketDecodeError, PacketDecodeResult, PacketDecodeState, SocketPacket } from './types';
 
 /**
  * Encodes and decodes 8-byte big-endian length-prefixed JSON IPC frames.

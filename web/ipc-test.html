@@ -159,6 +159,7 @@
 
         <script>
             let ws = null;
+            let pending = false;
             const status = document.getElementById('status');
             const statusText = document.getElementById('statusText');
             const chat = document.getElementById('chat');
@@ -177,11 +178,22 @@
                 chat.scrollTop = chat.scrollHeight;
             }
 
+            function setInputEnabled(enabled) {
+                sendBtn.disabled = !enabled;
+                messageInput.disabled = !enabled;
+                document.querySelectorAll('.quick-btn').forEach((btn) => {
+                    btn.disabled = !enabled;
+                });
+            }
+
             function sendUserMessage(text) {
-                if (!text || !ws) return;
+                if (!text || !ws || pending) return;
                 const payload = { action: 'user', data: text };
+                pending = true;
+                setInputEnabled(false);
                 ws.send(JSON.stringify(payload));
                 addMessage(text, 'user');
+                addMessage('模型生成中...', 'system');
             }
 
             connectBtn.onclick = () => {
@@ -193,8 +205,7 @@
                     connectBtn.disabled = true;
                     disconnectBtn.disabled = false;
                     clearBtn.disabled = false;
-                    sendBtn.disabled = false;
-                    messageInput.disabled = false;
+                    setInputEnabled(true);
                     quickActions.style.display = 'flex';
                     addMessage('WebSocket 已连接，等待欢迎消息...', 'system');
                 };
@@ -203,8 +214,12 @@
                     try {
                         const msg = JSON.parse(event.data);
                         if (msg.action === 'agent') {
+                            pending = false;
+                            setInputEnabled(true);
                             addMessage(msg.data, 'agent');
                         } else if (msg.action === 'error') {
+                            pending = false;
+                            setInputEnabled(true);
                             addMessage('错误: ' + msg.data, 'error');
                         } else {
                             addMessage('收到: ' + event.data, 'system');
@@ -220,8 +235,8 @@
                     connectBtn.disabled = false;
                     disconnectBtn.disabled = true;
                     clearBtn.disabled = true;
-                    sendBtn.disabled = true;
-                    messageInput.disabled = true;
+                    pending = false;
+                    setInputEnabled(false);
                     quickActions.style.display = 'none';
                     addMessage('WebSocket 已断开', 'system');
                     ws = null;

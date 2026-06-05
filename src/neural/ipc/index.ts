@@ -1,2 +1,2 @@
-export * from './ipc.service';
-export * from './ipc.constants';
+export * from './service';
+export * from './socket';
