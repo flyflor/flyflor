@@ -1,10 +1,11 @@
 import { Inject, Logger, Singleton, type FLogger } from '@/core';
+import type { Synapse } from '@/neural/synapse';
 import type { BinaryType, Socket, SocketHandler } from 'bun';
-import type { NeuralTransformer } from '../controller';
 
 const SOCKET_LOG_SCOPE = 'IPC.Socket';
 const SOCKET_BINARY_TYPE: BinaryType = 'buffer';
 const FUNCTION_TYPE = 'function';
+const FRAME_SEPARATOR = '\n';
 
 /**
  * Socket lifecycle event names used in IPC socket logs and socket packets.
@@ -45,9 +46,11 @@ export class FSocket<Data = SocketPacket> implements SocketHandler<Data, 'buffer
     public readonly log!: FLogger;
 
     @Inject()
-    public neural!: NeuralTransformer;
+    public synapse!: Synapse;
 
     public binaryType?: BinaryType;
+
+    private frameBuffer = '';
 
     constructor() {
         this.binaryType = SOCKET_BINARY_TYPE;
@@ -81,7 +84,15 @@ export class FSocket<Data = SocketPacket> implements SocketHandler<Data, 'buffer
 
     public async data(socket: Socket<Data>, data: Uint8Array) {
         // this.log.debug(SocketEvent.Data, Buffer.from(data).toString());
-        this.neural.reflex.next({ action: SocketEvent.Data, data: JSON.parse(Buffer.from(data).toString()) });
+        this.frameBuffer += Buffer.from(data).toString('utf8');
+        const frames = this.frameBuffer.split(FRAME_SEPARATOR);
+        this.frameBuffer = frames.pop() ?? '';
+        for (const frame of frames) {
+            const trimmed = frame.trim();
+            if (trimmed.length === 0) continue;
+            this.log.debug(this.synapse.subsciber);
+            this.synapse.subsciber.next({ action: SocketEvent.Data, data: JSON.parse(trimmed) });
+        }
     }
 
     public async drain(socket: Socket<Data>) {

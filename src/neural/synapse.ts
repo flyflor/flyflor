@@ -1,8 +1,8 @@
 import { Agent } from '@/agent';
 import { Config, Init, Inject, Logger, Singleton, useContainer, type FLogger } from '@/core';
-import type { ConfigComponent } from '@/shard/components';
-import { Observable, Subscriber } from 'rxjs';
-import type { FSocket, SocketPacket } from './ipc/scoket';
+import { ConfigComponent } from '@/config';
+import { map, Observable, Subscriber } from 'rxjs';
+import type { SocketPacket } from './ipc/ipc.socket';
 
 export interface AgentPool {
     active: string;
@@ -10,17 +10,14 @@ export interface AgentPool {
 }
 
 @Singleton()
-export class NeuralTransformer<T extends SocketPacket = SocketPacket> extends Observable<T> {
+export class Synapse<T extends SocketPacket = SocketPacket> extends Observable<T> {
     @Config()
     public readonly config!: ConfigComponent;
 
     @Logger('Neural')
     public readonly log!: FLogger;
 
-    @Inject()
-    public dispatch!: FSocket;
-
-    public reflex!: Subscriber<T>
+    public subsciber!: Subscriber<T>;
 
     public agentPool: AgentPool;
 
@@ -29,7 +26,9 @@ export class NeuralTransformer<T extends SocketPacket = SocketPacket> extends Ob
     }
 
     constructor() {
-        super((reflex) => this.reflex = reflex);
+        super((subsciber) => {
+            this.subsciber = subsciber;
+        });
         this.subscribe({
             next: this.next.bind(this),
             error: this.error.bind(this),
@@ -48,7 +47,11 @@ export class NeuralTransformer<T extends SocketPacket = SocketPacket> extends Ob
         const active = this.config.agent;
         this.agentPool.active = active;
         const agentConfig = this.config.agents[active];
-        if (!agentConfig) throw new Error('请配置默认 Agent');
+        if (!agentConfig) {
+            throw Object.assign(Error('Default agent profile is missing'), {
+                detail: { active, configuredAgents: Object.keys(this.config.agents) },
+            });
+        }
         agentConfig.model = agentConfig.model || this.config.model.model || this.config.model.default;
         agentConfig.provider = agentConfig.provider || this.config.model.provider;
         agentConfig.contextLength = agentConfig.contextLength || this.config.model.contextLength;
@@ -58,14 +61,16 @@ export class NeuralTransformer<T extends SocketPacket = SocketPacket> extends Ob
 
     public next(data: SocketPacket) {
         // this.log.debug(data);
-        this.agent.pipe(data);
+        this.agent.pipe(
+            map((d) => {
+                this.log.debug('d', d);
+                this.log.debug('data', data);
+                return data;
+            }),
+        );
     }
 
-    public error(err: Error) {
+    public error(err: Error) {}
 
-    }
-
-    public complete() {
-
-    }
+    public complete() {}
 }

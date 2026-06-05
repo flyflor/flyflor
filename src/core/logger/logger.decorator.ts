@@ -1,6 +1,6 @@
-import { LOGGER_DEFAULT_SCOPE } from './constants';
-import { useLogger } from './composition';
-import { type LoggerConfigurationInput, type LoggerOptions } from './types';
+import { LOGGER_DEFAULT_SCOPE } from './logger.constants';
+import { useLogger } from './logger.composition';
+import { type LoggerConfigurationInput, type LoggerOptions } from './logger.types';
 
 /**
  * Property decorator that exposes a scoped logger without requiring manual construction.

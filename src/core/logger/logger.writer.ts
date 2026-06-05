@@ -1,8 +1,8 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
-import { LOGGER_RECORD_SEPARATOR } from './constants';
-import { type LoggerConfiguration } from './types';
-import { stripLoggerColors } from './format';
+import { LOGGER_RECORD_SEPARATOR } from './logger.constants';
+import { type LoggerConfiguration } from './logger.types';
+import { stripLoggerColors } from './logger.format';
 
 /**
  * Emits one formatted log record to the configured sinks.

@@ -1,6 +1,6 @@
 // 流体智力
 import { Config, FService, Init, Service, Singleton } from '@/core';
-import { type FModelConfiguration } from '@/shard/components';
+import { type FModelConfiguration } from '@/config';
 
 /**
  * Roles accepted by the OpenAI-compatible chat-completions endpoint.

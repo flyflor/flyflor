@@ -1,5 +1,5 @@
 import { Repo } from '@/core';
-import { MemoryEntity } from './entity';
+import { MemoryEntity } from './memory.entity';
 
 /**
  * Owns SQL operations for the `memories` table.

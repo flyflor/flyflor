@@ -705,3 +705,168 @@
   |     data: '111'
   |   }
   | }
+[INFO ]  2026-06-05T08:15:12.822Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:29:57.151Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:30:52.225Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:32:11.536Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:33:08.561Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:33:17.271Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:35:29.847Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:39:41.044Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:39:56.128Z  IPC.Socket
+  | open
+[INFO ]  2026-06-05T08:40:12.865Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:40:19.587Z  IPC.Socket
+  | open
+[INFO ]  2026-06-05T08:41:50.110Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:42:05.699Z  IPC.Socket
+  | open
+[DEBUG]  2026-06-05T08:42:08.200Z  IPC.Socket
+  | undefined
+[INFO ]  2026-06-05T08:42:32.745Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:43:27.257Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:43:27.258Z  Neural
+  | reflex
+  | SafeSubscriber {
+  |   _finalizers: null,
+  |   _parentage: null,
+  |   closed: false,
+  |   destination: ConsumerObserver {
+  |     partialObserver: {
+  |       complete: [Function: bound complete],
+  |       error: [Function: bound error],
+  |       next: [Function: bound next]
+  |     }
+  |   },
+  |   initialTeardown: undefined,
+  |   isStopped: false
+  | }
+[INFO ]  2026-06-05T08:43:39.692Z  IPC.Socket
+  | open
+[DEBUG]  2026-06-05T08:43:42.479Z  IPC.Socket
+  | undefined
+[INFO ]  2026-06-05T08:44:56.488Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:44:56.490Z  Neural
+  | Synapse {
+  |   _subscribe: [Function (anonymous)],
+  |   agentPool: undefined,
+  |   subsciber: undefined
+  | }
+[INFO ]  2026-06-05T08:45:06.754Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:45:06.755Z  Neural
+  | Synapse {
+  |   _subscribe: [Function (anonymous)],
+  |   agentPool: undefined,
+  |   subsciber: undefined
+  | }
+[INFO ]  2026-06-05T08:45:06.756Z  Neural
+  | Synapse {
+  |   _subscribe: [Function (anonymous)],
+  |   agentPool: undefined,
+  |   subsciber: SafeSubscriber {
+  |     _finalizers: null,
+  |     _parentage: null,
+  |     closed: false,
+  |     destination: ConsumerObserver {
+  |       partialObserver: {
+  |         complete: [Function: bound complete],
+  |         error: [Function: bound error],
+  |         next: [Function: bound next]
+  |       }
+  |     },
+  |     initialTeardown: undefined,
+  |     isStopped: false
+  |   }
+  | }
+[INFO ]  2026-06-05T08:45:14.680Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:46:00.017Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:46:24.509Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:47:05.619Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:47:07.828Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-05T08:47:12.622Z  IPC.Socket
+  | open
+[DEBUG]  2026-06-05T08:47:15.281Z  IPC.Socket
+  | undefined
+[INFO ]  2026-06-05T08:47:23.435Z  IPC.Socket
+  | end
+[INFO ]  2026-06-05T08:47:23.436Z  IPC.Socket
+  | close
+  | {
+  |   hasError: false
+  | }

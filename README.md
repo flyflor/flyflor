@@ -1,17 +1,24 @@
 # Flyflor
 
-Flyflor is a Bun + TypeScript intelligent agent kernel. The first milestone is a standalone binary-friendly core with explicit DI, a capillary event layer, socket interaction, repo-owned SQL, and prompt mirror rules.
+Flyflor is a Bun + TypeScript agent kernel with a small NestJS/Angular-inspired runtime: decorators, modules, services, components, repositories, and a reflect-metadata IOC container.
 
 ## Development
 
 ```bash
 bun install
-bun run dev
 bun run check
+bun run dev
 bun run build:binary
 ```
 
-## Documents
+## Current Implementation
 
-- [Boundaries](docs/boundaries.md)
-- [Development workflow](docs/development.workflow.md)
+- `Factory.create(AppModule)` bootstraps the root module.
+- `Container` owns singleton construction, property injection, constructor props, and `@Init` lifecycle calls.
+- `ConfigComponent` loads `./.config/config.jsonc`.
+- `Synapse` Synapse owns the active agent pool and receives IPC packets.
+- `IPCService` exposes a Bun Unix socket / Windows named-pipe boundary.
+- `FSocket` speaks newline-delimited JSON frames.
+- `Agent` is currently a thin runtime shell wired to brain and memory components.
+
+See [Architecture](docs/architecture.md) and [Boundaries](docs/boundaries.md).

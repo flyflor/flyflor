@@ -1,6 +1,6 @@
 import { join } from 'path';
 import { FComponent, Singleton } from '@/core';
-import { ROOT_PATH } from '@/config/constants';
+import { ROOT_PATH } from '@/config/config.constants';
 import { readFileSync } from 'fs';
 import { JSON5 } from 'bun';
 

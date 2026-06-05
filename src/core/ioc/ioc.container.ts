@@ -7,7 +7,7 @@ import {
     type ClassType,
     type InjectInstanceMetadata,
     type InjectMetadata,
-} from './types';
+} from './ioc.types';
 
 export interface InjectConfig {
     key?: string;

@@ -1,2 +1,2 @@
-export * from './entity';
-export * from './repo';
+export * from './memory.entity';
+export * from './memory.repository';

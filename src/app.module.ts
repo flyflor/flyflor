@@ -1,7 +1,7 @@
 import { FModule, Init, Inject, Module } from '@/core';
 import { PluginModule } from '@/plugins';
 import { IPCService } from './neural/ipc';
-import type { NeuralTransformer } from '@/neural';
+import { Synapse } from '@/neural';
 
 /**
  * The root Flyflor module.
@@ -18,5 +18,5 @@ export class AppModule extends FModule {
     public ipc!: IPCService;
 
     @Inject()
-    public neural!: NeuralTransformer;
+    public synapse!: Synapse;
 }

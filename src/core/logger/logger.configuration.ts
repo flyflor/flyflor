@@ -1,5 +1,5 @@
-import { LOGGER_DEFAULT_INSPECT_DEPTH, LOGGER_DEFAULT_PATH } from './constants';
-import { LoggerLevel, type LoggerConfiguration, type LoggerConfigurationInput } from './types';
+import { LOGGER_DEFAULT_INSPECT_DEPTH, LOGGER_DEFAULT_PATH } from './logger.constants';
+import { LoggerLevel, type LoggerConfiguration, type LoggerConfigurationInput } from './logger.types';
 
 /** Runtime logger configuration shared by `useLogger()` and `@Logger()`. */
 let currentConfiguration: LoggerConfiguration = {

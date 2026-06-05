@@ -7,14 +7,13 @@ import {
     type ClassType,
     type InjectInstanceMetadata,
     type InjectMetadata,
-} from './ioc/types';
-import { defineMetadata, getMetadata, useContainer } from './ioc/container';
-import type { FModule } from './ioc/superclz';
+} from './ioc/ioc.types';
+import { defineMetadata, getMetadata, useContainer } from './ioc/ioc.container';
+import type { FModule } from './ioc/scope.base';
 import { join } from 'path';
-import { ROOT_PATH } from '@/constants';
+import { ROOT_PATH } from '@/core/core.constants';
 import { existsSync, globSync, readFileSync, statSync } from 'fs';
 import { get, set } from 'lodash-es';
-import { Observable } from 'rxjs';
 
 export type Ctor<T = unknown> = new (...args: never[]) => T;
 
@@ -64,7 +63,7 @@ export function Module<T extends FModule>(metadata: ModuleMetadata = {}): ClassD
 }
 
 export function Controller() {
-    return <T extends new <C>() => Observable<C>>(target: T) => {
+    return <T extends Ctor>(target: T) => {
         Singleton()(target as unknown as Function);
     };
 }
@@ -185,7 +184,7 @@ export function Config(key?: string): PropertyDecorator {
         data.push({
             propertyKey,
             instance: async () => {
-                const { ConfigComponent } = await import('@/shard/components');
+                const { ConfigComponent } = await import('@/config');
                 return useContainer().getAsync(ConfigComponent);
             },
         });

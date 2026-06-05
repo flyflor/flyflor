@@ -6,8 +6,8 @@ import {
     LOGGER_LAYOUT,
     LOGGER_LEVEL_COLOR,
     LOGGER_LEVEL_LABEL_WIDTH,
-} from './constants';
-import { LoggerLevel, type LoggerConfiguration } from './types';
+} from './logger.constants';
+import { LoggerLevel, type LoggerConfiguration } from './logger.types';
 
 /**
  * Formats one log record for terminal output.

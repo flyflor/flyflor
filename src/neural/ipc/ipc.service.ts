@@ -4,9 +4,8 @@ import { unlink } from 'fs/promises';
 import { ConfigComponent } from '@/config';
 import type { UnixSocketListener } from 'bun';
 import { join } from 'path';
-import { ROOT_PATH } from '@/config/constants';
-import type { NeuralTransformer } from '../controller';
-import { FSocket } from './scoket';
+import { ROOT_PATH } from '@/config/config.constants';
+import { FSocket } from './ipc.socket';
 
 /** Windows named-pipe prefix used internally while the public endpoint remains `./flyflor.sock`. */
 const WINDOWS_NAMED_PIPE_PREFIX = '\\\\.\\pipe\\';

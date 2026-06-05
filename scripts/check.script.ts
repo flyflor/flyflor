@@ -20,10 +20,10 @@ const SKIPPED_DIR_NAMES = new Set(['node_modules', 'dist', '.agents']);
 const ALLOWED_NEW_TARGETS = new Set(['Container', 'Date', 'Error', 'Map', 'Response', 'Set', 'TextDecoder']);
 
 /** Container internals are the repository's only custom-class construction entry. */
-const CONTAINER_SOURCE_FILE = join('src', 'core', 'ioc', 'container.ts');
+const CONTAINER_SOURCE_FILE = join('src', 'core', 'ioc', 'ioc.container.ts');
 
 /** The red-line checker itself defines the `.zh.cn.md` reference pattern; it must be self-exempted. */
-const SELF_CHECK_FILE = 'scripts/check.ts';
+const SELF_CHECK_FILE = 'scripts/check.script.ts';
 
 /** Type-only declarations containing `new` are not runtime construction sites. */
 const TYPE_DECLARATION_PATTERN = /^\s*(export\s+)?type\s+/;
@@ -45,6 +45,15 @@ const PROMPTS_DIR = 'prompts';
 
 /** Pattern that flags any code reference to a Chinese prompt mirror. */
 const ZH_MIRROR_REFERENCE_PATTERN = /\.zh\.cn\.md/g;
+
+/** Project file names follow Angular/Nest-style dotted roles, with barrel `index.ts` as the only bare name. */
+const DOTTED_TYPESCRIPT_FILENAME_PATTERN = /^(index|[a-z0-9-]+(?:\.[a-z0-9-]+)+)\.ts$/;
+
+/** Exported function APIs are reserved for composition/decorator/bootstrap/check surfaces, not business logic. */
+const EXPORTED_FUNCTION_PATTERN = /^\s*export\s+(async\s+)?function\s+/;
+
+/** Files that may expose function-style composition APIs, decorators, or low-level core helpers by design. */
+const FUNCTION_EXPORT_FILE_PATTERN = /(^|\/)(index|main\.bootstrap|.*\.composition|.*\.decorator|.*\.configuration|.*\.format|.*\.writer|ioc\.container|check\.script)\.ts$/;
 
 const violations: CheckViolation[] = [];
 
@@ -78,9 +87,28 @@ function scanDirectory(dir: string): void {
             continue;
         }
         if (path.endsWith('.ts')) {
+            scanFileName(path);
             scanFile(path);
         }
     }
+}
+
+/**
+ * Enforces code-first Angular/Nest-style file naming: class-bearing files use `name.role.ts`,
+ * while `index.ts` remains the only barrel exception.
+ * @param path - Absolute TypeScript file path.
+ */
+function scanFileName(path: string): void {
+    const relativePath = relative(process.cwd(), path);
+    const fileName = relativePath.split(sep).pop() ?? relativePath;
+    if (DOTTED_TYPESCRIPT_FILENAME_PATTERN.test(fileName)) {
+        return;
+    }
+    violations.push({
+        file: relativePath,
+        line: 1,
+        message: 'file name must use Angular/Nest-style dotted naming such as name.service.ts; only index.ts is exempt',
+    });
 }
 
 /**
@@ -114,6 +142,13 @@ function scanFile(path: string): void {
                 file: relativePath,
                 line: index + 1,
                 message: `disallowed reference to a Chinese prompt mirror '${match[0]}' (AGENTS.md red line 5: runtime reads only the English .md source)`,
+            });
+        }
+        if (EXPORTED_FUNCTION_PATTERN.test(line) && !FUNCTION_EXPORT_FILE_PATTERN.test(relativePath)) {
+            violations.push({
+                file: relativePath,
+                line: index + 1,
+                message: 'exported function APIs are reserved for composition/decorator/bootstrap/check files; use OOP class boundaries for business code',
             });
         }
     });

@@ -1,8 +1,8 @@
-import { LOGGER_DEFAULT_SCOPE, LOGGER_LEVEL_WEIGHT } from './constants';
-import { resolveLoggerConfiguration } from './configuration';
-import { formatLogRecord } from './format';
-import { LoggerLevel, type FLogger, type LoggerConfigurationInput, type LoggerOptions } from './types';
-import { writeLogRecord } from './writer';
+import { LOGGER_DEFAULT_SCOPE, LOGGER_LEVEL_WEIGHT } from './logger.constants';
+import { resolveLoggerConfiguration } from './logger.configuration';
+import { formatLogRecord } from './logger.format';
+import { LoggerLevel, type FLogger, type LoggerConfigurationInput, type LoggerOptions } from './logger.types';
+import { writeLogRecord } from './logger.writer';
 
 /**
  * Creates a scoped logger API.

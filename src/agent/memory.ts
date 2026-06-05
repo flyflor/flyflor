@@ -1,4 +1,4 @@
-import { Component, FComponent } from '@/core';
+import { FService, Service } from '@/core';
 
-@Component()
-export class MemoryComponent extends FComponent {}
+@Service()
+export class MemoryService extends FService {}

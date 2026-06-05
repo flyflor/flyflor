@@ -1,4 +1,4 @@
-import { LoggerLevel } from './types';
+import { LoggerLevel } from './logger.types';
 
 /** Default logger scope shown when a caller does not provide a module name. */
 export const LOGGER_DEFAULT_SCOPE = 'flyflor';
