@@ -60,8 +60,7 @@ export class IntelligenceService extends FService {
     private readonly llm!: FModelConfiguration;
 
     @Init()
-    public async init() {
-    }
+    public async init() {}
 
     /**
      * Sends messages to the configured provider and returns the completed assistant text.
