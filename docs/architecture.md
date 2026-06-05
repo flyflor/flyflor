@@ -34,13 +34,13 @@ Business code should use class boundaries instead of exported process-style func
 
 ## Runtime Flow
 
-`AppModule` imports `PluginModule` and injects `IPCService` plus `Synapse`. `IPCService` starts the socket. `Synapse` creates the configured active `Agent`, then routes socket packets into `Agent.pipe()`.
+`AppModule` imports `PluginModule` and injects `IPCService` plus `Synapse`. `IPCService` starts the socket. `Synapse` creates the configured active `Agent`, then routes socket packets into the active agent subject.
 
 `Agent` currently logs packets. `IntelligenceService` contains an OpenAI-compatible streaming chat-completions client, but full conversation orchestration is not implemented yet.
 
 ## IPC
 
-IPC uses newline-delimited JSON frames. `FSocket` buffers socket chunks and emits complete frames to `Synapse`. The public socket path is configured through `ConfigComponent.socket`.
+IPC uses newline-delimited JSON frames. `PacketService` owns frame encoding and per-connection stream decoding, so partial chunks, coalesced frames, and split UTF-8 characters are handled before packets reach business code. `FSocket` owns the Bun socket lifecycle and emits decoded frames to `Synapse`. The public socket path is configured through `ConfigComponent.socket`.
 
 ## Validation
 

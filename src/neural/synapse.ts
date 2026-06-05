@@ -1,8 +1,8 @@
 import { Agent } from '@/agent';
 import { Config, Init, Inject, Logger, Singleton, useContainer, type FLogger } from '@/core';
 import { ConfigComponent } from '@/config';
-import { map, Observable, Subscriber } from 'rxjs';
-import type { SocketPacket } from './ipc/ipc.socket';
+import { Observable, Subscriber } from 'rxjs';
+import type { SocketPacket } from './packet';
 
 export interface AgentPool {
     active: string;
@@ -17,7 +17,7 @@ export class Synapse<T extends SocketPacket = SocketPacket> extends Observable<T
     @Logger('Neural')
     public readonly log!: FLogger;
 
-    public subsciber!: Subscriber<T>;
+    public subscriber!: Subscriber<T>;
 
     public agentPool: AgentPool;
 
@@ -26,8 +26,8 @@ export class Synapse<T extends SocketPacket = SocketPacket> extends Observable<T
     }
 
     constructor() {
-        super((subsciber) => {
-            this.subsciber = subsciber;
+        super((subscriber) => {
+            this.subscriber = subscriber;
         });
         this.subscribe({
             next: this.next.bind(this),
@@ -61,13 +61,7 @@ export class Synapse<T extends SocketPacket = SocketPacket> extends Observable<T
 
     public next(data: SocketPacket) {
         // this.log.debug(data);
-        this.agent.pipe(
-            map((d) => {
-                this.log.debug('d', d);
-                this.log.debug('data', data);
-                return data;
-            }),
-        );
+        this.agent.next(data);
     }
 
     public error(err: Error) {}

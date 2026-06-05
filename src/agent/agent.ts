@@ -2,7 +2,7 @@ import { Inject, Prompt, Provide, Config, PromptScope, Logger, FAgent } from '@/
 import { CrystallService, IntelligenceService } from './brain';
 import { ConfigComponent, type FAgentProfileConfiguration } from '@/config';
 import type { FLogger } from '@/core/logger';
-import type { SocketPacket } from '@/neural/ipc/ipc.socket';
+import type { SocketPacket } from '@/neural/packet';
 import { MemoryService } from '@/agent/memory';
 
 @Provide()
@@ -38,7 +38,7 @@ export class Agent extends FAgent<SocketPacket> {
     constructor(public readonly config: FAgentProfileConfiguration) {
         super();
         this.subscribe((data: any) => {
-            console.log(data);
+            this.log.debug(data);
         });
     }
 }

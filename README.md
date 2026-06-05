@@ -18,7 +18,8 @@ bun run build:binary
 - `ConfigComponent` loads `./.config/config.jsonc`.
 - `Synapse` Synapse owns the active agent pool and receives IPC packets.
 - `IPCService` exposes a Bun Unix socket / Windows named-pipe boundary.
-- `FSocket` speaks newline-delimited JSON frames.
+- `PacketService` encodes and decodes newline-delimited JSON frames, including partial chunks and coalesced frames.
+- `FSocket` owns Bun socket lifecycle callbacks and routes decoded packets into `Synapse`.
 - `Agent` is currently a thin runtime shell wired to brain and memory components.
 
 See [Architecture](docs/architecture.md) and [Boundaries](docs/boundaries.md).

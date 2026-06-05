@@ -1,37 +1,13 @@
 import { Inject, Logger, Singleton, type FLogger } from '@/core';
-import type { Synapse } from '@/neural/synapse';
+import { Synapse } from '@/neural/synapse';
+import { PacketService, SocketEvent, type SocketPacket } from '@/neural/packet';
 import type { BinaryType, Socket, SocketHandler } from 'bun';
 
 const SOCKET_LOG_SCOPE = 'IPC.Socket';
 const SOCKET_BINARY_TYPE: BinaryType = 'buffer';
 const FUNCTION_TYPE = 'function';
-const FRAME_SEPARATOR = '\n';
 
-/**
- * Socket lifecycle event names used in IPC socket logs and socket packets.
- */
-export enum SocketEvent {
-    Constructor = 'constructor',
-    Close = 'close',
-    Error = 'error',
-    Open = 'open',
-    Data = 'data',
-    Drain = 'drain',
-    Handshake = 'handshake',
-    End = 'end',
-    ConnectError = 'connectError',
-    Timeout = 'timeout',
-}
-
-/**
- * Packet shape written through the IPC socket.
- *
- * @template T Payload type associated with the socket lifecycle action.
- */
-export interface SocketPacket<T = unknown> {
-    action: SocketEvent;
-    data: T;
-}
+export { SocketEvent, type SocketPacket } from '@/neural/packet';
 
 /**
  * Bun socket handler used by IPCService.
@@ -48,9 +24,10 @@ export class FSocket<Data = SocketPacket> implements SocketHandler<Data, 'buffer
     @Inject()
     public synapse!: Synapse;
 
-    public binaryType?: BinaryType;
+    @Inject()
+    public packet!: PacketService;
 
-    private frameBuffer = '';
+    public binaryType?: BinaryType;
 
     constructor() {
         this.binaryType = SOCKET_BINARY_TYPE;
@@ -70,11 +47,13 @@ export class FSocket<Data = SocketPacket> implements SocketHandler<Data, 'buffer
     public async open(socket: Socket<Data>) {
         this.log.info(SocketEvent.Open);
         // this.neural.reflex.next({ action: SocketEvent.Open, data: true });
-        socket.write(`${JSON.stringify({ action: SocketEvent.Open, data: true })}\n`);
+        socket.write(this.packet.encode({ action: SocketEvent.Open, data: true }));
     }
 
     public async close(socket: Socket<Data>, error?: Error) {
+        const partialFrame = this.packet.close(socket);
         this.log.info(SocketEvent.Close, { hasError: error !== undefined });
+        if (partialFrame !== undefined) this.log.warn(SocketEvent.Close, { partialFrame });
         if (error) this.log.error(SocketEvent.Close, error);
     }
 
@@ -83,15 +62,12 @@ export class FSocket<Data = SocketPacket> implements SocketHandler<Data, 'buffer
     }
 
     public async data(socket: Socket<Data>, data: Uint8Array) {
-        // this.log.debug(SocketEvent.Data, Buffer.from(data).toString());
-        this.frameBuffer += Buffer.from(data).toString('utf8');
-        const frames = this.frameBuffer.split(FRAME_SEPARATOR);
-        this.frameBuffer = frames.pop() ?? '';
-        for (const frame of frames) {
-            const trimmed = frame.trim();
-            if (trimmed.length === 0) continue;
-            this.log.debug(this.synapse.subsciber);
-            this.synapse.subsciber.next({ action: SocketEvent.Data, data: JSON.parse(trimmed) });
+        const result = this.packet.decode(socket, data);
+        for (const error of result.errors) {
+            this.log.error(SocketEvent.Data, error.error, { frame: error.frame });
+        }
+        for (const packet of result.packets) {
+            this.synapse.next({ action: SocketEvent.Data, data: packet });
         }
     }
 

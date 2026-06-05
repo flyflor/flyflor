@@ -31,7 +31,7 @@ Class-bearing files use dotted role names:
 
 ## Neural And IPC
 
-`src/neural` owns the runtime transformer and IPC transport. External clients talk through the socket boundary; business classes should not open their own external transport.
+`src/neural` owns the runtime transformer and IPC transport. `src/neural/packet` owns IPC frame encode/decode rules, and `src/neural/ipc` owns the Bun socket boundary. External clients talk through the socket boundary; business classes should not open their own external transport.
 
 ## Entities
 

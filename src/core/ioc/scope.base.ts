@@ -1,4 +1,4 @@
-import { Observable } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
 
 export abstract class FlyFlor {}
 
@@ -45,4 +45,4 @@ export abstract class FSandBox extends FGuard {}
  * via `listModule(FAgent)` and to manage their lifecycles. An agent's `chat` is the canonical
  * entry point: the runtime never inspects or rewrites the agent's system prompt.
  */
-export abstract class FAgent<T = object | number | string | boolean | undefined> extends Observable<T> {}
+export abstract class FAgent<T = object | number | string | boolean | undefined> extends Subject<T> {}
