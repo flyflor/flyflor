@@ -967,3 +967,8 @@
   | {
   |   binaryType: 'buffer'
   | }
+[INFO ]  2026-06-05T10:14:11.156Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }

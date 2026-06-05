@@ -1,6 +1,6 @@
 {
     "name": "flyflor",
-    "module": "src/main.bootstrap.ts",
+    "module": "src/bootstrap.ts",
     "type": "module",
     "scripts": {
         "dev": "bun run --watch src/bootstrap.ts",

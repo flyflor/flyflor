@@ -18,7 +18,7 @@ Flyflor is a Bun + TypeScript agent kernel. The current codebase centers on a Ne
 8. Use `@/*` imports for cross-domain source imports. Relative imports are fine inside the same directory boundary.
 9. Runtime prompt sources are English `.md` files. `.zh.cn.md` mirrors are for humans and must never be read by runtime code.
 10. Keep config in `./.config/config.jsonc` and secrets in environment variables.
-11. IPC frames are newline-delimited JSON. Socket code must tolerate chunking and frame coalescing.
+11. IPC frames are 8-byte big-endian length-prefixed JSON. Socket code must tolerate chunking, frame coalescing, and split UTF-8 bytes.
 12. `bun run check` is the minimum validation gate before considering a change healthy.
 
 ## Directory Roles

@@ -4,7 +4,7 @@ Flyflor uses code-first architecture. This document describes the current code; 
 
 ## Bootstrap
 
-`src/main.bootstrap.ts` imports `reflect-metadata`, then calls `Factory.create(AppModule)`. `Factory` delegates construction to the shared IOC container.
+`src/bootstrap.ts` imports `reflect-metadata`, then calls `Factory.create(AppModule)`. `Factory` delegates construction to the shared IOC container.
 
 ## IOC
 
@@ -40,7 +40,7 @@ Business code should use class boundaries instead of exported process-style func
 
 ## IPC
 
-IPC uses newline-delimited JSON frames. `PacketService` owns frame encoding and per-connection stream decoding, so partial chunks, coalesced frames, and split UTF-8 characters are handled before packets reach business code. `FSocket` owns the Bun socket lifecycle and emits decoded frames to `Synapse`. The public socket path is configured through `ConfigComponent.socket`.
+IPC uses 8-byte big-endian length-prefixed JSON frames. `PacketService` owns frame encoding and per-connection stream decoding, so partial chunks, coalesced frames, and split UTF-8 bytes are handled before packets reach business code. `FSocket` owns the Bun socket lifecycle and emits decoded frames to `Synapse`. The public socket path is configured through `ConfigComponent.socket`.
 
 ## Validation
 

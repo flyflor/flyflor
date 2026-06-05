@@ -180,7 +180,7 @@
             function sendUserMessage(text) {
                 if (!text || !ws) return;
                 const payload = { action: 'user', data: text };
-                ws.send(JSON.stringify(payload) + '\n');
+                ws.send(JSON.stringify(payload));
                 addMessage(text, 'user');
             }
 

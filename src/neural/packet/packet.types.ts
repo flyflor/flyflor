@@ -45,5 +45,5 @@ export interface PacketDecodeError {
  */
 export interface PacketDecodeState {
     decoder: TextDecoder;
-    buffer: string;
+    buffer: Buffer;
 }
