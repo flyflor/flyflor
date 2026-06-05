@@ -1,8 +1,7 @@
 import { FModule, Init, Inject, Module } from '@/core';
-import { ShardModule } from '@/shard/module';
 import { PluginModule } from '@/plugins';
-import { NeuralTransformer } from './neural';
 import { IPCService } from './neural/ipc';
+import type { NeuralTransformer } from '@/neural';
 
 /**
  * The root Flyflor module.
@@ -12,19 +11,12 @@ import { IPCService } from './neural/ipc';
  * import (convention > configuration: `listModule(FAgent)` is the discovery surface for agents).
  */
 @Module({
-    imports: [IPCService, ShardModule, PluginModule],
+    imports: [PluginModule],
 })
 export class AppModule extends FModule {
+    @Inject()
+    public ipc!: IPCService;
 
     @Inject()
     public neural!: NeuralTransformer;
-
-    constructor(public ipc: IPCService) {
-        super();
-    }
-
-    @Init()
-    public async init() {
-        await this.ipc.startSocket(this.neural);
-    }
 }

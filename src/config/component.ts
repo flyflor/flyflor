@@ -1,9 +1,8 @@
-import { readFile } from 'fs/promises';
-import { join, resolve } from 'path';
-import { Component, FComponent, Init, Singleton } from '@/core';
-import { ROOT_PATH } from '@/constants';
-import { JSON5 } from 'bun';
+import { join } from 'path';
+import { FComponent, Singleton } from '@/core';
+import { ROOT_PATH } from '@/config/constants';
 import { readFileSync } from 'fs';
+import { JSON5 } from 'bun';
 
 /**
  * One provider/model timeout override.
@@ -86,8 +85,8 @@ export interface FConfiguration {
 }
 
 export interface SkillsConfig {
-    directory: string,
-    creationNudgeInterval: number,
+    directory: string;
+    creationNudgeInterval: number;
     externalDirs: string[];
 }
 

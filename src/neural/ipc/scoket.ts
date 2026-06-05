@@ -1,4 +1,4 @@
-import { Logger, Singleton, type FLogger } from '@/core';
+import { Inject, Logger, Singleton, type FLogger } from '@/core';
 import type { BinaryType, Socket, SocketHandler } from 'bun';
 import type { NeuralTransformer } from '../controller';
 
@@ -44,9 +44,12 @@ export class FSocket<Data = SocketPacket> implements SocketHandler<Data, 'buffer
     @Logger(SOCKET_LOG_SCOPE)
     public readonly log!: FLogger;
 
+    @Inject()
+    public neural!: NeuralTransformer;
+
     public binaryType?: BinaryType;
 
-    constructor(public neural: NeuralTransformer) {
+    constructor() {
         this.binaryType = SOCKET_BINARY_TYPE;
         this.log.info(SocketEvent.Constructor, { binaryType: this.binaryType });
     }
@@ -78,9 +81,8 @@ export class FSocket<Data = SocketPacket> implements SocketHandler<Data, 'buffer
 
     public async data(socket: Socket<Data>, data: Uint8Array) {
         // this.log.debug(SocketEvent.Data, Buffer.from(data).toString());
-        this.neural.reflex.next({ action: SocketEvent.Data, data: JSON.parse(Buffer.from(data).toString()) })
+        this.neural.reflex.next({ action: SocketEvent.Data, data: JSON.parse(Buffer.from(data).toString()) });
     }
-
 
     public async drain(socket: Socket<Data>) {
         this.log.debug(SocketEvent.Drain);

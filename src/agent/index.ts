@@ -1,10 +1,9 @@
 import { Inject, Prompt, Provide, Config, PromptScope, Logger, FAgent } from '@/core';
-import type { FLogger } from '@/core/logger';
 import { CrystallService, IntelligenceService } from './brain';
-import { ConfigComponent } from '@/shard/components/config/component';
-import { MemoryComponent } from '@/shard/components/memory/component';
-import type { FAgentProfileConfiguration } from '@/shard/components';
+import { ConfigComponent, type FAgentProfileConfiguration } from '@/config';
+import type { FLogger } from '@/core/logger';
 import type { SocketPacket } from '@/neural/ipc/scoket';
+import type { MemoryComponent } from '@/agent/memory';
 
 @Provide()
 export class Agent extends FAgent {

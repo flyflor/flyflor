@@ -1,10 +1,10 @@
-import { Inject, FService, Service, useContainer } from '@/core';
+import { Inject, FService, Service, useContainer, Init } from '@/core';
 import { existsSync } from 'fs';
 import { unlink } from 'fs/promises';
-import { ConfigComponent } from '@/shard/components/config';
+import { ConfigComponent } from '@/config';
 import type { UnixSocketListener } from 'bun';
 import { join } from 'path';
-import { ROOT_PATH } from '@/constants';
+import { ROOT_PATH } from '@/config/constants';
 import type { NeuralTransformer } from '../controller';
 import { FSocket } from './scoket';
 
@@ -27,11 +27,6 @@ export class IPCService extends FService {
 
     public socketServer?: UnixSocketListener<any>;
 
-    /**
-     * Converts the public socket endpoint into the platform listen address without changing what clients see.
-     * @param endpoint - the public `./flyflor.sock` endpoint.
-     * @returns the endpoint passed to Bun's socket listener.
-     */
     public toListenEndpoint(endpoint: string): string {
         if (process.platform !== 'win32') {
             return endpoint;
@@ -39,13 +34,11 @@ export class IPCService extends FService {
         return WINDOWS_NAMED_PIPE_PREFIX + endpoint.replace(RELATIVE_PATH_PREFIX, '');
     }
 
-    /**
-     * Socket transport for CLI / Rust TUI clients. Consumers always use `./flyflor.sock`.
-     */
-    public async startSocket(transformer: NeuralTransformer) {
+    @Init()
+    public async init() {
         const endpoint = join(ROOT_PATH, this.config.socket);
         const listenEndpoint = this.toListenEndpoint(endpoint);
-        const { socket } = await useContainer().getAsync(FSocket, transformer);
+        const { socket } = await useContainer().getAsync(FSocket);
 
         if (existsSync(listenEndpoint)) await unlink(listenEndpoint);
         this.socketServer = Bun.listen({ unix: listenEndpoint, socket: socket });
