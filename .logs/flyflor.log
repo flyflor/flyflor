@@ -3861,3 +3861,172 @@
   | {
   |   hasError: false
   | }
+[INFO ]  2026-06-05T19:12:08.520Z  IPC.Socket
+  | open
+[WARN ]  2026-06-05T19:14:08.522Z  IPC.Socket
+  | timeout
+[INFO ]  2026-06-05T19:14:11.458Z  IPC.Socket
+  | end
+[INFO ]  2026-06-05T19:14:11.459Z  IPC.Socket
+  | close
+  | {
+  |   hasError: false
+  | }
+[INFO ]  2026-06-06T13:37:32.481Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T13:37:38.913Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T13:38:30.440Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T13:40:40.813Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T13:40:55.699Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T13:41:10.083Z  IPC.Socket
+  | open
+[INFO ]  2026-06-06T13:41:48.678Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T13:41:52.067Z  IPC.Socket
+  | open
+[DEBUG]  2026-06-06T13:41:54.151Z  Neural
+  | 1
+[DEBUG]  2026-06-06T13:42:02.027Z  Neural
+  | 123
+[WARN ]  2026-06-06T13:43:52.072Z  IPC.Socket
+  | timeout
+[INFO ]  2026-06-06T13:44:08.294Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T13:44:38.986Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T13:44:43.060Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T13:44:49.743Z  IPC.Socket
+  | open
+[DEBUG]  2026-06-06T13:44:51.994Z  Neural
+  | 1
+[INFO ]  2026-06-06T13:45:09.607Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T15:20:05.926Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T15:20:36.722Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T15:22:55.734Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T15:23:12.746Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T15:23:19.562Z  IPC.Socket
+  | open
+[INFO ]  2026-06-06T15:24:30.510Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T15:24:53.830Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T15:25:00.780Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T15:25:34.540Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T15:25:38.000Z  IPC.Socket
+  | open
+[DEBUG]  2026-06-06T15:25:41.211Z  IPC.Socket
+  | <Buffer 00 00 00 00 00 00 00 1e 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 31 31 31 22 7d>
+[INFO ]  2026-06-06T15:26:09.906Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T15:26:13.413Z  IPC.Socket
+  | open
+[DEBUG]  2026-06-06T15:26:15.781Z  IPC.Socket
+  | <Buffer 00 00 00 00 00 00 00 1f 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 31 31 31 31 22 7d>
+[INFO ]  2026-06-06T15:26:31.173Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T15:26:31.662Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T15:26:35.268Z  IPC.Socket
+  | open
+[DEBUG]  2026-06-06T15:26:38.164Z  IPC.Socket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 1e 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 31 31 31 22 7d>
+[INFO ]  2026-06-06T15:26:56.132Z  IPC.Socket
+  | end
+[INFO ]  2026-06-06T15:26:56.132Z  IPC.Socket
+  | close
+  | {
+  |   hasError: false
+  | }
+[INFO ]  2026-06-06T15:29:38.613Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T15:29:51.742Z  IPC.Socket
+  | open
+[DEBUG]  2026-06-06T15:29:51.846Z  IPC.Socket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 20 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 68 65 6c 6c 6f 22 7d>
+[INFO ]  2026-06-06T15:29:53.246Z  IPC.Socket
+  | end
+[INFO ]  2026-06-06T15:29:53.246Z  IPC.Socket
+  | close
+  | {
+  |   hasError: false
+  | }

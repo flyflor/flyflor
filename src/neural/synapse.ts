@@ -1,7 +1,7 @@
 import { Agent } from '@/agent';
-import { Config, Init, Inject, Logger, Singleton, useContainer, type FLogger } from '@/core';
+import { Config, Init, Logger, Singleton, useContainer, type FLogger } from '@/core';
 import { ConfigComponent } from '@/config';
-import { Observable, Subscriber } from 'rxjs';
+import { Subject, Subscriber } from 'rxjs';
 import { SocketEvent, type SocketPacket } from './packet';
 
 export interface AgentPool {
@@ -10,7 +10,7 @@ export interface AgentPool {
 }
 
 @Singleton()
-export class Synapse<T extends SocketPacket = SocketPacket> extends Observable<T> {
+export class Synapse<T extends SocketPacket = SocketPacket> extends Subject<T> {
     @Config()
     public readonly config!: ConfigComponent;
 
@@ -26,9 +26,7 @@ export class Synapse<T extends SocketPacket = SocketPacket> extends Observable<T
     }
 
     constructor() {
-        super((subscriber) => {
-            this.subscriber = subscriber;
-        });
+        super();
         this.subscribe({
             next: this.next.bind(this),
             error: this.error.bind(this),
@@ -59,29 +57,16 @@ export class Synapse<T extends SocketPacket = SocketPacket> extends Observable<T
         this.agentPool.agents[active] = await useContainer().getAsync(Agent, agentConfig);
     }
 
-    public next(data: SocketPacket) {
-        // this.log.debug(data);
-        this.agent.next(data);
-    }
-
-    /**
-     * Handles one external IPC packet and returns the packet that should be written back to the same socket.
-     *
-     * The socket layer owns bytes and frames; Synapse owns signal routing. For the web test page, the only
-     * model-backed request is `user`, which becomes one `Agent.chat()` turn and returns an `agent` packet.
-     */
-    public async dispatch(packet: SocketPacket): Promise<SocketPacket<string>> {
+    public override async next(packet: SocketPacket) {
+        this.log.debug(packet);
         if (packet.action !== SocketEvent.User) {
             throw Object.assign(Error('Unsupported IPC action'), { detail: { action: packet.action } });
         }
         if (typeof packet.data !== 'string' || packet.data.trim().length === 0) {
             throw Object.assign(Error('User message must be a non-empty string'), { detail: { data: packet.data } });
         }
-        const response = await this.agent.chat(packet.data.trim());
-        return { action: SocketEvent.Agent, data: response };
+        // const response = await this.agent.chat(packet.data.trim());
+        const response: any = {};
+        return await this.agent.next({ action: SocketEvent.Agent, data: response });
     }
-
-    public error(err: Error) {}
-
-    public complete() {}
 }

@@ -67,6 +67,7 @@ export function Controller() {
 
 // 注入装饰器，用于注册依赖注入服务类
 export function Inject(): PropertyDecorator;
+export function Inject<TThis, C>(callback: (this: TThis) => C): PropertyDecorator;
 export function Inject(classType: ClassType): PropertyDecorator;
 export function Inject(target: object, propertyKey: string | symbol): void;
 export function Inject(): PropertyDecorator | void {

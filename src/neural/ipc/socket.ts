@@ -2,6 +2,7 @@ import { Inject, Logger, Singleton, type FLogger } from '@/core';
 import { Synapse } from '@/neural/synapse';
 import { PacketService, SocketEvent, type SocketPacket } from '@/neural/packet';
 import type { BinaryType, Socket, SocketHandler } from 'bun';
+import { catchError, EMPTY, from, map, mergeMap, tap } from 'rxjs';
 
 const SOCKET_LOG_SCOPE = 'IPC.Socket';
 const SOCKET_BINARY_TYPE: BinaryType = 'buffer';
@@ -62,21 +63,22 @@ export class FSocket<Data = SocketPacket> implements SocketHandler<Data, 'buffer
     }
 
     public async data(socket: Socket<Data>, data: Uint8Array) {
-        const result = this.packet.decode<SocketPacket>(socket, data);
-        for (const error of result.errors) {
-            this.log.error(SocketEvent.Data, error.error, { frame: error.frame });
-            socket.write(this.packet.encode({ action: SocketEvent.Error, data: error.error.message }));
-        }
-        for (const packet of result.packets) {
-            try {
-                const response = await this.synapse.dispatch(packet);
-                socket.write(this.packet.encode(response));
-            } catch (error) {
-                const message = error instanceof Error ? error.message : String(error);
+        this.log.debug('input', data);
+        this.synapse.pipe(
+            map(() => this.packet.decode<SocketPacket>(socket, data)),
+            tap(({ errors = [] }) => errors.map(({ error }) => {
+                return socket.write(this.packet.encode({ action: SocketEvent.Error, data: error.message }));
+            })),
+            mergeMap(({ packets }) => from(packets)),
+            catchError(error => {
                 this.log.error(SocketEvent.Data, error);
-                socket.write(this.packet.encode({ action: SocketEvent.Error, data: message }));
-            }
-        }
+                socket.write(this.packet.encode({ action: SocketEvent.Error, data: error.message }));
+                return EMPTY;
+            })
+        ).subscribe(response => {
+            this.log.debug('output', response);
+            socket.write(this.packet.encode(response));
+        });
     }
 
     public async drain(socket: Socket<Data>) {
