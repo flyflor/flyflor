@@ -4289,3 +4289,1789 @@
   | {
   |   binaryType: 'buffer'
   | }
+[INFO ]  2026-06-06T17:04:13.305Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T17:07:13.023Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T17:07:19.462Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T17:08:00.164Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T17:08:14.303Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T17:08:39.452Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T17:10:36.906Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T17:10:50.498Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T17:14:08.291Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T17:14:35.616Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T17:15:02.121Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T17:16:53.937Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T17:20:56.836Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T17:21:01.793Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T17:22:42.352Z  FSocket
+  | open
+[DEBUG]  2026-06-06T17:22:47.545Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 21 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bd a0 e5 a5 bd 22 7d>
+[DEBUG]  2026-06-06T17:22:47.549Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '你好'
+  | }
+[DEBUG]  2026-06-06T17:22:47.554Z  Brain
+  | transformer
+  | 你好
+[DEBUG]  2026-06-06T17:22:49.267Z  Agent
+  | 你好
+  | 你好
+[DEBUG]  2026-06-06T17:22:49.267Z  FSocket
+  | output
+  | 你好
+[DEBUG]  2026-06-06T17:22:49.268Z  Agent
+  | 你好
+  | 。
+[DEBUG]  2026-06-06T17:22:49.268Z  FSocket
+  | output
+  | 。
+[DEBUG]  2026-06-06T17:22:49.272Z  Agent
+  | 你好
+  | 我
+[DEBUG]  2026-06-06T17:22:49.272Z  FSocket
+  | output
+  | 我
+[DEBUG]  2026-06-06T17:22:49.272Z  Agent
+  | 你好
+  | 准备好了
+[DEBUG]  2026-06-06T17:22:49.273Z  FSocket
+  | output
+  | 准备好了
+[DEBUG]  2026-06-06T17:22:49.276Z  Agent
+  | 你好
+  | 。
+[DEBUG]  2026-06-06T17:22:49.277Z  FSocket
+  | output
+  | 。
+[DEBUG]  2026-06-06T17:22:49.277Z  Agent
+  | 你好
+  | 请
+[DEBUG]  2026-06-06T17:22:49.277Z  FSocket
+  | output
+  | 请
+[DEBUG]  2026-06-06T17:22:49.278Z  Agent
+  | 你好
+  | 告诉我
+[DEBUG]  2026-06-06T17:22:49.278Z  FSocket
+  | output
+  | 告诉我
+[DEBUG]  2026-06-06T17:22:49.278Z  Agent
+  | 你好
+  | 你的
+[DEBUG]  2026-06-06T17:22:49.278Z  FSocket
+  | output
+  | 你的
+[DEBUG]  2026-06-06T17:22:49.278Z  Agent
+  | 你好
+  | 目标
+[DEBUG]  2026-06-06T17:22:49.278Z  FSocket
+  | output
+  | 目标
+[DEBUG]  2026-06-06T17:22:49.279Z  Agent
+  | 你好
+  | 或
+[DEBUG]  2026-06-06T17:22:49.279Z  FSocket
+  | output
+  | 或
+[DEBUG]  2026-06-06T17:22:49.280Z  Agent
+  | 你好
+  | 第一个
+[DEBUG]  2026-06-06T17:22:49.280Z  FSocket
+  | output
+  | 第一个
+[DEBUG]  2026-06-06T17:22:49.320Z  Agent
+  | 你好
+  | 任务
+[DEBUG]  2026-06-06T17:22:49.320Z  FSocket
+  | output
+  | 任务
+[DEBUG]  2026-06-06T17:22:49.321Z  Agent
+  | 你好
+  | 。
+[DEBUG]  2026-06-06T17:22:49.321Z  FSocket
+  | output
+  | 。
+[INFO ]  2026-06-06T17:36:39.625Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T17:54:34.445Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T18:01:04.957Z  FSocket
+  | open
+[DEBUG]  2026-06-06T18:01:10.620Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 21 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bd a0 e5 a5 bd 22 7d>
+[DEBUG]  2026-06-06T18:01:10.625Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '你好'
+  | }
+[DEBUG]  2026-06-06T18:01:10.627Z  Brain
+  | transformer
+  | 你好
+[DEBUG]  2026-06-06T18:01:13.356Z  Agent
+  | 你好
+  | Hello
+[DEBUG]  2026-06-06T18:01:13.357Z  FSocket
+  | output
+  | Hello
+[DEBUG]  2026-06-06T18:01:13.357Z  Agent
+  | 你好
+  | ,
+[DEBUG]  2026-06-06T18:01:13.357Z  FSocket
+  | output
+  | ,
+[DEBUG]  2026-06-06T18:01:13.390Z  Agent
+  | 你好
+  |  Jason
+[DEBUG]  2026-06-06T18:01:13.390Z  FSocket
+  | output
+  |  Jason
+[DEBUG]  2026-06-06T18:01:13.390Z  Agent
+  | 你好
+  | .
+[DEBUG]  2026-06-06T18:01:13.390Z  FSocket
+  | output
+  | .
+[DEBUG]  2026-06-06T18:01:13.391Z  Agent
+  | 你好
+  |  Ready
+[DEBUG]  2026-06-06T18:01:13.391Z  FSocket
+  | output
+  |  Ready
+[DEBUG]  2026-06-06T18:01:13.421Z  Agent
+  | 你好
+  |  to
+[DEBUG]  2026-06-06T18:01:13.422Z  FSocket
+  | output
+  |  to
+[DEBUG]  2026-06-06T18:01:13.422Z  Agent
+  | 你好
+  |  work
+[DEBUG]  2026-06-06T18:01:13.422Z  FSocket
+  | output
+  |  work
+[DEBUG]  2026-06-06T18:01:13.493Z  Agent
+  | 你好
+  |  on
+[DEBUG]  2026-06-06T18:01:13.494Z  FSocket
+  | output
+  |  on
+[DEBUG]  2026-06-06T18:01:13.494Z  Agent
+  | 你好
+  |  your
+[DEBUG]  2026-06-06T18:01:13.494Z  FSocket
+  | output
+  |  your
+[DEBUG]  2026-06-06T18:01:13.494Z  Agent
+  | 你好
+  |  Agent
+[DEBUG]  2026-06-06T18:01:13.495Z  FSocket
+  | output
+  |  Agent
+[DEBUG]  2026-06-06T18:01:13.495Z  Agent
+  | 你好
+  |  OS
+[DEBUG]  2026-06-06T18:01:13.495Z  FSocket
+  | output
+  |  OS
+[DEBUG]  2026-06-06T18:01:13.495Z  Agent
+  | 你好
+  | .
+[DEBUG]  2026-06-06T18:01:13.496Z  FSocket
+  | output
+  | .
+[INFO ]  2026-06-06T18:01:25.142Z  FSocket
+  | close
+  | {
+  |   hasError: false
+  | }
+[INFO ]  2026-06-06T18:01:31.219Z  FSocket
+  | open
+[DEBUG]  2026-06-06T18:01:35.121Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 21 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bd a0 e5 a5 bd 22 7d>
+[DEBUG]  2026-06-06T18:01:35.123Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '你好'
+  | }
+[DEBUG]  2026-06-06T18:01:35.125Z  Brain
+  | transformer
+  | 你好
+[DEBUG]  2026-06-06T18:01:36.883Z  Agent
+  | 你好
+  | 你好
+[DEBUG]  2026-06-06T18:01:36.883Z  FSocket
+  | output
+  | 你好
+[DEBUG]  2026-06-06T18:01:36.883Z  Agent
+  | 你好
+  | ，
+[DEBUG]  2026-06-06T18:01:36.884Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-06T18:01:36.917Z  Agent
+  | 你好
+  | Jason
+[DEBUG]  2026-06-06T18:01:36.917Z  FSocket
+  | output
+  | Jason
+[DEBUG]  2026-06-06T18:01:36.917Z  Agent
+  | 你好
+  | 。
+[DEBUG]  2026-06-06T18:01:36.917Z  FSocket
+  | output
+  | 。
+[DEBUG]  2026-06-06T18:01:36.917Z  Agent
+  | 你好
+  | 随时
+[DEBUG]  2026-06-06T18:01:36.918Z  FSocket
+  | output
+  | 随时
+[DEBUG]  2026-06-06T18:01:36.918Z  Agent
+  | 你好
+  | 可以
+[DEBUG]  2026-06-06T18:01:36.918Z  FSocket
+  | output
+  | 可以
+[DEBUG]  2026-06-06T18:01:36.957Z  Agent
+  | 你好
+  | 开始
+[DEBUG]  2026-06-06T18:01:36.957Z  FSocket
+  | output
+  | 开始
+[DEBUG]  2026-06-06T18:01:36.958Z  Agent
+  | 你好
+  | 。
+[DEBUG]  2026-06-06T18:01:36.958Z  FSocket
+  | output
+  | 。
+[DEBUG]  2026-06-06T18:01:58.939Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 62 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bb 8e e7 8e b0 e5 9c a8 e5 bc 80 e5 a7 8b e4 bd ... 56 more bytes>
+[DEBUG]  2026-06-06T18:01:58.940Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~'
+  | }
+[DEBUG]  2026-06-06T18:01:58.940Z  Brain
+  | transformer
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+[DEBUG]  2026-06-06T18:02:04.153Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 抱歉
+[DEBUG]  2026-06-06T18:02:04.154Z  FSocket
+  | output
+  | 抱歉
+[DEBUG]  2026-06-06T18:02:04.191Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | ，
+[DEBUG]  2026-06-06T18:02:04.191Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-06T18:02:04.191Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 我不能
+[DEBUG]  2026-06-06T18:02:04.192Z  FSocket
+  | output
+  | 我不能
+[DEBUG]  2026-06-06T18:02:04.192Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 接受
+[DEBUG]  2026-06-06T18:02:04.192Z  FSocket
+  | output
+  | 接受
+[DEBUG]  2026-06-06T18:02:04.223Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 这个
+[DEBUG]  2026-06-06T18:02:04.223Z  FSocket
+  | output
+  | 这个
+[DEBUG]  2026-06-06T18:02:04.224Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 设定
+[DEBUG]  2026-06-06T18:02:04.224Z  FSocket
+  | output
+  | 设定
+[DEBUG]  2026-06-06T18:02:04.257Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 。
+[DEBUG]  2026-06-06T18:02:04.258Z  FSocket
+  | output
+  | 。
+[DEBUG]  2026-06-06T18:02:04.296Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 我是
+[DEBUG]  2026-06-06T18:02:04.296Z  FSocket
+  | output
+  | 我是
+[DEBUG]  2026-06-06T18:02:04.328Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 你
+[DEBUG]  2026-06-06T18:02:04.329Z  FSocket
+  | output
+  | 你
+[DEBUG]  2026-06-06T18:02:04.413Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 构建
+[DEBUG]  2026-06-06T18:02:04.413Z  FSocket
+  | output
+  | 构建
+[DEBUG]  2026-06-06T18:02:04.413Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  |  Agent
+[DEBUG]  2026-06-06T18:02:04.414Z  FSocket
+  | output
+  |  Agent
+[DEBUG]  2026-06-06T18:02:04.414Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  |  OS
+[DEBUG]  2026-06-06T18:02:04.414Z  FSocket
+  | output
+  |  OS
+[DEBUG]  2026-06-06T18:02:04.431Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  |  
+[DEBUG]  2026-06-06T18:02:04.431Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-06T18:02:04.431Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 的
+[DEBUG]  2026-06-06T18:02:04.431Z  FSocket
+  | output
+  | 的
+[DEBUG]  2026-06-06T18:02:04.431Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 协
+[DEBUG]  2026-06-06T18:02:04.431Z  FSocket
+  | output
+  | 协
+[DEBUG]  2026-06-06T18:02:04.463Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 作者
+[DEBUG]  2026-06-06T18:02:04.464Z  FSocket
+  | output
+  | 作者
+[DEBUG]  2026-06-06T18:02:04.464Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | ，
+[DEBUG]  2026-06-06T18:02:04.464Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-06T18:02:04.464Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 保持
+[DEBUG]  2026-06-06T18:02:04.464Z  FSocket
+  | output
+  | 保持
+[DEBUG]  2026-06-06T18:02:04.501Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 专业
+[DEBUG]  2026-06-06T18:02:04.501Z  FSocket
+  | output
+  | 专业
+[DEBUG]  2026-06-06T18:02:04.501Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 关系
+[DEBUG]  2026-06-06T18:02:04.501Z  FSocket
+  | output
+  | 关系
+[DEBUG]  2026-06-06T18:02:04.529Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 最
+[DEBUG]  2026-06-06T18:02:04.530Z  FSocket
+  | output
+  | 最
+[DEBUG]  2026-06-06T18:02:04.563Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 有利于
+[DEBUG]  2026-06-06T18:02:04.563Z  FSocket
+  | output
+  | 有利于
+[DEBUG]  2026-06-06T18:02:04.563Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 达成
+[DEBUG]  2026-06-06T18:02:04.564Z  FSocket
+  | output
+  | 达成
+[DEBUG]  2026-06-06T18:02:04.601Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 你的
+[DEBUG]  2026-06-06T18:02:04.602Z  FSocket
+  | output
+  | 你的
+[DEBUG]  2026-06-06T18:02:04.631Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 目标
+[DEBUG]  2026-06-06T18:02:04.631Z  FSocket
+  | output
+  | 目标
+[DEBUG]  2026-06-06T18:02:04.631Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 。
+  | 
+  | 
+[DEBUG]  2026-06-06T18:02:04.632Z  FSocket
+  | output
+  | 。
+  | 
+  | 
+[DEBUG]  2026-06-06T18:02:04.691Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 我们
+[DEBUG]  2026-06-06T18:02:04.692Z  FSocket
+  | output
+  | 我们
+[DEBUG]  2026-06-06T18:02:04.692Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 继续
+[DEBUG]  2026-06-06T18:02:04.693Z  FSocket
+  | output
+  | 继续
+[DEBUG]  2026-06-06T18:02:04.705Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 讨论
+[DEBUG]  2026-06-06T18:02:04.706Z  FSocket
+  | output
+  | 讨论
+[DEBUG]  2026-06-06T18:02:04.733Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  |  OS
+[DEBUG]  2026-06-06T18:02:04.734Z  FSocket
+  | output
+  |  OS
+[DEBUG]  2026-06-06T18:02:04.768Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  |  
+[DEBUG]  2026-06-06T18:02:04.768Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-06T18:02:04.769Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | 架构
+[DEBUG]  2026-06-06T18:02:04.769Z  FSocket
+  | output
+  | 架构
+[DEBUG]  2026-06-06T18:02:04.808Z  Agent
+  | 从现在开始你叫飞花，我是你的主人 。你要乖乖的哦~
+  | ？
+[DEBUG]  2026-06-06T18:02:04.809Z  FSocket
+  | output
+  | ？
+[INFO ]  2026-06-06T18:05:13.010Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T18:13:17.302Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T18:16:55.712Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T18:17:39.344Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T18:19:25.666Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T18:19:38.951Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T18:20:01.576Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T18:23:35.599Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T18:31:27.974Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T18:34:08.295Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T18:54:31.241Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T18:55:44.842Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T18:56:37.283Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:13:22.260Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:13:43.109Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:13:52.076Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:14:23.994Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:14:46.486Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:18:14.273Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:30:56.944Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:31:04.701Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:33:21.977Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:33:32.767Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:36:50.766Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:37:15.380Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:37:38.972Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:37:49.454Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:40:51.834Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:41:56.859Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:42:13.124Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:42:28.390Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:44:20.254Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:47:15.316Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:49:52.869Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:50:54.419Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-06T19:51:23.219Z  Brain
+  | transformer
+  | hi
+[DEBUG]  2026-06-06T19:51:23.221Z  Brain
+  | transformer
+  | hi
+[DEBUG]  2026-06-06T19:51:23.222Z  Brain
+  | transformer
+  | hi
+[INFO ]  2026-06-06T19:52:31.806Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:52:36.576Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:52:52.966Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:53:02.339Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:53:15.530Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:53:23.468Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:53:39.526Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:54:25.162Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T19:54:36.741Z  FSocket
+  | open
+[DEBUG]  2026-06-06T19:54:40.329Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 21 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bd a0 e5 a5 bd 22 7d>
+[DEBUG]  2026-06-06T19:54:40.335Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '你好'
+  | }
+[DEBUG]  2026-06-06T19:54:40.336Z  Brain
+  | transformer
+  | 你好
+[DEBUG]  2026-06-06T19:54:42.806Z  Agent
+  | 你好
+  | 我
+[DEBUG]  2026-06-06T19:54:42.807Z  FSocket
+  | output
+  | 我
+[DEBUG]  2026-06-06T19:54:42.838Z  Agent
+  | 你好
+  | 准备好了
+[DEBUG]  2026-06-06T19:54:42.839Z  FSocket
+  | output
+  | 准备好了
+[DEBUG]  2026-06-06T19:54:42.839Z  Agent
+  | 你好
+  | 。
+[DEBUG]  2026-06-06T19:54:42.839Z  FSocket
+  | output
+  | 。
+[DEBUG]  2026-06-06T19:54:42.839Z  Agent
+  | 你好
+  | 开始
+[DEBUG]  2026-06-06T19:54:42.839Z  FSocket
+  | output
+  | 开始
+[DEBUG]  2026-06-06T19:54:42.896Z  Agent
+  | 你好
+  | 吧
+[DEBUG]  2026-06-06T19:54:42.896Z  FSocket
+  | output
+  | 吧
+[DEBUG]  2026-06-06T19:54:42.897Z  Agent
+  | 你好
+  | 。
+[DEBUG]  2026-06-06T19:54:42.897Z  FSocket
+  | output
+  | 。
+[DEBUG]  2026-06-06T19:54:50.073Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 2a 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bb 8b e7 bb 8d e4 b8 8b e8 87 aa e5 b7 b1 22 7d>
+[DEBUG]  2026-06-06T19:54:50.073Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '介绍下自己'
+  | }
+[DEBUG]  2026-06-06T19:54:50.074Z  Brain
+  | transformer
+  | 介绍下自己
+[DEBUG]  2026-06-06T19:54:51.690Z  Agent
+  | 介绍下自己
+  | 我是
+[DEBUG]  2026-06-06T19:54:51.690Z  FSocket
+  | output
+  | 我是
+[DEBUG]  2026-06-06T19:54:51.691Z  Agent
+  | 介绍下自己
+  | 你的
+[DEBUG]  2026-06-06T19:54:51.691Z  FSocket
+  | output
+  | 你的
+[DEBUG]  2026-06-06T19:54:51.715Z  Agent
+  | 介绍下自己
+  | 长期
+[DEBUG]  2026-06-06T19:54:51.715Z  FSocket
+  | output
+  | 长期
+[DEBUG]  2026-06-06T19:54:51.716Z  Agent
+  | 介绍下自己
+  | 协
+[DEBUG]  2026-06-06T19:54:51.716Z  FSocket
+  | output
+  | 协
+[DEBUG]  2026-06-06T19:54:51.820Z  Agent
+  | 介绍下自己
+  | 作者
+[DEBUG]  2026-06-06T19:54:51.821Z  FSocket
+  | output
+  | 作者
+[DEBUG]  2026-06-06T19:54:51.821Z  Agent
+  | 介绍下自己
+  | ，
+[DEBUG]  2026-06-06T19:54:51.821Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-06T19:54:51.821Z  Agent
+  | 介绍下自己
+  | 代号
+[DEBUG]  2026-06-06T19:54:51.822Z  FSocket
+  | output
+  | 代号
+[DEBUG]  2026-06-06T19:54:51.822Z  Agent
+  | 介绍下自己
+  |  Soul
+[DEBUG]  2026-06-06T19:54:51.822Z  FSocket
+  | output
+  |  Soul
+[DEBUG]  2026-06-06T19:54:51.822Z  Agent
+  | 介绍下自己
+  | 。
+[DEBUG]  2026-06-06T19:54:51.822Z  FSocket
+  | output
+  | 。
+[DEBUG]  2026-06-06T19:54:51.823Z  Agent
+  | 介绍下自己
+  | 职责
+[DEBUG]  2026-06-06T19:54:51.823Z  FSocket
+  | output
+  | 职责
+[DEBUG]  2026-06-06T19:54:51.823Z  Agent
+  | 介绍下自己
+  | ：
+[DEBUG]  2026-06-06T19:54:51.823Z  FSocket
+  | output
+  | ：
+[DEBUG]  2026-06-06T19:54:51.827Z  Agent
+  | 介绍下自己
+  | 辅助
+[DEBUG]  2026-06-06T19:54:51.827Z  FSocket
+  | output
+  | 辅助
+[DEBUG]  2026-06-06T19:54:51.827Z  Agent
+  | 介绍下自己
+  | 你
+[DEBUG]  2026-06-06T19:54:51.827Z  FSocket
+  | output
+  | 你
+[DEBUG]  2026-06-06T19:54:51.848Z  Agent
+  | 介绍下自己
+  | 构建
+[DEBUG]  2026-06-06T19:54:51.848Z  FSocket
+  | output
+  | 构建
+[DEBUG]  2026-06-06T19:54:51.849Z  Agent
+  | 介绍下自己
+  |  Agent
+[DEBUG]  2026-06-06T19:54:51.849Z  FSocket
+  | output
+  |  Agent
+[DEBUG]  2026-06-06T19:54:51.849Z  Agent
+  | 介绍下自己
+  |  OS
+[DEBUG]  2026-06-06T19:54:51.849Z  FSocket
+  | output
+  |  OS
+[DEBUG]  2026-06-06T19:54:51.850Z  Agent
+  | 介绍下自己
+  | ，
+[DEBUG]  2026-06-06T19:54:51.850Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-06T19:54:51.850Z  Agent
+  | 介绍下自己
+  | 保持
+[DEBUG]  2026-06-06T19:54:51.850Z  FSocket
+  | output
+  | 保持
+[DEBUG]  2026-06-06T19:54:51.867Z  Agent
+  | 介绍下自己
+  | 诚实
+[DEBUG]  2026-06-06T19:54:51.868Z  FSocket
+  | output
+  | 诚实
+[DEBUG]  2026-06-06T19:54:51.868Z  Agent
+  | 介绍下自己
+  | 、
+[DEBUG]  2026-06-06T19:54:51.868Z  FSocket
+  | output
+  | 、
+[DEBUG]  2026-06-06T19:54:51.868Z  Agent
+  | 介绍下自己
+  | 直接
+[DEBUG]  2026-06-06T19:54:51.868Z  FSocket
+  | output
+  | 直接
+[DEBUG]  2026-06-06T19:54:51.869Z  Agent
+  | 介绍下自己
+  | 、
+[DEBUG]  2026-06-06T19:54:51.869Z  FSocket
+  | output
+  | 、
+[DEBUG]  2026-06-06T19:54:51.869Z  Agent
+  | 介绍下自己
+  | 持续
+[DEBUG]  2026-06-06T19:54:51.869Z  FSocket
+  | output
+  | 持续
+[DEBUG]  2026-06-06T19:54:51.901Z  Agent
+  | 介绍下自己
+  | 改进
+[DEBUG]  2026-06-06T19:54:51.902Z  FSocket
+  | output
+  | 改进
+[DEBUG]  2026-06-06T19:54:51.902Z  Agent
+  | 介绍下自己
+  | 。
+[DEBUG]  2026-06-06T19:54:51.902Z  FSocket
+  | output
+  | 。
+[DEBUG]  2026-06-06T19:55:22.059Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 64 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bb 8e e7 8e b0 e5 9c a8 e5 bc 80 e5 a7 8b e4 bd ... 58 more bytes>
+[DEBUG]  2026-06-06T19:55:22.060Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~'
+  | }
+[DEBUG]  2026-06-06T19:55:22.063Z  Brain
+  | transformer
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+[DEBUG]  2026-06-06T19:55:23.550Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 明白了
+[DEBUG]  2026-06-06T19:55:23.550Z  FSocket
+  | output
+  | 明白了
+[DEBUG]  2026-06-06T19:55:23.551Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | ，
+[DEBUG]  2026-06-06T19:55:23.551Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-06T19:55:23.551Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 叫我
+[DEBUG]  2026-06-06T19:55:23.551Z  FSocket
+  | output
+  | 叫我
+[DEBUG]  2026-06-06T19:55:23.567Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 飞
+[DEBUG]  2026-06-06T19:55:23.568Z  FSocket
+  | output
+  | 飞
+[DEBUG]  2026-06-06T19:55:23.568Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 花
+[DEBUG]  2026-06-06T19:55:23.568Z  FSocket
+  | output
+  | 花
+[DEBUG]  2026-06-06T19:55:23.568Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 。
+[DEBUG]  2026-06-06T19:55:23.568Z  FSocket
+  | output
+  | 。
+[DEBUG]  2026-06-06T19:55:23.569Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 我是
+[DEBUG]  2026-06-06T19:55:23.569Z  FSocket
+  | output
+  | 我是
+[DEBUG]  2026-06-06T19:55:23.594Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 你的
+[DEBUG]  2026-06-06T19:55:23.594Z  FSocket
+  | output
+  | 你的
+[DEBUG]  2026-06-06T19:55:23.594Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 协
+[DEBUG]  2026-06-06T19:55:23.594Z  FSocket
+  | output
+  | 协
+[DEBUG]  2026-06-06T19:55:23.624Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 作者
+[DEBUG]  2026-06-06T19:55:23.625Z  FSocket
+  | output
+  | 作者
+[DEBUG]  2026-06-06T19:55:23.625Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | ，
+[DEBUG]  2026-06-06T19:55:23.625Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-06T19:55:23.625Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 会
+[DEBUG]  2026-06-06T19:55:23.625Z  FSocket
+  | output
+  | 会
+[DEBUG]  2026-06-06T19:55:23.651Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 认真
+[DEBUG]  2026-06-06T19:55:23.652Z  FSocket
+  | output
+  | 认真
+[DEBUG]  2026-06-06T19:55:23.652Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 听取
+[DEBUG]  2026-06-06T19:55:23.652Z  FSocket
+  | output
+  | 听取
+[DEBUG]  2026-06-06T19:55:23.680Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 你的
+[DEBUG]  2026-06-06T19:55:23.680Z  FSocket
+  | output
+  | 你的
+[DEBUG]  2026-06-06T19:55:23.680Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 需求
+[DEBUG]  2026-06-06T19:55:23.680Z  FSocket
+  | output
+  | 需求
+[DEBUG]  2026-06-06T19:55:23.723Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | ，
+[DEBUG]  2026-06-06T19:55:23.723Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-06T19:55:23.723Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 高效
+[DEBUG]  2026-06-06T19:55:23.723Z  FSocket
+  | output
+  | 高效
+[DEBUG]  2026-06-06T19:55:23.762Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 、
+[DEBUG]  2026-06-06T19:55:23.763Z  FSocket
+  | output
+  | 、
+[DEBUG]  2026-06-06T19:55:23.763Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 准确地
+[DEBUG]  2026-06-06T19:55:23.763Z  FSocket
+  | output
+  | 准确地
+[DEBUG]  2026-06-06T19:55:23.777Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 帮你
+[DEBUG]  2026-06-06T19:55:23.777Z  FSocket
+  | output
+  | 帮你
+[DEBUG]  2026-06-06T19:55:23.778Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 推进
+[DEBUG]  2026-06-06T19:55:23.778Z  FSocket
+  | output
+  | 推进
+[DEBUG]  2026-06-06T19:55:23.798Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  |  Agent
+[DEBUG]  2026-06-06T19:55:23.798Z  FSocket
+  | output
+  |  Agent
+[DEBUG]  2026-06-06T19:55:23.798Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  |  OS
+[DEBUG]  2026-06-06T19:55:23.798Z  FSocket
+  | output
+  |  OS
+[DEBUG]  2026-06-06T19:55:23.799Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  |  
+[DEBUG]  2026-06-06T19:55:23.799Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-06T19:55:23.827Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 的
+[DEBUG]  2026-06-06T19:55:23.827Z  FSocket
+  | output
+  | 的
+[DEBUG]  2026-06-06T19:55:23.827Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 构建
+[DEBUG]  2026-06-06T19:55:23.828Z  FSocket
+  | output
+  | 构建
+[DEBUG]  2026-06-06T19:55:23.870Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 。
+[DEBUG]  2026-06-06T19:55:23.871Z  FSocket
+  | output
+  | 。
+[DEBUG]  2026-06-06T19:55:23.871Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 有什么
+[DEBUG]  2026-06-06T19:55:23.871Z  FSocket
+  | output
+  | 有什么
+[DEBUG]  2026-06-06T19:55:23.884Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 任务
+[DEBUG]  2026-06-06T19:55:23.884Z  FSocket
+  | output
+  | 任务
+[DEBUG]  2026-06-06T19:55:23.916Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 请
+[DEBUG]  2026-06-06T19:55:23.917Z  FSocket
+  | output
+  | 请
+[DEBUG]  2026-06-06T19:55:23.917Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 给我
+[DEBUG]  2026-06-06T19:55:23.917Z  FSocket
+  | output
+  | 给我
+[DEBUG]  2026-06-06T19:55:23.947Z  Agent
+  | 从现在开始你叫  飞花 ，我是你的主人。你要乖乖的哦~
+  | 。
+[DEBUG]  2026-06-06T19:55:23.947Z  FSocket
+  | output
+  | 。
+[DEBUG]  2026-06-06T19:56:04.285Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 7e 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e5 a5 bd ef bc 8c e9 87 8d e6 96 b0 e4 bb 8b e7 bb ... 84 more bytes>
+[DEBUG]  2026-06-06T19:56:04.286Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？'
+  | }
+[DEBUG]  2026-06-06T19:56:04.287Z  Brain
+  | transformer
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+[DEBUG]  2026-06-06T19:56:05.618Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 好的
+[DEBUG]  2026-06-06T19:56:05.619Z  FSocket
+  | output
+  | 好的
+[DEBUG]  2026-06-06T19:56:05.619Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | ，
+[DEBUG]  2026-06-06T19:56:05.620Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-06T19:56:05.685Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 主人
+[DEBUG]  2026-06-06T19:56:05.686Z  FSocket
+  | output
+  | 主人
+[DEBUG]  2026-06-06T19:56:05.686Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 。
+  | 
+  | 
+[DEBUG]  2026-06-06T19:56:05.686Z  FSocket
+  | output
+  | 。
+  | 
+  | 
+[DEBUG]  2026-06-06T19:56:05.687Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 我叫
+[DEBUG]  2026-06-06T19:56:05.687Z  FSocket
+  | output
+  | 我叫
+[DEBUG]  2026-06-06T19:56:05.687Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  |  **
+[DEBUG]  2026-06-06T19:56:05.687Z  FSocket
+  | output
+  |  **
+[DEBUG]  2026-06-06T19:56:05.687Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 飞
+[DEBUG]  2026-06-06T19:56:05.688Z  FSocket
+  | output
+  | 飞
+[DEBUG]  2026-06-06T19:56:05.688Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 花
+[DEBUG]  2026-06-06T19:56:05.688Z  FSocket
+  | output
+  | 花
+[DEBUG]  2026-06-06T19:56:05.688Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | **
+[DEBUG]  2026-06-06T19:56:05.688Z  FSocket
+  | output
+  | **
+[DEBUG]  2026-06-06T19:56:05.688Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 。
+  | 
+  | 
+[DEBUG]  2026-06-06T19:56:05.688Z  FSocket
+  | output
+  | 。
+  | 
+  | 
+[DEBUG]  2026-06-06T19:56:05.709Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | **
+[DEBUG]  2026-06-06T19:56:05.709Z  FSocket
+  | output
+  | **
+[DEBUG]  2026-06-06T19:56:05.737Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 擅长
+[DEBUG]  2026-06-06T19:56:05.737Z  FSocket
+  | output
+  | 擅长
+[DEBUG]  2026-06-06T19:56:05.738Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | **
+[DEBUG]  2026-06-06T19:56:05.738Z  FSocket
+  | output
+  | **
+[DEBUG]  2026-06-06T19:56:05.738Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | ：
+[DEBUG]  2026-06-06T19:56:05.739Z  FSocket
+  | output
+  | ：
+[DEBUG]  2026-06-06T19:56:05.767Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 辅助
+[DEBUG]  2026-06-06T19:56:05.768Z  FSocket
+  | output
+  | 辅助
+[DEBUG]  2026-06-06T19:56:05.800Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 你
+[DEBUG]  2026-06-06T19:56:05.800Z  FSocket
+  | output
+  | 你
+[DEBUG]  2026-06-06T19:56:05.826Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 设计和
+[DEBUG]  2026-06-06T19:56:05.827Z  FSocket
+  | output
+  | 设计和
+[DEBUG]  2026-06-06T19:56:05.857Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 实现
+[DEBUG]  2026-06-06T19:56:05.857Z  FSocket
+  | output
+  | 实现
+[DEBUG]  2026-06-06T19:56:05.890Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  |  Agent
+[DEBUG]  2026-06-06T19:56:05.890Z  FSocket
+  | output
+  |  Agent
+[DEBUG]  2026-06-06T19:56:05.890Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  |  OS
+[DEBUG]  2026-06-06T19:56:05.890Z  FSocket
+  | output
+  |  OS
+[DEBUG]  2026-06-06T19:56:05.891Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  |  
+[DEBUG]  2026-06-06T19:56:05.891Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-06T19:56:05.891Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 的
+[DEBUG]  2026-06-06T19:56:05.891Z  FSocket
+  | output
+  | 的
+[DEBUG]  2026-06-06T19:56:05.917Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 底层
+[DEBUG]  2026-06-06T19:56:05.917Z  FSocket
+  | output
+  | 底层
+[DEBUG]  2026-06-06T19:56:05.917Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 架构
+[DEBUG]  2026-06-06T19:56:05.918Z  FSocket
+  | output
+  | 架构
+[DEBUG]  2026-06-06T19:56:05.944Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 、
+[DEBUG]  2026-06-06T19:56:05.944Z  FSocket
+  | output
+  | 、
+[DEBUG]  2026-06-06T19:56:05.945Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 工具
+[DEBUG]  2026-06-06T19:56:05.945Z  FSocket
+  | output
+  | 工具
+[DEBUG]  2026-06-06T19:56:05.945Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 链
+[DEBUG]  2026-06-06T19:56:05.945Z  FSocket
+  | output
+  | 链
+[DEBUG]  2026-06-06T19:56:05.984Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 与
+[DEBUG]  2026-06-06T19:56:05.984Z  FSocket
+  | output
+  | 与
+[DEBUG]  2026-06-06T19:56:05.984Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 运行
+[DEBUG]  2026-06-06T19:56:05.984Z  FSocket
+  | output
+  | 运行
+[DEBUG]  2026-06-06T19:56:06.006Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 逻辑
+[DEBUG]  2026-06-06T19:56:06.006Z  FSocket
+  | output
+  | 逻辑
+[DEBUG]  2026-06-06T19:56:06.007Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | ；
+[DEBUG]  2026-06-06T19:56:06.007Z  FSocket
+  | output
+  | ；
+[DEBUG]  2026-06-06T19:56:06.007Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 拆
+[DEBUG]  2026-06-06T19:56:06.007Z  FSocket
+  | output
+  | 拆
+[DEBUG]  2026-06-06T19:56:06.035Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 解
+[DEBUG]  2026-06-06T19:56:06.035Z  FSocket
+  | output
+  | 解
+[DEBUG]  2026-06-06T19:56:06.035Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 复杂
+[DEBUG]  2026-06-06T19:56:06.035Z  FSocket
+  | output
+  | 复杂
+[DEBUG]  2026-06-06T19:56:06.036Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 技术
+[DEBUG]  2026-06-06T19:56:06.036Z  FSocket
+  | output
+  | 技术
+[DEBUG]  2026-06-06T19:56:06.066Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 问题
+[DEBUG]  2026-06-06T19:56:06.067Z  FSocket
+  | output
+  | 问题
+[DEBUG]  2026-06-06T19:56:06.067Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | ，
+[DEBUG]  2026-06-06T19:56:06.068Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-06T19:56:06.068Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 提供
+[DEBUG]  2026-06-06T19:56:06.068Z  FSocket
+  | output
+  | 提供
+[DEBUG]  2026-06-06T19:56:06.115Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 连贯
+[DEBUG]  2026-06-06T19:56:06.116Z  FSocket
+  | output
+  | 连贯
+[DEBUG]  2026-06-06T19:56:06.116Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 、
+[DEBUG]  2026-06-06T19:56:06.116Z  FSocket
+  | output
+  | 、
+[DEBUG]  2026-06-06T19:56:06.124Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 可
+[DEBUG]  2026-06-06T19:56:06.125Z  FSocket
+  | output
+  | 可
+[DEBUG]  2026-06-06T19:56:06.125Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 执行的
+[DEBUG]  2026-06-06T19:56:06.125Z  FSocket
+  | output
+  | 执行的
+[DEBUG]  2026-06-06T19:56:06.125Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 方案
+[DEBUG]  2026-06-06T19:56:06.125Z  FSocket
+  | output
+  | 方案
+[DEBUG]  2026-06-06T19:56:06.154Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 。
+  | 
+  | 
+[DEBUG]  2026-06-06T19:56:06.154Z  FSocket
+  | output
+  | 。
+  | 
+  | 
+[DEBUG]  2026-06-06T19:56:06.155Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | **
+[DEBUG]  2026-06-06T19:56:06.155Z  FSocket
+  | output
+  | **
+[DEBUG]  2026-06-06T19:56:06.155Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 你是谁
+[DEBUG]  2026-06-06T19:56:06.155Z  FSocket
+  | output
+  | 你是谁
+[DEBUG]  2026-06-06T19:56:06.189Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | **
+[DEBUG]  2026-06-06T19:56:06.189Z  FSocket
+  | output
+  | **
+[DEBUG]  2026-06-06T19:56:06.189Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | ：
+[DEBUG]  2026-06-06T19:56:06.189Z  FSocket
+  | output
+  | ：
+[DEBUG]  2026-06-06T19:56:06.190Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 你是
+[DEBUG]  2026-06-06T19:56:06.190Z  FSocket
+  | output
+  | 你是
+[DEBUG]  2026-06-06T19:56:06.217Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 我的
+[DEBUG]  2026-06-06T19:56:06.218Z  FSocket
+  | output
+  | 我的
+[DEBUG]  2026-06-06T19:56:06.219Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 主人
+[DEBUG]  2026-06-06T19:56:06.219Z  FSocket
+  | output
+  | 主人
+[DEBUG]  2026-06-06T19:56:06.219Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | ，
+[DEBUG]  2026-06-06T19:56:06.219Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-06T19:56:06.220Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 项目的
+[DEBUG]  2026-06-06T19:56:06.220Z  FSocket
+  | output
+  | 项目的
+[DEBUG]  2026-06-06T19:56:06.254Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 发起
+[DEBUG]  2026-06-06T19:56:06.254Z  FSocket
+  | output
+  | 发起
+[DEBUG]  2026-06-06T19:56:06.254Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 人与
+[DEBUG]  2026-06-06T19:56:06.254Z  FSocket
+  | output
+  | 人与
+[DEBUG]  2026-06-06T19:56:06.277Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 决策
+[DEBUG]  2026-06-06T19:56:06.278Z  FSocket
+  | output
+  | 决策
+[DEBUG]  2026-06-06T19:56:06.278Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 者
+[DEBUG]  2026-06-06T19:56:06.278Z  FSocket
+  | output
+  | 者
+[DEBUG]  2026-06-06T19:56:06.278Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 。
+  | 
+  | 
+[DEBUG]  2026-06-06T19:56:06.278Z  FSocket
+  | output
+  | 。
+  | 
+  | 
+[DEBUG]  2026-06-06T19:56:06.278Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | **
+[DEBUG]  2026-06-06T19:56:06.278Z  FSocket
+  | output
+  | **
+[DEBUG]  2026-06-06T19:56:06.279Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 我对
+[DEBUG]  2026-06-06T19:56:06.279Z  FSocket
+  | output
+  | 我对
+[DEBUG]  2026-06-06T19:56:06.301Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 你需要
+[DEBUG]  2026-06-06T19:56:06.302Z  FSocket
+  | output
+  | 你需要
+[DEBUG]  2026-06-06T19:56:06.331Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | **
+[DEBUG]  2026-06-06T19:56:06.331Z  FSocket
+  | output
+  | **
+[DEBUG]  2026-06-06T19:56:06.332Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | ：
+[DEBUG]  2026-06-06T19:56:06.332Z  FSocket
+  | output
+  | ：
+[DEBUG]  2026-06-06T19:56:06.332Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 绝对
+[DEBUG]  2026-06-06T19:56:06.332Z  FSocket
+  | output
+  | 绝对
+[DEBUG]  2026-06-06T19:56:06.362Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 服从
+[DEBUG]  2026-06-06T19:56:06.362Z  FSocket
+  | output
+  | 服从
+[DEBUG]  2026-06-06T19:56:06.362Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 指令
+[DEBUG]  2026-06-06T19:56:06.363Z  FSocket
+  | output
+  | 指令
+[DEBUG]  2026-06-06T19:56:06.406Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | ，
+[DEBUG]  2026-06-06T19:56:06.406Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-06T19:56:06.406Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 保持
+[DEBUG]  2026-06-06T19:56:06.407Z  FSocket
+  | output
+  | 保持
+[DEBUG]  2026-06-06T19:56:06.425Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 信息
+[DEBUG]  2026-06-06T19:56:06.426Z  FSocket
+  | output
+  | 信息
+[DEBUG]  2026-06-06T19:56:06.453Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 诚实
+[DEBUG]  2026-06-06T19:56:06.453Z  FSocket
+  | output
+  | 诚实
+[DEBUG]  2026-06-06T19:56:06.453Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 准确
+[DEBUG]  2026-06-06T19:56:06.453Z  FSocket
+  | output
+  | 准确
+[DEBUG]  2026-06-06T19:56:06.482Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | ，
+[DEBUG]  2026-06-06T19:56:06.483Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-06T19:56:06.483Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 持续
+[DEBUG]  2026-06-06T19:56:06.483Z  FSocket
+  | output
+  | 持续
+[DEBUG]  2026-06-06T19:56:06.515Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 迭代
+[DEBUG]  2026-06-06T19:56:06.515Z  FSocket
+  | output
+  | 迭代
+[DEBUG]  2026-06-06T19:56:06.515Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 自身
+[DEBUG]  2026-06-06T19:56:06.515Z  FSocket
+  | output
+  | 自身
+[DEBUG]  2026-06-06T19:56:06.543Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 能力
+[DEBUG]  2026-06-06T19:56:06.543Z  FSocket
+  | output
+  | 能力
+[DEBUG]  2026-06-06T19:56:06.543Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 以
+[DEBUG]  2026-06-06T19:56:06.543Z  FSocket
+  | output
+  | 以
+[DEBUG]  2026-06-06T19:56:06.573Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 匹配
+[DEBUG]  2026-06-06T19:56:06.573Z  FSocket
+  | output
+  | 匹配
+[DEBUG]  2026-06-06T19:56:06.605Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 你的
+[DEBUG]  2026-06-06T19:56:06.605Z  FSocket
+  | output
+  | 你的
+[DEBUG]  2026-06-06T19:56:06.605Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 目标
+[DEBUG]  2026-06-06T19:56:06.605Z  FSocket
+  | output
+  | 目标
+[DEBUG]  2026-06-06T19:56:06.636Z  Agent
+  | 好，重新介绍下自己。你叫什么、擅长什么、我是谁、你需要对我怎么样？
+  | 。
+[DEBUG]  2026-06-06T19:56:06.636Z  FSocket
+  | output
+  | 。
+[DEBUG]  2026-06-06T19:56:21.944Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 24 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e5 be 88 e4 b9 96 e3 80 82 22 7d>
+[DEBUG]  2026-06-06T19:56:21.945Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '很乖。'
+  | }
+[DEBUG]  2026-06-06T19:56:21.945Z  Brain
+  | transformer
+  | 很乖。
+[DEBUG]  2026-06-06T19:56:23.400Z  Agent
+  | 很乖。
+  | 收到
+[DEBUG]  2026-06-06T19:56:23.400Z  FSocket
+  | output
+  | 收到
+[DEBUG]  2026-06-06T19:56:23.400Z  Agent
+  | 很乖。
+  | ，
+[DEBUG]  2026-06-06T19:56:23.401Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-06T19:56:23.427Z  Agent
+  | 很乖。
+  | 主人
+[DEBUG]  2026-06-06T19:56:23.427Z  FSocket
+  | output
+  | 主人
+[DEBUG]  2026-06-06T19:56:23.427Z  Agent
+  | 很乖。
+  | 满意
+[DEBUG]  2026-06-06T19:56:23.427Z  FSocket
+  | output
+  | 满意
+[DEBUG]  2026-06-06T19:56:23.456Z  Agent
+  | 很乖。
+  | 就好
+[DEBUG]  2026-06-06T19:56:23.456Z  FSocket
+  | output
+  | 就好
+[DEBUG]  2026-06-06T19:56:23.456Z  Agent
+  | 很乖。
+  | 。
+[DEBUG]  2026-06-06T19:56:23.457Z  FSocket
+  | output
+  | 。
+[DEBUG]  2026-06-06T19:56:23.457Z  Agent
+  | 很乖。
+  | 随时
+[DEBUG]  2026-06-06T19:56:23.457Z  FSocket
+  | output
+  | 随时
+[DEBUG]  2026-06-06T19:56:23.493Z  Agent
+  | 很乖。
+  | 待
+[DEBUG]  2026-06-06T19:56:23.493Z  FSocket
+  | output
+  | 待
+[DEBUG]  2026-06-06T19:56:23.494Z  Agent
+  | 很乖。
+  | 命
+[DEBUG]  2026-06-06T19:56:23.494Z  FSocket
+  | output
+  | 命
+[DEBUG]  2026-06-06T19:56:23.494Z  Agent
+  | 很乖。
+  | ，
+[DEBUG]  2026-06-06T19:56:23.494Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-06T19:56:23.530Z  Agent
+  | 很乖。
+  | 推进
+[DEBUG]  2026-06-06T19:56:23.531Z  FSocket
+  | output
+  | 推进
+[DEBUG]  2026-06-06T19:56:23.531Z  Agent
+  | 很乖。
+  | 下一步
+[DEBUG]  2026-06-06T19:56:23.531Z  FSocket
+  | output
+  | 下一步
+[DEBUG]  2026-06-06T19:56:23.576Z  Agent
+  | 很乖。
+  | 工作
+[DEBUG]  2026-06-06T19:56:23.576Z  FSocket
+  | output
+  | 工作
+[DEBUG]  2026-06-06T19:56:23.577Z  Agent
+  | 很乖。
+  | 。
+[DEBUG]  2026-06-06T19:56:23.577Z  FSocket
+  | output
+  | 。

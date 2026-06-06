@@ -7,8 +7,8 @@ import type { FModule } from './ioc';
 /**
  * Bootstraps the Flyflor kernel from a root `@Module`.
  *
- * It is the composition root: it registers the import graph, then eagerly builds and initializes the whole
- * DI tree (every node is a shared singleton). Dependencies are initialized before dependents via `getAsync`.
+ * It is the composition root: it registers the import graph, then eagerly builds and initializes the root module.
+ * `getAsync` decides reuse from decorator metadata: singleton classes are cached, ordinary providers are fresh.
  */
 export class Factory {
     /**

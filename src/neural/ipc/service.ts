@@ -1,4 +1,4 @@
-import { Inject, FService, Service, useContainer, Init } from '@/core';
+import { Inject, FService, Singleton, useContainer, Init } from '@/core';
 import { existsSync } from 'fs';
 import { unlink } from 'fs/promises';
 import { ConfigComponent } from '@/config';
@@ -19,7 +19,7 @@ const RELATIVE_PATH_PREFIX = './';
  * Exposes one socket transport over the shared `IPCService` brain. The public endpoint is always
  * `./flyflor.sock`; platform-specific listen details stay encapsulated inside this module.
  */
-@Service()
+@Singleton()
 export class IPCService extends FService {
     @Inject()
     public readonly config!: ConfigComponent;

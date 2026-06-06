@@ -30,7 +30,9 @@ afterEach(() => {
     tempPaths = [];
 });
 
-async function useSocketHandler() {
+async function useSocketHandler(options?: {
+    onNext?: (packet: SocketPacket, stream: ReturnType<typeof useAgentStream>) => Promise<void> | void;
+}) {
     const logPath = mkdtempSync(join(tmpdir(), 'flyflor-socket-'));
     tempPaths.push(logPath);
     configureLogger({
@@ -50,6 +52,7 @@ async function useSocketHandler() {
         agent: stream.agent,
         next: async (value: SocketPacket) => {
             calls.push(value);
+            await options?.onNext?.(value, stream);
         },
     } as unknown as Synapse;
 
@@ -108,29 +111,37 @@ function frameFromJson(content: string): Buffer {
 }
 
 describe('FSocket', () => {
-    test('open subscribes to the active agent stream and writes emitted chunks', async () => {
+    test('open sends the handshake without subscribing the socket to global agent output', async () => {
         const { handler, packet, stream } = await useSocketHandler();
         const { socket, writes } = useCapturedSocket();
 
         await handler.open(socket);
         stream.emit('hello');
 
-        expect(stream.count()).toBe(1);
+        expect(stream.count()).toBe(0);
         expect(decodeWrites(packet, writes)).toEqual([
             { action: SocketEvent.Open, data: true },
-            { action: SocketEvent.Data, data: 'hello' },
         ]);
     });
 
-    test('routes a user packet through Synapse without writing command-path output', async () => {
-        const { handler, packet, calls } = await useSocketHandler();
+    test('routes a user packet through Synapse and writes scoped streamed chunks plus stream end', async () => {
+        const { handler, packet, calls } = await useSocketHandler({
+            onNext: async (_packet, stream) => {
+                stream.emit('he');
+                stream.emit('llo');
+            },
+        });
         const { socket, writes } = useCapturedSocket();
         const input = { action: SocketEvent.User, data: 'hello' };
 
         await handler.data(socket, packet.encode(input));
 
         expect(calls).toEqual([input]);
-        expect(decodeWrites(packet, writes)).toEqual([]);
+        expect(decodeWrites(packet, writes)).toEqual([
+            { action: SocketEvent.Data, data: 'he' },
+            { action: SocketEvent.Data, data: 'llo' },
+            { action: SocketEvent.StreamEnd, data: true },
+        ]);
     });
 
     test('writes an error response for malformed JSON frames', async () => {
@@ -147,7 +158,11 @@ describe('FSocket', () => {
     });
 
     test('routes coalesced user packets through Synapse in order', async () => {
-        const { handler, packet, calls } = await useSocketHandler();
+        const { handler, packet, calls } = await useSocketHandler({
+            onNext: async (value, stream) => {
+                stream.emit(String(value.data));
+            },
+        });
         const { socket, writes } = useCapturedSocket();
         const first = { action: SocketEvent.User, data: 'first' };
         const second = { action: SocketEvent.User, data: 'second' };
@@ -155,10 +170,52 @@ describe('FSocket', () => {
         await handler.data(socket, Buffer.concat([packet.encode(first), packet.encode(second)]));
 
         expect(calls).toEqual([first, second]);
-        expect(decodeWrites(packet, writes)).toEqual([]);
+        expect(decodeWrites(packet, writes)).toEqual([
+            { action: SocketEvent.Data, data: 'first' },
+            { action: SocketEvent.StreamEnd, data: true },
+            { action: SocketEvent.Data, data: 'second' },
+            { action: SocketEvent.StreamEnd, data: true },
+        ]);
     });
 
-    test('close releases the connection stream subscription', async () => {
+    test('concurrent sockets do not receive each other\'s streamed output', async () => {
+        const gate = Promise.withResolvers<void>();
+        const { handler, packet } = await useSocketHandler({
+            onNext: async (value, stream) => {
+                if (value.data === 'first') {
+                    stream.emit('first-1');
+                    await gate.promise;
+                    stream.emit('first-2');
+                    return;
+                }
+                stream.emit('second-1');
+            },
+        });
+        const firstSocket = useCapturedSocket();
+        const secondSocket = useCapturedSocket();
+        await handler.open(firstSocket.socket);
+        await handler.open(secondSocket.socket);
+
+        const first = handler.data(firstSocket.socket, packet.encode({ action: SocketEvent.User, data: 'first' }));
+        await Promise.resolve();
+        const second = handler.data(secondSocket.socket, packet.encode({ action: SocketEvent.User, data: 'second' }));
+        gate.resolve();
+        await Promise.all([first, second]);
+
+        expect(decodeWrites(packet, firstSocket.writes)).toEqual([
+            { action: SocketEvent.Open, data: true },
+            { action: SocketEvent.Data, data: 'first-1' },
+            { action: SocketEvent.Data, data: 'first-2' },
+            { action: SocketEvent.StreamEnd, data: true },
+        ]);
+        expect(decodeWrites(packet, secondSocket.writes)).toEqual([
+            { action: SocketEvent.Open, data: true },
+            { action: SocketEvent.Data, data: 'second-1' },
+            { action: SocketEvent.StreamEnd, data: true },
+        ]);
+    });
+
+    test('close releases packet decode state', async () => {
         const { handler, packet, stream } = await useSocketHandler();
         const { socket, writes } = useCapturedSocket();
 
@@ -167,7 +224,6 @@ describe('FSocket', () => {
         stream.emit('late');
 
         expect(stream.count()).toBe(0);
-        expect(socket.data.subscription).toBeUndefined();
         expect(decodeWrites(packet, writes)).toEqual([
             { action: SocketEvent.Open, data: true },
         ]);

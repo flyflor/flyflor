@@ -21,6 +21,7 @@ export enum SocketEvent {
     User = 'user',
     Agent = 'agent',
     Data = 'data',
+    StreamEnd = 'streamEnd',
     Drain = 'drain',
     Handshake = 'handshake',
     End = 'end',
@@ -33,7 +34,7 @@ export enum SocketEvent {
  */
 interface IPCMessage {
     action: SocketEvent;
-    data: string;
+    data: unknown;
 }
 
 /** WebSocket connection state stored by Bun for each browser client. */

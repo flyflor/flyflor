@@ -13,6 +13,33 @@ export interface FProviderModelConfiguration {
     staleTimeoutSeconds: number;
 }
 
+export enum FModelProtocolName {
+    AnthropicMessages = 'anthropicMessages',
+    OpenAIResponses = 'openaiResponses',
+    GoogleGeminiGenerateContent = 'googleGeminiGenerateContent',
+    AWSBedrockConverse = 'awsBedrockConverse',
+    CohereChat = 'cohereChat',
+    HuggingFace = 'huggingFace',
+    Ollama = 'ollama',
+    VLLM = 'vllm',
+    LMStudio = 'lmStudio',
+    OpenAIChatCompletions = 'openaiChatCompletions',
+}
+
+export interface FModelProtocolConfiguration {
+    name: FModelProtocolName;
+    enabled?: boolean;
+    baseUrl?: string;
+    apiKeyEnv?: string;
+    path?: string;
+    version?: string;
+}
+
+const DEFAULT_MODEL_PROTOCOLS: FModelProtocolConfiguration[] = [
+    { name: FModelProtocolName.OpenAIChatCompletions },
+    { name: FModelProtocolName.OpenAIResponses },
+];
+
 /**
  * One inference provider configuration.
  * `requestTimeoutSeconds` and `staleTimeoutSeconds` are provider defaults; `models` stores per-model
@@ -21,6 +48,7 @@ export interface FProviderModelConfiguration {
 export interface FProviderConfiguration {
     requestTimeoutSeconds: number;
     staleTimeoutSeconds: number;
+    protocols?: FModelProtocolConfiguration[];
     models: Record<string, FProviderModelConfiguration>;
 }
 
@@ -36,6 +64,7 @@ export interface FModelConfiguration {
     provider: string;
     apiKeyEnv: string;
     baseUrl: string;
+    protocols: FModelProtocolConfiguration[];
     entra: object;
     contextLength: number;
     maxTokens: number;
@@ -133,6 +162,7 @@ export class ConfigComponent extends FComponent implements FConfiguration {
             provider: '',
             apiKeyEnv: '',
             baseUrl: '',
+            protocols: [...DEFAULT_MODEL_PROTOCOLS],
             entra: {},
             contextLength: 131072,
             maxTokens: 8192,
@@ -166,6 +196,7 @@ export class ConfigComponent extends FComponent implements FConfiguration {
         };
         this.mcp = {};
         Object.assign(this, JSON5.parse(readFileSync(this.configPath, 'utf-8')));
+        this.model.protocols = this.resolveModelProtocols();
     }
 
     /**
@@ -174,5 +205,13 @@ export class ConfigComponent extends FComponent implements FConfiguration {
      */
     public get socketEndpoint(): string {
         return this.socket;
+    }
+
+    private resolveModelProtocols(): FModelProtocolConfiguration[] {
+        const providerProtocols = this.providers[this.model.provider]?.protocols;
+        const protocols = providerProtocols && providerProtocols.length > 0
+            ? providerProtocols
+            : this.model.protocols;
+        return protocols && protocols.length > 0 ? protocols : [...DEFAULT_MODEL_PROTOCOLS];
     }
 }

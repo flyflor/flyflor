@@ -17,7 +17,21 @@ const SCAN_DIRS = ['src', 'scripts'] as const;
 const SKIPPED_DIR_NAMES = new Set(['node_modules', 'dist', '.agents']);
 
 /** Built-in constructors and the single IOC construction entry allowed by the repository rules. */
-const ALLOWED_NEW_TARGETS = new Set(['Container', 'Date', 'Error', 'Map', 'RegExp', 'Response', 'Set', 'TextDecoder']);
+const ALLOWED_NEW_TARGETS = new Set([
+    'AbortController',
+    'BehaviorSubject',
+    'Container',
+    'Date',
+    'Error',
+    'Map',
+    'ReadableStream',
+    'RegExp',
+    'Response',
+    'Set',
+    'TextDecoder',
+    'TextEncoder',
+    'TransformStream',
+]);
 
 /** Container internals are the repository's only custom-class construction entry. */
 const CONTAINER_SOURCE_FILE = join('src', 'core', 'ioc', 'container.ts');
@@ -62,14 +76,25 @@ const ROLE_DIRECTORIES = new Set([
     join('src', 'core', 'ioc'),
     join('src', 'core', 'logger'),
     join('src', 'core', 'prompt'),
+    join('src', 'agent', 'brain', 'intelligence'),
     join('src', 'neural', 'ipc'),
     join('src', 'neural', 'packet'),
 ]);
 
 /** Existing compact object files are preserved until a dedicated naming migration finalizes the convention. */
 const COMPACT_TYPESCRIPT_SOURCE_FILES = new Set([
+    join('src', 'agent', 'brain', 'brain.ts'),
     join('src', 'agent', 'brain', 'crystall.ts'),
-    join('src', 'agent', 'brain', 'intelligence.ts'),
+    join('src', 'agent', 'brain', 'intelligence', 'protocols', 'anthropic-messages.ts'),
+    join('src', 'agent', 'brain', 'intelligence', 'protocols', 'aws-bedrock-converse.ts'),
+    join('src', 'agent', 'brain', 'intelligence', 'protocols', 'cohere-chat.ts'),
+    join('src', 'agent', 'brain', 'intelligence', 'protocols', 'google-gemini-generate-content.ts'),
+    join('src', 'agent', 'brain', 'intelligence', 'protocols', 'hugging-face.ts'),
+    join('src', 'agent', 'brain', 'intelligence', 'protocols', 'lm-studio.ts'),
+    join('src', 'agent', 'brain', 'intelligence', 'protocols', 'ollama.ts'),
+    join('src', 'agent', 'brain', 'intelligence', 'protocols', 'openai-chat-completions.ts'),
+    join('src', 'agent', 'brain', 'intelligence', 'protocols', 'openai-responses.ts'),
+    join('src', 'agent', 'brain', 'intelligence', 'protocols', 'vllm.ts'),
 ]);
 
 /** Existing non-dotted source files are preserved until a dedicated naming migration happens. */

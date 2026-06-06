@@ -12,6 +12,9 @@ coverage
 
 # logs
 logs
+.logs
+.logs/*
+!LOGS.md
 _.log
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
@@ -32,11 +35,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Finder (MacOS) folder config
 .DS_Store
-LOGS.md
-LOGS.zh.cn.md
-TODO.md
-TODO.zh.cn.md
 flyflor.sock
 skills-lock.json
-.agents
-.logs
+!TODO.md

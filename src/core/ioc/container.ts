@@ -25,6 +25,8 @@ export interface MetadataQueue {
 export const CONST_METADATA_KEY = 'CONST_METADATA_KEY';
 const CONSTRUCTOR_PARAM_METADATA_KEY = 'design:paramtypes';
 const CONSTRUCTOR_DEPENDENCY_NOT_FOUND = 'Constructor dependency not found';
+const SYNC_INIT_UNSUPPORTED = 'Synchronous container get() does not support @Init; use getAsync()';
+const SYNC_ASYNC_DEPENDENCY_UNSUPPORTED = 'Synchronous container get() does not support async dependency factories; use getAsync()';
 
 /**
  * 依赖注入容器类，用于管理应用程序的依赖注入 - 单例
@@ -47,7 +49,10 @@ export class Container {
     }
 
     /**
-     * 获取异步依赖注入容器实例
+     * 获取异步依赖注入容器实例。
+     *
+     * `getAsync` is the single IOC construction entrypoint. Classes marked with `@Singleton()` are cached;
+     * ordinary providers are constructed fresh on each call so stateful request objects do not leak between turns.
      *
      * @param Module 依赖注入类类型
      * @param props 传给构造函数和 `@Init` 初始化钩子的兼容参数
@@ -55,7 +60,8 @@ export class Container {
      */
     public async getAsync<T extends ClassType, P extends unknown[]>(Module: T, ...props: P): Promise<InstanceType<T>> {
         if (!this.classList.includes(Module)) this.classList.push(Module);
-        if (this.singletons.has(Module)) return this.singletons.get(Module) as InstanceType<T>;
+        const isSingleton = getMetadata(PROVIDER_SINGLETON_KEY, Module) === true;
+        if (isSingleton && this.singletons.has(Module)) return this.singletons.get(Module) as InstanceType<T>;
         const config = getMetadata(MODULE_METADATA_KEY, Module);
         if ((config?.imports || []).length !== 0) {
             for (const importModule of config.imports) {
@@ -64,7 +70,7 @@ export class Container {
         }
         const constructorProps = this.getConstructorProps(Module, this.getModuleImportInstances(Module), props);
         const clz = new Module(...constructorProps);
-        this.singletons.set(Module, clz);
+        if (isSingleton) this.singletons.set(Module, clz);
         try {
             /**
              * 提前注入 register 实例
@@ -93,7 +99,64 @@ export class Container {
             if (actionPropertyKey) await clz[actionPropertyKey]?.apply(clz, props);
             return clz;
         } catch (error) {
-            this.singletons.delete(Module);
+            if (isSingleton) this.singletons.delete(Module);
+            throw error;
+        }
+    }
+
+    /**
+     * Gets one IOC-managed instance through the synchronous path.
+     *
+     * Cached singletons are returned directly, including singletons that were initialized earlier through
+     * `getAsync()`. Fresh synchronous construction is allowed only when the provider graph does not require
+     * `@Init` or any async injection factory.
+     *
+     * @param Module 依赖注入类类型
+     * @param props 传给构造函数的显式参数
+     * @returns 同步可构造的依赖注入类实例
+     */
+    public get<T extends ClassType, P extends unknown[]>(Module: T, ...props: P): InstanceType<T> {
+        if (!this.classList.includes(Module)) this.classList.push(Module);
+        const isSingleton = getMetadata(PROVIDER_SINGLETON_KEY, Module) === true;
+        if (isSingleton && this.singletons.has(Module)) return this.singletons.get(Module) as InstanceType<T>;
+        if (this.hasInit(Module)) {
+            throw Object.assign(Error(SYNC_INIT_UNSUPPORTED), { detail: { module: Module.name } });
+        }
+        const config = getMetadata(MODULE_METADATA_KEY, Module);
+        if ((config?.imports || []).length !== 0) {
+            for (const importModule of config.imports) {
+                this.get(importModule);
+            }
+        }
+        const constructorProps = this.getConstructorProps(Module, this.getModuleImportInstances(Module), props);
+        const clz = new Module(...constructorProps);
+        if (isSingleton) this.singletons.set(Module, clz);
+        try {
+            const injectInstances: InjectInstanceMetadata[] = getMetadata(INJECT_METADATA_INSTANCE_KEY, Module) || getMetadata(INJECT_METADATA_INSTANCE_KEY, Module.prototype) || [];
+            for (const inject of injectInstances) {
+                const instance = inject.instance?.();
+                if (this.isPromiseLike(instance)) {
+                    throw Object.assign(Error(SYNC_ASYNC_DEPENDENCY_UNSUPPORTED), {
+                        detail: { module: Module.name, propertyKey: String(inject.propertyKey) },
+                    });
+                }
+                clz[inject.propertyKey] = instance;
+            }
+            const injects: InjectMetadata[] = this.getInjectMetadata(Module);
+            for (const inject of injects) {
+                const resolvedProps = inject.factoryArgs ? inject.factoryArgs.call(clz) : undefined;
+                if (this.isPromiseLike(resolvedProps)) {
+                    throw Object.assign(Error(SYNC_ASYNC_DEPENDENCY_UNSUPPORTED), {
+                        detail: { module: Module.name, propertyKey: String(inject.propertyKey) },
+                    });
+                }
+                const props = resolvedProps === undefined ? [] : Array.isArray(resolvedProps) ? resolvedProps : [resolvedProps];
+                const instance = this.get(inject.classType, ...props);
+                clz[inject.propertyKey] = instance;
+            }
+            return clz;
+        } catch (error) {
+            if (isSingleton) this.singletons.delete(Module);
             throw error;
         }
     }
@@ -213,6 +276,14 @@ export class Container {
             unique.push(inject);
         }
         return unique;
+    }
+
+    private hasInit(Module: ClassType): boolean {
+        return getMetadata(INIT_METADATA_KEY, Module.prototype) !== undefined || getMetadata(INIT_METADATA_KEY, Module) !== undefined;
+    }
+
+    private isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+        return typeof value === 'object' && value !== null && typeof (value as PromiseLike<unknown>).then === 'function';
     }
 
     /**

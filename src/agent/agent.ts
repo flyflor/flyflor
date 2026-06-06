@@ -1,8 +1,7 @@
 import { Inject, Provide, Logger, FAgent } from '@/core';
-import { AgentChatRole, Brain, type AgentChatMessage } from './brain';
+import { Brain } from './brain';
 import { ConfigComponent, type FAgentProfileConfiguration } from '@/config';
 import type { FLogger } from '@/core/logger';
-import type { SocketPacket } from '@/neural/packet';
 
 
 
@@ -24,10 +23,10 @@ export class Agent extends FAgent<string> {
     }
 
     public override async next(data: string): Promise<void> {
-        const content = await this.brain.transformer(data);
-        this.log.debug(data, content);
-        // Agent output is streamed through the Subject, not returned to the caller.
-        super.next(content);
+        for await (const content of this.brain.transformer(data)) {
+            this.log.debug(data, content);
+            super.next(content);
+        }
     }
 
     // public pushUser(content: string): AgentChatMessage[] {

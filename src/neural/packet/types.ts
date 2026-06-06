@@ -9,6 +9,7 @@ export enum SocketEvent {
     User = 'user',
     Agent = 'agent',
     Data = 'data',
+    StreamEnd = 'streamEnd',
     Drain = 'drain',
     Handshake = 'handshake',
     End = 'end',

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { Agent } from '@/agent';
 import { Brain } from '@/agent/brain';
-import { Inject, useContainer } from '@/core';
+import { Init, Inject, Service, Singleton, useContainer } from '@/core';
 import { configureLogger, LoggerLevel } from '@/core/logger';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -27,6 +27,95 @@ afterEach(() => {
 });
 
 describe('Container property injection', () => {
+    test('creates fresh non-singleton provider instances through getAsync', async () => {
+        @Service()
+        class TransientDependency {}
+
+        const first = await useContainer().getAsync(TransientDependency);
+        const second = await useContainer().getAsync(TransientDependency);
+
+        expect(first).toBeInstanceOf(TransientDependency);
+        expect(second).toBeInstanceOf(TransientDependency);
+        expect(first).not.toBe(second);
+    });
+
+    test('reuses singleton provider instances through getAsync', async () => {
+        @Singleton()
+        class SharedDependency {}
+
+        const first = await useContainer().getAsync(SharedDependency);
+        const second = await useContainer().getAsync(SharedDependency);
+
+        expect(first).toBe(second);
+    });
+
+    test('creates synchronous instances through get when the dependency graph is sync-only', () => {
+        @Service()
+        class SyncDependency {}
+
+        const first = useContainer().get(SyncDependency);
+        const second = useContainer().get(SyncDependency);
+
+        expect(first).toBeInstanceOf(SyncDependency);
+        expect(second).toBeInstanceOf(SyncDependency);
+        expect(first).not.toBe(second);
+    });
+
+    test('reuses cached singletons through get', () => {
+        @Singleton()
+        class SharedDependency {}
+
+        const first = useContainer().get(SharedDependency);
+        const second = useContainer().get(SharedDependency);
+
+        expect(first).toBe(second);
+    });
+
+    test('reuses async-initialized singletons through get even when they define @Init', async () => {
+        @Singleton()
+        class InitializedSingleton {
+            public initialized = false;
+
+            @Init()
+            public async init() {
+                this.initialized = true;
+            }
+        }
+
+        const first = await useContainer().getAsync(InitializedSingleton);
+        const second = useContainer().get(InitializedSingleton);
+
+        expect(first.initialized).toBe(true);
+        expect(second).toBe(first);
+    });
+
+    test('throws when get would need to run @Init during sync construction', () => {
+        @Singleton()
+        class InitializedSingleton {
+            @Init()
+            public async init() {}
+        }
+
+        expect(() => useContainer().get(InitializedSingleton)).toThrow('does not support @Init');
+    });
+
+    test('throws when get hits an async @Inject callback', () => {
+        class AsyncDependency {
+            constructor(public readonly name: string) {}
+        }
+
+        class AsyncHost {
+            public readonly name = 'async-value';
+
+            @Inject(async function (this: AsyncHost) {
+                return this.name;
+            })
+            public dependency!: AsyncDependency;
+        }
+
+        expect(() => useContainer().get(AsyncHost)).toThrow('does not support async dependency factories');
+    });
+
     test('uses sync @Inject callback results as constructor arguments', async () => {
         class SyncDependency {
             constructor(public readonly value: string) {}
@@ -106,7 +195,9 @@ describe('Container property injection', () => {
         const agent = await useContainer().getAsync(Agent, agentConfig);
         const outputs: string[] = [];
         Object.assign(agent.brain, {
-            transformer: (content: string) => `stream:${content}`,
+            transformer: async function* (content: string) {
+                yield `stream:${content}`;
+            },
         });
 
         const subscription = agent.subscribe(content => outputs.push(content));
