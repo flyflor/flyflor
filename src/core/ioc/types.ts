@@ -8,6 +8,7 @@ export const INJECT_METADATA_INSTANCE_KEY = Symbol('INJECT_METADATA_INSTANCE_KEY
 export interface InjectMetadata {
     propertyKey: string | symbol;
     classType: ClassType;
+    factoryArgs?: (this: any) => unknown | unknown[] | Promise<unknown | unknown[]>;
 }
 export interface InjectInstanceMetadata {
     propertyKey: string | symbol;

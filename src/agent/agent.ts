@@ -7,7 +7,7 @@ import type { SocketPacket } from '@/neural/packet';
 
 
 @Provide()
-export class Agent extends FAgent<SocketPacket> {
+export class Agent extends FAgent<string> {
     @Inject(function (this: Agent) {
         return this.agentConfig;
     })
@@ -16,17 +16,18 @@ export class Agent extends FAgent<SocketPacket> {
     @Inject()
     public config!: ConfigComponent;
 
-    @Logger('agent')
+    @Logger(Agent.name)
     public readonly log!: FLogger;
 
     constructor(public readonly agentConfig: FAgentProfileConfiguration) {
         super();
     }
 
-    public override async next(data: SocketPacket) {
-        this.log.debug(data);
-        await this.brain.transformer('');
-        return await super.next(data);
+    public override async next(data: string): Promise<void> {
+        const content = await this.brain.transformer(data);
+        this.log.debug(data, content);
+        // Agent output is streamed through the Subject, not returned to the caller.
+        super.next(content);
     }
 
     // public pushUser(content: string): AgentChatMessage[] {

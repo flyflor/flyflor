@@ -4030,3 +4030,262 @@
   | {
   |   hasError: false
   | }
+[INFO ]  2026-06-06T15:56:46.222Z  IPC.Socket
+  | open
+[DEBUG]  2026-06-06T15:56:49.280Z  IPC.Socket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 1e 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 31 31 31 22 7d>
+[DEBUG]  2026-06-06T15:56:49.284Z  Neural
+  | {
+  |   action: 'user',
+  |   data: '111'
+  | }
+[DEBUG]  2026-06-06T15:56:49.285Z  agent
+  | {
+  |   action: 'agent',
+  |   data: {}
+  | }
+[DEBUG]  2026-06-06T15:56:49.287Z  IPC.Socket
+  | output
+  | {
+  |   action: 'agent',
+  |   data: {}
+  | }
+[INFO ]  2026-06-06T15:57:24.657Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T15:57:27.588Z  IPC.Socket
+  | open
+[DEBUG]  2026-06-06T15:57:31.246Z  IPC.Socket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 1e 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 31 31 31 22 7d>
+[DEBUG]  2026-06-06T15:57:31.251Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '111'
+  | }
+[DEBUG]  2026-06-06T15:57:31.252Z  agent
+  | {
+  |   action: 'agent',
+  |   data: {}
+  | }
+[DEBUG]  2026-06-06T15:57:31.254Z  IPC.Socket
+  | output
+  | {
+  |   action: 'agent',
+  |   data: {}
+  | }
+[WARN ]  2026-06-06T15:59:27.584Z  IPC.Socket
+  | timeout
+[INFO ]  2026-06-06T16:01:24.114Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:01:50.830Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:01:51.363Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:02:54.041Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:03:01.795Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:03:11.049Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:03:21.105Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:05:37.354Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:05:45.233Z  IPC.Socket
+  | open
+[DEBUG]  2026-06-06T16:05:49.404Z  IPC.Socket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 1e 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 31 31 31 22 7d>
+[DEBUG]  2026-06-06T16:05:49.408Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '111'
+  | }
+[DEBUG]  2026-06-06T16:05:49.408Z  agent
+  | 111
+[DEBUG]  2026-06-06T16:05:49.409Z  agent
+  | transformer
+  | 111
+[DEBUG]  2026-06-06T16:05:49.410Z  IPC.Socket
+  | output
+  | undefined
+[INFO ]  2026-06-06T16:07:03.277Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:07:04.200Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:07:14.373Z  IPC.Socket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:07:31.759Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:07:36.602Z  FSocket
+  | open
+[DEBUG]  2026-06-06T16:07:40.130Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 1e 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 31 31 31 22 7d>
+[DEBUG]  2026-06-06T16:07:40.133Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '111'
+  | }
+[DEBUG]  2026-06-06T16:07:40.134Z  Agent
+  | 111
+[DEBUG]  2026-06-06T16:07:40.134Z  Brain
+  | transformer
+  | 111
+[DEBUG]  2026-06-06T16:07:40.136Z  FSocket
+  | output
+  | undefined
+[INFO ]  2026-06-06T16:08:21.548Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:08:23.672Z  FSocket
+  | open
+[DEBUG]  2026-06-06T16:08:26.218Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 1e 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 31 31 31 22 7d>
+[DEBUG]  2026-06-06T16:08:26.223Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '111'
+  | }
+[DEBUG]  2026-06-06T16:08:26.223Z  Brain
+  | transformer
+  | 111
+[DEBUG]  2026-06-06T16:08:26.225Z  Agent
+  | 111
+  | hello
+[DEBUG]  2026-06-06T16:08:26.226Z  FSocket
+  | output
+  | undefined
+[INFO ]  2026-06-06T16:08:56.209Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:08:59.579Z  FSocket
+  | open
+[DEBUG]  2026-06-06T16:09:02.081Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 1e 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 31 31 31 22 7d>
+[DEBUG]  2026-06-06T16:09:02.085Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '111'
+  | }
+[DEBUG]  2026-06-06T16:09:02.085Z  Brain
+  | transformer
+  | 111
+[DEBUG]  2026-06-06T16:09:02.086Z  Agent
+  | 111
+  | hello
+[DEBUG]  2026-06-06T16:09:02.087Z  FSocket
+  | output
+  | undefined
+[WARN ]  2026-06-06T16:10:59.574Z  FSocket
+  | timeout
+[INFO ]  2026-06-06T16:15:35.970Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:15:48.682Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:15:56.111Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:16:38.288Z  FSocket
+  | open
+[DEBUG]  2026-06-06T16:16:43.231Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 1f 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 31 31 31 31 22 7d>
+[DEBUG]  2026-06-06T16:16:43.234Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '1111'
+  | }
+[DEBUG]  2026-06-06T16:16:43.235Z  Brain
+  | transformer
+  | 1111
+[DEBUG]  2026-06-06T16:16:43.237Z  Agent
+  | 1111
+  | hello
+[DEBUG]  2026-06-06T16:16:43.237Z  FSocket
+  | output
+  | hello
+[DEBUG]  2026-06-06T16:18:06.481Z  Agent
+  | hello
+  | stream:hello
+[WARN ]  2026-06-06T16:18:38.286Z  FSocket
+  | timeout
+[INFO ]  2026-06-06T16:19:35.611Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:20:25.743Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:20:55.509Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:21:02.771Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-06T16:53:10.763Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }

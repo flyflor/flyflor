@@ -2,13 +2,16 @@ import { Inject, Logger, Singleton, type FLogger } from '@/core';
 import { Synapse } from '@/neural/synapse';
 import { PacketService, SocketEvent, type SocketPacket } from '@/neural/packet';
 import type { BinaryType, Socket, SocketHandler } from 'bun';
-import { catchError, EMPTY, from, map, mergeMap, tap } from 'rxjs';
+import { catchError, concatMap, defaultIfEmpty, EMPTY, from, ignoreElements, lastValueFrom, map, tap, type Subscription } from 'rxjs';
 
-const SOCKET_LOG_SCOPE = 'IPC.Socket';
 const SOCKET_BINARY_TYPE: BinaryType = 'buffer';
 const FUNCTION_TYPE = 'function';
 
 export { SocketEvent, type SocketPacket } from '@/neural/packet';
+
+export interface SocketConnectionData {
+    subscription?: Subscription;
+}
 
 /**
  * Bun socket handler used by IPCService.
@@ -18,8 +21,8 @@ export { SocketEvent, type SocketPacket } from '@/neural/packet';
  * can be traced without changing the wire protocol.
  */
 @Singleton()
-export class FSocket<Data = SocketPacket> implements SocketHandler<Data, 'buffer'> {
-    @Logger(SOCKET_LOG_SCOPE)
+export class FSocket implements SocketHandler<SocketConnectionData, 'buffer'> {
+    @Logger(FSocket.name)
     public readonly log!: FLogger;
 
     @Inject()
@@ -35,70 +38,64 @@ export class FSocket<Data = SocketPacket> implements SocketHandler<Data, 'buffer
         this.log.info(SocketEvent.Constructor, { binaryType: this.binaryType });
     }
 
-    public get socket(): SocketHandler<Data, 'buffer'> {
+    public get socket(): SocketHandler<SocketConnectionData, 'buffer'> {
         return Proxy.revocable(this, {
             get: (target, key) => {
                 const value = Reflect.get(target, key, target);
                 if (typeof value !== FUNCTION_TYPE) return value;
                 return (value as (...props: unknown[]) => unknown).bind(target);
             },
-        }).proxy as SocketHandler<Data, 'buffer'>;
+        }).proxy as SocketHandler<SocketConnectionData, 'buffer'>;
     }
 
-    public async open(socket: Socket<Data>) {
+    public async open(socket: Socket<SocketConnectionData>) {
         this.log.info(SocketEvent.Open);
-        // this.neural.reflex.next({ action: SocketEvent.Open, data: true });
+        // Socket open owns the stream subscription; data() only triggers agent work.
+        socket.data = socket.data ?? {};
+        socket.data.subscription?.unsubscribe();
+        socket.data.subscription = this.synapse.agent.subscribe(content => {
+            this.log.debug('output', content);
+            socket.write(this.packet.encode({ action: SocketEvent.Data, data: content }));
+        });
         socket.write(this.packet.encode({ action: SocketEvent.Open, data: true }));
     }
 
-    public async close(socket: Socket<Data>, error?: Error) {
+    public async close(socket: Socket<SocketConnectionData>, error?: Error) {
+        // Release the per-connection subscription so reconnects do not keep stale writers alive.
+        socket.data?.subscription?.unsubscribe();
+        if (socket.data !== undefined) socket.data.subscription = undefined;
         const partialFrame = this.packet.close(socket);
         this.log.info(SocketEvent.Close, { hasError: error !== undefined });
         if (partialFrame !== undefined) this.log.warn(SocketEvent.Close, { partialFrame });
         if (error) this.log.error(SocketEvent.Close, error);
     }
 
-    public async error(socket: Socket<Data>, error: Error) {
+    public async error(socket: Socket<SocketConnectionData>, error: Error) {
         this.log.error(SocketEvent.Error, error);
     }
 
-    public async data(socket: Socket<Data>, data: Uint8Array) {
+    public async data(socket: Socket<SocketConnectionData>, data: Uint8Array) {
         this.log.debug('input', data);
-        this.synapse.pipe(
-            map(() => this.packet.decode<SocketPacket>(socket, data)),
-            tap(({ errors = [] }) => errors.map(({ error }) => {
-                return socket.write(this.packet.encode({ action: SocketEvent.Error, data: error.message }));
-            })),
-            mergeMap(({ packets }) => from(packets)),
-            catchError(error => {
-                this.log.error(SocketEvent.Data, error);
-                socket.write(this.packet.encode({ action: SocketEvent.Error, data: error.message }));
-                return EMPTY;
-            })
-        ).subscribe(response => {
-            this.log.debug('output', response);
-            socket.write(this.packet.encode(response));
-        });
-    }
-
-    public async drain(socket: Socket<Data>) {
-        this.log.debug(SocketEvent.Drain);
-    }
-
-    public async handshake(socket: Socket<Data>, success: boolean, authorizationError: Error | null) {
-        this.log.info(SocketEvent.Handshake, { success, hasAuthorizationError: authorizationError !== null });
-        if (authorizationError) this.log.error(SocketEvent.Handshake, authorizationError);
-    }
-
-    public async end(socket: Socket<Data>) {
-        this.log.info(SocketEvent.End);
-    }
-
-    public async connectError(socket: Socket<Data>, error: Error) {
-        this.log.error(SocketEvent.ConnectError, error);
-    }
-
-    public async timeout(socket: Socket<Data>) {
-        this.log.warn(SocketEvent.Timeout);
+        // Command path only: decoded packets trigger Synapse, streamed output arrives through the open() subscription.
+        await lastValueFrom(
+            from([data]).pipe(
+                map((chunk) => this.packet.decode<SocketPacket>(socket, chunk)),
+                tap(({ errors = [] }) => {
+                    for (const { error } of errors) {
+                        socket.write(this.packet.encode({ action: SocketEvent.Error, data: error.message }));
+                    }
+                }),
+                concatMap(({ packets }) => from(packets)),
+                concatMap((packet) => from(this.synapse.next(packet))),
+                ignoreElements(),
+                catchError(error => {
+                    const cause = error instanceof Error ? error : Error(String(error));
+                    this.log.error(SocketEvent.Data, cause);
+                    socket.write(this.packet.encode({ action: SocketEvent.Error, data: cause.message }));
+                    return EMPTY;
+                }),
+                defaultIfEmpty(undefined),
+            )
+        );
     }
 }

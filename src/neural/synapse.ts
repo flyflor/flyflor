@@ -1,7 +1,7 @@
 import { Agent } from '@/agent';
 import { Config, Init, Logger, Singleton, useContainer, type FLogger } from '@/core';
 import { ConfigComponent } from '@/config';
-import { Subject, Subscriber } from 'rxjs';
+import { Subject } from 'rxjs';
 import { SocketEvent, type SocketPacket } from './packet';
 
 export interface AgentPool {
@@ -14,10 +14,8 @@ export class Synapse<T extends SocketPacket = SocketPacket> extends Subject<T> {
     @Config()
     public readonly config!: ConfigComponent;
 
-    @Logger('Neural')
+    @Logger(Synapse.name)
     public readonly log!: FLogger;
-
-    public subscriber!: Subscriber<T>;
 
     public agentPool: AgentPool;
 
@@ -27,11 +25,6 @@ export class Synapse<T extends SocketPacket = SocketPacket> extends Subject<T> {
 
     constructor() {
         super();
-        this.subscribe({
-            next: this.next.bind(this),
-            error: this.error.bind(this),
-            complete: this.complete.bind(this),
-        });
         this.agentPool = { active: '', agents: {} };
     }
 
@@ -57,16 +50,16 @@ export class Synapse<T extends SocketPacket = SocketPacket> extends Subject<T> {
         this.agentPool.agents[active] = await useContainer().getAsync(Agent, agentConfig);
     }
 
-    public override async next(packet: SocketPacket) {
+    public override async next(packet: SocketPacket): Promise<void> {
         this.log.debug(packet);
+        // Broadcast inbound packets for observers, then route user input into the active agent.
+        super.next(packet as T);
         if (packet.action !== SocketEvent.User) {
             throw Object.assign(Error('Unsupported IPC action'), { detail: { action: packet.action } });
         }
         if (typeof packet.data !== 'string' || packet.data.trim().length === 0) {
             throw Object.assign(Error('User message must be a non-empty string'), { detail: { data: packet.data } });
         }
-        // const response = await this.agent.chat(packet.data.trim());
-        const response: any = {};
-        return await this.agent.next({ action: SocketEvent.Agent, data: response });
+        await this.agent.next(packet.data.trim());
     }
 }

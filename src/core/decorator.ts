@@ -72,30 +72,41 @@ export function Inject(classType: ClassType): PropertyDecorator;
 export function Inject(target: object, propertyKey: string | symbol): void;
 export function Inject(): PropertyDecorator | void {
     const props = arguments;
-    if (!props[0]) {
-        // 无参数时，返回属性装饰器
+    if (props.length >= 2 && ['symbol', 'string'].includes(typeof props[1])) {
+        const [target, propertyKey] = props as unknown as [object, string | symbol];
+        registerInject(target, propertyKey, getMetadata('design:type', target, propertyKey));
+    } else if (!props[0]) {
         return (target: object, propertyKey: string | symbol) => {
-            const classType = getMetadata('design:type', target, propertyKey);
-            const data: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, target.constructor) || [];
-            data.push({ propertyKey, classType });
-            defineMetadata(INJECT_METADATA_KEY, data, target.constructor);
+            registerInject(target, propertyKey, getMetadata('design:type', target, propertyKey));
         };
-    } else if (['symbol', 'string'].includes(typeof props[1])) {
-        // 有参数时，根据参数类型判断是否为类类型
-        const [target, propertyKey] = props;
-        const classType = getMetadata('design:type', target, propertyKey);
-        const data: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, target.constructor) || [];
-        data.push({ propertyKey, classType });
-        defineMetadata(INJECT_METADATA_KEY, data, target.constructor);
     } else {
-        // 有参数时，根据参数类型判断是否为类类型
         return (target: object, propertyKey: string | symbol) => {
-            const classType = props[0];
-            const data: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, target.constructor) || [];
-            data.push({ propertyKey, classType });
-            defineMetadata(INJECT_METADATA_KEY, data, target.constructor);
+            const reflectedClassType = getMetadata('design:type', target, propertyKey);
+            const value = props[0];
+            const explicitClassType = isClassType(value);
+            registerInject(
+                target,
+                propertyKey,
+                explicitClassType ? value : reflectedClassType,
+                explicitClassType ? undefined : value as InjectMetadata['factoryArgs'],
+            );
         };
     }
+}
+
+function registerInject(
+    target: object,
+    propertyKey: string | symbol,
+    classType: ClassType,
+    factoryArgs?: InjectMetadata['factoryArgs'],
+): void {
+    const data: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, target.constructor) || [];
+    data.push({ propertyKey, classType, factoryArgs });
+    defineMetadata(INJECT_METADATA_KEY, data, target.constructor);
+}
+
+function isClassType(value: unknown): value is ClassType {
+    return typeof value === 'function' && Function.prototype.toString.call(value).startsWith('class ');
 }
 
 export function Init(): MethodDecorator {

@@ -80,7 +80,9 @@ export class Container {
              */
             const injects: InjectMetadata[] = this.getInjectMetadata(Module);
             for (const inject of injects) {
-                const instance = await this.getAsync(inject.classType);
+                const resolvedProps = inject.factoryArgs ? await inject.factoryArgs.call(clz) : undefined;
+                const props = resolvedProps === undefined ? [] : Array.isArray(resolvedProps) ? resolvedProps : [resolvedProps];
+                const instance = await this.getAsync(inject.classType, ...props);
                 clz[inject.propertyKey] = instance;
             }
             /**
