@@ -30,11 +30,12 @@
         "noUnusedLocals": false,
         "noUnusedParameters": false,
         "noPropertyAccessFromIndexSignature": false,
-        "baseUrl": ".",
         "paths": {
-            "@/*": ["src/*"],
+            "@/*": ["./src/*"],
+            "@plugins/*": ["./plugins/*"],
+            "@pakcages/*": ["./pakcages/*"]
         },
     },
-    "include": ["src/**/*.ts", "scripts/**/*.ts", "src/agent/.types.ts"],
+    "include": ["pakcages/**/*.ts", "plugins/**/*.ts", "src/**/*.ts", "scripts/**/*.ts"],
     "exclude": ["node_modules", "dist", "plugins", ".agents"],
 }

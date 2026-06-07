@@ -6075,3 +6075,8 @@
 [DEBUG]  2026-06-06T19:56:23.577Z  FSocket
   | output
   | 。
+[INFO ]  2026-06-07T05:01:46.087Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }

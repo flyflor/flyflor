@@ -7,4 +7,4 @@ import { FModule, Module } from '@/core';
 @Module({
     imports: [],
 })
-export class PluginModule extends FModule {}
+export class PluginsModule extends FModule {}
