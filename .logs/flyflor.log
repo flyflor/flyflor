@@ -6080,3 +6080,123 @@
   | {
   |   binaryType: 'buffer'
   | }
+[INFO ]  2026-06-07T18:08:00.574Z  FSocket
+  | open
+[DEBUG]  2026-06-07T18:08:04.104Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 21 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bd a0 e5 a5 bd 22 7d>
+[DEBUG]  2026-06-07T18:08:04.109Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '你好'
+  | }
+[DEBUG]  2026-06-07T18:08:04.111Z  Brain
+  | transformer
+  | 你好
+[DEBUG]  2026-06-07T18:08:14.161Z  Agent
+  | 你好
+  | 你好
+[DEBUG]  2026-06-07T18:08:14.161Z  FSocket
+  | output
+  | 你好
+[DEBUG]  2026-06-07T18:08:14.162Z  Agent
+  | 你好
+  | 。
+[DEBUG]  2026-06-07T18:08:14.162Z  FSocket
+  | output
+  | 。
+[DEBUG]  2026-06-07T18:08:14.194Z  Agent
+  | 你好
+  | 我是
+[DEBUG]  2026-06-07T18:08:14.195Z  FSocket
+  | output
+  | 我是
+[DEBUG]  2026-06-07T18:08:14.222Z  Agent
+  | 你好
+  | 你的
+[DEBUG]  2026-06-07T18:08:14.222Z  FSocket
+  | output
+  | 你的
+[DEBUG]  2026-06-07T18:08:14.223Z  Agent
+  | 你好
+  |  Agent
+[DEBUG]  2026-06-07T18:08:14.223Z  FSocket
+  | output
+  |  Agent
+[DEBUG]  2026-06-07T18:08:14.255Z  Agent
+  | 你好
+  |  OS
+[DEBUG]  2026-06-07T18:08:14.255Z  FSocket
+  | output
+  |  OS
+[DEBUG]  2026-06-07T18:08:14.256Z  Agent
+  | 你好
+  |  
+[DEBUG]  2026-06-07T18:08:14.256Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-07T18:08:14.303Z  Agent
+  | 你好
+  | 协
+[DEBUG]  2026-06-07T18:08:14.304Z  FSocket
+  | output
+  | 协
+[DEBUG]  2026-06-07T18:08:14.304Z  Agent
+  | 你好
+  | 作者
+[DEBUG]  2026-06-07T18:08:14.304Z  FSocket
+  | output
+  | 作者
+[DEBUG]  2026-06-07T18:08:14.304Z  Agent
+  | 你好
+  | 。
+[DEBUG]  2026-06-07T18:08:14.305Z  FSocket
+  | output
+  | 。
+[DEBUG]  2026-06-07T18:08:14.305Z  Agent
+  | 你好
+  | 有什么
+[DEBUG]  2026-06-07T18:08:14.305Z  FSocket
+  | output
+  | 有什么
+[DEBUG]  2026-06-07T18:08:14.363Z  Agent
+  | 你好
+  | 需要
+[DEBUG]  2026-06-07T18:08:14.363Z  FSocket
+  | output
+  | 需要
+[DEBUG]  2026-06-07T18:08:14.364Z  Agent
+  | 你好
+  | 我
+[DEBUG]  2026-06-07T18:08:14.364Z  FSocket
+  | output
+  | 我
+[DEBUG]  2026-06-07T18:08:14.364Z  Agent
+  | 你好
+  | 帮忙
+[DEBUG]  2026-06-07T18:08:14.364Z  FSocket
+  | output
+  | 帮忙
+[DEBUG]  2026-06-07T18:08:14.364Z  Agent
+  | 你好
+  | 的
+[DEBUG]  2026-06-07T18:08:14.364Z  FSocket
+  | output
+  | 的
+[DEBUG]  2026-06-07T18:08:14.365Z  Agent
+  | 你好
+  | ？
+[DEBUG]  2026-06-07T18:08:14.365Z  FSocket
+  | output
+  | ？
+[DEBUG]  2026-06-07T18:08:36.005Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 6b 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e9 98 85 e8 af bb e4 b8 80 e4 b8 8b e8 bf 99 e4 b8 ... 65 more bytes>
+[DEBUG]  2026-06-07T18:08:36.007Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli'
+  | }
+[DEBUG]  2026-06-07T18:08:36.009Z  Brain
+  | transformer
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli

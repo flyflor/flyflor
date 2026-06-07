@@ -4,6 +4,7 @@ import { Crystall } from './crystall';
 import { Memory } from '../memory';
 import { SoulSection } from '../types';
 import { ConfigComponent, type FAgentProfileConfiguration } from '@/config';
+import { Investigation, type BrainInvestigationResult } from './investigation';
 
 const PROMPT_SECTION_ORDER = [SoulSection.Soul, SoulSection.User, SoulSection.Agents, SoulSection.Memory] as const;
 
@@ -32,6 +33,11 @@ export class Brain extends FService {
     })
     public intelligence!: Intelligence;
 
+    @Inject(function (this: Brain) {
+        return this.config;
+    })
+    public investigation!: Investigation;
+
     @Prompt('agent', function wrapper(this: Brain) {
         return this.config.name;
     })
@@ -46,12 +52,15 @@ export class Brain extends FService {
 
     public async *transformer(content: string): AsyncGenerator<string> {
         this.log.debug('transformer', content);
-        const turn = this.intelligence.turn(this.buildMessages(content));
-        const state = { cancelled: false };
+        const state = { cancelled: false, turn: undefined as ReturnType<Intelligence['turn']> | undefined };
         const stream = new ReadableStream<string>({
             start: async (controller) => {
                 let assistant = '';
                 try {
+                    const investigation = await this.investigation.investigate({ content, context: this.context });
+                    if (state.cancelled) return;
+                    const turn = this.intelligence.turn(this.buildMessages(content, investigation));
+                    state.turn = turn;
                     while (true) {
                         const { done, value } = await turn.read();
                         if (done) break;
@@ -65,12 +74,13 @@ export class Brain extends FService {
                     if (state.cancelled) return;
                     controller.error(error);
                 } finally {
-                    turn.release();
+                    state.turn?.release();
+                    state.turn = undefined;
                 }
             },
             cancel: async (reason) => {
                 state.cancelled = true;
-                await turn.cancel(reason).catch(() => undefined);
+                await state.turn?.cancel(reason).catch(() => undefined);
             },
         });
         const reader = stream.getReader();
@@ -90,7 +100,7 @@ export class Brain extends FService {
         }
     }
 
-    private buildMessages(content: string): AgentChatMessage[] {
+    private buildMessages(content: string, investigation?: BrainInvestigationResult): AgentChatMessage[] {
         const sections = PROMPT_SECTION_ORDER.map((section) => {
             const value = this.prompt.data[section];
             return typeof value === 'string' && value.trim().length > 0 ? `<${section}>\n${value.trim()}\n</${section}>` : '';
@@ -99,7 +109,22 @@ export class Brain extends FService {
         return this.crystall.prepareTurn([
             {  role: AgentChatRole.System, content: sections.join('\n\n') },
             ...this.context,
-            { role: AgentChatRole.User, content },
+            { role: AgentChatRole.User, content: this.renderUserContent(content, investigation) },
         ]);
+    }
+
+    private renderUserContent(content: string, investigation?: BrainInvestigationResult): string {
+        if (investigation === undefined) return content;
+        return JSON.stringify({
+            user_message: content,
+            investigation: investigation.state,
+            tool_observations: investigation.observations.map((observation) => ({
+                source: observation.source,
+                pipes: observation.pipes,
+                ok: observation.ok,
+                code: observation.code,
+                summary: observation.summary,
+            })),
+        }, null, 4);
     }
 }

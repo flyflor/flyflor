@@ -3,6 +3,7 @@ import { FileService, useContainer } from '@/core';
 import { Brain } from './brain';
 import { AgentChatRole, type AgentChatMessage, type Intelligence, type IntelligenceTurn } from './intelligence';
 import { SoulSection } from '../types';
+import type { BrainInvestigationResult, Investigation } from './investigation';
 
 describe('Brain intelligence orchestration', () => {
     test('builds one turn, streams through flowing intelligence, and commits the result', async () => {
@@ -24,7 +25,7 @@ describe('Brain intelligence orchestration', () => {
             },
             {
                 role: AgentChatRole.User,
-                content: 'hi',
+                content: investigatedUserContent('hi'),
             },
         ]]);
         expect(brain.context).toEqual([
@@ -86,7 +87,14 @@ async function brainWithPrompt(prompt: Partial<Record<SoulSection, string>>): Pr
     const promptFile = useContainer().create(FileService, '') as FileService<Partial<Record<SoulSection, string>>>;
     promptFile.data = prompt;
     brain.prompt = promptFile;
+    setInvestigation(brain);
     return brain;
+}
+
+function setInvestigation(brain: Brain, result: BrainInvestigationResult = defaultInvestigation()): void {
+    brain.investigation = {
+        investigate: async () => result,
+    } as unknown as Investigation;
 }
 
 function setProviderStream(brain: Brain, stream: (messages: AgentChatMessage[]) => ReadableStream<string>): void {
@@ -125,4 +133,34 @@ function streamFromText(...chunks: string[]): ReadableStream<string> {
             controller.close();
         },
     });
+}
+
+function defaultInvestigation(): BrainInvestigationResult {
+    return {
+        state: {
+            explicit_requests: ['hi'],
+            implicit_goals: ['greeting'],
+            constraints: [],
+            unknowns: [],
+            hypotheses: [{
+                goal: 'greet the assistant',
+                supporting_evidence: ['short greeting'],
+                missing_evidence: [],
+                confidence: 0.9,
+            }],
+            evidence: ['user said hi'],
+            information_needed: [],
+            next_question: '',
+            confidence: 0.9,
+        },
+        observations: [],
+    };
+}
+
+function investigatedUserContent(content: string): string {
+    return JSON.stringify({
+        user_message: content,
+        investigation: defaultInvestigation().state,
+        tool_observations: [],
+    }, null, 4);
 }

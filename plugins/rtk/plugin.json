@@ -1,0 +1,8 @@
+{
+    "name": "rtk",
+    "source": "https://github.com/rtk-ai/rtk",
+    "version": "",
+    "platform": "",
+    "binary": "bin/<platform>/rtk",
+    "sha256": ""
+}

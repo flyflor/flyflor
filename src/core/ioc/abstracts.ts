@@ -1,4 +1,4 @@
-import { Observable, Subject } from 'rxjs';
+import { Subject } from 'rxjs';
 
 export abstract class FlyFlor {}
 
@@ -24,10 +24,17 @@ export abstract class FModule extends FComponent {}
  */
 export abstract class FRepo extends FService {}
 
+export type PluginSignal<TData = unknown> =
+    | { type: 'start'; plugin: string; data?: TData }
+    | { type: 'delta'; plugin: string; data: TData }
+    | { type: 'end'; plugin: string; data?: TData }
+    | { type: 'error'; plugin: string; error: Error };
+
 /**
  * Base class for external plugin boundaries (classes decorated with `@Plugin()`).
+ * Plugins are active observation objects: they can expose methods and emit turn-local signals.
  */
-export abstract class FPlugin extends FService {}
+export abstract class FPlugin<TSignal = PluginSignal> extends Subject<TSignal> {}
 
 /**
  * Base class for permission/policy subscribers (classes decorated with `@Guard()`).

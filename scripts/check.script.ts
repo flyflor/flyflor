@@ -76,6 +76,7 @@ const ROLE_DIRECTORIES = new Set([
     join('src', 'core', 'ioc'),
     join('src', 'core', 'logger'),
     join('src', 'core', 'prompt'),
+    join('src', 'agent', 'brain', 'investigation'),
     join('src', 'agent', 'brain', 'intelligence'),
     join('src', 'neural', 'ipc'),
     join('src', 'neural', 'packet'),
