@@ -1,681 +1,884 @@
 # TOOLS-PLAN
 
-Status: research and design only. Nothing in this document is implemented yet.
+Status: planned architecture only. The execution layer described here is not implemented yet.
 
-This plan was produced after reading the current Flyflor repository code (`src/`, `scripts/`, tests, prompts, docs) and the local reference trees for Codex, Claude Code, opencode, openhuman, openclaw, nanobot, CodeWhale, and hermes-agent.
+This document supersedes the previous tool-runtime plan. The old design over-split the execution layer into
+`ToolRegistry`, `ToolOrchestrator`, `PermissionService`, `ProcessSessionService`, `PatchService`, and a new
+`src/tool` domain. Flyflor should not grow a generic tool platform first. It should grow a brain reflection loop
+first.
 
-## Goals
+## Core Mental Model
 
-Flyflor needs a real tool execution layer that:
+Flyflor is being built as an intelligent life-like runtime, not as a bag of agent utilities.
 
-- fits the current object-first runtime;
-- keeps IOC as the only construction boundary;
-- preserves the 8-byte big-endian IPC frame protocol;
-- separates kernel plugin loading (`src/plugins`) from the root external tool layer (`./plugins`);
-- supports tool calls, approvals, sandboxing, multi-step execution, and subagents without turning the kernel into a loose function registry.
+The current directory model already implies the correct design:
+
+```txt
+IPC / Socket stimulus
+  -> Synapse
+  -> Agent
+  -> Brain
+  -> Reflection
+      -> model signal
+      -> tool impulse
+      -> confirm interrupt
+      -> child-agent investigation
+      -> tool result signal
+      -> continued thought
+  -> Agent outward signal
+  -> Socket / IPC
+```
+
+Object meanings:
+
+- `Brain` is the turn owner. It owns context assembly, reflection startup, successful context commit, and rollback on
+  failure or cancellation.
+- `Reflection` is one neural reflex arc inside the brain. It is the execution layer for a single turn.
+- `Synapse` routes external stimulus into the active agent.
+- `Socket` and `IPC` are the outer signal boundary. They transmit signals and do not own interaction semantics.
+- `PacketService` owns byte framing only: 8-byte big-endian length-prefixed JSON.
+- `FTool` objects are action endpoints that a reflection may trigger.
+- `task` is multi-agent cognition. It spawns multiple `src/agent` instances for parallel investigation and synthesis.
+
+Important naming rule:
+
+- `confirm` means permission confirmation for an action.
+- `ask` means future cognitive questioning when the agent needs missing information.
+- Permission must never be modeled as `ask`.
+
+## Current Repository Reality
+
+Existing strengths:
+
+- IOC construction is already centralized in `src/core/ioc/container.ts`.
+- Prompt files are already path-bound `FileService` objects.
+- Prompt protocol blocks are already parsed as `<flyflor:xxx>` JSONC blocks.
+- `Brain.transformer()` already preserves the invariant that context is committed only after successful completion.
+- `FSocket` already scopes streamed output to the requesting socket and appends `streamEnd`.
+- `src/plugins/tools` already exists as an intended kernel tool area, but its files are currently empty.
+- Root `./plugins` already exists with placeholder directories for external capabilities.
+
+Current gaps:
+
+- `IntelligenceTurn` is text-only.
+- `Brain` has no reflection loop.
+- `Agent` outward signals are text-only.
+- `SocketEvent` does not yet include tool, confirm, task, or cancel signals.
+- There is no `FTool` scope.
+- There is no external plugin bridge.
+- `task` is currently only prompt intent, not a runtime multi-agent operation.
+- `rtk` and `codegraph` are not installed or bridged through `./plugins`.
+
+## Execution Layer Target
+
+First target:
+
+- Add a `Reflection` object under `src/agent/brain/reflection.ts`.
+- Upgrade `Intelligence` to produce structured model events while keeping text compatibility.
+- Add `FTool` and `@Tool()` as minimal core scope additions.
+- Implement built-in read/write/exec tools as `FTool` objects under `src/plugins/tools`.
+- Add `confirm` interruptions for write/execute actions.
+- Implement `task` as foreground multi-agent read-only investigation.
+- Add a small external plugin bridge for `./plugins/rtk` and `./plugins/codegraph`.
 
 Non-goals for the first implementation:
 
-- do not ship every possible tool on day one;
-- do not bundle browser/computer/rtk/codegraph runtimes into the Bun binary;
-- do not import a foreign architecture wholesale from Codex/opencode/openhuman;
-- do not break the current streamed-text behavior while tool support is still rolling out.
-
-## Current Flyflor Audit
-
-### What already exists
-
-1. IOC and lifecycle are solid enough for a tool layer.
-   - `src/core/ioc/container.ts` already gives Flyflor singleton reuse, fresh `create()`, property injection, constructor import resolution, and `@Init()`.
-   - `src/core/ioc/abstracts.ts` already has object scopes for services, modules, files, plugins, guards, sandboxes, and agents.
-
-2. Prompt and file objects already expose a policy channel.
-   - `src/core/file/service.ts` parses `<flyflor:xxx>` JSONC blocks and stores them in `blocks`.
-   - `src/core/prompt/decorator.ts` already loads path-bound prompt file objects through IOC.
-
-3. The current runtime is text-stream oriented and narrow.
-   - `src/agent/brain/brain.ts` builds one `system` message, appends text history, and streams text deltas from `Intelligence`.
-   - `src/agent/brain/intelligence/*` is still a provider text streaming layer, not a tool event layer.
-
-4. IPC is small and stable.
-   - `src/neural/packet/service.ts` owns the 8-byte length-prefixed JSON protocol.
-   - `src/neural/ipc/socket.ts` routes one inbound packet to `Synapse`, streams text deltas back, and sends `streamEnd`.
-
-5. A plugin boundary already exists in name only.
-   - `src/plugins/plugin.module.ts` is an empty kernel module boundary today.
-
-6. Config already contains relevant seeds.
-   - `src/config/config.component.ts` already exposes `mcp`.
-   - it also exposes `skills`, but that should not become the executable plugin runtime by accident.
-
-### Current gaps
-
-1. There is no tool-call event model.
-   - `IntelligenceTurn` only returns `{ done, value?: string }`.
-   - providers do not surface tool calls, tool results, approval requests, or structured reasoning parts.
-
-2. There is no tool loop.
-   - `Brain.transformer()` reads one provider stream and commits text directly.
-   - there is no "model asks for tool -> tool runs -> result goes back into model" cycle.
-
-3. There is no permission object or approval state.
-   - `FGuard` and `FSandBox` exist as scopes, but no runtime service uses them for tool policy.
-
-4. There is no structured file edit path.
-   - Flyflor has `FileService`, but no patch grammar, diff object, or multi-edit validator.
-
-5. There is no process-session model for shell execution.
-   - nothing in the runtime currently owns long-lived child processes, stdin writes, polling, or cancellation.
-
-6. `src/plugins` and root `./plugins` are not yet distinct in code.
-   - the kernel has no loader for external tool packages.
-
-7. Tests currently lock in text streaming semantics that the tool layer must preserve.
-   - `brain.test.ts` checks "commit context only on successful completion".
-   - `socket.test.ts` checks scoped streaming per socket and `streamEnd` ordering.
-
-## Reference Extraction
-
-### Codex
-
-Useful patterns:
-
-- `ToolDefinition` is a normalized model-facing spec with input schema, optional output schema, and deferred loading.
-- `ToolExecutor` keeps executable runtime and model-visible spec tied together, and each tool can declare whether parallel tool calls are safe.
-- `mcp_tool.rs` normalizes MCP schemas before exposing them to models.
-- `tool_output.rs` separates model-facing output, log preview, and hook-facing post-tool payloads.
-- `tool_config.rs` treats shell backend choice, unified exec, and environment mode as explicit runtime policy, not incidental behavior.
-- thread/sdk surfaces make approval mode and sandbox mode explicit per thread and per turn.
-
-Implications for Flyflor:
-
-- keep a normalized internal tool definition even when the tool source is built-in, plugin, or MCP;
-- treat exposure, schema sanitization, deferred tools, and parallel support as first-class metadata;
-- make shell/process execution a dedicated runtime path, not a one-off helper.
-
-### Claude Code
-
-Useful patterns:
-
-- command frontmatter declares `allowed-tools`, model hints, and argument shapes;
-- hooks (`PreToolUse`, `PostToolUse`, `Stop`, `PreCompact`) provide lifecycle interception points;
-- `TodoWrite`, `Task`, `MultiEdit`, `Edit`, `Bash`, `Read`, `Grep`, and `Glob` are distinct tools rather than one giant shell escape hatch;
-- settings layer expresses allow/ask/deny policy separately from tool implementation.
-
-Implications for Flyflor:
-
-- prompt blocks should compile into runtime tool policy;
-- guardrails need deterministic pre/post tool hooks;
-- multi-edit should be a structured edit surface, not raw overwrite;
-- todo and task should be explicit runtime objects, not prompt prose.
-
-### opencode
-
-Useful patterns:
-
-- tool context carries session id, message id, call id, abort, messages, metadata updates, and `ask()`;
-- tool execution writes structured parts (`text`, `tool-call`, `tool-result`, `step-finish`) into session state;
-- `task` is just a standard tool;
-- permissions support `allow`, `deny`, `ask`;
-- child agents inherit parent constraints.
-
-Implications for Flyflor:
-
-- subagents should enter through the same tool orchestrator as every other tool;
-- tool context must be a stable runtime object;
-- permission ask/reply must suspend and resume a tool call instead of forcing tools to block on ad hoc prompts.
-
-### openhuman, openclaw, nanobot, CodeWhale, hermes-agent
-
-Useful patterns worth borrowing selectively:
-
-- openhuman:
-  - `ToolScope`, `ToolCategory`, `PermissionLevel`, args-aware permission escalation;
-  - provider schema cleaning;
-  - codegraph exposed as explicit tools (`codegraph_index`, `codegraph_search`);
-  - browser/computer tools treated as higher-risk surfaces.
-- openclaw:
-  - external plugin manifest compatibility checks and typed plugin SDK entrypoints.
-- nanobot:
-  - minimal tool interface, schema casting/validation, long-running exec sessions.
-- CodeWhale:
-  - tool capability metadata, approval requirement, timeout, and hook events;
-  - command-prefix exec policy.
-- hermes-agent:
-  - registry generation counters, TTL availability cache, path security helpers, browser provider registry.
-
-Implications for Flyflor:
-
-- external tool packages should be cold-discovered from manifests and normalized before registration;
-- codegraph should be visible as a tool, not hidden behind generic search;
-- path guards, command guards, and workspace boundary checks should be deterministic services.
-
-## Target Architecture
-
-### 1. Add a real tool runtime scope
-
-Recommended new primitive layer:
-
-```txt
-src/core/tool/
-  index.ts
-  decorator.ts
-  types.ts
-```
-
-Recommended addition to `src/core/ioc/abstracts.ts`:
-
-- `FTool extends FService`
-
-Recommended decorator:
-
-- `@Tool()`
-
-Reason:
-
-- tools are now a real runtime object kind, not just helper methods;
-- the repository rules already require new runtime scopes to be expressed through decorators plus inheritance.
-
-### 2. Add a dedicated tool domain
-
-Recommended new domain boundary:
-
-```txt
-src/tool/
-  index.ts
-  types.ts
-  service.ts
-  permission/
-    service.ts
-    types.ts
-  approval/
-    service.ts
-    types.ts
-  process/
-    service.ts
-    types.ts
-  patch/
-    service.ts
-    types.ts
-  mcp/
-    service.ts
-    types.ts
-  plugin/
-    service.ts
-    types.ts
-```
-
-Core objects:
-
-- `ToolService`
-  - discovery, filtering, model-visible tool list assembly
-- `ToolRegistry`
-  - name -> tool runtime mapping
-- `ToolOrchestrator`
-  - executes one tool call through permission, sandbox, runtime, output shaping, and event emission
-- `PermissionService`
-  - `allow | deny | ask`
-- `ApprovalService`
-  - pending approval tickets, replies, "always allow" session rules
-- `ProcessSessionService`
-  - long-lived shell/exec sessions
-- `PatchService`
-  - patch grammar parsing, diff validation, atomic apply
-- `PluginRuntimeService`
-  - load and supervise root `./plugins`
-- `McpToolService`
-  - normalize configured MCP tools into internal `FTool` objects
-
-### 3. Normalize every tool source into the same internal shape
-
-Recommended internal metadata:
-
-- `name`
-- `description`
-- `inputSchema`
-- `outputSchema?`
-- `source`: `builtin | plugin | mcp | generated`
-- `exposure`: `direct | deferred | directModelOnly | hidden`
-- `permissionLevel`: `none | read | write | execute | dangerous`
-- `parallelSafe`
-- `lockScope`: `tool | workspace | path | global`
-- `timeoutMs?`
-- `scope`: `agent | cli | ipc | all`
-- `category`: `system | workflow | browser | computer | retrieval`
-
-Recommended call context:
-
-- `sessionId`
-- `turnId`
-- `messageId`
-- `callId`
-- `agentName`
-- `workspaceRoot`
-- `cwd`
-- `abortSignal`
-- `metadata()`
-- `emit()`
-- `ask()`
-- `sandbox`
-
-Recommended result shape:
-
-- `status`: `completed | error`
-- `content`: text and/or structured payload
-- `artifacts?`
-- `truncated`
-- `outputPath?`
-- `metadata`
-
-## Model And Brain Changes
-
-### Current problem
-
-`Brain` and `Intelligence` are text-only today.
-
-### Proposed change
-
-Add a structured intelligence event stream:
-
-- `text_delta`
-- `tool_call`
-- `assistant_finish`
-- `error`
-
-Recommended first implementation strategy:
-
-1. keep `Agent.next()` streaming assistant text outward;
-2. change `Intelligence` internals to expose structured events;
-3. let `Brain` own the tool loop:
-   - send user + context to model;
-   - read events;
-   - stream text deltas outward immediately;
-    - on `tool_call`, dispatch through `ToolOrchestrator`;
-   - persist the tool-call item in turn state before starting execution so replay/history stay stable;
-   - append tool result to the turn state;
-   - continue the model turn until assistant finish;
-   - only commit turn context on successful finish.
-
-Recommended provider rollout:
-
-- Phase 1 tool-call support:
-  - `OpenAIResponses`
-  - `AnthropicMessages`
-- Keep other adapters text-only until they are upgraded with schema translators and tool-call event parsing.
-
-This is the most conservative path because it does not force all existing providers to change at once.
-
-## IPC And Event Protocol
-
-Keep the frame protocol exactly as it is:
-
-- still 8-byte big-endian length-prefixed JSON;
-- still one `SocketPacket` envelope.
-
-Extend the event vocabulary, not the transport.
-
-Recommended new outbound actions:
+- Do not create `src/tool`.
+- Do not add `ToolRegistry`, `ToolOrchestrator`, `PermissionService`, `ProcessSessionService`, or `PatchService`.
+- Do not implement generic MCP.
+- Do not implement browser-use or computer-use.
+- Do not allow child agents to write files.
+- Do not implement background subagents.
+- Do not implement `ask`.
+- Do not compile external plugin scripts or binaries into the Flyflor Bun binary.
+
+## Reflection Design
+
+`Reflection` is created per turn by `Brain`.
+
+Responsibilities:
+
+- Build model input from the system prompt, existing context, and current user content.
+- Expose model-visible tool schemas for the current turn.
+- Consume structured `Intelligence` events.
+- Stream text deltas outward immediately.
+- Execute tool calls.
+- Pause on `confirm` when an action needs permission.
+- Resume after inbound confirm resolution.
+- Append tool results to the ongoing model turn.
+- Spawn child agents through the `task` tool.
+- Cancel provider streams, tools, and child agents when the parent turn is cancelled.
+- Return the final assistant text to `Brain` so `Brain` can commit context.
+
+Internal event vocabulary:
 
 - `turnStart`
+- `modelTextDelta`
+- `modelToolCall`
 - `toolStart`
 - `toolDelta`
 - `toolEnd`
 - `toolError`
-- `approvalRequested`
-- `approvalResolved`
-- `todoUpdated`
-- `subagentStart`
-- `subagentEnd`
+- `confirmRequested`
+- `confirmResolved`
+- `taskStart`
+- `taskAgentStart`
+- `taskAgentEnd`
+- `taskEnd`
+- `turnEnd`
+- `turnError`
+- `turnCancelled`
+
+Implementation style:
+
+- Use RxJS for the turn event stream.
+- Keep all turn-local state inside `Reflection`.
+- Keep long-lived agent context ownership in `Brain`.
+- Keep socket transport ownership in `neural/ipc`.
+- Do not let tools mutate `Brain.context` directly.
+
+## Intelligence Events
+
+`Intelligence` should evolve from `ReadableStream<string>` to a structured event stream.
+
+Required event shape:
+
+```ts
+type IntelligenceEvent =
+    | { type: 'text_delta'; text: string }
+    | { type: 'tool_call'; id: string; name: string; input: unknown }
+    | { type: 'assistant_finish'; reason?: string }
+    | { type: 'error'; error: Error };
+```
+
+Compatibility requirements:
+
+- `Brain.transformer()` remains `AsyncGenerator<string>` for existing callers.
+- `Intelligence.complete()` remains available and joins `text_delta` events.
+- Text-only providers continue to pass existing tests.
+- Providers without tool-call support can remain text-only until upgraded.
+
+First provider targets:
+
+- `openaiResponses`
+- `anthropicMessages`
+
+Later provider targets:
+
+- `openaiChatCompletions`
+- `googleGeminiGenerateContent`
+- `ollama`
+- other adapters only when their tool-call wire shape is implemented.
+
+## Agent Signals And IPC
+
+`Agent` currently emits strings through `FAgent<string>`. Reflection needs structured outward signals while preserving old
+text streaming behavior.
+
+Target signal union:
+
+```ts
+type AgentSignal =
+    | string
+    | { type: 'text'; data: string }
+    | { type: 'tool'; action: SocketEvent; data: unknown }
+    | { type: 'confirm'; action: SocketEvent; data: unknown }
+    | { type: 'task'; action: SocketEvent; data: unknown };
+```
+
+Socket compatibility:
+
+- If the signal is a string, write `{ action: SocketEvent.Data, data: signal }`.
+- If the signal is `{ type: 'text' }`, write `{ action: SocketEvent.Data, data: signal.data }`.
+- If the signal is structured, write the included action and data.
+- `streamEnd` is still written by `FSocket` after `Synapse.next()` completes.
+
+New outbound socket events:
+
+- `toolStart`
+- `toolDelta`
+- `toolEnd`
+- `toolError`
+- `confirmRequested`
+- `confirmResolved`
+- `taskStart`
+- `taskAgentStart`
+- `taskAgentEnd`
+- `taskEnd`
 - `turnEnd`
 
-Recommended new inbound actions:
+New inbound socket events:
 
-- `approvalReply`
-- `toolCancel`
+- `confirm`
+- `cancel`
 
-Compatibility rule:
+Inbound `confirm` payload:
 
-- keep current `data` and `streamEnd` behavior for assistant text so existing clients do not break while richer events are added.
+```ts
+{
+    id: string;
+    confirmed: boolean;
+    remember?: 'turn' | 'session';
+}
+```
 
-## Permissions, Approvals, And Sandboxing
+Inbound `cancel` payload:
 
-### Runtime decision model
+```ts
+{
+    turnId?: string;
+    toolCallId?: string;
+    taskId?: string;
+    agentId?: string;
+}
+```
 
-Every tool call should resolve to:
+Socket and IPC do not interpret those payloads. They route them back to `Synapse`, then to the active `Agent` / `Brain`.
 
-- `allow`
-- `deny`
-- `ask`
+## Confirm Semantics
 
-Session or agent policy may still be configured in higher-level modes such as:
+First implementation only supports action confirmation.
 
-- `never`
-- `on_request`
-- `on_failure`
-- `unless_trusted`
+States:
 
-But the runtime execution decision per call should stay `allow | deny | ask`.
+- `none`: no confirmation required.
+- `required`: reflection must pause and emit `confirmRequested`.
+- `confirmed`: external side permitted the action.
+- `rejected`: external side denied the action.
 
-### Guard pipeline
+Default rules:
 
-Recommended deterministic checks before tool execution:
+- Read tools do not require confirm.
+- Write tools require confirm.
+- Execute tools require confirm.
+- Dangerous tools require confirm.
+- Child agents are read-only in v1, so they cannot request confirm for write/execute tools.
+- Confirm allowlists only affect permission confirmation.
+- Confirm allowlists are not `ask`.
 
-1. tool enabled?
-2. tool source trusted?
-3. workspace path valid?
-4. command/network rules valid?
-5. permission level within policy?
-6. approval required?
-7. sandbox/runtime available?
+Reserved future meaning of `ask`:
 
-Recommended hook points, implemented as `FGuard` / `FSandBox` subscribers:
+- missing requirement details;
+- missing user preference;
+- missing external fact;
+- ambiguous task intent;
+- not permission.
 
-- `PreToolUse`
-- `PostToolUse`
-- `Stop`
-- `PreCompact`
+## Built-In Tools
 
-### Session inheritance rules
+Built-in tools live under `src/plugins/tools` as `FTool` objects.
 
-Subagents and plugin-provided tools must inherit:
+Minimal tool shape:
 
-- parent deny rules;
-- workspace boundary restrictions;
-- approval mode;
-- network restrictions.
+```ts
+interface FToolDefinition {
+    name: string;
+    description: string;
+    inputSchema: unknown;
+    level: 'read' | 'write' | 'execute' | 'dangerous';
+    confirm: 'none' | 'required';
+}
+```
 
-Child tools must never widen a parent deny.
+Each tool object should expose an execute method that receives reflection context and validated input.
 
-## Shell And Process Sessions
-
-Do not model shell as one synchronous `spawn -> collect text -> return` helper.
-
-Recommended process-session object:
-
-- session id
-- pid
-- command
-- cwd
-- env policy
-- `tty`
-- `login`
-- `stdin` write support
-- polling/yield interval
-- truncation counters
-- timeout state
-- cancellation state
-
-Recommended minimal tool surface:
-
-- `exec_command`
-- `write_stdin`
-- `terminate_process`
-
-This should be backed by `ProcessSessionService` and routed through `FSandBox`.
-
-## File Editing And Patch
-
-### Recommendation
-
-Make patch/diff the default write surface.
-
-Preferred built-ins:
+First built-in tools:
 
 - `read_file`
+  - read UTF-8 text inside the workspace boundary;
+  - no confirm.
 - `glob`
+  - list files matching a pattern inside the workspace boundary;
+  - no confirm.
 - `grep`
+  - search file contents inside the workspace boundary;
+  - no confirm.
 - `apply_patch`
-- `shell`
-- `task`
+  - structured patch application;
+  - confirm required.
+- `exec_command`
+  - bounded process execution;
+  - confirm required by default;
+  - can return a session id for long-running commands.
+- `write_stdin`
+  - write to an existing process session;
+  - confirm required.
 - `todo`
-
-Avoid exposing raw overwrite as the primary model path.
-
-### Patch rules
-
-Recommended patch flow:
-
-1. parse patch grammar into a structured edit object;
-2. resolve every touched path against the workspace boundary;
-3. validate `oldText` or hunk context against the current file;
-4. compute a preview diff;
-5. request approval when required;
-6. apply atomically;
-7. emit tool lifecycle events with diff metadata.
-
-This should use `FileService` as the path-bound file owner, but the patch logic itself should live in a dedicated patch service.
-
-## Task And Subagent Design
-
-Implement subagent dispatch as a standard tool.
-
-Recommended first tool:
-
+  - turn-local progress state;
+  - no long-term memory writes in v1.
 - `task`
+  - multi-agent investigation;
+  - child agents are read-only in v1.
 
-Phase 1 behavior:
+Implementation constraint:
 
-- foreground only;
-- target profiles come from `ConfigComponent.agents`;
-- child result is returned as one tool result to the parent.
+- Tool discovery should be explicit in v1. `PluginsModule` imports the built-in tool classes. Avoid adding broad dynamic
+  discovery until the object model needs it.
 
-Phase 2 behavior:
+## Task Multi-Agent Design
 
-- optional background mode;
-- synthetic follow-up events/messages when the child completes;
-- later support ephemeral generated agent profiles.
+`task` is the most important tool for Flyflor's coding ability. It is not a generic background task helper.
 
-This aligns with the existing prompt intent in `prompts/agent/AGENTS.md` without requiring a special out-of-band text protocol.
+Purpose:
 
-## Kernel Plugin Layer vs Root External Tool Layer
+- Spawn multiple `Agent` instances for parallel investigation.
+- Improve summarization, code archaeology, impact analysis, and patch planning.
+- Let the master agent keep final write ownership.
 
-### `src/plugins`
+V1 behavior:
 
-Keep `src/plugins` as the kernel-owned loader and supervision boundary.
+- Foreground only.
+- Read-only children only.
+- No recursive `task`.
+- No child memory writes.
+- No child user interaction.
+- No child confirm.
+- No direct file edits from children.
+- Parent turn cancellation cancels running child agents.
 
-Its job should be:
+Task input:
 
-- discover plugin manifests;
-- validate compatibility;
-- start supervised runtimes;
-- normalize plugin tools into internal `FTool` objects;
-- bridge plugin events, approvals, and shutdown.
+```ts
+{
+    description: string;
+    prompt: string;
+    agents: Array<{
+        label?: string;
+        profile?: string;
+        focus: string;
+        expectedOutput?: string;
+    }>;
+    timeoutMs?: number;
+    context?: string;
+}
+```
 
-### `./plugins`
+Scheduling:
 
-This is the required root external tool layer. It must stay outside the Bun binary.
+- Default child concurrency: 3.
+- Hard v1 child concurrency: 5.
+- Default timeout per child: 120000 ms.
+- Max timeout per child: 600000 ms.
+- A single failed child produces `partial`.
+- All children failed produces `failed`.
+- Results are returned in the order requested, not in completion order.
 
-Recommended default contents:
+Child agent setup:
 
-- `./plugins/browser-use`
-- `./plugins/computer-use`
-- `./plugins/rtk`
-- `./plugins/codegraph`
+- Construct each child through IOC.
+- Give each child an isolated `Brain.context`.
+- Inherit the parent agent's constitution prompt.
+- Append task-specific instructions that enforce read-only investigation.
+- Provide only read tools plus CodeGraph read tools.
+- Do not expose `apply_patch`, write tools, arbitrary execute tools, `todo`, or `task`.
 
-Recommended manifest direction:
+Required child output contract:
+
+```txt
+SUMMARY:
+EVIDENCE:
+PATCH_SUGGESTION:
+RISKS:
+BLOCKERS:
+```
+
+Parent task result:
+
+```ts
+{
+    taskId: string;
+    status: 'completed' | 'partial' | 'failed' | 'cancelled';
+    children: Array<{
+        agentId: string;
+        label: string;
+        status: string;
+        summary: string;
+        evidence: string[];
+        patchSuggestion?: string;
+        risks: string[];
+        blockers: string[];
+    }>;
+    synthesis: string;
+}
+```
+
+The parent `Reflection` receives the task result as a tool result. The parent model decides how to synthesize, what to
+verify, and whether to perform a write action after confirm.
+
+## External Plugin Layer
+
+Root `./plugins` is the external organ layer. It is separate from `src/plugins`.
+
+Goals:
+
+- Support binary or multi-language external capabilities without compiling them into Flyflor.
+- Keep third-party installation and runtime scripts outside `src`.
+- Prepare for future tools such as Scrapling, browser-use, and computer-use.
+- Make plugin communication deterministic through stdio JSONL.
+
+Directory contract:
+
+```txt
+plugins/
+  rtk/
+    plugin.json
+    install.ts
+    bridge.ts
+    bin/
+    cache/
+  codegraph/
+    plugin.json
+    install.ts
+    bridge.ts
+    bin/
+    cache/
+```
+
+Rules:
+
+- `bridge.ts` is run with Bun from the plugin directory.
+- `bridge.ts` is not imported by `src`.
+- `bridge.ts` is not compiled into the Flyflor binary.
+- `bin/` holds local downloaded executables and should not be committed.
+- `cache/` holds local plugin state and should not be committed.
+- Bridge stdout is JSONL protocol only.
+- Bridge logs go to stderr.
+- Missing binaries return typed errors.
+- Install scripts are only run by explicit user action, never by autonomous model tool call.
+
+Minimal manifest:
 
 ```json
 {
   "name": "codegraph",
-  "version": "0.1.0",
+  "version": 1,
   "runtime": {
-    "kind": "stdio",
-    "entry": "./bin/codegraph"
+    "kind": "bun-stdio",
+    "entry": "./bridge.ts"
+  },
+  "install": {
+    "entry": "./install.ts"
   },
   "tools": [
-    { "name": "codegraph_index" },
-    { "name": "codegraph_search" }
-  ],
-  "permissions": {
-    "default": "read"
-  },
-  "capabilities": ["retrieval", "workspace-local-index"]
+    {
+      "name": "codegraph_search",
+      "level": "read",
+      "confirm": "none"
+    }
+  ]
 }
 ```
 
-Recommended policy:
+Kernel side:
 
-- browser/computer/rtk/codegraph stay external packages;
-- Flyflor core ships only the contract, loader, and runtime bridge.
+- Add a small `PluginsService extends FPlugin` under `src/plugins/service.ts`.
+- It reads `./plugins/*/plugin.json`.
+- It starts and reuses bridge processes.
+- It translates bridge tools into reflection-visible tools.
+- It is not a general `ToolRegistry`.
 
-### Special notes per external tool
+## Plugin Bridge Protocol
 
-1. `browser-use`
-   - explicit opt-in plugin;
-   - separate domain allowlist from generic HTTP fetch;
-   - default approval level should be at least `execute`, often `dangerous`.
+Communication uses JSONL over stdio.
 
-2. `computer-use`
-   - explicit opt-in plugin;
-   - highest-risk surface;
-   - must go through approval + sandbox + lifecycle events.
+Request types:
 
-3. `rtk`
-   - integrate through the same plugin contract as any other external tool;
-   - do not add a bespoke kernel fast path for it.
+```ts
+type PluginRequest =
+    | { id: string; type: 'handshake'; cwd: string; workspaceRoot: string }
+    | { id: string; type: 'tools' }
+    | { id: string; type: 'call'; tool: string; input: unknown; cwd: string; signal?: { timeoutMs?: number } }
+    | { id: string; type: 'cancel'; callId: string };
+```
 
-4. `codegraph`
-   - expose as explicit tools, not hidden retrieval;
-   - keep its index/store in plugin-owned local state;
-   - enforce workspace-root restriction before indexing or searching.
+Response types:
 
-## MCP Integration
+```ts
+type PluginResponse =
+    | { id: string; type: 'ready'; name: string; tools: PluginToolSpec[] }
+    | {
+          id: string;
+          type: 'result';
+          status: 'completed' | 'error' | 'cancelled';
+          content: string;
+          data?: unknown;
+          truncated?: boolean;
+          metadata?: unknown;
+      }
+    | { id: string; type: 'delta'; content: string; metadata?: unknown }
+    | { id: string; type: 'error'; message: string; code?: string; detail?: unknown };
+```
 
-Use the existing `config.mcp` configuration as the seed for MCP server definitions.
+Protocol rules:
 
-Recommended behavior:
+- Every response preserves the request id.
+- Invalid stdout lines are protocol errors.
+- Stderr is log output, not protocol.
+- Calls have timeout.
+- Cancel sends `cancel`; if the plugin cannot stop the call, the host may kill the bridge.
+- Bridge startup does `handshake` before any tool call.
 
-- support stdio MCP first;
-- normalize MCP tools into internal `FTool`;
-- namespace tool names as `mcp__server__tool`;
-- sanitize schemas before model exposure;
-- keep structured MCP output instead of flattening everything to text too early.
+## RTK Plugin
 
-Recommended non-goal for phase 1:
+Upstream: `https://github.com/rtk-ai/rtk`
 
-- do not block phase 1 on full OAuth, SSE, or HTTP MCP support.
+Purpose:
 
-## Prompt Policy Blocks
+- Compress, filter, and structure noisy command output.
+- Improve coding loops around tests, search, git output, logs, and build output.
+- Act as an execution-output enhancer, not a permission bypass.
 
-Flyflor already has a prompt block system. Use it.
+V1 tools:
 
-Recommended new block families:
+- `rtk_command`
+  - level: `execute`
+  - confirm: `required`
+  - input: command, cwd, timeoutMs
+  - behavior: run the requested command through RTK and return compact output.
+- `rtk_gain`
+  - level: `read`
+  - confirm: `none`
+  - behavior: return RTK savings/usage stats when available.
+- `rtk_discover`
+  - level: `read`
+  - confirm: `none`
+  - behavior: report commands that RTK can optimize.
+
+Integration with `exec_command`:
+
+- Do not force every command through RTK.
+- Prefer RTK for noisy, bounded commands such as tests, type checks, `git diff`, `git status`, search, and logs.
+- Preserve the original command's permission classification before wrapping.
+- Wrapping never lowers confirm requirements.
+
+Install behavior:
+
+- `plugins/rtk/install.ts` downloads a matching release or package for the current OS/arch.
+- The executable is stored under `plugins/rtk/bin/`.
+- The installer verifies with `rtk --version`.
+- Do not run global shell-hook setup such as modifying other agent configurations.
+
+## CodeGraph Plugin
+
+Upstream: `https://github.com/colbymchenry/codegraph`
+
+Purpose:
+
+- Provide fast local codebase graph investigation.
+- Improve summarization, impact analysis, and multi-agent research.
+- Reduce blind `grep` / `read_file` exploration.
+
+Important behavior:
+
+- CodeGraph creates local workspace graph state under `.codegraph/`.
+- Its MCP server exists, but v1 Flyflor should use the CLI bridge first.
+- MCP integration can come later after Flyflor has a generic MCP bridge.
+
+V1 tools:
+
+- `codegraph_status`
+  - level: `read`
+  - confirm: `none`
+  - behavior: inspect graph/index health.
+- `codegraph_init`
+  - level: `execute`
+  - confirm: `required`
+  - behavior: initialize CodeGraph for the workspace.
+- `codegraph_sync`
+  - level: `execute`
+  - confirm: `required`
+  - behavior: sync/update the local graph.
+- `codegraph_search`
+  - level: `read`
+  - confirm: `none`
+  - behavior: semantic or symbol-oriented search.
+- `codegraph_context`
+  - level: `read`
+  - confirm: `none`
+  - behavior: gather task-specific code context.
+- `codegraph_callers`
+  - level: `read`
+  - confirm: `none`
+  - behavior: inspect callers of a symbol.
+- `codegraph_callees`
+  - level: `read`
+  - confirm: `none`
+  - behavior: inspect callees of a symbol.
+- `codegraph_impact`
+  - level: `read`
+  - confirm: `none`
+  - behavior: estimate change impact.
+
+Default rules:
+
+- If `.codegraph/` does not exist, read tools return `not_initialized` with a suggested next action.
+- Do not auto-initialize.
+- `codegraph_init` and `codegraph_sync` require confirm and a workspace-level lock.
+- Child agents can use read-only CodeGraph tools.
+- Child agents cannot run init or sync.
+- Parallel child-agent read queries are allowed.
+
+## Prompt Blocks
+
+Use existing `FileService.blocks`; do not add a new prompt parser.
+
+Tools block:
 
 ```md
 <flyflor:tools>
 {
     version: 1,
-    allowed: ["read_file", "glob", "grep", "apply_patch", "task"],
-    enabledPlugins: ["codegraph"],
-    approvalPolicy: "on_request"
+    allowed: [
+        "read_file",
+        "glob",
+        "grep",
+        "apply_patch",
+        "exec_command",
+        "write_stdin",
+        "todo",
+        "task",
+        "rtk_command",
+        "rtk_gain",
+        "rtk_discover",
+        "codegraph_status",
+        "codegraph_search",
+        "codegraph_context",
+        "codegraph_callers",
+        "codegraph_callees",
+        "codegraph_impact"
+    ],
+    confirmAlways: ["apply_patch", "exec_command", "write_stdin", "rtk_command", "codegraph_init", "codegraph_sync"]
 }
 </flyflor:tools>
-
-<flyflor:permissions>
-{
-    version: 1,
-    maxLevel: "write",
-    network: false
-}
-</flyflor:permissions>
 ```
 
-These blocks should compile into runtime policy objects before the tool loop starts.
+Reflection block:
 
-## Recommended Phases
+```md
+<flyflor:reflection>
+{
+    version: 1,
+    maxToolCalls: 32,
+    maxTaskAgents: 3,
+    taskTimeoutMs: 120000
+}
+</flyflor:reflection>
+```
 
-### Phase 1: core tool loop
+Defaults:
 
-- add `FTool` and `@Tool()`;
-- add `src/tool` runtime services;
-- add structured intelligence events;
-- implement built-in tools:
-  - `read_file`
-  - `glob`
-  - `grep`
-  - `apply_patch`
-  - `shell`
-  - `task`
-  - `todo`
-- implement `allow | deny | ask`;
-- add IPC tool lifecycle events;
-- preserve current text-stream behavior.
+- Without blocks, enable built-in read tools only.
+- `task` can be enabled by default only in read-only child mode.
+- Write and execute tools require confirm.
+- Plugin install and plugin mutation actions require confirm.
 
-### Phase 2: process sessions and external tool bridge
+## Implementation Phases
 
-- add `ProcessSessionService`;
-- add root `./plugins` discovery and supervision;
-- add stdio MCP bridge;
-- add external plugins:
-  - `browser-use`
-  - `computer-use`
-  - `rtk`
-  - `codegraph`
-- add foreground subagent execution through `task`.
+Each phase should be small enough to review and verify independently.
 
-### Phase 3: richer policy and background execution
+### Phase 1: Plan Docs
 
-- background tasks/subagents;
-- `PreCompact` summaries with structured carry-forward state;
-- approval persistence and trusted-session rules;
-- more provider tool schemas;
-- richer UI/IPC surfaces for approvals, todos, and tool progress.
+- Rewrite `TOOLS-PLAN.md`.
+- Add or sync `TOOLS-PLAN.zh.cn.md`.
+- Do not change runtime code.
 
-## Test And Regression Plan
-
-Minimum new test coverage:
-
-1. tool discovery and IOC registration
-2. provider schema sanitization
-3. intelligence event parsing for tool-call capable providers
-4. `Brain` tool loop success/failure/cancel semantics
-5. permission `allow | deny | ask`
-6. approval suspend/resume over IPC
-7. patch path escape and old-text mismatch rejection
-8. process session polling, stdin, timeout, cancel, truncation
-9. socket event ordering and per-socket isolation
-10. MCP name normalization and output shaping
-11. subagent deny inheritance
-12. plugin manifest validation and plugin runtime supervision
-13. codegraph workspace-bound indexing/search
-
-Health gates when implementation starts:
+Verification:
 
 - `bun run check`
-- focused `bun test` suites for every changed boundary
 
-## Open Decisions And Recommended Answers
+### Phase 2: Core Reflection Types
 
-1. Should executable plugins reuse `skills` config?
-   - Recommendation: no.
-   - Keep `skills` for skill content; add a dedicated plugin config or hard default to root `./plugins`.
+- Add `FTool`.
+- Add `@Tool()`.
+- Add `AgentSignal`.
+- Add reflection event and tool definition types.
+- Do not connect real tools yet.
 
-2. Which providers should gain tool calls first?
-   - Recommendation: `OpenAIResponses` first, `AnthropicMessages` second.
+Verification:
 
-3. Should raw file overwrite be model-visible in phase 1?
-   - Recommendation: no.
-   - Prefer patch/edit-oriented tools first.
+- `bun run check`
+- focused type-checking through `bunx tsc --noEmit`
 
-4. Should browser/computer be built-in?
-   - Recommendation: no.
-   - Keep them as external plugin runtimes and bridge them through the kernel.
+### Phase 3: Brain Reflection Shell
 
-5. Should codegraph be hidden behind generic search?
-   - Recommendation: no.
-   - Expose `codegraph_index` and `codegraph_search` explicitly.
+- Add `src/agent/brain/reflection.ts`.
+- Route text-only model output through `Reflection`.
+- Preserve `Brain.transformer()` external behavior.
+- Preserve successful-only context commit.
 
-## Final Recommendation
+Verification:
 
-Flyflor should not add "tools" as a bag of helper functions inside `Brain` or `Intelligence`.
+- existing `brain.test.ts`
+- existing `socket.test.ts`
 
-It should add:
+### Phase 4: Structured Intelligence Events
 
-- a real `FTool` runtime scope;
-- a dedicated `src/tool` orchestration boundary;
-- structured model events and a real tool loop in `Brain`;
-- explicit permission and sandbox services;
-- patch/process/session primitives;
-- a strict separation between kernel plugin loading (`src/plugins`) and root external tools (`./plugins`).
+- Add `text_delta` and `assistant_finish` event support.
+- Keep `complete()` compatibility.
+- Keep text-only adapters working.
+- Do not enable tool calls yet.
 
-That path matches the current repository rules, fits the existing IOC and prompt machinery, and leaves room for Codex-style execution, Claude-style policy hooks, and opencode-style task/subagent flow without forcing Flyflor to stop being Flyflor.
+Verification:
+
+- existing `intelligence.test.ts`
+
+### Phase 5: Built-In Read Tools
+
+- Implement `read_file`.
+- Implement `glob`.
+- Implement `grep`.
+- Expose schemas to `Reflection`.
+- Feed tool results back into the model turn.
+
+Verification:
+
+- path escape rejection;
+- read tools require no confirm;
+- tool result appears in the next model request.
+
+### Phase 6: Confirm
+
+- Add `confirmRequested` and `confirmResolved` signals.
+- Add inbound `confirm` routing.
+- Pause reflection while waiting.
+- Resume or reject the tool call after confirm.
+- Do not use `ask`.
+
+Verification:
+
+- confirmed calls execute;
+- rejected calls do not execute;
+- cancellation releases pending confirm;
+- tests assert no permission path emits `ask`.
+
+### Phase 7: Write And Exec Tools
+
+- Implement `apply_patch`.
+- Implement `exec_command`.
+- Implement `write_stdin`.
+- Add timeout, truncation, cancellation, and process session ids.
+- Write and execute tools require confirm.
+
+Verification:
+
+- patch context mismatch rejection;
+- shell timeout handling;
+- stdin to existing session;
+- confirm required by default.
+
+### Phase 8: Task Tool V1
+
+- Implement foreground `task`.
+- Spawn multiple child `Agent` instances through IOC.
+- Give each child isolated context and read-only tools.
+- Collect structured reports.
+- Return deterministic ordered synthesis to parent reflection.
+
+Verification:
+
+- child context isolation;
+- child cannot write;
+- partial result when one child fails;
+- parent cancellation cancels children.
+
+### Phase 9: External Plugin Bridge
+
+- Add `src/plugins/types.ts`.
+- Add `src/plugins/service.ts`.
+- Load `./plugins/*/plugin.json`.
+- Start `bun bridge.ts`.
+- Implement JSONL handshake, tools, call, cancel.
+- Convert plugin responses into reflection tool events.
+
+Verification:
+
+- fake plugin bridge tests;
+- invalid JSONL handling;
+- timeout and cancel;
+- stderr does not affect protocol.
+
+### Phase 10: RTK Plugin
+
+- Add `plugins/rtk/plugin.json`.
+- Add `plugins/rtk/install.ts`.
+- Add `plugins/rtk/bridge.ts`.
+- Implement `rtk_command`, `rtk_gain`, `rtk_discover`.
+- Optionally let `exec_command` choose RTK wrapping for noisy commands.
+
+Verification:
+
+- missing binary typed error;
+- `rtk_command` requires confirm;
+- `rtk_gain` requires no confirm;
+- RTK wrapping does not lower permission classification.
+
+### Phase 11: CodeGraph Plugin
+
+- Add `plugins/codegraph/plugin.json`.
+- Add `plugins/codegraph/install.ts`.
+- Add `plugins/codegraph/bridge.ts`.
+- Implement status, init, sync, search, context, callers, callees, impact.
+- Make CodeGraph read tools available to task children.
+- Keep init/sync parent-only.
+
+Verification:
+
+- no `.codegraph/` returns `not_initialized`;
+- init/sync require confirm;
+- child agents cannot init/sync;
+- parallel read queries are stable.
+
+### Phase 12: Docs And Mirror Cleanup
+
+- Update architecture docs only after code exists.
+- Keep all `.md` mirrors paired.
+- Ensure runtime never reads `.zh.cn.md`.
+
+Verification:
+
+- `bun run check`
+
+## Test Plan
+
+Minimum focused coverage:
+
+- `Brain` text compatibility and context commit/rollback.
+- `Reflection` text, tool, confirm, cancel, error, and task paths.
+- `Intelligence` structured events for supported providers.
+- `Socket` compatibility for `data` and `streamEnd`.
+- `Socket` structured signals for tool, confirm, task events.
+- Built-in read tools and workspace path safety.
+- Patch validation and mismatch handling.
+- Exec timeout, truncation, cancellation, and stdin.
+- Task child context isolation and read-only enforcement.
+- Plugin host handshake, call, delta, result, error, timeout, and cancel.
+- RTK permission preservation.
+- CodeGraph init/sync locks and child read-only access.
+
+Health gates:
+
+- `bun run check`
+- focused `bun test` suites for changed boundaries
+- broader `bun test` before large phase completion
+
+## Open Risks
+
+- `Intelligence` provider adapters may need different tool result message formats.
+- `AgentSignal` migration can break socket tests if compatibility is not kept exact.
+- Confirm pause/resume needs careful pending-turn ownership so concurrent sockets do not cross signals.
+- Child agents can multiply token usage quickly; concurrency caps must be enforced from v1.
+- CodeGraph sync may race with child read queries unless mutation tools take a workspace lock.
+- RTK wrapping must never hide command failure or lower confirm requirements.
+- Plugin install scripts need deterministic OS/arch handling and typed failure modes.
+
+## Non Goals
+
+- No generic MCP bridge in v1.
+- No browser-use or computer-use in v1.
+- No background child agents in v1.
+- No persistent task ledger in v1.
+- No child-agent writes in v1.
+- No recursive task in v1.
+- No permission `ask`.
+- No global shell hook installation for RTK.
+- No plugin binary compilation into Flyflor.

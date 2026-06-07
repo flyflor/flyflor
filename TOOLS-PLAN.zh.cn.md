@@ -1,681 +1,879 @@
 # TOOLS-PLAN
 
-状态：本文档只做调研与方案设计，尚未实现任何运行时代码。
+状态：仅为计划中的架构设计。本文档描述的执行层尚未实现。
 
-本方案基于对当前 Flyflor 仓库代码（`src/`、`scripts/`、tests、prompts、docs）以及本地参考目录 `reference/codex`、`reference/claude-code`、`reference/opencode`、`reference/openhuman`、`reference/openclaw`、`reference/nanobot`、`reference/CodeWhale`、`reference/hermes-agent` 的通读整理。
+本文档替代上一版工具运行时方案。旧方案把执行层过度拆成了 `ToolRegistry`、`ToolOrchestrator`、
+`PermissionService`、`ProcessSessionService`、`PatchService` 和新的 `src/tool` 领域。Flyflor 不应该先长出
+一个通用工具平台，而应该先长出大脑反射循环。
 
-## 目标
+## 核心心智模型
 
-Flyflor 需要一个真正的工具执行层，它必须：
+Flyflor 正在被构建成类智能生命体的运行时，而不是一组 agent 工具函数。
 
-- 贴合当前 object-first 运行时；
-- 保持 IOC 是唯一构造边界；
-- 保持现有 8-byte big-endian IPC frame 协议；
-- 明确区分内核插件加载边界（`src/plugins`）和仓库根外部工具层（`./plugins`）；
-- 支持 tool call、审批、sandbox、多步执行和 subagent，而不是退化成一堆散落函数。
-
-第一阶段的非目标：
-
-- 不追求一次性做齐所有工具；
-- 不把 browser/computer/rtk/codegraph 直接打进 Bun 主体二进制；
-- 不整套照搬 Codex / opencode / openhuman 的架构；
-- 在工具层逐步接入期间，不破坏当前的文本流输出行为。
-
-## 当前 Flyflor 现状审计
-
-### 已有基础
-
-1. IOC 和生命周期已经足够承载工具层。
-   - `src/core/ioc/container.ts` 已经支持 singleton、fresh `create()`、属性注入、构造函数 import 解析和 `@Init()`。
-   - `src/core/ioc/abstracts.ts` 已经有 service、module、file、plugin、guard、sandbox、agent 等运行时对象边界。
-
-2. Prompt / File 已经提供策略通道。
-   - `src/core/file/service.ts` 已经能解析 `<flyflor:xxx>` JSONC blocks。
-   - `src/core/prompt/decorator.ts` 已经通过 IOC 加载 path-bound prompt file object。
-
-3. 当前运行时仍然是窄文本流模型。
-   - `src/agent/brain/brain.ts` 负责组装单个 `system` message、附加文本历史，并从 `Intelligence` 流出文本 delta。
-   - `src/agent/brain/intelligence/*` 仍然只是 provider 文本流层，不是 tool event 层。
-
-4. IPC 已经小而稳定。
-   - `src/neural/packet/service.ts` 拥有 8-byte length-prefixed JSON 协议。
-   - `src/neural/ipc/socket.ts` 负责把入站 packet 路由到 `Synapse`，并把文本流和 `streamEnd` 回推给客户端。
-
-5. 插件边界只在命名上存在。
-   - `src/plugins/plugin.module.ts` 现在还是空 module boundary。
-
-6. Config 里已经有部分落点。
-   - `src/config/config.component.ts` 已经有 `mcp`。
-   - 也有 `skills`，但不应该误用成可执行插件运行时。
-
-### 当前缺口
-
-1. 没有 tool-call event model。
-   - `IntelligenceTurn` 只会返回 `{ done, value?: string }`。
-   - provider 不会产出 tool call、tool result、approval request 或结构化 part。
-
-2. 没有 tool loop。
-   - `Brain.transformer()` 现在只会读一个 provider 文本流并直接提交文本。
-   - 还不存在“模型发起工具调用 -> 工具执行 -> 结果回灌模型”的回合内循环。
-
-3. 没有权限对象和审批状态。
-   - `FGuard` 和 `FSandBox` 已经有 scope，但没有任何运行时服务把它们接到工具策略上。
-
-4. 没有结构化文件编辑路径。
-   - Flyflor 有 `FileService`，但没有 patch grammar、diff object 或 multi-edit validator。
-
-5. 没有 shell/process session 模型。
-   - 运行时没有对象负责长命令、stdin 写入、轮询、取消、超时和截断。
-
-6. `src/plugins` 与根 `./plugins` 在代码里还没有真正分层。
-   - 内核没有外部工具包 loader。
-
-7. 现有测试锁定了文本流语义，工具层必须保留这些约束。
-   - `brain.test.ts` 要求“只有成功结束才提交上下文”。
-   - `socket.test.ts` 要求按 socket 隔离的流输出和 `streamEnd` 顺序。
-
-## 参考项目提炼
-
-### Codex
-
-值得借鉴的点：
-
-- `ToolDefinition` 是统一的模型可见规格，包含 input schema、可选 output schema、deferred loading。
-- `ToolExecutor` 把可执行 runtime 和模型规格绑定在一起，而且每个工具都能声明是否支持并行调用。
-- `mcp_tool.rs` 会在模型曝光前先做 MCP schema 归一化。
-- `tool_output.rs` 分离模型输出、日志预览和 hook 可见 payload。
-- `tool_config.rs` 把 shell backend、unified exec、environment mode 当成显式运行时策略。
-- thread/sdk 层把 approval mode 和 sandbox mode 当作每个 thread / 每个 turn 的显式输入。
-
-对 Flyflor 的含义：
-
-- 不管工具来源是 built-in、plugin 还是 MCP，都应先归一成统一内部规格；
-- exposure、schema sanitization、deferred tools、parallel support 应成为一等元数据；
-- shell/process 执行必须是独立 runtime path，不能只是一次性的 helper。
-
-### Claude Code
-
-值得借鉴的点：
-
-- command frontmatter 可以声明 `allowed-tools`、model hints、argument shapes；
-- hooks（`PreToolUse`、`PostToolUse`、`Stop`、`PreCompact`）提供生命周期拦截点；
-- `TodoWrite`、`Task`、`MultiEdit`、`Edit`、`Bash`、`Read`、`Grep`、`Glob` 是分立工具，而不是全部塞进 shell；
-- settings 层把 allow/ask/deny 策略和工具实现解耦。
-
-对 Flyflor 的含义：
-
-- prompt blocks 应编译成运行时工具策略；
-- guardrail 需要确定性的 pre/post tool hooks；
-- multi-edit 应是结构化编辑表面，不是 raw overwrite；
-- todo 和 task 应是显式 runtime object，而不是 prompt 里的文字约定。
-
-### opencode
-
-值得借鉴的点：
-
-- tool context 携带 session id、message id、call id、abort、messages、metadata updates、`ask()`；
-- 工具执行会把 `text`、`tool-call`、`tool-result`、`step-finish` 等结构化 part 写进 session；
-- `task` 只是标准工具；
-- 权限支持 `allow`、`deny`、`ask`；
-- 子 agent 继承父级限制。
-
-对 Flyflor 的含义：
-
-- subagent 应走与其他工具相同的编排层；
-- tool context 必须是稳定运行时对象；
-- permission ask/reply 必须是可暂停/可恢复的工具调用，而不是工具内部同步阻塞。
-
-### openhuman、openclaw、nanobot、CodeWhale、hermes-agent
-
-值得有选择地借鉴：
-
-- openhuman：
-  - `ToolScope`、`ToolCategory`、`PermissionLevel`、按参数动态升级权限；
-  - provider schema cleaning；
-  - `codegraph_index` / `codegraph_search` 作为显式工具；
-  - browser/computer 作为高风险显式表面。
-- openclaw：
-  - 外部插件 manifest 兼容性校验和类型化 plugin SDK entrypoint。
-- nanobot：
-  - 极简 tool interface、schema cast/validate、长生命周期 exec session。
-- CodeWhale：
-  - capability metadata、approval requirement、timeout、hook events；
-  - 基于命令前缀的 exec policy。
-- hermes-agent：
-  - registry generation counter、TTL availability cache、path security helper、browser provider registry。
-
-对 Flyflor 的含义：
-
-- 外部工具包应先做冷发现和 manifest 归一化，再注册；
-- codegraph 应是可见工具，不应藏在泛搜索后面；
-- path guard、command guard、workspace boundary check 应由确定性服务完成。
-
-## 目标架构
-
-### 1. 引入真正的工具运行时 scope
-
-建议新增 primitive layer：
+当前目录模型已经暗示了正确设计：
 
 ```txt
-src/core/tool/
-  index.ts
-  decorator.ts
-  types.ts
+IPC / Socket stimulus
+  -> Synapse
+  -> Agent
+  -> Brain
+  -> Reflection
+      -> model signal
+      -> tool impulse
+      -> confirm interrupt
+      -> child-agent investigation
+      -> tool result signal
+      -> continued thought
+  -> Agent outward signal
+  -> Socket / IPC
 ```
 
-建议在 `src/core/ioc/abstracts.ts` 中新增：
+对象含义：
 
-- `FTool extends FService`
+- `Brain` 是 turn owner。它拥有上下文组装、reflection 启动、成功上下文提交，以及失败或取消时的回滚。
+- `Reflection` 是大脑内的一次神经反射弧。它是单个 turn 的执行层。
+- `Synapse` 把外部刺激路由到 active agent。
+- `Socket` 和 `IPC` 是外部信号边界。它们传输信号，不拥有交互语义。
+- `PacketService` 只拥有字节 framing：8-byte big-endian length-prefixed JSON。
+- `FTool` 对象是 reflection 可以触发的动作末梢。
+- `task` 是多 agent 认知。它会启动多个 `src/agent` 实例做并行调查与综合。
 
-建议新增 decorator：
+重要命名规则：
 
-- `@Tool()`
+- `confirm` 表示动作权限确认。
+- `ask` 表示未来智能体缺少信息时的认知询问。
+- 权限绝不能建模成 `ask`。
 
-原因：
+## 当前仓库现实
 
-- 工具已经是明确的运行时对象种类，不再只是 helper 方法；
-- 仓库规则已经要求新的运行时 scope 用 decorator + inheritance 表达。
+已有优势：
 
-### 2. 新增专门的工具领域边界
+- IOC 构造已经集中在 `src/core/ioc/container.ts`。
+- Prompt 文件已经是 path-bound `FileService` 对象。
+- Prompt protocol blocks 已经会被解析成 `<flyflor:xxx>` JSONC blocks。
+- `Brain.transformer()` 已经保持“只有成功完成才提交上下文”的不变量。
+- `FSocket` 已经把流输出限制在发起请求的 socket，并追加 `streamEnd`。
+- `src/plugins/tools` 已经存在，适合作为内核工具区域，但当前文件为空。
+- 根目录 `./plugins` 已经存在，是外部能力的占位目录。
 
-建议新增：
+当前缺口：
 
-```txt
-src/tool/
-  index.ts
-  types.ts
-  service.ts
-  permission/
-    service.ts
-    types.ts
-  approval/
-    service.ts
-    types.ts
-  process/
-    service.ts
-    types.ts
-  patch/
-    service.ts
-    types.ts
-  mcp/
-    service.ts
-    types.ts
-  plugin/
-    service.ts
-    types.ts
-```
+- `IntelligenceTurn` 只有文本。
+- `Brain` 没有 reflection loop。
+- `Agent` 对外信号只有文本。
+- `SocketEvent` 尚无 tool、confirm、task、cancel 信号。
+- 没有 `FTool` scope。
+- 没有外部插件 bridge。
+- `task` 目前只是 prompt 意图，不是运行时多 agent 操作。
+- `rtk` 和 `codegraph` 尚未通过 `./plugins` 安装或桥接。
 
-核心对象建议：
+## 执行层目标
 
-- `ToolService`
-  - discovery、filter、组装模型可见 tool list
-- `ToolRegistry`
-  - name -> tool runtime 映射
-- `ToolOrchestrator`
-  - 串起 permission、sandbox、runtime、output shaping、event emission
-- `PermissionService`
-  - `allow | deny | ask`
-- `ApprovalService`
-  - pending approval ticket、reply、session 级 always allow
-- `ProcessSessionService`
-  - 长生命周期 shell/exec session
-- `PatchService`
-  - patch grammar parsing、diff validate、atomic apply
-- `PluginRuntimeService`
-  - 加载和监管根 `./plugins`
-- `McpToolService`
-  - 把 configured MCP tools 归一成内部 `FTool`
+第一目标：
 
-### 3. 所有工具来源统一归一成同一种内部对象
+- 在 `src/agent/brain/reflection.ts` 增加 `Reflection` 对象。
+- 将 `Intelligence` 升级为结构化模型事件，同时保持文本兼容。
+- 增加 `FTool` 和 `@Tool()` 作为最小 core scope。
+- 在 `src/plugins/tools` 下以内核 `FTool` 对象实现内置 read/write/exec 工具。
+- 为 write/execute 动作加入 `confirm` 中断。
+- 将 `task` 实现为 foreground 多 agent 只读调查。
+- 为 `./plugins/rtk` 和 `./plugins/codegraph` 增加小型外部插件桥。
 
-建议内部元数据至少包含：
+第一阶段非目标：
 
-- `name`
-- `description`
-- `inputSchema`
-- `outputSchema?`
-- `source`: `builtin | plugin | mcp | generated`
-- `exposure`: `direct | deferred | directModelOnly | hidden`
-- `permissionLevel`: `none | read | write | execute | dangerous`
-- `parallelSafe`
-- `lockScope`: `tool | workspace | path | global`
-- `timeoutMs?`
-- `scope`: `agent | cli | ipc | all`
-- `category`: `system | workflow | browser | computer | retrieval`
+- 不创建 `src/tool`。
+- 不增加 `ToolRegistry`、`ToolOrchestrator`、`PermissionService`、`ProcessSessionService` 或 `PatchService`。
+- 不实现通用 MCP。
+- 不实现 browser-use 或 computer-use。
+- 不允许子 agent 写文件。
+- 不实现 background subagents。
+- 不实现 `ask`。
+- 不把外部插件脚本或二进制编进 Flyflor Bun 二进制。
 
-建议调用上下文包含：
+## Reflection 设计
 
-- `sessionId`
-- `turnId`
-- `messageId`
-- `callId`
-- `agentName`
-- `workspaceRoot`
-- `cwd`
-- `abortSignal`
-- `metadata()`
-- `emit()`
-- `ask()`
-- `sandbox`
+`Reflection` 由 `Brain` 按 turn 创建。
 
-建议结果对象包含：
+职责：
 
-- `status`: `completed | error`
-- `content`: 文本和/或结构化 payload
-- `artifacts?`
-- `truncated`
-- `outputPath?`
-- `metadata`
+- 基于 system prompt、已有 context 和当前用户内容构建模型输入。
+- 为当前 turn 暴露模型可见工具 schema。
+- 消费结构化 `Intelligence` 事件。
+- 立即向外流式输出 text delta。
+- 执行工具调用。
+- 当动作需要权限时在 `confirm` 处暂停。
+- 在 inbound confirm 结果到达后恢复。
+- 把工具结果追加进当前模型 turn。
+- 通过 `task` 工具启动子 agent。
+- 父 turn 取消时取消 provider stream、工具和子 agent。
+- 把最终 assistant text 返回给 `Brain`，由 `Brain` 提交上下文。
 
-## Model / Brain 改造方向
-
-### 当前问题
-
-`Brain` 和 `Intelligence` 现在都是 text-only。
-
-### 建议改造
-
-为 `Intelligence` 新增结构化 event stream：
-
-- `text_delta`
-- `tool_call`
-- `assistant_finish`
-- `error`
-
-建议的第一版策略：
-
-1. 对外保留 `Agent.next()` 的文本流输出；
-2. 把 `Intelligence` 内部改成结构化 event；
-3. 由 `Brain` 持有 tool loop：
-   - 发送用户消息和上下文给模型；
-   - 读取 event；
-   - 文本 delta 立即向外流出；
-   - 遇到 `tool_call` 时通过 `ToolOrchestrator` 执行；
-   - 在真正执行工具前，先把 tool-call item 写入 turn state，保证 history / replay 稳定；
-   - 把 tool result 追加到 turn state；
-   - 继续模型回合直到 assistant finish；
-   - 只有 assistant 成功 finish 才提交 turn context。
-
-建议的 provider 推进顺序：
-
-- 第一阶段先支持有 tool-call 能力的：
-  - `OpenAIResponses`
-  - `AnthropicMessages`
-- 其他 adapter 先保留 text-only，等 schema translator 和 tool event parser 做好后再升级。
-
-这是最保守的路径，因为不需要一次性改完所有 provider。
-
-## IPC 与事件协议
-
-保持底层传输完全不变：
-
-- 仍然是 8-byte big-endian length-prefixed JSON；
-- 仍然是同一个 `SocketPacket` envelope。
-
-扩展 event vocabulary，而不是重写 transport。
-
-建议新增的 outbound action：
+内部事件词汇：
 
 - `turnStart`
+- `modelTextDelta`
+- `modelToolCall`
 - `toolStart`
 - `toolDelta`
 - `toolEnd`
 - `toolError`
-- `approvalRequested`
-- `approvalResolved`
-- `todoUpdated`
-- `subagentStart`
-- `subagentEnd`
+- `confirmRequested`
+- `confirmResolved`
+- `taskStart`
+- `taskAgentStart`
+- `taskAgentEnd`
+- `taskEnd`
+- `turnEnd`
+- `turnError`
+- `turnCancelled`
+
+实现风格：
+
+- 用 RxJS 表达 turn 事件流。
+- 所有 turn-local 状态留在 `Reflection`。
+- 长生命周期 agent context 所有权留在 `Brain`。
+- socket transport 所有权留在 `neural/ipc`。
+- 工具不能直接修改 `Brain.context`。
+
+## Intelligence 事件
+
+`Intelligence` 应从 `ReadableStream<string>` 演进为结构化事件流。
+
+必要事件形态：
+
+```ts
+type IntelligenceEvent =
+    | { type: 'text_delta'; text: string }
+    | { type: 'tool_call'; id: string; name: string; input: unknown }
+    | { type: 'assistant_finish'; reason?: string }
+    | { type: 'error'; error: Error };
+```
+
+兼容要求：
+
+- `Brain.transformer()` 仍然是 `AsyncGenerator<string>`，服务现有调用方。
+- `Intelligence.complete()` 仍可用，并拼接 `text_delta` 事件。
+- text-only providers 继续通过现有测试。
+- 不支持 tool-call 的 providers 可以保持 text-only，直到单独升级。
+
+第一批 provider：
+
+- `openaiResponses`
+- `anthropicMessages`
+
+后续 provider：
+
+- `openaiChatCompletions`
+- `googleGeminiGenerateContent`
+- `ollama`
+- 其他 adapter 只有在实现对应 tool-call wire shape 后再升级。
+
+## Agent Signals And IPC
+
+`Agent` 当前通过 `FAgent<string>` emit 字符串。Reflection 需要结构化 outward signals，同时保留旧文本流行为。
+
+目标 signal union：
+
+```ts
+type AgentSignal =
+    | string
+    | { type: 'text'; data: string }
+    | { type: 'tool'; action: SocketEvent; data: unknown }
+    | { type: 'confirm'; action: SocketEvent; data: unknown }
+    | { type: 'task'; action: SocketEvent; data: unknown };
+```
+
+Socket 兼容：
+
+- signal 是字符串时，写 `{ action: SocketEvent.Data, data: signal }`。
+- signal 是 `{ type: 'text' }` 时，写 `{ action: SocketEvent.Data, data: signal.data }`。
+- signal 是结构化对象时，写其中的 action 和 data。
+- `streamEnd` 仍由 `FSocket` 在 `Synapse.next()` 完成后写出。
+
+新增 outbound socket events：
+
+- `toolStart`
+- `toolDelta`
+- `toolEnd`
+- `toolError`
+- `confirmRequested`
+- `confirmResolved`
+- `taskStart`
+- `taskAgentStart`
+- `taskAgentEnd`
+- `taskEnd`
 - `turnEnd`
 
-建议新增的 inbound action：
+新增 inbound socket events：
 
-- `approvalReply`
-- `toolCancel`
+- `confirm`
+- `cancel`
 
-兼容性要求：
+Inbound `confirm` payload：
 
-- 保留现有 `data` + `streamEnd` 的文本流行为，这样旧客户端在 richer event 加入期间不会立刻失效。
+```ts
+{
+    id: string;
+    confirmed: boolean;
+    remember?: 'turn' | 'session';
+}
+```
 
-## 权限、审批与沙箱
+Inbound `cancel` payload：
 
-### 运行时决策模型
+```ts
+{
+    turnId?: string;
+    toolCallId?: string;
+    taskId?: string;
+    agentId?: string;
+}
+```
 
-每次工具调用最终都应收敛到：
+Socket 和 IPC 不解释这些 payload。它们只把 packet 路由回 `Synapse`，再进入 active `Agent` / `Brain`。
 
-- `allow`
-- `deny`
-- `ask`
+## Confirm 语义
 
-session 或 agent 级策略仍可用更高层模式表达，例如：
+第一版只支持动作确认。
 
-- `never`
-- `on_request`
-- `on_failure`
-- `unless_trusted`
+状态：
 
-但具体到每次调用，执行决策应保持为 `allow | deny | ask`。
+- `none`：无需确认。
+- `required`：reflection 必须暂停并发出 `confirmRequested`。
+- `confirmed`：外部允许执行动作。
+- `rejected`：外部拒绝执行动作。
 
-### Guard pipeline
+默认规则：
 
-建议在工具执行前做确定性检查：
+- Read 工具不需要 confirm。
+- Write 工具需要 confirm。
+- Execute 工具需要 confirm。
+- Dangerous 工具需要 confirm。
+- V1 子 agent 只读，所以不能为 write/execute 工具请求 confirm。
+- Confirm allowlist 只影响权限确认。
+- Confirm allowlist 不是 `ask`。
 
-1. tool 是否启用？
-2. tool source 是否可信？
-3. workspace path 是否有效？
-4. command / network rule 是否通过？
-5. permission level 是否落在允许范围内？
-6. 是否需要 approval？
-7. sandbox/runtime 是否可用？
+`ask` 的未来保留语义：
 
-建议实现为 `FGuard` / `FSandBox` 订阅点的 hook：
+- 缺少需求细节；
+- 缺少用户偏好；
+- 缺少外部事实；
+- 任务意图模糊；
+- 不是权限。
 
-- `PreToolUse`
-- `PostToolUse`
-- `Stop`
-- `PreCompact`
+## 内置工具
 
-### 继承规则
+内置工具作为 `FTool` 对象放在 `src/plugins/tools`。
 
-subagent 和 plugin-provided tool 必须继承：
+最小工具形态：
 
-- 父级 deny rule；
-- workspace boundary 限制；
-- approval mode；
-- network 限制。
+```ts
+interface FToolDefinition {
+    name: string;
+    description: string;
+    inputSchema: unknown;
+    level: 'read' | 'write' | 'execute' | 'dangerous';
+    confirm: 'none' | 'required';
+}
+```
 
-子级不允许扩大父级 deny。
+每个工具对象应暴露 execute 方法，接收 reflection context 和校验后的 input。
 
-## Shell 与 Process Session
-
-不要把 shell 建模成一次性的 `spawn -> collect text -> return` helper。
-
-建议的 process-session 对象包含：
-
-- session id
-- pid
-- command
-- cwd
-- env policy
-- `tty`
-- `login`
-- `stdin` 写入支持
-- polling / yield interval
-- truncation counters
-- timeout state
-- cancellation state
-
-建议的最小工具表面：
-
-- `exec_command`
-- `write_stdin`
-- `terminate_process`
-
-底层应由 `ProcessSessionService` 持有，并通过 `FSandBox` 进入真实执行。
-
-## 文件编辑与 Patch
-
-### 总体建议
-
-让 patch / diff 成为默认写入表面。
-
-优先内置工具：
+第一批内置工具：
 
 - `read_file`
+  - 读取 workspace 边界内 UTF-8 文本；
+  - 无 confirm。
 - `glob`
+  - 列出 workspace 边界内匹配 pattern 的文件；
+  - 无 confirm。
 - `grep`
+  - 搜索 workspace 边界内文件内容；
+  - 无 confirm。
 - `apply_patch`
-- `shell`
-- `task`
+  - 结构化 patch application；
+  - 需要 confirm。
+- `exec_command`
+  - 有界进程执行；
+  - 默认需要 confirm；
+  - 长命令可以返回 session id。
+- `write_stdin`
+  - 向已有 process session 写入 stdin；
+  - 需要 confirm。
 - `todo`
-
-不建议把 raw overwrite 暴露成主要模型写入路径。
-
-### Patch 规则
-
-建议 patch 流程：
-
-1. 把 patch grammar 解析成结构化 edit object；
-2. 所有 touched path 都先相对 workspace 做解析；
-3. 校验 `oldText` 或 hunk context 是否匹配当前文件；
-4. 计算 preview diff；
-5. 需要时请求 approval；
-6. 原子提交；
-7. 发出带 diff metadata 的 tool lifecycle event。
-
-`FileService` 继续作为 path-bound file owner，但 patch 逻辑本身应在专门的 patch service 中。
-
-## Task 与 Subagent 设计
-
-把 subagent dispatch 实现成标准工具。
-
-第一版建议工具：
-
+  - turn-local progress state；
+  - V1 不写长期记忆。
 - `task`
+  - 多 agent 调查；
+  - V1 子 agent 只读。
 
-Phase 1 行为：
+实现约束：
 
-- 仅支持 foreground；
-- 目标 profile 先来自 `ConfigComponent.agents`；
-- 子 agent 的最终结果作为一个标准 tool result 返回给父级。
+- V1 工具发现应显式。`PluginsModule` import 内置工具类。不要在对象模型真正需要前增加宽泛动态发现。
 
-Phase 2 行为：
+## Task 多 Agent 设计
 
-- 可选 background mode；
-- 子任务完成时生成 synthetic follow-up event / message；
-- 后续再支持 ephemeral generated profile。
+`task` 是 Flyflor coding 能力中最重要的工具。它不是普通 background task helper。
 
-这样既能贴合 `prompts/agent/AGENTS.md` 里的意图，又不需要额外的文本侧信道协议。
+目的：
 
-## 内核插件层 vs 根外部工具层
+- 启动多个 `Agent` 实例做并行调查。
+- 提升摘要、代码考古、影响分析和 patch planning。
+- 让 master agent 保持最终写入所有权。
 
-### `src/plugins`
+V1 行为：
 
-保留 `src/plugins` 作为内核自有的 loader / supervision boundary。
+- 仅 foreground。
+- 子 agent 只读。
+- 无递归 `task`。
+- 子 agent 不写 memory。
+- 子 agent 不直接与用户交互。
+- 子 agent 不发 confirm。
+- 子 agent 不直接编辑文件。
+- 父 turn cancel 会取消正在运行的子 agent。
 
-它的职责应是：
+Task input：
 
-- 发现 plugin manifest；
-- 做兼容性校验；
-- 启动受监管 runtime；
-- 把 plugin tools 归一成内部 `FTool`；
-- bridge plugin event、approval、shutdown。
+```ts
+{
+    description: string;
+    prompt: string;
+    agents: Array<{
+        label?: string;
+        profile?: string;
+        focus: string;
+        expectedOutput?: string;
+    }>;
+    timeoutMs?: number;
+    context?: string;
+}
+```
 
-### `./plugins`
+调度：
 
-这是用户要求的仓库根外部工具层，必须保持在 Bun 二进制之外。
+- 默认 child concurrency：3。
+- V1 hard child concurrency：5。
+- 默认 child timeout：120000 ms。
+- 最大 child timeout：600000 ms。
+- 单个 child 失败产生 `partial`。
+- 全部 child 失败产生 `failed`。
+- 结果按请求顺序返回，不按完成顺序返回。
 
-建议默认内容：
+子 agent 设置：
 
-- `./plugins/browser-use`
-- `./plugins/computer-use`
-- `./plugins/rtk`
-- `./plugins/codegraph`
+- 每个 child 都通过 IOC 构造。
+- 每个 child 拥有独立 `Brain.context`。
+- 继承父 agent 的 constitution prompt。
+- 追加 task-specific instructions，强制只读调查。
+- 只提供 read tools 和 CodeGraph read tools。
+- 不暴露 `apply_patch`、写工具、任意 execute 工具、`todo` 或 `task`。
 
-建议 manifest 方向：
+子 agent 必须输出的固定契约：
+
+```txt
+SUMMARY:
+EVIDENCE:
+PATCH_SUGGESTION:
+RISKS:
+BLOCKERS:
+```
+
+父 task result：
+
+```ts
+{
+    taskId: string;
+    status: 'completed' | 'partial' | 'failed' | 'cancelled';
+    children: Array<{
+        agentId: string;
+        label: string;
+        status: string;
+        summary: string;
+        evidence: string[];
+        patchSuggestion?: string;
+        risks: string[];
+        blockers: string[];
+    }>;
+    synthesis: string;
+}
+```
+
+父 `Reflection` 把 task result 当作 tool result 接收。父模型决定如何综合、验证，以及是否在 confirm 后执行写动作。
+
+## 外部插件层
+
+根 `./plugins` 是外部器官层，与 `src/plugins` 分离。
+
+目标：
+
+- 支持二进制或多语言外部能力，而不把它们编译进 Flyflor。
+- 让第三方安装和 runtime 脚本留在 `src` 之外。
+- 为未来 Scrapling、browser-use、computer-use 等能力预留路径。
+- 通过 stdio JSONL 让插件通信保持确定性。
+
+目录契约：
+
+```txt
+plugins/
+  rtk/
+    plugin.json
+    install.ts
+    bridge.ts
+    bin/
+    cache/
+  codegraph/
+    plugin.json
+    install.ts
+    bridge.ts
+    bin/
+    cache/
+```
+
+规则：
+
+- `bridge.ts` 在插件目录下用 Bun 运行。
+- `bridge.ts` 不被 `src` import。
+- `bridge.ts` 不编译进 Flyflor 二进制。
+- `bin/` 存本地下载的 executable，不提交。
+- `cache/` 存插件本地状态，不提交。
+- Bridge stdout 只能输出 JSONL 协议。
+- Bridge logs 写 stderr。
+- 缺失 binary 时返回 typed error。
+- Install scripts 只能由明确用户动作触发，不能由模型自主 tool call 触发。
+
+最小 manifest：
 
 ```json
 {
   "name": "codegraph",
-  "version": "0.1.0",
+  "version": 1,
   "runtime": {
-    "kind": "stdio",
-    "entry": "./bin/codegraph"
+    "kind": "bun-stdio",
+    "entry": "./bridge.ts"
+  },
+  "install": {
+    "entry": "./install.ts"
   },
   "tools": [
-    { "name": "codegraph_index" },
-    { "name": "codegraph_search" }
-  ],
-  "permissions": {
-    "default": "read"
-  },
-  "capabilities": ["retrieval", "workspace-local-index"]
+    {
+      "name": "codegraph_search",
+      "level": "read",
+      "confirm": "none"
+    }
+  ]
 }
 ```
 
-建议策略：
+内核侧：
 
-- browser/computer/rtk/codegraph 都作为外部工具包存在；
-- Flyflor core 只提供 contract、loader 和 runtime bridge。
+- 在 `src/plugins/service.ts` 增加小型 `PluginsService extends FPlugin`。
+- 它读取 `./plugins/*/plugin.json`。
+- 它启动并复用 bridge processes。
+- 它把 bridge tools 转换成 reflection-visible tools。
+- 它不是通用 `ToolRegistry`。
 
-### 针对几个外部工具的特殊说明
+## Plugin Bridge 协议
 
-1. `browser-use`
-   - 必须是显式启用插件；
-   - domain allowlist 应独立于通用 HTTP fetch；
-   - 默认 approval level 至少是 `execute`，很多场景应视作 `dangerous`。
+通信使用 stdio JSONL。
 
-2. `computer-use`
-   - 必须是显式启用插件；
-   - 风险最高；
-   - 必须经过 approval + sandbox + lifecycle event。
+Request types：
 
-3. `rtk`
-   - 通过与其他外部工具相同的 plugin contract 接入；
-   - 不建议为它做专门的 kernel fast path。
+```ts
+type PluginRequest =
+    | { id: string; type: 'handshake'; cwd: string; workspaceRoot: string }
+    | { id: string; type: 'tools' }
+    | { id: string; type: 'call'; tool: string; input: unknown; cwd: string; signal?: { timeoutMs?: number } }
+    | { id: string; type: 'cancel'; callId: string };
+```
 
-4. `codegraph`
-   - 应作为显式工具，而不是隐藏检索；
-   - 索引和存储保留在 plugin 自己的本地状态里；
-   - indexing / searching 前必须先过 workspace-root 边界检查。
+Response types：
 
-## MCP 接入方案
+```ts
+type PluginResponse =
+    | { id: string; type: 'ready'; name: string; tools: PluginToolSpec[] }
+    | {
+          id: string;
+          type: 'result';
+          status: 'completed' | 'error' | 'cancelled';
+          content: string;
+          data?: unknown;
+          truncated?: boolean;
+          metadata?: unknown;
+      }
+    | { id: string; type: 'delta'; content: string; metadata?: unknown }
+    | { id: string; type: 'error'; message: string; code?: string; detail?: unknown };
+```
 
-使用现有 `config.mcp` 作为 MCP server 定义种子。
+协议规则：
 
-建议行为：
+- 每个 response 都保留 request id。
+- stdout 中非法行都是 protocol error。
+- stderr 是日志，不是协议。
+- call 有 timeout。
+- cancel 先发送 `cancel`；如果插件无法停止调用，host 可以 kill bridge。
+- bridge startup 必须在任何 tool call 前完成 `handshake`。
 
-- 先支持 stdio MCP；
-- 把 MCP tools 统一归一成内部 `FTool`；
-- 命名规范统一为 `mcp__server__tool`；
-- 在模型曝光前做 schema sanitize；
-- 保留结构化 MCP output，不要过早全部 flatten 成文本。
+## RTK Plugin
 
-第一阶段的非目标：
+上游：`https://github.com/rtk-ai/rtk`
 
-- 不要把完整 OAuth、SSE、HTTP MCP 支持作为一期前置条件。
+目的：
 
-## Prompt 策略 Blocks
+- 压缩、过滤和结构化嘈杂命令输出。
+- 改进 tests、search、git output、logs、build output 的 coding loop。
+- 作为执行输出增强器，而不是权限绕过器。
 
-Flyflor 已经有 prompt block 机制，应直接复用。
+V1 tools：
 
-建议新增 block 家族：
+- `rtk_command`
+  - level：`execute`
+  - confirm：`required`
+  - input：command、cwd、timeoutMs
+  - 行为：通过 RTK 运行请求命令并返回 compact output。
+- `rtk_gain`
+  - level：`read`
+  - confirm：`none`
+  - 行为：在可用时返回 RTK savings / usage stats。
+- `rtk_discover`
+  - level：`read`
+  - confirm：`none`
+  - 行为：报告 RTK 可优化的命令。
+
+与 `exec_command` 的集成：
+
+- 不强制所有命令都经过 RTK。
+- 对 tests、type checks、`git diff`、`git status`、search、logs 等有界且嘈杂的命令优先使用 RTK。
+- wrapping 前先保留原始命令的 permission classification。
+- wrapping 永远不能降低 confirm 要求。
+
+安装行为：
+
+- `plugins/rtk/install.ts` 为当前 OS/arch 下载匹配 release 或 package。
+- executable 存到 `plugins/rtk/bin/`。
+- installer 通过 `rtk --version` 验证。
+- 不运行会修改其他 agent 配置的 global shell-hook setup。
+
+## CodeGraph Plugin
+
+上游：`https://github.com/colbymchenry/codegraph`
+
+目的：
+
+- 提供快速本地代码图谱调查。
+- 提升摘要、影响分析和多 agent research。
+- 减少盲目的 `grep` / `read_file` 探索。
+
+重要行为：
+
+- CodeGraph 会在 workspace 下创建本地图谱状态 `.codegraph/`。
+- 它存在 MCP server，但 V1 Flyflor 先使用 CLI bridge。
+- MCP integration 等 Flyflor 有通用 MCP bridge 后再做。
+
+V1 tools：
+
+- `codegraph_status`
+  - level：`read`
+  - confirm：`none`
+  - 行为：检查 graph / index health。
+- `codegraph_init`
+  - level：`execute`
+  - confirm：`required`
+  - 行为：为 workspace 初始化 CodeGraph。
+- `codegraph_sync`
+  - level：`execute`
+  - confirm：`required`
+  - 行为：同步/更新本地图谱。
+- `codegraph_search`
+  - level：`read`
+  - confirm：`none`
+  - 行为：semantic 或 symbol-oriented search。
+- `codegraph_context`
+  - level：`read`
+  - confirm：`none`
+  - 行为：收集任务相关代码上下文。
+- `codegraph_callers`
+  - level：`read`
+  - confirm：`none`
+  - 行为：查看 symbol callers。
+- `codegraph_callees`
+  - level：`read`
+  - confirm：`none`
+  - 行为：查看 symbol callees。
+- `codegraph_impact`
+  - level：`read`
+  - confirm：`none`
+  - 行为：估算修改影响。
+
+默认规则：
+
+- 如果 `.codegraph/` 不存在，read tools 返回 `not_initialized` 和建议下一步。
+- 不自动初始化。
+- `codegraph_init` 和 `codegraph_sync` 需要 confirm 和 workspace-level lock。
+- 子 agent 可以使用只读 CodeGraph tools。
+- 子 agent 不能执行 init 或 sync。
+- 多个子 agent 并行 read query 允许。
+
+## Prompt Blocks
+
+使用已有 `FileService.blocks`，不增加新 prompt parser。
+
+Tools block：
 
 ```md
 <flyflor:tools>
 {
     version: 1,
-    allowed: ["read_file", "glob", "grep", "apply_patch", "task"],
-    enabledPlugins: ["codegraph"],
-    approvalPolicy: "on_request"
+    allowed: [
+        "read_file",
+        "glob",
+        "grep",
+        "apply_patch",
+        "exec_command",
+        "write_stdin",
+        "todo",
+        "task",
+        "rtk_command",
+        "rtk_gain",
+        "rtk_discover",
+        "codegraph_status",
+        "codegraph_search",
+        "codegraph_context",
+        "codegraph_callers",
+        "codegraph_callees",
+        "codegraph_impact"
+    ],
+    confirmAlways: ["apply_patch", "exec_command", "write_stdin", "rtk_command", "codegraph_init", "codegraph_sync"]
 }
 </flyflor:tools>
-
-<flyflor:permissions>
-{
-    version: 1,
-    maxLevel: "write",
-    network: false
-}
-</flyflor:permissions>
 ```
 
-这些 blocks 应在 tool loop 开始前先编译成运行时 policy object。
+Reflection block：
 
-## 分阶段实施路线
+```md
+<flyflor:reflection>
+{
+    version: 1,
+    maxToolCalls: 32,
+    maxTaskAgents: 3,
+    taskTimeoutMs: 120000
+}
+</flyflor:reflection>
+```
 
-### Phase 1：核心工具循环
+默认：
 
-- 新增 `FTool` 和 `@Tool()`；
-- 新增 `src/tool` 运行时服务；
-- 新增结构化 intelligence event；
-- 实现最小 built-in tool 集合：
-  - `read_file`
-  - `glob`
-  - `grep`
-  - `apply_patch`
-  - `shell`
-  - `task`
-  - `todo`
-- 实现 `allow | deny | ask`；
-- 扩展 IPC tool lifecycle event；
-- 保留当前文本流行为。
+- 没有 blocks 时，只启用内置 read tools。
+- `task` 只有在 read-only child mode 下才可默认启用。
+- write 和 execute 工具需要 confirm。
+- plugin install 和 plugin mutation actions 需要 confirm。
 
-### Phase 2：process session 与外部工具桥接
+## 实现阶段
 
-- 新增 `ProcessSessionService`；
-- 新增根 `./plugins` discovery / supervision；
-- 新增 stdio MCP bridge；
-- 接入外部插件：
-  - `browser-use`
-  - `computer-use`
-  - `rtk`
-  - `codegraph`
-- `task` 支持 foreground subagent。
+每个阶段都应足够小，可以独立 review 和验证。
 
-### Phase 3：更丰富的策略与后台执行
+### Phase 1: Plan Docs
 
-- background task / subagent；
-- `PreCompact` 结构化摘要，保留 carry-forward state；
-- approval persistence 与 trusted-session rule；
-- 更多 provider tool schema；
-- 更丰富的 UI / IPC 表面，用于 approval、todo、tool progress。
+- 重写 `TOOLS-PLAN.md`。
+- 新增或同步 `TOOLS-PLAN.zh.cn.md`。
+- 不修改 runtime code。
 
-## 测试与回归计划
-
-至少要新增这些测试覆盖：
-
-1. tool discovery 与 IOC registration
-2. provider schema sanitization
-3. 有 tool-call 能力 provider 的 intelligence event parsing
-4. `Brain` tool loop 的 success / failure / cancel 语义
-5. permission `allow | deny | ask`
-6. approval suspend / resume over IPC
-7. patch path escape 与 old-text mismatch rejection
-8. process session polling、stdin、timeout、cancel、truncation
-9. socket event ordering 与 per-socket isolation
-10. MCP name normalization 与 output shaping
-11. subagent deny inheritance
-12. plugin manifest validation 与 plugin runtime supervision
-13. codegraph workspace-bound indexing / search
-
-真正开始实现后的健康门槛：
+验证：
 
 - `bun run check`
-- 每个变更边界对应的 focused `bun test`
 
-## 待定问题与推荐答案
+### Phase 2: Core Reflection Types
 
-1. 可执行插件是否复用 `skills` 配置？
-   - 推荐：不要。
-   - `skills` 继续用于 skill content；可执行插件建议新增独立配置或默认固定到根 `./plugins`。
+- 增加 `FTool`。
+- 增加 `@Tool()`。
+- 增加 `AgentSignal`。
+- 增加 reflection event 和 tool definition types。
+- 暂不接真实工具。
 
-2. 哪些 provider 先支持 tool call？
-   - 推荐：先 `OpenAIResponses`，再 `AnthropicMessages`。
+验证：
 
-3. 第一阶段是否暴露 raw file overwrite？
-   - 推荐：不要。
-   - 先以 patch / edit 导向工具为主。
+- `bun run check`
+- 通过 `bunx tsc --noEmit` 做 focused type-checking。
 
-4. browser / computer 是否做成 built-in？
-   - 推荐：不要。
-   - 它们应是外部 plugin runtime，由内核桥接。
+### Phase 3: Brain Reflection Shell
 
-5. codegraph 是否藏在泛搜索后面？
-   - 推荐：不要。
-   - 直接暴露 `codegraph_index` 和 `codegraph_search`。
+- 增加 `src/agent/brain/reflection.ts`。
+- 让 text-only model output 先经过 `Reflection`。
+- 保持 `Brain.transformer()` 外部行为。
+- 保持成功才提交 context。
 
-## 最终建议
+验证：
 
-Flyflor 不应该把“tools”做成 `Brain` 或 `Intelligence` 里的 helper 函数集合。
+- 现有 `brain.test.ts`
+- 现有 `socket.test.ts`
 
-应该补出的是真正的：
+### Phase 4: Structured Intelligence Events
 
-- `FTool` 运行时 scope；
-- 专门的 `src/tool` orchestration boundary；
-- `Brain` 内的结构化模型事件和 tool loop；
-- 显式 permission / sandbox service；
-- patch / process / session primitives；
-- 严格区分内核插件加载（`src/plugins`）与仓库根外挂工具层（`./plugins`）。
+- 增加 `text_delta` 和 `assistant_finish` event 支持。
+- 保持 `complete()` 兼容。
+- 保持 text-only adapters 工作。
+- 暂不启用 tool calls。
 
-这条路径既符合当前仓库规则，也能复用现有 IOC、Prompt、IPC 机制，同时为 Codex 风格执行层、Claude 风格策略 hooks、opencode 风格 task/subagent 流程留出清晰演进空间，而不需要让 Flyflor 失去自己现在的形状。
+验证：
+
+- 现有 `intelligence.test.ts`
+
+### Phase 5: Built-In Read Tools
+
+- 实现 `read_file`。
+- 实现 `glob`。
+- 实现 `grep`。
+- 向 `Reflection` 暴露 schemas。
+- 把 tool results 回灌模型 turn。
+
+验证：
+
+- path escape rejection；
+- read tools 不需要 confirm；
+- tool result 出现在下一次 model request。
+
+### Phase 6: Confirm
+
+- 增加 `confirmRequested` 和 `confirmResolved` signals。
+- 增加 inbound `confirm` routing。
+- Reflection 等待期间暂停。
+- confirm 后恢复或拒绝 tool call。
+- 不使用 `ask`。
+
+验证：
+
+- confirmed calls 会执行；
+- rejected calls 不执行；
+- cancel 会释放 pending confirm；
+- 测试断言 permission path 不 emit `ask`。
+
+### Phase 7: Write And Exec Tools
+
+- 实现 `apply_patch`。
+- 实现 `exec_command`。
+- 实现 `write_stdin`。
+- 增加 timeout、truncation、cancellation 和 process session ids。
+- write / execute tools 需要 confirm。
+
+验证：
+
+- patch context mismatch rejection；
+- shell timeout handling；
+- stdin to existing session；
+- 默认 confirm required。
+
+### Phase 8: Task Tool V1
+
+- 实现 foreground `task`。
+- 通过 IOC spawn 多个 child `Agent` 实例。
+- 为每个 child 设置 isolated context 和 read-only tools。
+- 收集结构化 reports。
+- 给 parent reflection 返回稳定排序的 synthesis。
+
+验证：
+
+- child context isolation；
+- child 不能写；
+- 一个 child 失败时结果是 partial；
+- parent cancellation 会取消 children。
+
+### Phase 9: External Plugin Bridge
+
+- 增加 `src/plugins/types.ts`。
+- 增加 `src/plugins/service.ts`。
+- 读取 `./plugins/*/plugin.json`。
+- 启动 `bun bridge.ts`。
+- 实现 JSONL handshake、tools、call、cancel。
+- 把 plugin responses 转成 reflection tool events。
+
+验证：
+
+- fake plugin bridge tests；
+- invalid JSONL handling；
+- timeout and cancel；
+- stderr 不影响协议。
+
+### Phase 10: RTK Plugin
+
+- 增加 `plugins/rtk/plugin.json`。
+- 增加 `plugins/rtk/install.ts`。
+- 增加 `plugins/rtk/bridge.ts`。
+- 实现 `rtk_command`、`rtk_gain`、`rtk_discover`。
+- 可选让 `exec_command` 对嘈杂命令选择 RTK wrapping。
+
+验证：
+
+- missing binary typed error；
+- `rtk_command` requires confirm；
+- `rtk_gain` requires no confirm；
+- RTK wrapping 不降低 permission classification。
+
+### Phase 11: CodeGraph Plugin
+
+- 增加 `plugins/codegraph/plugin.json`。
+- 增加 `plugins/codegraph/install.ts`。
+- 增加 `plugins/codegraph/bridge.ts`。
+- 实现 status、init、sync、search、context、callers、callees、impact。
+- 让 CodeGraph read tools 对 task children 可用。
+- init/sync 只允许 parent 执行。
+
+验证：
+
+- 没有 `.codegraph/` 时返回 `not_initialized`；
+- init/sync 需要 confirm；
+- child agents 不能 init/sync；
+- parallel read queries 稳定。
+
+### Phase 12: Docs And Mirror Cleanup
+
+- 只有代码存在后才更新 architecture docs。
+- 保持所有 `.md` mirror 成对。
+- 确保 runtime 不读 `.zh.cn.md`。
+
+验证：
+
+- `bun run check`
+
+## 测试计划
+
+最低 focused coverage：
+
+- `Brain` text compatibility 和 context commit/rollback。
+- `Reflection` text、tool、confirm、cancel、error、task paths。
+- `Intelligence` 针对支持 provider 的 structured events。
+- `Socket` 对 `data` 和 `streamEnd` 的兼容。
+- `Socket` 对 tool、confirm、task events 的 structured signals。
+- 内置 read tools 和 workspace path safety。
+- Patch validation 和 mismatch handling。
+- Exec timeout、truncation、cancellation、stdin。
+- Task child context isolation 和 read-only enforcement。
+- Plugin host handshake、call、delta、result、error、timeout、cancel。
+- RTK permission preservation。
+- CodeGraph init/sync locks 和 child read-only access。
+
+健康门禁：
+
+- `bun run check`
+- 针对变更边界的 focused `bun test`
+- 大阶段完成前跑更广泛的 `bun test`
+
+## 开放风险
+
+- `Intelligence` provider adapters 可能需要不同 tool result message 格式。
+- `AgentSignal` 迁移如果不严格保持兼容，可能破坏 socket tests。
+- Confirm pause/resume 需要仔细处理 pending-turn ownership，避免并发 socket 串信号。
+- 子 agent 会快速放大 token 用量，V1 必须强制 concurrency caps。
+- CodeGraph sync 如果没有 workspace lock，可能与 child read query 竞争。
+- RTK wrapping 不能隐藏 command failure，也不能降低 confirm 要求。
+- Plugin install scripts 需要确定性 OS/arch 处理和 typed failure modes。
+
+## 非目标
+
+- V1 不做通用 MCP bridge。
+- V1 不做 browser-use 或 computer-use。
+- V1 不做 background child agents。
+- V1 不做 persistent task ledger。
+- V1 不允许 child-agent writes。
+- V1 不允许 recursive task。
+- 不做 permission `ask`。
+- 不为 RTK 安装 global shell hook。
+- 不把 plugin binary 编译进 Flyflor。

@@ -79,6 +79,7 @@ const ROLE_DIRECTORIES = new Set([
     join('src', 'agent', 'brain', 'intelligence'),
     join('src', 'neural', 'ipc'),
     join('src', 'neural', 'packet'),
+    join('src', 'plugins'),
 ]);
 
 /** Existing compact object files are preserved until a dedicated naming migration finalizes the convention. */
@@ -95,6 +96,13 @@ const COMPACT_TYPESCRIPT_SOURCE_FILES = new Set([
     join('src', 'agent', 'brain', 'intelligence', 'protocols', 'openai-chat-completions.ts'),
     join('src', 'agent', 'brain', 'intelligence', 'protocols', 'openai-responses.ts'),
     join('src', 'agent', 'brain', 'intelligence', 'protocols', 'vllm.ts'),
+    join('src', 'plugins', 'tools', 'codegraph.ts'),
+    join('src', 'plugins', 'tools', 'glob.ts'),
+    join('src', 'plugins', 'tools', 'grep.ts'),
+    join('src', 'plugins', 'module.ts'),
+    join('src', 'plugins', 'tools', 'rtk.ts'),
+    join('src', 'plugins', 'tools', 'task.ts'),
+    join('src', 'plugins', 'tools', 'todo.ts'),
 ]);
 
 /** Existing non-dotted source files are preserved until a dedicated naming migration happens. */
