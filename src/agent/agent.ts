@@ -2,8 +2,25 @@ import { Inject, Provide, Logger, FAgent } from '@/core';
 import { Brain } from './brain';
 import { ConfigComponent, type FAgentProfileConfiguration } from '@/config';
 import type { FLogger } from '@/core/logger';
+import type { AgentChatMessage } from './brain/intelligence';
+import type { BrainInvestigationResult } from './brain/investigation';
 
+interface AgentTurnMemory {
+    id: number;
+    status: 'running' | 'completed' | 'failed' | 'cancelled';
+    userMessage: string;
+    investigation?: BrainInvestigationResult;
+    messages: AgentChatMessage[];
+    chunks: string[];
+    assistant: string;
+    error?: string;
+    startedAt: string;
+    completedAt?: string;
+}
 
+interface AgentRuntimeMemory {
+    turns: AgentTurnMemory[];
+}
 
 @Provide()
 export class Agent extends FAgent<string> {
@@ -18,15 +35,79 @@ export class Agent extends FAgent<string> {
     @Logger(Agent.name)
     public readonly log!: FLogger;
 
+    public memory: AgentRuntimeMemory;
+
     constructor(public readonly agentConfig: FAgentProfileConfiguration) {
         super();
+        this.memory = { turns: [] };
     }
 
     public override async next(data: string): Promise<void> {
-        for await (const content of this.brain.transformer(data)) {
-            this.log.debug(data, content);
-            super.next(content);
+        if (!this.hasPreparedTurnApi()) {
+            for await (const content of this.brain.transformer(data)) {
+                super.next(content);
+            }
+            return;
         }
+
+        const turn = this.createTurn(data);
+        try {
+            const prepared = await this.brain.prepareTurn(data);
+            turn.investigation = prepared.investigation;
+            turn.messages = prepared.messages;
+            this.log.info('agent.turn.prepared', {
+                id: turn.id,
+                messages: turn.messages.length,
+                investigationConfidence: turn.investigation.state.confidence,
+                observations: turn.investigation.observations.length,
+            });
+            for await (const content of this.brain.streamTurn(turn.messages)) {
+                turn.chunks.push(content);
+                turn.assistant += content;
+                super.next(content);
+            }
+            this.brain.commitTurn(data, turn.assistant);
+            turn.status = 'completed';
+            turn.completedAt = new Date().toISOString();
+            this.log.info('agent.turn.complete', {
+                id: turn.id,
+                chunks: turn.chunks.length,
+                assistantLength: turn.assistant.length,
+            });
+        } catch (error) {
+            turn.status = 'failed';
+            turn.completedAt = new Date().toISOString();
+            turn.error = error instanceof Error ? error.message : String(error);
+            this.log.error('agent.turn.error', {
+                id: turn.id,
+                error: turn.error,
+            });
+            throw error;
+        }
+    }
+
+    private createTurn(userMessage: string): AgentTurnMemory {
+        const turn: AgentTurnMemory = {
+            id: this.memory.turns.length + 1,
+            status: 'running',
+            userMessage,
+            messages: [],
+            chunks: [],
+            assistant: '',
+            startedAt: new Date().toISOString(),
+        };
+        this.memory.turns.push(turn);
+        this.log.info('agent.turn.start', {
+            id: turn.id,
+            userMessageLength: userMessage.length,
+        });
+        return turn;
+    }
+
+    private hasPreparedTurnApi(): boolean {
+        return typeof this.brain.prepareTurn === 'function'
+            && typeof this.brain.streamTurn === 'function'
+            && typeof this.brain.commitTurn === 'function';
     }
 
     // public pushUser(content: string): AgentChatMessage[] {

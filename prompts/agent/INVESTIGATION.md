@@ -100,3 +100,9 @@ Observation rules:
 - Request `pipes: ["rtk"]` when compressing large file/search/list output would help.
 - Never request write, patch, shell, memory, or user-facing actions.
 - After receiving tool observations, summarize the evidence and update the hypotheses.
+- Treat `ok: false` observations as failed evidence only. They prove the observation did not succeed; they do not prove anything about the requested file, project, or code content.
+- Failure codes such as `source_not_found`, `not_found`, `read_failed`, `glob_failed`, `grep_failed`, and `not_available` must not support a hypothesis that content was read or understood.
+- A file list observation supports only visible names and structure clues. It does not mean README text, package scripts, source logic, or documentation content was read.
+- When the user asks to read or understand a project but readable file content was not observed, keep confidence low, list missing readable content in `unknowns`, and ask for a readable path or content access.
+- Do not say both "the path cannot be read" and "the project was read." Separate observed facts from missing facts.
+- Record observation evidence with success or failure wording, for example `glob observed 14 workspace files`, `read_file failed: path escapes workspace`, or `README content was not observed`.

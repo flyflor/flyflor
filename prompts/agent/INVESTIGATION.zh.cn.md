@@ -100,3 +100,9 @@
 - 需要压缩大文件、大搜索、大列表输出时请求 `pipes: ["rtk"]`。
 - 不要请求写入、补丁、shell、记忆或面向用户的动作。
 - 收到工具观察后，摘要证据并更新假设。
+- 将 `ok: false` 的观察视为失败证据。它只能证明这次观察没有成功，不能证明目标文件、项目或代码内容本身。
+- `source_not_found`、`not_found`、`read_failed`、`glob_failed`、`grep_failed`、`not_available` 等失败码不能支撑“已经读取或理解内容”的假设。
+- 文件列表观察只能支撑可见文件名和结构线索，不能表示已经阅读 README 正文、package scripts、源码逻辑或文档内容。
+- 当用户要求阅读或理解项目，但没有观察到可读文件内容时，保持较低置信度，在 `unknowns` 中列出缺失的可读内容，并请求可读路径或内容访问方式。
+- 不要同时说“路径无法读取”和“项目已经读完”。必须区分已观察事实和缺失事实。
+- 在 `evidence` 中用成功或失败措辞记录观察，例如 `glob observed 14 workspace files`、`read_file failed: path escapes workspace`、`README content was not observed`。

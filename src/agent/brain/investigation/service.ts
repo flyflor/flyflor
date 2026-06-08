@@ -6,6 +6,7 @@ import { AgentChatRole, Intelligence } from '../intelligence';
 import type { BrainInvestigationRequest, BrainInvestigationResult, BrainInvestigationState } from './types';
 
 const MAX_INVESTIGATION_TOOL_ROUNDS = 5;
+const INVESTIGATION_LOG_PREVIEW_LENGTH = 160;
 
 @Service()
 export class Investigation extends FService {
@@ -46,24 +47,57 @@ export class Investigation extends FService {
 
     public async investigate(request: BrainInvestigationRequest): Promise<BrainInvestigationResult> {
         const observations: InvestigationObservation[] = [];
-        let state = await this.ask(request, observations);
-        for (let round = 0; round < MAX_INVESTIGATION_TOOL_ROUNDS; round += 1) {
+        this.log.info('investigation.start', {
+            userMessageLength: request.content.length,
+            contextMessages: request.context.length,
+            maxToolRounds: MAX_INVESTIGATION_TOOL_ROUNDS,
+        });
+
+        let state = await this.ask(request, observations, 0);
+        this.logState(0, state, observations);
+        for (let round = 1; round <= MAX_INVESTIGATION_TOOL_ROUNDS; round += 1) {
             const observeRequests = this.observeRequests(state);
             if (observeRequests.length === 0) break;
             for (const observeRequest of observeRequests) {
-                observations.push(await this.observe(observeRequest));
+                this.log.info('investigation.observe_request', {
+                    round,
+                    request: this.describeObserveRequest(observeRequest),
+                });
+                const observation = await this.observe(observeRequest);
+                observations.push(observation);
+                this.log.info('investigation.observe_result', {
+                    round,
+                    observation: this.describeObservation(observation),
+                });
             }
-            state = await this.ask(request, observations, state);
+            state = await this.ask(request, observations, round, state);
+            this.logState(round, state, observations);
         }
-        return { state: this.withoutObserveRequests(state), observations };
+        const publicState = this.withoutObserveRequests(state);
+        this.log.info('investigation.complete', {
+            confidence: publicState.confidence,
+            observations: observations.length,
+            hasNextQuestion: publicState.next_question.length > 0,
+        });
+        return { state: publicState, observations };
     }
 
-    private async ask(request: BrainInvestigationRequest, observations: InvestigationObservation[], state?: BrainInvestigationState): Promise<BrainInvestigationState> {
+    private async ask(request: BrainInvestigationRequest, observations: InvestigationObservation[], round: number, state?: BrainInvestigationState): Promise<BrainInvestigationState> {
+        this.log.info('investigation.ask', {
+            round,
+            observations: observations.length,
+            previousConfidence: state?.confidence,
+        });
         const response = await this.intelligence.complete([
             { role: AgentChatRole.System, content: this.prompt.render() },
             { role: AgentChatRole.User, content: this.renderRequest(request, observations, state) },
         ]);
-        return this.parseState(response, request.content);
+        this.log.info('investigation.llm_response', {
+            round,
+            responseLength: response.length,
+            response,
+        });
+        return this.parseState(response, request.content, round);
     }
 
     private renderRequest(request: BrainInvestigationRequest, observations: InvestigationObservation[], state?: BrainInvestigationState): string {
@@ -75,9 +109,14 @@ export class Investigation extends FService {
         }, null, 4);
     }
 
-    private parseState(response: string, content: string): BrainInvestigationState {
+    private parseState(response: string, content: string, round: number): BrainInvestigationState {
         const parsed = this.parseJsonObject(response);
         if (parsed === undefined) {
+            this.log.warn('investigation.parse_failed', {
+                round,
+                responseLength: response.length,
+                responsePreview: this.preview(response),
+            });
             return this.fallbackState(content, response);
         }
         return this.normalizeState(parsed, content);
@@ -242,6 +281,64 @@ export class Investigation extends FService {
                 pipe_status: { name: pipe, code },
             },
         };
+    }
+
+    private logState(round: number, state: BrainInvestigationState, observations: InvestigationObservation[]): void {
+        this.log.info('investigation.state', {
+            round,
+            confidence: state.confidence,
+            observations: observations.length,
+            explicit_requests: this.previewStrings(state.explicit_requests),
+            implicit_goals: this.previewStrings(state.implicit_goals),
+            constraints: this.previewStrings(state.constraints),
+            unknowns: this.previewStrings(state.unknowns),
+            information_needed: this.previewStrings(state.information_needed),
+            hypotheses: state.hypotheses.map((hypothesis) => ({
+                goal: this.preview(hypothesis.goal),
+                confidence: hypothesis.confidence,
+            })),
+            next_question: this.preview(state.next_question),
+            observe_requests: this.observeRequests(state).map((request) => this.describeObserveRequest(request)),
+        });
+    }
+
+    private describeObserveRequest(request: InvestigationObserveRequest): Record<string, unknown> {
+        return {
+            goal: this.preview(request.goal),
+            kind: request.kind,
+            query: request.query,
+            path: request.path,
+            symbol: request.symbol,
+            relation: request.relation,
+            caseSensitive: request.caseSensitive,
+            maxMatches: request.maxMatches,
+            maxBytes: request.maxBytes,
+            timeoutMs: request.timeoutMs,
+            pipes: request.pipes ?? [],
+        };
+    }
+
+    private describeObservation(observation: InvestigationObservation): Record<string, unknown> {
+        return {
+            source: observation.source,
+            pipes: observation.pipes,
+            ok: observation.ok,
+            code: observation.code,
+            summary: this.preview(observation.summary),
+            evidenceCount: observation.evidence.length,
+            truncated: observation.truncated === true,
+            error: observation.error === undefined ? undefined : this.preview(observation.error),
+        };
+    }
+
+    private previewStrings(values: string[]): string[] {
+        return values.map((value) => this.preview(value));
+    }
+
+    private preview(value: string): string {
+        const normalized = value.replace(/\s+/g, ' ').trim();
+        if (normalized.length <= INVESTIGATION_LOG_PREVIEW_LENGTH) return normalized;
+        return `${normalized.slice(0, INVESTIGATION_LOG_PREVIEW_LENGTH - 3)}...`;
     }
 
     private isRecord(value: unknown): value is Record<string, unknown> {

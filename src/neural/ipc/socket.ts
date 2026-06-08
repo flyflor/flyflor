@@ -79,21 +79,21 @@ export class FSocket implements SocketHandler<SocketConnectionData, 'buffer'> {
                     concatMap(({ packets }) => from(packets)),
                     concatMap((packet) => from(this.routePacket(socket, packet))),
                     ignoreElements(),
-                    catchError(error => {
+                    catchError((error) => {
                         const cause = error instanceof Error ? error : Error(String(error));
                         this.log.error(SocketEvent.Data, cause);
                         socket.write(this.packet.encode({ action: SocketEvent.Error, data: cause.message }));
                         return EMPTY;
                     }),
                     defaultIfEmpty(undefined),
-                )
+                ),
             );
         });
     }
 
     private async routePacket(socket: Socket<SocketConnectionData>, packet: SocketPacket): Promise<void> {
-        const subscription = this.synapse.agent.subscribe(content => {
-            this.log.debug('output', content);
+        const subscription = this.synapse.agent.subscribe((content) => {
+            // this.log.debug('output', content);
             socket.write(this.packet.encode({ action: SocketEvent.Data, data: content }));
         });
         try {

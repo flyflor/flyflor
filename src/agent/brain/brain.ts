@@ -106,25 +106,25 @@ export class Brain extends FService {
             return typeof value === 'string' && value.trim().length > 0 ? `<${section}>\n${value.trim()}\n</${section}>` : '';
         }).filter((section) => section.length > 0);
 
-        return this.crystall.prepareTurn([
-            {  role: AgentChatRole.System, content: sections.join('\n\n') },
-            ...this.context,
-            { role: AgentChatRole.User, content: this.renderUserContent(content, investigation) },
-        ]);
+        return this.crystall.prepareTurn([{ role: AgentChatRole.System, content: sections.join('\n\n') }, ...this.context, { role: AgentChatRole.User, content: this.renderUserContent(content, investigation) }]);
     }
 
     private renderUserContent(content: string, investigation?: BrainInvestigationResult): string {
         if (investigation === undefined) return content;
-        return JSON.stringify({
-            user_message: content,
-            investigation: investigation.state,
-            tool_observations: investigation.observations.map((observation) => ({
-                source: observation.source,
-                pipes: observation.pipes,
-                ok: observation.ok,
-                code: observation.code,
-                summary: observation.summary,
-            })),
-        }, null, 4);
+        return JSON.stringify(
+            {
+                user_message: content,
+                investigation: investigation.state,
+                tool_observations: investigation.observations.map((observation) => ({
+                    source: observation.source,
+                    pipes: observation.pipes,
+                    ok: observation.ok,
+                    code: observation.code,
+                    summary: observation.summary,
+                })),
+            },
+            null,
+            4,
+        );
     }
 }

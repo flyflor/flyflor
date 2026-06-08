@@ -6200,3 +6200,2763 @@
 [DEBUG]  2026-06-07T18:08:36.009Z  Brain
   | transformer
   | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+[DEBUG]  2026-06-07T18:09:30.330Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 项目
+[DEBUG]  2026-06-07T18:09:30.331Z  FSocket
+  | output
+  | 项目
+[DEBUG]  2026-06-07T18:09:30.331Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 已
+[DEBUG]  2026-06-07T18:09:30.332Z  FSocket
+  | output
+  | 已
+[DEBUG]  2026-06-07T18:09:30.412Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 通过
+[DEBUG]  2026-06-07T18:09:30.413Z  FSocket
+  | output
+  | 通过
+[DEBUG]  2026-06-07T18:09:30.413Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  |  glob
+[DEBUG]  2026-06-07T18:09:30.413Z  FSocket
+  | output
+  |  glob
+[DEBUG]  2026-06-07T18:09:30.413Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  |  
+[DEBUG]  2026-06-07T18:09:30.413Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-07T18:09:30.414Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 探测
+[DEBUG]  2026-06-07T18:09:30.414Z  FSocket
+  | output
+  | 探测
+[DEBUG]  2026-06-07T18:09:30.414Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 到
+[DEBUG]  2026-06-07T18:09:30.414Z  FSocket
+  | output
+  | 到
+[DEBUG]  2026-06-07T18:09:30.425Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 结构
+[DEBUG]  2026-06-07T18:09:30.425Z  FSocket
+  | output
+  | 结构
+[DEBUG]  2026-06-07T18:09:30.425Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | （
+[DEBUG]  2026-06-07T18:09:30.425Z  FSocket
+  | output
+  | （
+[DEBUG]  2026-06-07T18:09:30.524Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | CL
+[DEBUG]  2026-06-07T18:09:30.525Z  FSocket
+  | output
+  | CL
+[DEBUG]  2026-06-07T18:09:30.525Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | I
+[DEBUG]  2026-06-07T18:09:30.526Z  FSocket
+  | output
+  | I
+[DEBUG]  2026-06-07T18:09:30.526Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  |  
+[DEBUG]  2026-06-07T18:09:30.526Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-07T18:09:30.526Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 工具
+[DEBUG]  2026-06-07T18:09:30.526Z  FSocket
+  | output
+  | 工具
+[DEBUG]  2026-06-07T18:09:30.526Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | ，
+[DEBUG]  2026-06-07T18:09:30.527Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-07T18:09:30.527Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | Type
+[DEBUG]  2026-06-07T18:09:30.527Z  FSocket
+  | output
+  | Type
+[DEBUG]  2026-06-07T18:09:30.527Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | Script
+[DEBUG]  2026-06-07T18:09:30.527Z  FSocket
+  | output
+  | Script
+[DEBUG]  2026-06-07T18:09:30.527Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  |  +
+[DEBUG]  2026-06-07T18:09:30.528Z  FSocket
+  | output
+  |  +
+[DEBUG]  2026-06-07T18:09:30.528Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  |  Bun
+[DEBUG]  2026-06-07T18:09:30.528Z  FSocket
+  | output
+  |  Bun
+[DEBUG]  2026-06-07T18:09:30.528Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | ，
+[DEBUG]  2026-06-07T18:09:30.528Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-07T18:09:30.528Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 含
+[DEBUG]  2026-06-07T18:09:30.529Z  FSocket
+  | output
+  | 含
+[DEBUG]  2026-06-07T18:09:30.529Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  |  AG
+[DEBUG]  2026-06-07T18:09:30.529Z  FSocket
+  | output
+  |  AG
+[DEBUG]  2026-06-07T18:09:30.598Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | ENTS
+[DEBUG]  2026-06-07T18:09:30.598Z  FSocket
+  | output
+  | ENTS
+[DEBUG]  2026-06-07T18:09:30.599Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | .md
+[DEBUG]  2026-06-07T18:09:30.599Z  FSocket
+  | output
+  | .md
+[DEBUG]  2026-06-07T18:09:30.599Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  |  
+[DEBUG]  2026-06-07T18:09:30.599Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-07T18:09:30.599Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 及
+[DEBUG]  2026-06-07T18:09:30.600Z  FSocket
+  | output
+  | 及
+[DEBUG]  2026-06-07T18:09:30.600Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 架构
+[DEBUG]  2026-06-07T18:09:30.600Z  FSocket
+  | output
+  | 架构
+[DEBUG]  2026-06-07T18:09:30.600Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 文档
+[DEBUG]  2026-06-07T18:09:30.601Z  FSocket
+  | output
+  | 文档
+[DEBUG]  2026-06-07T18:09:30.601Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | ），
+[DEBUG]  2026-06-07T18:09:30.601Z  FSocket
+  | output
+  | ），
+[DEBUG]  2026-06-07T18:09:30.601Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 但
+[DEBUG]  2026-06-07T18:09:30.601Z  FSocket
+  | output
+  | 但
+[DEBUG]  2026-06-07T18:09:30.623Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 无法
+[DEBUG]  2026-06-07T18:09:30.624Z  FSocket
+  | output
+  | 无法
+[DEBUG]  2026-06-07T18:09:30.624Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 直接
+[DEBUG]  2026-06-07T18:09:30.624Z  FSocket
+  | output
+  | 直接
+[DEBUG]  2026-06-07T18:09:30.654Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 读取
+[DEBUG]  2026-06-07T18:09:30.654Z  FSocket
+  | output
+  | 读取
+[DEBUG]  2026-06-07T18:09:30.655Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 文件
+[DEBUG]  2026-06-07T18:09:30.655Z  FSocket
+  | output
+  | 文件
+[DEBUG]  2026-06-07T18:09:30.655Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 内容
+[DEBUG]  2026-06-07T18:09:30.655Z  FSocket
+  | output
+  | 内容
+[DEBUG]  2026-06-07T18:09:30.655Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | （
+[DEBUG]  2026-06-07T18:09:30.656Z  FSocket
+  | output
+  | （
+[DEBUG]  2026-06-07T18:09:30.700Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 工作
+[DEBUG]  2026-06-07T18:09:30.701Z  FSocket
+  | output
+  | 工作
+[DEBUG]  2026-06-07T18:09:30.701Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 空间
+[DEBUG]  2026-06-07T18:09:30.701Z  FSocket
+  | output
+  | 空间
+[DEBUG]  2026-06-07T18:09:30.717Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 路径
+[DEBUG]  2026-06-07T18:09:30.717Z  FSocket
+  | output
+  | 路径
+[DEBUG]  2026-06-07T18:09:30.750Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 限制
+[DEBUG]  2026-06-07T18:09:30.751Z  FSocket
+  | output
+  | 限制
+[DEBUG]  2026-06-07T18:09:30.751Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | ）。
+  | 
+  | 
+[DEBUG]  2026-06-07T18:09:30.752Z  FSocket
+  | output
+  | ）。
+  | 
+  | 
+[DEBUG]  2026-06-07T18:09:30.752Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 请
+[DEBUG]  2026-06-07T18:09:30.752Z  FSocket
+  | output
+  | 请
+[DEBUG]  2026-06-07T18:09:30.856Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 选择
+[DEBUG]  2026-06-07T18:09:30.857Z  FSocket
+  | output
+  | 选择
+[DEBUG]  2026-06-07T18:09:30.857Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 以下
+[DEBUG]  2026-06-07T18:09:30.857Z  FSocket
+  | output
+  | 以下
+[DEBUG]  2026-06-07T18:09:30.857Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 方式
+[DEBUG]  2026-06-07T18:09:30.858Z  FSocket
+  | output
+  | 方式
+[DEBUG]  2026-06-07T18:09:30.858Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 之一
+[DEBUG]  2026-06-07T18:09:30.858Z  FSocket
+  | output
+  | 之一
+[DEBUG]  2026-06-07T18:09:30.858Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 继续
+[DEBUG]  2026-06-07T18:09:30.858Z  FSocket
+  | output
+  | 继续
+[DEBUG]  2026-06-07T18:09:30.858Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | ：
+  | 
+[DEBUG]  2026-06-07T18:09:30.859Z  FSocket
+  | output
+  | ：
+  | 
+[DEBUG]  2026-06-07T18:09:30.859Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 1
+[DEBUG]  2026-06-07T18:09:30.859Z  FSocket
+  | output
+  | 1
+[DEBUG]  2026-06-07T18:09:30.859Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | .
+[DEBUG]  2026-06-07T18:09:30.859Z  FSocket
+  | output
+  | .
+[DEBUG]  2026-06-07T18:09:30.859Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  |  
+[DEBUG]  2026-06-07T18:09:30.860Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-07T18:09:30.860Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 将
+[DEBUG]  2026-06-07T18:09:30.860Z  FSocket
+  | output
+  | 将
+[DEBUG]  2026-06-07T18:09:30.877Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  |  **
+[DEBUG]  2026-06-07T18:09:30.878Z  FSocket
+  | output
+  |  **
+[DEBUG]  2026-06-07T18:09:30.878Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | package
+[DEBUG]  2026-06-07T18:09:30.878Z  FSocket
+  | output
+  | package
+[DEBUG]  2026-06-07T18:09:30.878Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | .json
+[DEBUG]  2026-06-07T18:09:30.879Z  FSocket
+  | output
+  | .json
+[DEBUG]  2026-06-07T18:09:30.879Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | **
+[DEBUG]  2026-06-07T18:09:30.879Z  FSocket
+  | output
+  | **
+[DEBUG]  2026-06-07T18:09:30.963Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 、
+[DEBUG]  2026-06-07T18:09:30.963Z  FSocket
+  | output
+  | 、
+[DEBUG]  2026-06-07T18:09:30.964Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | **
+[DEBUG]  2026-06-07T18:09:30.964Z  FSocket
+  | output
+  | **
+[DEBUG]  2026-06-07T18:09:30.964Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | README
+[DEBUG]  2026-06-07T18:09:30.965Z  FSocket
+  | output
+  | README
+[DEBUG]  2026-06-07T18:09:30.965Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | .md
+[DEBUG]  2026-06-07T18:09:30.965Z  FSocket
+  | output
+  | .md
+[DEBUG]  2026-06-07T18:09:30.965Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | **
+[DEBUG]  2026-06-07T18:09:30.965Z  FSocket
+  | output
+  | **
+[DEBUG]  2026-06-07T18:09:30.966Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 、
+[DEBUG]  2026-06-07T18:09:30.966Z  FSocket
+  | output
+  | 、
+[DEBUG]  2026-06-07T18:09:30.966Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | **
+[DEBUG]  2026-06-07T18:09:30.966Z  FSocket
+  | output
+  | **
+[DEBUG]  2026-06-07T18:09:30.966Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | AG
+[DEBUG]  2026-06-07T18:09:30.966Z  FSocket
+  | output
+  | AG
+[DEBUG]  2026-06-07T18:09:30.967Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | ENTS
+[DEBUG]  2026-06-07T18:09:30.967Z  FSocket
+  | output
+  | ENTS
+[DEBUG]  2026-06-07T18:09:30.967Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | .md
+[DEBUG]  2026-06-07T18:09:30.967Z  FSocket
+  | output
+  | .md
+[DEBUG]  2026-06-07T18:09:30.967Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | **
+[DEBUG]  2026-06-07T18:09:30.967Z  FSocket
+  | output
+  | **
+[DEBUG]  2026-06-07T18:09:30.968Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  |  
+[DEBUG]  2026-06-07T18:09:30.968Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-07T18:09:30.977Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 等内容
+[DEBUG]  2026-06-07T18:09:30.977Z  FSocket
+  | output
+  | 等内容
+[DEBUG]  2026-06-07T18:09:31.009Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 粘贴
+[DEBUG]  2026-06-07T18:09:31.009Z  FSocket
+  | output
+  | 粘贴
+[DEBUG]  2026-06-07T18:09:31.039Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 或
+[DEBUG]  2026-06-07T18:09:31.040Z  FSocket
+  | output
+  | 或
+[DEBUG]  2026-06-07T18:09:31.072Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 复制
+[DEBUG]  2026-06-07T18:09:31.072Z  FSocket
+  | output
+  | 复制
+[DEBUG]  2026-06-07T18:09:31.105Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 到
+[DEBUG]  2026-06-07T18:09:31.105Z  FSocket
+  | output
+  | 到
+[DEBUG]  2026-06-07T18:09:31.105Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 工作
+[DEBUG]  2026-06-07T18:09:31.106Z  FSocket
+  | output
+  | 工作
+[DEBUG]  2026-06-07T18:09:31.106Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 空间
+[DEBUG]  2026-06-07T18:09:31.106Z  FSocket
+  | output
+  | 空间
+[DEBUG]  2026-06-07T18:09:31.137Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 
+  | 
+[DEBUG]  2026-06-07T18:09:31.138Z  FSocket
+  | output
+  | 
+  | 
+[DEBUG]  2026-06-07T18:09:31.168Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 2
+[DEBUG]  2026-06-07T18:09:31.168Z  FSocket
+  | output
+  | 2
+[DEBUG]  2026-06-07T18:09:31.169Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | .
+[DEBUG]  2026-06-07T18:09:31.169Z  FSocket
+  | output
+  | .
+[DEBUG]  2026-06-07T18:09:31.169Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  |  
+[DEBUG]  2026-06-07T18:09:31.169Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-07T18:09:31.169Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 指定
+[DEBUG]  2026-06-07T18:09:31.170Z  FSocket
+  | output
+  | 指定
+[DEBUG]  2026-06-07T18:09:31.253Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 你最
+[DEBUG]  2026-06-07T18:09:31.253Z  FSocket
+  | output
+  | 你最
+[DEBUG]  2026-06-07T18:09:31.254Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 关心的
+[DEBUG]  2026-06-07T18:09:31.254Z  FSocket
+  | output
+  | 关心的
+[DEBUG]  2026-06-07T18:09:31.254Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 部分
+[DEBUG]  2026-06-07T18:09:31.254Z  FSocket
+  | output
+  | 部分
+[DEBUG]  2026-06-07T18:09:31.254Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | （
+[DEBUG]  2026-06-07T18:09:31.254Z  FSocket
+  | output
+  | （
+[DEBUG]  2026-06-07T18:09:31.266Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 如
+[DEBUG]  2026-06-07T18:09:31.266Z  FSocket
+  | output
+  | 如
+[DEBUG]  2026-06-07T18:09:31.266Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 源码
+[DEBUG]  2026-06-07T18:09:31.266Z  FSocket
+  | output
+  | 源码
+[DEBUG]  2026-06-07T18:09:31.298Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 目录
+[DEBUG]  2026-06-07T18:09:31.298Z  FSocket
+  | output
+  | 目录
+[DEBUG]  2026-06-07T18:09:31.334Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 位置
+[DEBUG]  2026-06-07T18:09:31.335Z  FSocket
+  | output
+  | 位置
+[DEBUG]  2026-06-07T18:09:31.368Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 、
+[DEBUG]  2026-06-07T18:09:31.368Z  FSocket
+  | output
+  | 、
+[DEBUG]  2026-06-07T18:09:31.368Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 架构
+[DEBUG]  2026-06-07T18:09:31.369Z  FSocket
+  | output
+  | 架构
+[DEBUG]  2026-06-07T18:09:31.369Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 设计
+[DEBUG]  2026-06-07T18:09:31.369Z  FSocket
+  | output
+  | 设计
+[DEBUG]  2026-06-07T18:09:31.397Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 、
+[DEBUG]  2026-06-07T18:09:31.397Z  FSocket
+  | output
+  | 、
+[DEBUG]  2026-06-07T18:09:31.431Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 依赖
+[DEBUG]  2026-06-07T18:09:31.431Z  FSocket
+  | output
+  | 依赖
+[DEBUG]  2026-06-07T18:09:31.457Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 清单
+[DEBUG]  2026-06-07T18:09:31.457Z  FSocket
+  | output
+  | 清单
+[DEBUG]  2026-06-07T18:09:31.496Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | ）
+  | 
+[DEBUG]  2026-06-07T18:09:31.497Z  FSocket
+  | output
+  | ）
+  | 
+[DEBUG]  2026-06-07T18:09:31.497Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 3
+[DEBUG]  2026-06-07T18:09:31.497Z  FSocket
+  | output
+  | 3
+[DEBUG]  2026-06-07T18:09:31.497Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | .
+[DEBUG]  2026-06-07T18:09:31.497Z  FSocket
+  | output
+  | .
+[DEBUG]  2026-06-07T18:09:31.497Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  |  
+[DEBUG]  2026-06-07T18:09:31.497Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-07T18:09:31.498Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 授权
+[DEBUG]  2026-06-07T18:09:31.498Z  FSocket
+  | output
+  | 授权
+[DEBUG]  2026-06-07T18:09:31.520Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 我
+[DEBUG]  2026-06-07T18:09:31.521Z  FSocket
+  | output
+  | 我
+[DEBUG]  2026-06-07T18:09:31.521Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 临时
+[DEBUG]  2026-06-07T18:09:31.521Z  FSocket
+  | output
+  | 临时
+[DEBUG]  2026-06-07T18:09:31.553Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 更改
+[DEBUG]  2026-06-07T18:09:31.553Z  FSocket
+  | output
+  | 更改
+[DEBUG]  2026-06-07T18:09:31.553Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 工作
+[DEBUG]  2026-06-07T18:09:31.553Z  FSocket
+  | output
+  | 工作
+[DEBUG]  2026-06-07T18:09:31.554Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 空间
+[DEBUG]  2026-06-07T18:09:31.554Z  FSocket
+  | output
+  | 空间
+[DEBUG]  2026-06-07T18:09:31.554Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 根
+[DEBUG]  2026-06-07T18:09:31.554Z  FSocket
+  | output
+  | 根
+[DEBUG]  2026-06-07T18:09:31.647Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 路径
+[DEBUG]  2026-06-07T18:09:31.648Z  FSocket
+  | output
+  | 路径
+[DEBUG]  2026-06-07T18:09:31.649Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | 为
+[DEBUG]  2026-06-07T18:09:31.649Z  FSocket
+  | output
+  | 为
+[DEBUG]  2026-06-07T18:09:31.649Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  |  `/
+[DEBUG]  2026-06-07T18:09:31.649Z  FSocket
+  | output
+  |  `/
+[DEBUG]  2026-06-07T18:09:31.650Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | Users
+[DEBUG]  2026-06-07T18:09:31.650Z  FSocket
+  | output
+  | Users
+[DEBUG]  2026-06-07T18:09:31.650Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | /y
+[DEBUG]  2026-06-07T18:09:31.650Z  FSocket
+  | output
+  | /y
+[DEBUG]  2026-06-07T18:09:31.652Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | ih
+[DEBUG]  2026-06-07T18:09:31.652Z  FSocket
+  | output
+  | ih
+[DEBUG]  2026-06-07T18:09:31.652Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | ua
+[DEBUG]  2026-06-07T18:09:31.652Z  FSocket
+  | output
+  | ua
+[DEBUG]  2026-06-07T18:09:31.653Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | qing
+[DEBUG]  2026-06-07T18:09:31.653Z  FSocket
+  | output
+  | qing
+[DEBUG]  2026-06-07T18:09:31.653Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | /
+[DEBUG]  2026-06-07T18:09:31.653Z  FSocket
+  | output
+  | /
+[DEBUG]  2026-06-07T18:09:31.653Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | Desktop
+[DEBUG]  2026-06-07T18:09:31.654Z  FSocket
+  | output
+  | Desktop
+[DEBUG]  2026-06-07T18:09:31.654Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | /y
+[DEBUG]  2026-06-07T18:09:31.654Z  FSocket
+  | output
+  | /y
+[DEBUG]  2026-06-07T18:09:31.683Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | ih
+[DEBUG]  2026-06-07T18:09:31.683Z  FSocket
+  | output
+  | ih
+[DEBUG]  2026-06-07T18:09:31.683Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | ua
+[DEBUG]  2026-06-07T18:09:31.683Z  FSocket
+  | output
+  | ua
+[DEBUG]  2026-06-07T18:09:31.684Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | qing
+[DEBUG]  2026-06-07T18:09:31.684Z  FSocket
+  | output
+  | qing
+[DEBUG]  2026-06-07T18:09:31.684Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | /f
+[DEBUG]  2026-06-07T18:09:31.684Z  FSocket
+  | output
+  | /f
+[DEBUG]  2026-06-07T18:09:31.684Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | ly
+[DEBUG]  2026-06-07T18:09:31.684Z  FSocket
+  | output
+  | ly
+[DEBUG]  2026-06-07T18:09:31.685Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | fl
+[DEBUG]  2026-06-07T18:09:31.685Z  FSocket
+  | output
+  | fl
+[DEBUG]  2026-06-07T18:09:31.763Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | ors
+[DEBUG]  2026-06-07T18:09:31.763Z  FSocket
+  | output
+  | ors
+[DEBUG]  2026-06-07T18:09:31.763Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | /f
+[DEBUG]  2026-06-07T18:09:31.764Z  FSocket
+  | output
+  | /f
+[DEBUG]  2026-06-07T18:09:31.764Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | ly
+[DEBUG]  2026-06-07T18:09:31.764Z  FSocket
+  | output
+  | ly
+[DEBUG]  2026-06-07T18:09:31.764Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | fl
+[DEBUG]  2026-06-07T18:09:31.764Z  FSocket
+  | output
+  | fl
+[DEBUG]  2026-06-07T18:09:31.764Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | or
+[DEBUG]  2026-06-07T18:09:31.764Z  FSocket
+  | output
+  | or
+[DEBUG]  2026-06-07T18:09:31.764Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | -cl
+[DEBUG]  2026-06-07T18:09:31.765Z  FSocket
+  | output
+  | -cl
+[DEBUG]  2026-06-07T18:09:31.765Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | i
+[DEBUG]  2026-06-07T18:09:31.765Z  FSocket
+  | output
+  | i
+[DEBUG]  2026-06-07T18:09:31.765Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+  | `
+[DEBUG]  2026-06-07T18:09:31.765Z  FSocket
+  | output
+  | `
+[INFO ]  2026-06-07T18:10:23.989Z  FSocket
+  | close
+  | {
+  |   hasError: false
+  | }
+[INFO ]  2026-06-08T14:39:25.769Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T14:39:52.252Z  FSocket
+  | open
+[DEBUG]  2026-06-08T14:40:19.304Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 62 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e9 98 85 e8 af bb e4 b8 8b 20 2f 55 73 65 72 73 2f ... 56 more bytes>
+[DEBUG]  2026-06-08T14:40:19.316Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目'
+  | }
+[DEBUG]  2026-06-08T14:40:19.318Z  Brain
+  | transformer
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+[DEBUG]  2026-06-08T14:40:57.364Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 无法
+[DEBUG]  2026-06-08T14:40:57.365Z  FSocket
+  | output
+  | 无法
+[DEBUG]  2026-06-08T14:40:57.365Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 读取
+[DEBUG]  2026-06-08T14:40:57.365Z  FSocket
+  | output
+  | 读取
+[DEBUG]  2026-06-08T14:40:57.408Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 指定
+[DEBUG]  2026-06-08T14:40:57.409Z  FSocket
+  | output
+  | 指定
+[DEBUG]  2026-06-08T14:40:57.428Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 项目
+[DEBUG]  2026-06-08T14:40:57.428Z  FSocket
+  | output
+  | 项目
+[DEBUG]  2026-06-08T14:40:57.428Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | ：
+[DEBUG]  2026-06-08T14:40:57.428Z  FSocket
+  | output
+  | ：
+[DEBUG]  2026-06-08T14:40:57.455Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 路径
+[DEBUG]  2026-06-08T14:40:57.455Z  FSocket
+  | output
+  | 路径
+[DEBUG]  2026-06-08T14:40:57.456Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 逃
+[DEBUG]  2026-06-08T14:40:57.456Z  FSocket
+  | output
+  | 逃
+[DEBUG]  2026-06-08T14:40:57.495Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 逸
+[DEBUG]  2026-06-08T14:40:57.495Z  FSocket
+  | output
+  | 逸
+[DEBUG]  2026-06-08T14:40:57.496Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 工作
+[DEBUG]  2026-06-08T14:40:57.496Z  FSocket
+  | output
+  | 工作
+[DEBUG]  2026-06-08T14:40:57.496Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 空间
+[DEBUG]  2026-06-08T14:40:57.496Z  FSocket
+  | output
+  | 空间
+[DEBUG]  2026-06-08T14:40:57.540Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 。
+  | 
+  | 
+[DEBUG]  2026-06-08T14:40:57.540Z  FSocket
+  | output
+  | 。
+  | 
+  | 
+[DEBUG]  2026-06-08T14:40:57.540Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | ##
+[DEBUG]  2026-06-08T14:40:57.540Z  FSocket
+  | output
+  | ##
+[DEBUG]  2026-06-08T14:40:57.543Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  |  
+[DEBUG]  2026-06-08T14:40:57.543Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-08T14:40:57.544Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 详情
+[DEBUG]  2026-06-08T14:40:57.544Z  FSocket
+  | output
+  | 详情
+[DEBUG]  2026-06-08T14:40:57.742Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 
+  | 
+  | 
+[DEBUG]  2026-06-08T14:40:57.742Z  FSocket
+  | output
+  | 
+  | 
+  | 
+[DEBUG]  2026-06-08T14:40:57.743Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | -
+[DEBUG]  2026-06-08T14:40:57.743Z  FSocket
+  | output
+  | -
+[DEBUG]  2026-06-08T14:40:57.743Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  |  
+[DEBUG]  2026-06-08T14:40:57.743Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-08T14:40:57.743Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 你
+[DEBUG]  2026-06-08T14:40:57.744Z  FSocket
+  | output
+  | 你
+[DEBUG]  2026-06-08T14:40:57.744Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 要求
+[DEBUG]  2026-06-08T14:40:57.744Z  FSocket
+  | output
+  | 要求
+[DEBUG]  2026-06-08T14:40:57.744Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 读取
+[DEBUG]  2026-06-08T14:40:57.744Z  FSocket
+  | output
+  | 读取
+[DEBUG]  2026-06-08T14:40:57.745Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  |  `/
+[DEBUG]  2026-06-08T14:40:57.745Z  FSocket
+  | output
+  |  `/
+[DEBUG]  2026-06-08T14:40:57.745Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | Users
+[DEBUG]  2026-06-08T14:40:57.745Z  FSocket
+  | output
+  | Users
+[DEBUG]  2026-06-08T14:40:57.745Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | /y
+[DEBUG]  2026-06-08T14:40:57.745Z  FSocket
+  | output
+  | /y
+[DEBUG]  2026-06-08T14:40:57.745Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | ih
+[DEBUG]  2026-06-08T14:40:57.746Z  FSocket
+  | output
+  | ih
+[DEBUG]  2026-06-08T14:40:57.746Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | ua
+[DEBUG]  2026-06-08T14:40:57.746Z  FSocket
+  | output
+  | ua
+[DEBUG]  2026-06-08T14:40:57.746Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | qing
+[DEBUG]  2026-06-08T14:40:57.746Z  FSocket
+  | output
+  | qing
+[DEBUG]  2026-06-08T14:40:57.746Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | /
+[DEBUG]  2026-06-08T14:40:57.746Z  FSocket
+  | output
+  | /
+[DEBUG]  2026-06-08T14:40:57.746Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | Desktop
+[DEBUG]  2026-06-08T14:40:57.747Z  FSocket
+  | output
+  | Desktop
+[DEBUG]  2026-06-08T14:40:57.747Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | /y
+[DEBUG]  2026-06-08T14:40:57.747Z  FSocket
+  | output
+  | /y
+[DEBUG]  2026-06-08T14:40:57.747Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | ih
+[DEBUG]  2026-06-08T14:40:57.747Z  FSocket
+  | output
+  | ih
+[DEBUG]  2026-06-08T14:40:57.747Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | ua
+[DEBUG]  2026-06-08T14:40:57.747Z  FSocket
+  | output
+  | ua
+[DEBUG]  2026-06-08T14:40:57.747Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | qing
+[DEBUG]  2026-06-08T14:40:57.748Z  FSocket
+  | output
+  | qing
+[DEBUG]  2026-06-08T14:40:57.748Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | /f
+[DEBUG]  2026-06-08T14:40:57.748Z  FSocket
+  | output
+  | /f
+[DEBUG]  2026-06-08T14:40:57.748Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | ly
+[DEBUG]  2026-06-08T14:40:57.748Z  FSocket
+  | output
+  | ly
+[DEBUG]  2026-06-08T14:40:57.748Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | fl
+[DEBUG]  2026-06-08T14:40:57.748Z  FSocket
+  | output
+  | fl
+[DEBUG]  2026-06-08T14:40:57.748Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | ors
+[DEBUG]  2026-06-08T14:40:57.749Z  FSocket
+  | output
+  | ors
+[DEBUG]  2026-06-08T14:40:57.749Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | /test
+[DEBUG]  2026-06-08T14:40:57.749Z  FSocket
+  | output
+  | /test
+[DEBUG]  2026-06-08T14:40:57.749Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | `
+  | 
+[DEBUG]  2026-06-08T14:40:57.749Z  FSocket
+  | output
+  | `
+  | 
+[DEBUG]  2026-06-08T14:40:57.749Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | -
+[DEBUG]  2026-06-08T14:40:57.749Z  FSocket
+  | output
+  | -
+[DEBUG]  2026-06-08T14:40:57.749Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  |  
+[DEBUG]  2026-06-08T14:40:57.749Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-08T14:40:57.750Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 该
+[DEBUG]  2026-06-08T14:40:57.750Z  FSocket
+  | output
+  | 该
+[DEBUG]  2026-06-08T14:40:57.786Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 路径
+[DEBUG]  2026-06-08T14:40:57.786Z  FSocket
+  | output
+  | 路径
+[DEBUG]  2026-06-08T14:40:57.796Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 不在
+[DEBUG]  2026-06-08T14:40:57.797Z  FSocket
+  | output
+  | 不在
+[DEBUG]  2026-06-08T14:40:57.797Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 当前
+[DEBUG]  2026-06-08T14:40:57.797Z  FSocket
+  | output
+  | 当前
+[DEBUG]  2026-06-08T14:40:57.797Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 工作
+[DEBUG]  2026-06-08T14:40:57.797Z  FSocket
+  | output
+  | 工作
+[DEBUG]  2026-06-08T14:40:57.829Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 空间
+[DEBUG]  2026-06-08T14:40:57.829Z  FSocket
+  | output
+  | 空间
+[DEBUG]  2026-06-08T14:40:57.829Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 内
+[DEBUG]  2026-06-08T14:40:57.829Z  FSocket
+  | output
+  | 内
+[DEBUG]  2026-06-08T14:40:57.829Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | ，
+[DEBUG]  2026-06-08T14:40:57.830Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-08T14:40:57.830Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 所有
+[DEBUG]  2026-06-08T14:40:57.830Z  FSocket
+  | output
+  | 所有
+[DEBUG]  2026-06-08T14:40:57.863Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 读取
+[DEBUG]  2026-06-08T14:40:57.863Z  FSocket
+  | output
+  | 读取
+[DEBUG]  2026-06-08T14:40:57.863Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 文件的
+[DEBUG]  2026-06-08T14:40:57.863Z  FSocket
+  | output
+  | 文件的
+[DEBUG]  2026-06-08T14:40:57.893Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 尝试
+[DEBUG]  2026-06-08T14:40:57.893Z  FSocket
+  | output
+  | 尝试
+[DEBUG]  2026-06-08T14:40:57.893Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 均
+[DEBUG]  2026-06-08T14:40:57.893Z  FSocket
+  | output
+  | 均
+[DEBUG]  2026-06-08T14:40:57.893Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 失败
+[DEBUG]  2026-06-08T14:40:57.894Z  FSocket
+  | output
+  | 失败
+[DEBUG]  2026-06-08T14:40:57.929Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 
+  | 
+[DEBUG]  2026-06-08T14:40:57.929Z  FSocket
+  | output
+  | 
+  | 
+[DEBUG]  2026-06-08T14:40:57.929Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | -
+[DEBUG]  2026-06-08T14:40:57.929Z  FSocket
+  | output
+  | -
+[DEBUG]  2026-06-08T14:40:57.929Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  |  
+[DEBUG]  2026-06-08T14:40:57.929Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-08T14:40:57.930Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 通过
+[DEBUG]  2026-06-08T14:40:57.930Z  FSocket
+  | output
+  | 通过
+[DEBUG]  2026-06-08T14:40:58.012Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  |  glob
+[DEBUG]  2026-06-08T14:40:58.012Z  FSocket
+  | output
+  |  glob
+[DEBUG]  2026-06-08T14:40:58.013Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  |  
+[DEBUG]  2026-06-08T14:40:58.013Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-08T14:40:58.013Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 已
+[DEBUG]  2026-06-08T14:40:58.013Z  FSocket
+  | output
+  | 已
+[DEBUG]  2026-06-08T14:40:58.017Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 列出
+[DEBUG]  2026-06-08T14:40:58.017Z  FSocket
+  | output
+  | 列出
+[DEBUG]  2026-06-08T14:40:58.018Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 该
+[DEBUG]  2026-06-08T14:40:58.018Z  FSocket
+  | output
+  | 该
+[DEBUG]  2026-06-08T14:40:58.018Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 路径
+[DEBUG]  2026-06-08T14:40:58.018Z  FSocket
+  | output
+  | 路径
+[DEBUG]  2026-06-08T14:40:58.051Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 下的
+[DEBUG]  2026-06-08T14:40:58.051Z  FSocket
+  | output
+  | 下的
+[DEBUG]  2026-06-08T14:40:58.081Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  |  
+[DEBUG]  2026-06-08T14:40:58.081Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-08T14:40:58.081Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 14
+[DEBUG]  2026-06-08T14:40:58.081Z  FSocket
+  | output
+  | 14
+[DEBUG]  2026-06-08T14:40:58.081Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  |  
+[DEBUG]  2026-06-08T14:40:58.081Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-08T14:40:58.082Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 个
+[DEBUG]  2026-06-08T14:40:58.082Z  FSocket
+  | output
+  | 个
+[DEBUG]  2026-06-08T14:40:58.105Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 文件
+[DEBUG]  2026-06-08T14:40:58.105Z  FSocket
+  | output
+  | 文件
+[DEBUG]  2026-06-08T14:40:58.106Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | （
+[DEBUG]  2026-06-08T14:40:58.106Z  FSocket
+  | output
+  | （
+[DEBUG]  2026-06-08T14:40:58.106Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 说明
+[DEBUG]  2026-06-08T14:40:58.106Z  FSocket
+  | output
+  | 说明
+[DEBUG]  2026-06-08T14:40:58.106Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 路径
+[DEBUG]  2026-06-08T14:40:58.106Z  FSocket
+  | output
+  | 路径
+[DEBUG]  2026-06-08T14:40:58.139Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 存在
+[DEBUG]  2026-06-08T14:40:58.139Z  FSocket
+  | output
+  | 存在
+[DEBUG]  2026-06-08T14:40:58.139Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 且
+[DEBUG]  2026-06-08T14:40:58.139Z  FSocket
+  | output
+  | 且
+[DEBUG]  2026-06-08T14:40:58.167Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 可
+[DEBUG]  2026-06-08T14:40:58.168Z  FSocket
+  | output
+  | 可
+[DEBUG]  2026-06-08T14:40:58.168Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 访问
+[DEBUG]  2026-06-08T14:40:58.168Z  FSocket
+  | output
+  | 访问
+[DEBUG]  2026-06-08T14:40:58.208Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | ），
+[DEBUG]  2026-06-08T14:40:58.208Z  FSocket
+  | output
+  | ），
+[DEBUG]  2026-06-08T14:40:58.208Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 但
+[DEBUG]  2026-06-08T14:40:58.208Z  FSocket
+  | output
+  | 但
+[DEBUG]  2026-06-08T14:40:58.258Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 无法
+[DEBUG]  2026-06-08T14:40:58.258Z  FSocket
+  | output
+  | 无法
+[DEBUG]  2026-06-08T14:40:58.258Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 读取
+[DEBUG]  2026-06-08T14:40:58.259Z  FSocket
+  | output
+  | 读取
+[DEBUG]  2026-06-08T14:40:58.264Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 内容
+[DEBUG]  2026-06-08T14:40:58.265Z  FSocket
+  | output
+  | 内容
+[DEBUG]  2026-06-08T14:40:58.265Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 
+  | 
+  | 
+[DEBUG]  2026-06-08T14:40:58.265Z  FSocket
+  | output
+  | 
+  | 
+  | 
+[DEBUG]  2026-06-08T14:40:58.265Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | ##
+[DEBUG]  2026-06-08T14:40:58.265Z  FSocket
+  | output
+  | ##
+[DEBUG]  2026-06-08T14:40:58.265Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  |  
+[DEBUG]  2026-06-08T14:40:58.265Z  FSocket
+  | output
+  |  
+[DEBUG]  2026-06-08T14:40:58.265Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 下一步
+[DEBUG]  2026-06-08T14:40:58.266Z  FSocket
+  | output
+  | 下一步
+[DEBUG]  2026-06-08T14:40:58.294Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 
+  | 
+  | 
+[DEBUG]  2026-06-08T14:40:58.295Z  FSocket
+  | output
+  | 
+  | 
+  | 
+[DEBUG]  2026-06-08T14:40:58.295Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 请
+[DEBUG]  2026-06-08T14:40:58.295Z  FSocket
+  | output
+  | 请
+[DEBUG]  2026-06-08T14:40:58.295Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 将
+[DEBUG]  2026-06-08T14:40:58.295Z  FSocket
+  | output
+  | 将
+[DEBUG]  2026-06-08T14:40:58.328Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 该项目
+[DEBUG]  2026-06-08T14:40:58.329Z  FSocket
+  | output
+  | 该项目
+[DEBUG]  2026-06-08T14:40:58.360Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 复制
+[DEBUG]  2026-06-08T14:40:58.360Z  FSocket
+  | output
+  | 复制
+[DEBUG]  2026-06-08T14:40:58.360Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 到
+[DEBUG]  2026-06-08T14:40:58.360Z  FSocket
+  | output
+  | 到
+[DEBUG]  2026-06-08T14:40:58.361Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 工作
+[DEBUG]  2026-06-08T14:40:58.361Z  FSocket
+  | output
+  | 工作
+[DEBUG]  2026-06-08T14:40:58.361Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 空间
+[DEBUG]  2026-06-08T14:40:58.361Z  FSocket
+  | output
+  | 空间
+[DEBUG]  2026-06-08T14:40:58.389Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 内
+[DEBUG]  2026-06-08T14:40:58.389Z  FSocket
+  | output
+  | 内
+[DEBUG]  2026-06-08T14:40:58.389Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | ，
+[DEBUG]  2026-06-08T14:40:58.389Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-08T14:40:58.389Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 或
+[DEBUG]  2026-06-08T14:40:58.390Z  FSocket
+  | output
+  | 或
+[DEBUG]  2026-06-08T14:40:58.390Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 提供
+[DEBUG]  2026-06-08T14:40:58.390Z  FSocket
+  | output
+  | 提供
+[DEBUG]  2026-06-08T14:40:58.420Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 工作
+[DEBUG]  2026-06-08T14:40:58.420Z  FSocket
+  | output
+  | 工作
+[DEBUG]  2026-06-08T14:40:58.420Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 空间
+[DEBUG]  2026-06-08T14:40:58.420Z  FSocket
+  | output
+  | 空间
+[DEBUG]  2026-06-08T14:40:58.421Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 内的
+[DEBUG]  2026-06-08T14:40:58.421Z  FSocket
+  | output
+  | 内的
+[DEBUG]  2026-06-08T14:40:58.421Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 另一个
+[DEBUG]  2026-06-08T14:40:58.421Z  FSocket
+  | output
+  | 另一个
+[DEBUG]  2026-06-08T14:40:58.468Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 路径
+[DEBUG]  2026-06-08T14:40:58.468Z  FSocket
+  | output
+  | 路径
+[DEBUG]  2026-06-08T14:40:58.469Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | ，
+[DEBUG]  2026-06-08T14:40:58.469Z  FSocket
+  | output
+  | ，
+[DEBUG]  2026-06-08T14:40:58.469Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 以便
+[DEBUG]  2026-06-08T14:40:58.469Z  FSocket
+  | output
+  | 以便
+[DEBUG]  2026-06-08T14:40:58.490Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 我
+[DEBUG]  2026-06-08T14:40:58.490Z  FSocket
+  | output
+  | 我
+[DEBUG]  2026-06-08T14:40:58.517Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 继续
+[DEBUG]  2026-06-08T14:40:58.517Z  FSocket
+  | output
+  | 继续
+[DEBUG]  2026-06-08T14:40:58.553Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 分析
+[DEBUG]  2026-06-08T14:40:58.553Z  FSocket
+  | output
+  | 分析
+[DEBUG]  2026-06-08T14:40:58.580Z  Agent
+  | 阅读下 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 这个项目
+  | 。
+[DEBUG]  2026-06-08T14:40:58.580Z  FSocket
+  | output
+  | 。
+[INFO ]  2026-06-08T14:48:16.487Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T14:48:16.766Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T14:50:30.591Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T14:53:51.532Z  FSocket
+  | open
+[DEBUG]  2026-06-08T14:54:15.924Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 64 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e9 98 85 e8 af bb e4 b8 80 e4 b8 8b e8 bf 99 e4 b8 ... 58 more bytes>
+[DEBUG]  2026-06-08T14:54:15.931Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test'
+  | }
+[DEBUG]  2026-06-08T14:54:15.933Z  Brain
+  | transformer
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+[INFO ]  2026-06-08T14:54:15.934Z  Investigation
+  | investigation.start
+  | {
+  |   contextMessages: 0,
+  |   maxToolRounds: 5,
+  |   userMessageLength: 57
+  | }
+[INFO ]  2026-06-08T14:54:15.935Z  Investigation
+  | investigation.ask
+  | {
+  |   observations: 0,
+  |   previousConfidence: undefined,
+  |   round: 0
+  | }
+[INFO ]  2026-06-08T14:54:26.057Z  Investigation
+  | investigation.state
+  | {
+  |   confidence: 0.2,
+  |   constraints: [],
+  |   explicit_requests: [
+  |     '阅读项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test'
+  |   ],
+  |   hypotheses: [
+  |     {
+  |       confidence: 0.5,
+  |       goal: '用户希望获得项目的结构概览和关键信息'
+  |     },
+  |     {
+  |       confidence: 0.3,
+  |       goal: '用户希望分析项目代码以进行审查或学习'
+  |     },
+  |     {
+  |       confidence: 0.2,
+  |       goal: '用户只是模糊地要求“阅读”，可能未明确具体需求'
+  |     }
+  |   ],
+  |   implicit_goals: [
+  |     '理解项目的整体结构',
+  |     '了解项目的功能与用途'
+  |   ],
+  |   information_needed: [
+  |     '项目的文件和目录结构',
+  |     '项目根目录下的关键文件内容（如 README、package.json）',
+  |     '项目的语言和框架'
+  |   ],
+  |   next_question: '',
+  |   observations: 0,
+  |   observe_requests: [
+  |     {
+  |       caseSensitive: undefined,
+  |       goal: '获取项目文件清单',
+  |       kind: 'files',
+  |       maxBytes: undefined,
+  |       maxMatches: undefined,
+  |       path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/test',
+  |       pipes: [],
+  |       query: '*',
+  |       relation: undefined,
+  |       symbol: undefined,
+  |       timeoutMs: undefined
+  |     }
+  |   ],
+  |   round: 0,
+  |   unknowns: [
+  |     '项目的类型（前端/后端/库等）',
+  |     '项目包含哪些文件和目录',
+  |     '用户期待了解的深度或具体方面'
+  |   ]
+  | }
+[INFO ]  2026-06-08T14:54:26.061Z  Investigation
+  | investigation.observe_request
+  | {
+  |   request: {
+  |     caseSensitive: undefined,
+  |     goal: '获取项目文件清单',
+  |     kind: 'files',
+  |     maxBytes: undefined,
+  |     maxMatches: undefined,
+  |     path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/test',
+  |     pipes: [],
+  |     query: '*',
+  |     relation: undefined,
+  |     symbol: undefined,
+  |     timeoutMs: undefined
+  |   },
+  |   round: 1
+  | }
+[INFO ]  2026-06-08T14:54:26.064Z  Investigation
+  | investigation.observe_result
+  | {
+  |   observation: {
+  |     code: 'ok',
+  |     error: undefined,
+  |     evidenceCount: 14,
+  |     ok: true,
+  |     pipes: [],
+  |     source: 'glob',
+  |     summary: 'Found 14 file(s)',
+  |     truncated: false
+  |   },
+  |   round: 1
+  | }
+[INFO ]  2026-06-08T14:54:26.064Z  Investigation
+  | investigation.ask
+  | {
+  |   observations: 1,
+  |   previousConfidence: 0.2,
+  |   round: 1
+  | }
+[INFO ]  2026-06-08T14:54:38.433Z  Investigation
+  | investigation.state
+  | {
+  |   confidence: 0.5,
+  |   constraints: [],
+  |   explicit_requests: [
+  |     '阅读项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test'
+  |   ],
+  |   hypotheses: [
+  |     {
+  |       confidence: 0.6,
+  |       goal: '用户希望获得项目的概要介绍和结构说明'
+  |     },
+  |     {
+  |       confidence: 0.3,
+  |       goal: '用户希望了解项目的 Agent 定义或工具规划'
+  |     },
+  |     {
+  |       confidence: 0.1,
+  |       goal: '用户可能仅需简单的项目认识，没有深入需求'
+  |     }
+  |   ],
+  |   implicit_goals: [
+  |     '理解项目的整体结构和用途',
+  |     '了解项目文档中的关键信息'
+  |   ],
+  |   information_needed: [
+  |     'README.md（或 README.zh.cn.md）的内容，了解项目的描述和用途',
+  |     'package.json 的内容，了解项目名称、版本、依赖和脚本',
+  |     'AGENTS.md 的内容，了解 Agent 定义或说明'
+  |   ],
+  |   next_question: '',
+  |   observations: 1,
+  |   observe_requests: [
+  |     {
+  |       caseSensitive: undefined,
+  |       goal: '获取项目说明文档',
+  |       kind: 'file',
+  |       maxBytes: undefined,
+  |       maxMatches: undefined,
+  |       path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/test/README.md',
+  |       pipes: [],
+  |       query: undefined,
+  |       relation: undefined,
+  |       symbol: undefined,
+  |       timeoutMs: undefined
+  |     },
+  |     {
+  |       caseSensitive: undefined,
+  |       goal: '获取项目配置文件',
+  |       kind: 'file',
+  |       maxBytes: undefined,
+  |       maxMatches: undefined,
+  |       path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/test/package.json',
+  |       pipes: [],
+  |       query: undefined,
+  |       relation: undefined,
+  |       symbol: undefined,
+  |       timeoutMs: undefined
+  |     }
+  |   ],
+  |   round: 1,
+  |   unknowns: [
+  |     '项目具体的功能和目标',
+  |     '项目使用的技术栈和框架',
+  |     '用户希望了解的重点方面（结构、代码、文档等）'
+  |   ]
+  | }
+[INFO ]  2026-06-08T14:54:38.435Z  Investigation
+  | investigation.observe_request
+  | {
+  |   request: {
+  |     caseSensitive: undefined,
+  |     goal: '获取项目说明文档',
+  |     kind: 'file',
+  |     maxBytes: undefined,
+  |     maxMatches: undefined,
+  |     path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/test/README.md',
+  |     pipes: [],
+  |     query: undefined,
+  |     relation: undefined,
+  |     symbol: undefined,
+  |     timeoutMs: undefined
+  |   },
+  |   round: 2
+  | }
+[INFO ]  2026-06-08T14:54:38.436Z  Investigation
+  | investigation.observe_result
+  | {
+  |   observation: {
+  |     code: 'read_failed',
+  |     error: 'Path escapes workspace: /Users/yihuaqing/Desktop/yihuaqing/flyflors/test/README.md',
+  |     evidenceCount: 0,
+  |     ok: false,
+  |     pipes: [],
+  |     source: 'read_file',
+  |     summary: 'Path escapes workspace: /Users/yihuaqing/Desktop/yihuaqing/flyflors/test/README.md',
+  |     truncated: false
+  |   },
+  |   round: 2
+  | }
+[INFO ]  2026-06-08T14:54:38.436Z  Investigation
+  | investigation.observe_request
+  | {
+  |   request: {
+  |     caseSensitive: undefined,
+  |     goal: '获取项目配置文件',
+  |     kind: 'file',
+  |     maxBytes: undefined,
+  |     maxMatches: undefined,
+  |     path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/test/package.json',
+  |     pipes: [],
+  |     query: undefined,
+  |     relation: undefined,
+  |     symbol: undefined,
+  |     timeoutMs: undefined
+  |   },
+  |   round: 2
+  | }
+[INFO ]  2026-06-08T14:54:38.436Z  Investigation
+  | investigation.observe_result
+  | {
+  |   observation: {
+  |     code: 'read_failed',
+  |     error: 'Path escapes workspace: /Users/yihuaqing/Desktop/yihuaqing/flyflors/test/package.json',
+  |     evidenceCount: 0,
+  |     ok: false,
+  |     pipes: [],
+  |     source: 'read_file',
+  |     summary: 'Path escapes workspace: /Users/yihuaqing/Desktop/yihuaqing/flyflors/test/package.json',
+  |     truncated: false
+  |   },
+  |   round: 2
+  | }
+[INFO ]  2026-06-08T14:54:38.437Z  Investigation
+  | investigation.ask
+  | {
+  |   observations: 3,
+  |   previousConfidence: 0.5,
+  |   round: 2
+  | }
+[INFO ]  2026-06-08T14:54:48.658Z  Investigation
+  | investigation.state
+  | {
+  |   confidence: 0.3,
+  |   constraints: [],
+  |   explicit_requests: [
+  |     '阅读项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test'
+  |   ],
+  |   hypotheses: [
+  |     {
+  |       confidence: 0.5,
+  |       goal: '用户希望获得项目的概要介绍，包括文档内容和代码结构'
+  |     },
+  |     {
+  |       confidence: 0.3,
+  |       goal: '用户可能期望工具能够直接访问本地文件系统而不受工作区限制'
+  |     }
+  |   ],
+  |   implicit_goals: [
+  |     '了解项目的整体结构和内容',
+  |     '获取项目的文档和代码信息'
+  |   ],
+  |   information_needed: [
+  |     '如何使项目文件可访问（例如将项目移入工作区或使用其他方法）',
+  |     '用户关注的重点是否可以通过文件列表和目录结构概括',
+  |     '用户是否愿意提供文件内容的摘要或特定部分'
+  |   ],
+  |   next_question: '您指定的路径 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 不在当前工作区内，我无法直接读取其中的文件。您是否可以将该项目复制到工作区中，或者通过其他方式分享内容？或者，我可以通过文件列表（包含14个文件）为您快速概括项目结构，但无法提供文件内部细节。您希望如何处理？',
+  |   observations: 3,
+  |   observe_requests: [],
+  |   round: 2,
+  |   unknowns: [
+  |     '用户是否知道此路径不在当前工作区内',
+  |     '用户是否希望将项目移至工作区或用其他方式分享内容',
+  |     '用户具体关注项目的哪些方面（文档、代码结构、配置等）'
+  |   ]
+  | }
+[INFO ]  2026-06-08T14:54:48.660Z  Investigation
+  | investigation.complete
+  | {
+  |   confidence: 0.3,
+  |   hasNextQuestion: true,
+  |   observations: 3
+  | }
+[DEBUG]  2026-06-08T14:54:52.923Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 无法
+[DEBUG]  2026-06-08T14:54:53.013Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 直接
+[DEBUG]  2026-06-08T14:54:53.015Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 读取
+[DEBUG]  2026-06-08T14:54:53.015Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 该
+[DEBUG]  2026-06-08T14:54:53.015Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 路径
+[DEBUG]  2026-06-08T14:54:53.015Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 下的
+[DEBUG]  2026-06-08T14:54:53.015Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 文件
+[DEBUG]  2026-06-08T14:54:53.016Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ，
+[DEBUG]  2026-06-08T14:54:53.061Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 因为
+[DEBUG]  2026-06-08T14:54:53.061Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 其
+[DEBUG]  2026-06-08T14:54:53.062Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 不在
+[DEBUG]  2026-06-08T14:54:53.082Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 当前
+[DEBUG]  2026-06-08T14:54:53.082Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 工作
+[DEBUG]  2026-06-08T14:54:53.082Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 区内
+[DEBUG]  2026-06-08T14:54:53.083Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 。
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:53.083Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 我已
+[DEBUG]  2026-06-08T14:54:53.120Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 通过
+[DEBUG]  2026-06-08T14:54:53.140Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  |  glob
+[DEBUG]  2026-06-08T14:54:53.212Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  |  
+[DEBUG]  2026-06-08T14:54:53.212Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 扫描
+[DEBUG]  2026-06-08T14:54:53.240Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 得到
+[DEBUG]  2026-06-08T14:54:53.240Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 项目
+[DEBUG]  2026-06-08T14:54:53.241Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 根
+[DEBUG]  2026-06-08T14:54:53.241Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 目录
+[DEBUG]  2026-06-08T14:54:53.241Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 下的
+[DEBUG]  2026-06-08T14:54:53.267Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  |  
+[DEBUG]  2026-06-08T14:54:53.267Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 14
+[DEBUG]  2026-06-08T14:54:53.268Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  |  
+[DEBUG]  2026-06-08T14:54:53.268Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 个
+[DEBUG]  2026-06-08T14:54:53.268Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 文件
+[DEBUG]  2026-06-08T14:54:53.295Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ：
+  | 
+[DEBUG]  2026-06-08T14:54:53.296Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ```
+  | 
+[DEBUG]  2026-06-08T14:54:53.328Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | README
+[DEBUG]  2026-06-08T14:54:53.329Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .md
+[DEBUG]  2026-06-08T14:54:53.358Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:53.358Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | AG
+[DEBUG]  2026-06-08T14:54:53.358Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ENTS
+[DEBUG]  2026-06-08T14:54:53.359Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .md
+[DEBUG]  2026-06-08T14:54:53.359Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:53.359Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | MEM
+[DEBUG]  2026-06-08T14:54:53.389Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ORY
+[DEBUG]  2026-06-08T14:54:53.390Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .md
+[DEBUG]  2026-06-08T14:54:53.390Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:53.390Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | TODO
+[DEBUG]  2026-06-08T14:54:53.390Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .md
+[DEBUG]  2026-06-08T14:54:53.390Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:53.423Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | TO
+[DEBUG]  2026-06-08T14:54:53.424Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | OLS
+[DEBUG]  2026-06-08T14:54:53.424Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | -P
+[DEBUG]  2026-06-08T14:54:53.424Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | LAN
+[DEBUG]  2026-06-08T14:54:53.424Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .md
+[DEBUG]  2026-06-08T14:54:53.452Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:53.452Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | UT
+[DEBUG]  2026-06-08T14:54:53.484Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ILITY
+[DEBUG]  2026-06-08T14:54:53.484Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | -D
+[DEBUG]  2026-06-08T14:54:53.548Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | OC
+[DEBUG]  2026-06-08T14:54:53.550Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | S
+[DEBUG]  2026-06-08T14:54:53.551Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .md
+[DEBUG]  2026-06-08T14:54:53.551Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:53.552Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | package
+[DEBUG]  2026-06-08T14:54:53.552Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .json
+[DEBUG]  2026-06-08T14:54:53.586Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:53.586Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | web
+[DEBUG]  2026-06-08T14:54:53.613Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | pack
+[DEBUG]  2026-06-08T14:54:53.614Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .config
+[DEBUG]  2026-06-08T14:54:53.614Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .js
+[DEBUG]  2026-06-08T14:54:53.642Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:53.642Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ts
+[DEBUG]  2026-06-08T14:54:53.642Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | config
+[DEBUG]  2026-06-08T14:54:53.678Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .json
+[DEBUG]  2026-06-08T14:54:53.678Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:53.679Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | jest
+[DEBUG]  2026-06-08T14:54:53.679Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .config
+[DEBUG]  2026-06-08T14:54:53.679Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .js
+[DEBUG]  2026-06-08T14:54:53.709Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:53.709Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | es
+[DEBUG]  2026-06-08T14:54:53.742Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | lint
+[DEBUG]  2026-06-08T14:54:53.742Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | rc
+[DEBUG]  2026-06-08T14:54:53.765Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .json
+[DEBUG]  2026-06-08T14:54:53.798Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:53.798Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | pre
+[DEBUG]  2026-06-08T14:54:53.873Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | tt
+[DEBUG]  2026-06-08T14:54:53.873Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ier
+[DEBUG]  2026-06-08T14:54:53.874Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | rc
+[DEBUG]  2026-06-08T14:54:53.874Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .json
+[DEBUG]  2026-06-08T14:54:53.874Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:53.874Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .git
+[DEBUG]  2026-06-08T14:54:53.874Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ignore
+[DEBUG]  2026-06-08T14:54:53.875Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:53.875Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | docker
+[DEBUG]  2026-06-08T14:54:53.904Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | -com
+[DEBUG]  2026-06-08T14:54:53.904Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | pose
+[DEBUG]  2026-06-08T14:54:53.905Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .yml
+[DEBUG]  2026-06-08T14:54:53.905Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:53.907Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ```
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:53.907Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | （
+[DEBUG]  2026-06-08T14:54:53.928Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 是
+[DEBUG]  2026-06-08T14:54:53.928Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 标准
+[DEBUG]  2026-06-08T14:54:53.958Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  |  Node
+[DEBUG]  2026-06-08T14:54:53.985Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .js
+[DEBUG]  2026-06-08T14:54:53.985Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | /
+[DEBUG]  2026-06-08T14:54:54.063Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | Type
+[DEBUG]  2026-06-08T14:54:54.064Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | Script
+[DEBUG]  2026-06-08T14:54:54.064Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  |  
+[DEBUG]  2026-06-08T14:54:54.064Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 项目
+[DEBUG]  2026-06-08T14:54:54.065Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 结构
+[DEBUG]  2026-06-08T14:54:54.065Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ，
+[DEBUG]  2026-06-08T14:54:54.065Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 含
+[DEBUG]  2026-06-08T14:54:54.084Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 文档
+[DEBUG]  2026-06-08T14:54:54.084Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 、
+[DEBUG]  2026-06-08T14:54:54.126Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 构建
+[DEBUG]  2026-06-08T14:54:54.126Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 、
+[DEBUG]  2026-06-08T14:54:54.127Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 测试
+[DEBUG]  2026-06-08T14:54:54.142Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 、
+[DEBUG]  2026-06-08T14:54:54.142Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | lint
+[DEBUG]  2026-06-08T14:54:54.177Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  |  
+[DEBUG]  2026-06-08T14:54:54.177Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 配置
+[DEBUG]  2026-06-08T14:54:54.178Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 。）
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:54.204Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 您
+[DEBUG]  2026-06-08T14:54:54.236Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 有
+[DEBUG]  2026-06-08T14:54:54.236Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 两条
+[DEBUG]  2026-06-08T14:54:54.274Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 路
+[DEBUG]  2026-06-08T14:54:54.303Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ：
+  | 
+[DEBUG]  2026-06-08T14:54:54.303Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 1
+[DEBUG]  2026-06-08T14:54:54.303Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .
+[DEBUG]  2026-06-08T14:54:54.303Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  |  **
+[DEBUG]  2026-06-08T14:54:54.303Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 将
+[DEBUG]  2026-06-08T14:54:54.330Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 项目
+[DEBUG]  2026-06-08T14:54:54.330Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 复制
+[DEBUG]  2026-06-08T14:54:54.331Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 到
+[DEBUG]  2026-06-08T14:54:54.331Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 工作
+[DEBUG]  2026-06-08T14:54:54.362Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 区内
+[DEBUG]  2026-06-08T14:54:54.362Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | **
+[DEBUG]  2026-06-08T14:54:54.362Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | （
+[DEBUG]  2026-06-08T14:54:54.363Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 例如
+[DEBUG]  2026-06-08T14:54:54.405Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  |  `
+[DEBUG]  2026-06-08T14:54:54.454Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | cp
+[DEBUG]  2026-06-08T14:54:54.455Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  |  -
+[DEBUG]  2026-06-08T14:54:54.455Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | r
+[DEBUG]  2026-06-08T14:54:54.469Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  |  /
+[DEBUG]  2026-06-08T14:54:54.470Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | Users
+[DEBUG]  2026-06-08T14:54:54.470Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | /y
+[DEBUG]  2026-06-08T14:54:54.490Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ih
+[DEBUG]  2026-06-08T14:54:54.490Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ua
+[DEBUG]  2026-06-08T14:54:54.490Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | qing
+[DEBUG]  2026-06-08T14:54:54.490Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | /
+[DEBUG]  2026-06-08T14:54:54.490Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | Desktop
+[DEBUG]  2026-06-08T14:54:54.491Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | /y
+[DEBUG]  2026-06-08T14:54:54.521Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ih
+[DEBUG]  2026-06-08T14:54:54.522Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ua
+[DEBUG]  2026-06-08T14:54:54.522Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | qing
+[DEBUG]  2026-06-08T14:54:54.522Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | /f
+[DEBUG]  2026-06-08T14:54:54.523Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ly
+[DEBUG]  2026-06-08T14:54:54.523Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | fl
+[DEBUG]  2026-06-08T14:54:54.610Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ors
+[DEBUG]  2026-06-08T14:54:54.611Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | /test
+[DEBUG]  2026-06-08T14:54:54.611Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  |  ./
+[DEBUG]  2026-06-08T14:54:54.612Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | test
+[DEBUG]  2026-06-08T14:54:54.612Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | `
+[DEBUG]  2026-06-08T14:54:54.612Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ），
+[DEBUG]  2026-06-08T14:54:54.612Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 我会
+[DEBUG]  2026-06-08T14:54:54.656Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 重新
+[DEBUG]  2026-06-08T14:54:54.658Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 读取
+[DEBUG]  2026-06-08T14:54:54.659Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 内容
+[DEBUG]  2026-06-08T14:54:54.659Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 并
+[DEBUG]  2026-06-08T14:54:54.688Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 给出
+[DEBUG]  2026-06-08T14:54:54.689Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 分析
+[DEBUG]  2026-06-08T14:54:54.789Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 。
+  | 
+[DEBUG]  2026-06-08T14:54:54.789Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 2
+[DEBUG]  2026-06-08T14:54:54.790Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | .
+[DEBUG]  2026-06-08T14:54:54.790Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  |  **
+[DEBUG]  2026-06-08T14:54:54.790Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 我只
+[DEBUG]  2026-06-08T14:54:54.790Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 根据
+[DEBUG]  2026-06-08T14:54:54.791Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 文件
+[DEBUG]  2026-06-08T14:54:54.791Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 列表
+[DEBUG]  2026-06-08T14:54:54.791Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 和
+[DEBUG]  2026-06-08T14:54:54.804Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 目录
+[DEBUG]  2026-06-08T14:54:54.804Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 结构
+[DEBUG]  2026-06-08T14:54:54.837Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 做
+[DEBUG]  2026-06-08T14:54:54.879Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 概括
+[DEBUG]  2026-06-08T14:54:54.879Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | **
+[DEBUG]  2026-06-08T14:54:54.880Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | （
+[DEBUG]  2026-06-08T14:54:54.893Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 无法
+[DEBUG]  2026-06-08T14:54:54.893Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 读取
+[DEBUG]  2026-06-08T14:54:54.933Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 文件
+[DEBUG]  2026-06-08T14:54:55.028Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 内容
+[DEBUG]  2026-06-08T14:54:55.029Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 细节
+[DEBUG]  2026-06-08T14:54:55.045Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ）。
+  | 
+  | 
+[DEBUG]  2026-06-08T14:54:55.045Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 您
+[DEBUG]  2026-06-08T14:54:55.045Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 希望
+[DEBUG]  2026-06-08T14:54:55.069Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | 如何处理
+[DEBUG]  2026-06-08T14:54:55.070Z  Agent
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+  | ？
+[INFO ]  2026-06-08T15:03:35.438Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:03:39.440Z  FSocket
+  | open
+[DEBUG]  2026-06-08T15:03:45.378Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 64 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e9 98 85 e8 af bb e4 b8 80 e4 b8 8b e8 bf 99 e4 b8 ... 58 more bytes>
+[DEBUG]  2026-06-08T15:03:45.383Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test'
+  | }
+[DEBUG]  2026-06-08T15:03:45.385Z  Brain
+  | transformer
+  | 阅读一下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test
+[INFO ]  2026-06-08T15:03:45.387Z  Investigation
+  | investigation.start
+  | {
+  |   contextMessages: 0,
+  |   maxToolRounds: 5,
+  |   userMessageLength: 57
+  | }
+[INFO ]  2026-06-08T15:03:45.387Z  Investigation
+  | investigation.ask
+  | {
+  |   observations: 0,
+  |   previousConfidence: undefined,
+  |   round: 0
+  | }
+[INFO ]  2026-06-08T15:04:00.818Z  Investigation
+  | investigation.state
+  | {
+  |   confidence: 0.6,
+  |   constraints: [],
+  |   explicit_requests: [
+  |     '阅读项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test'
+  |   ],
+  |   hypotheses: [
+  |     {
+  |       confidence: 0.7,
+  |       goal: '用户希望快速了解项目概况，以便后续进行任务'
+  |     },
+  |     {
+  |       confidence: 0.4,
+  |       goal: '用户需要定位特定代码或功能区域'
+  |     },
+  |     {
+  |       confidence: 0.2,
+  |       goal: '用户希望验证项目状态或进行审计'
+  |     }
+  |   ],
+  |   implicit_goals: [
+  |     '理解项目的整体结构和代码内容',
+  |     '为后续可能的修改、调试或扩展做准备',
+  |     '快速熟悉项目背景和功能'
+  |   ],
+  |   information_needed: [
+  |     '项目顶层文件和目录结构',
+  |     '项目描述文件（如 README）',
+  |     '项目配置文件（如 package.json、requirements.txt 等）',
+  |     '主要源代码入口'
+  |   ],
+  |   next_question: '',
+  |   observations: 0,
+  |   observe_requests: [
+  |     {
+  |       caseSensitive: undefined,
+  |       goal: '获取项目文件列表以了解结构',
+  |       kind: 'files',
+  |       maxBytes: undefined,
+  |       maxMatches: undefined,
+  |       path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/test',
+  |       pipes: [
+  |         'rtk'
+  |       ],
+  |       query: '*',
+  |       relation: undefined,
+  |       symbol: undefined,
+  |       timeoutMs: undefined
+  |     }
+  |   ],
+  |   round: 0,
+  |   unknowns: [
+  |     '项目的目的和业务领域',
+  |     '项目的技术栈和主要语言',
+  |     '用户对项目的熟悉程度',
+  |     '用户希望关注的具体方面（如架构、核心逻辑等）'
+  |   ]
+  | }
+[INFO ]  2026-06-08T15:04:00.822Z  Investigation
+  | investigation.observe_request
+  | {
+  |   request: {
+  |     caseSensitive: undefined,
+  |     goal: '获取项目文件列表以了解结构',
+  |     kind: 'files',
+  |     maxBytes: undefined,
+  |     maxMatches: undefined,
+  |     path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/test',
+  |     pipes: [
+  |       'rtk'
+  |     ],
+  |     query: '*',
+  |     relation: undefined,
+  |     symbol: undefined,
+  |     timeoutMs: undefined
+  |   },
+  |   round: 1
+  | }
+[INFO ]  2026-06-08T15:04:00.825Z  Investigation
+  | investigation.observe_result
+  | {
+  |   observation: {
+  |     code: 'ok',
+  |     error: undefined,
+  |     evidenceCount: 14,
+  |     ok: true,
+  |     pipes: [],
+  |     source: 'glob',
+  |     summary: 'Found 14 file(s)',
+  |     truncated: false
+  |   },
+  |   round: 1
+  | }
+[INFO ]  2026-06-08T15:04:00.825Z  Investigation
+  | investigation.ask
+  | {
+  |   observations: 1,
+  |   previousConfidence: 0.6,
+  |   round: 1
+  | }
+[INFO ]  2026-06-08T15:04:17.580Z  Investigation
+  | investigation.state
+  | {
+  |   confidence: 0.7,
+  |   constraints: [],
+  |   explicit_requests: [
+  |     '阅读项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test'
+  |   ],
+  |   hypotheses: [
+  |     {
+  |       confidence: 0.75,
+  |       goal: '用户希望快速了解项目概况，以便后续进行具体任务'
+  |     },
+  |     {
+  |       confidence: 0.5,
+  |       goal: '用户需要定位特定功能区域或文档细节，如 TOOLS-PLAN 或 LOGS'
+  |     },
+  |     {
+  |       confidence: 0.3,
+  |       goal: '用户希望验证项目状态或进行审计（如检查日志或待办完成情况）'
+  |     }
+  |   ],
+  |   implicit_goals: [
+  |     '理解项目的整体结构和代码内容',
+  |     '为后续可能的修改、调试或扩展做准备',
+  |     '快速熟悉项目背景和功能'
+  |   ],
+  |   information_needed: [
+  |     'README.md 的内容（项目描述、用途、使用方式）',
+  |     'package.json 的内容（依赖、脚本、名称）',
+  |     'tsconfig.json 的内容（编译目标、模块系统）',
+  |     '项目是否有更多子目录（全局搜索？但当前路径下 files 已列全）',
+  |     '用户对项目的已有了解程度和后续意图'
+  |   ],
+  |   next_question: '',
+  |   observations: 1,
+  |   observe_requests: [
+  |     {
+  |       caseSensitive: undefined,
+  |       goal: '获取项目描述和基本信息',
+  |       kind: 'file',
+  |       maxBytes: undefined,
+  |       maxMatches: undefined,
+  |       path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/test/README.md',
+  |       pipes: [],
+  |       query: undefined,
+  |       relation: undefined,
+  |       symbol: undefined,
+  |       timeoutMs: undefined
+  |     },
+  |     {
+  |       caseSensitive: undefined,
+  |       goal: '获取项目依赖和运行脚本',
+  |       kind: 'file',
+  |       maxBytes: undefined,
+  |       maxMatches: undefined,
+  |       path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/test/package.json',
+  |       pipes: [],
+  |       query: undefined,
+  |       relation: undefined,
+  |       symbol: undefined,
+  |       timeoutMs: undefined
+  |     }
+  |   ],
+  |   round: 1,
+  |   unknowns: [
+  |     '项目的具体目的和业务领域',
+  |     '项目使用的技术栈（已见 bun.lock, tsconfig.json，但未确认）',
+  |     '用户对项目的熟悉程度',
+  |     '用户希望关注的具体方面（如架构、核心逻辑、待办事项等）',
+  |     '项目是否有活跃的开发和变更历史'
+  |   ]
+  | }
+[INFO ]  2026-06-08T15:04:17.582Z  Investigation
+  | investigation.observe_request
+  | {
+  |   request: {
+  |     caseSensitive: undefined,
+  |     goal: '获取项目描述和基本信息',
+  |     kind: 'file',
+  |     maxBytes: undefined,
+  |     maxMatches: undefined,
+  |     path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/test/README.md',
+  |     pipes: [],
+  |     query: undefined,
+  |     relation: undefined,
+  |     symbol: undefined,
+  |     timeoutMs: undefined
+  |   },
+  |   round: 2
+  | }
+[INFO ]  2026-06-08T15:04:17.583Z  Investigation
+  | investigation.observe_result
+  | {
+  |   observation: {
+  |     code: 'read_failed',
+  |     error: 'Path escapes workspace: /Users/yihuaqing/Desktop/yihuaqing/flyflors/test/README.md',
+  |     evidenceCount: 0,
+  |     ok: false,
+  |     pipes: [],
+  |     source: 'read_file',
+  |     summary: 'Path escapes workspace: /Users/yihuaqing/Desktop/yihuaqing/flyflors/test/README.md',
+  |     truncated: false
+  |   },
+  |   round: 2
+  | }
+[INFO ]  2026-06-08T15:04:17.583Z  Investigation
+  | investigation.observe_request
+  | {
+  |   request: {
+  |     caseSensitive: undefined,
+  |     goal: '获取项目依赖和运行脚本',
+  |     kind: 'file',
+  |     maxBytes: undefined,
+  |     maxMatches: undefined,
+  |     path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/test/package.json',
+  |     pipes: [],
+  |     query: undefined,
+  |     relation: undefined,
+  |     symbol: undefined,
+  |     timeoutMs: undefined
+  |   },
+  |   round: 2
+  | }
+[INFO ]  2026-06-08T15:04:17.583Z  Investigation
+  | investigation.observe_result
+  | {
+  |   observation: {
+  |     code: 'read_failed',
+  |     error: 'Path escapes workspace: /Users/yihuaqing/Desktop/yihuaqing/flyflors/test/package.json',
+  |     evidenceCount: 0,
+  |     ok: false,
+  |     pipes: [],
+  |     source: 'read_file',
+  |     summary: 'Path escapes workspace: /Users/yihuaqing/Desktop/yihuaqing/flyflors/test/package.json',
+  |     truncated: false
+  |   },
+  |   round: 2
+  | }
+[INFO ]  2026-06-08T15:04:17.584Z  Investigation
+  | investigation.ask
+  | {
+  |   observations: 3,
+  |   previousConfidence: 0.7,
+  |   round: 2
+  | }
+[INFO ]  2026-06-08T15:04:28.208Z  Investigation
+  | investigation.state
+  | {
+  |   confidence: 0.3,
+  |   constraints: [],
+  |   explicit_requests: [
+  |     '阅读项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test'
+  |   ],
+  |   hypotheses: [
+  |     {
+  |       confidence: 0.4,
+  |       goal: '用户希望快速了解项目概况以便后续进行具体任务'
+  |     },
+  |     {
+  |       confidence: 0.3,
+  |       goal: '用户希望定位特定文档或功能区域，如 TOOLS-PLAN 或 LOGS'
+  |     },
+  |     {
+  |       confidence: 0.2,
+  |       goal: '用户希望验证项目状态或进行审计'
+  |     }
+  |   ],
+  |   implicit_goals: [
+  |     '理解项目整体结构与用途',
+  |     '为后续可能的修改、调试或扩展做准备',
+  |     '快速熟悉项目背景和功能'
+  |   ],
+  |   information_needed: [
+  |     '当前工作区限制，无法读取指定路径下的任何文件',
+  |     '用户是否有其他方式提供项目内容（如复制粘贴文本、切换到包含该路径的工作区）',
+  |     '用户对项目的已有了解程度和后续意图'
+  |   ],
+  |   next_question: '你指定的项目路径 /Users/yihuaqing/Desktop/yihuaqing/flyflors/test 超出了当前工作区范围，我无法直接读取其中的文件。请将项目内容复制粘贴到这里，或者切换到包含该路径的工作区后重新尝试。你希望我如何处理？',
+  |   observations: 3,
+  |   observe_requests: [],
+  |   round: 2,
+  |   unknowns: [
+  |     '项目的具体目的和业务领域',
+  |     '项目使用的技术栈（推测为 Bun + TypeScript，但未确认）',
+  |     '用户对项目的熟悉程度',
+  |     '用户希望关注的具体方面（如架构、核心逻辑、待办事项等）',
+  |     '项目是否含有更多子目录或源码文件（文件列表仅包含配置和文档）',
+  |     '指定路径超出当前工作区范围，无法直接读取文件'
+  |   ]
+  | }
+[INFO ]  2026-06-08T15:04:28.210Z  Investigation
+  | investigation.complete
+  | {
+  |   confidence: 0.3,
+  |   hasNextQuestion: true,
+  |   observations: 3
+  | }
+[INFO ]  2026-06-08T15:23:04.168Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:23:30.665Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:24:12.367Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[DEBUG]  2026-06-08T15:27:06.252Z  Brain
+  | transformer
+  | hi
+[INFO ]  2026-06-08T15:41:59.296Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }

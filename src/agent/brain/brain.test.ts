@@ -17,8 +17,11 @@ describe('Brain intelligence orchestration', () => {
             return streamFromText('hel', 'lo');
         });
 
-        await expect(collect(brain.transformer('hi'))).resolves.toBe('hello');
-        expect(seenTurns).toEqual([[
+        const prepared = await brain.prepareTurn('hi');
+        await expect(collect(brain.streamTurn(prepared.messages))).resolves.toBe('hello');
+        brain.commitTurn('hi', 'hello');
+
+        expect(prepared.messages).toEqual([
             {
                 role: AgentChatRole.System,
                 content: '<SOUL>\nfollow the constitution\n</SOUL>\n\n<MEMORY>\nremember the user\n</MEMORY>',
@@ -27,7 +30,8 @@ describe('Brain intelligence orchestration', () => {
                 role: AgentChatRole.User,
                 content: investigatedUserContent('hi'),
             },
-        ]]);
+        ]);
+        expect(seenTurns).toEqual([prepared.messages]);
         expect(brain.context).toEqual([
             { role: AgentChatRole.User, content: 'hi' },
             { role: AgentChatRole.Assistant, content: 'hello' },
@@ -47,7 +51,9 @@ describe('Brain intelligence orchestration', () => {
             });
         });
 
-        await expect(collect(brain.transformer('hi'))).rejects.toThrow('provider failed');
+        const prepared = await brain.prepareTurn('hi');
+
+        await expect(collect(brain.streamTurn(prepared.messages))).rejects.toThrow('provider failed');
         expect(brain.context).toEqual([]);
     });
 
@@ -67,12 +73,32 @@ describe('Brain intelligence orchestration', () => {
             });
         });
 
-        const turn = brain.transformer('hi');
+        const prepared = await brain.prepareTurn('hi');
+        const turn = brain.streamTurn(prepared.messages);
         await expect(turn.next()).resolves.toMatchObject({ done: false, value: 'partial' });
         await turn.return(undefined);
 
         expect(cancelled).toBe(true);
         expect(brain.context).toEqual([]);
+    });
+
+    test('keeps transformer as a compatibility wrapper around prepared streaming turns', async () => {
+        const brain = await brainWithPrompt({
+            [SoulSection.Soul]: 'follow the constitution',
+        });
+        const seenTurns: AgentChatMessage[][] = [];
+        setProviderStream(brain, (messages: AgentChatMessage[]) => {
+            seenTurns.push(messages);
+            return streamFromText('o', 'k');
+        });
+
+        await expect(collect(brain.transformer('hi'))).resolves.toBe('ok');
+
+        expect(seenTurns).toHaveLength(1);
+        expect(brain.context).toEqual([
+            { role: AgentChatRole.User, content: 'hi' },
+            { role: AgentChatRole.Assistant, content: 'ok' },
+        ]);
     });
 });
 
