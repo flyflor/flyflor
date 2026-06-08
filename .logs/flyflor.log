@@ -10292,3 +10292,8 @@
   |     role: 'user'
   |   }
   | ]
+[INFO ]  2026-06-08T19:06:47.150Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
