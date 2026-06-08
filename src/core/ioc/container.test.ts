@@ -194,30 +194,9 @@ describe('Container property injection', () => {
         };
         const agent = await useContainer().getAsync(Agent, agentConfig);
         const outputs: string[] = [];
-        const committed: string[] = [];
         Object.assign(agent.brain, {
-            prepareTurn: async (content: string) => ({
-                investigation: {
-                    state: {
-                        explicit_requests: [content],
-                        implicit_goals: [],
-                        constraints: [],
-                        unknowns: [],
-                        hypotheses: [],
-                        evidence: [],
-                        information_needed: [],
-                        next_question: '',
-                        confidence: 0.8,
-                    },
-                    observations: [],
-                },
-                messages: [{ role: 'user', content }],
-            }),
-            streamTurn: async function* () {
+            transformer: async function* () {
                 yield 'stream:hello';
-            },
-            commitTurn: (content: string, assistant: string) => {
-                committed.push(`${content}:${assistant}`);
             },
         });
 
@@ -227,7 +206,6 @@ describe('Container property injection', () => {
 
         expect(result).toBeUndefined();
         expect(outputs).toEqual(['stream:hello']);
-        expect(committed).toEqual(['hello:stream:hello']);
         expect(agent.memory.turns[0]?.assistant).toBe('stream:hello');
     });
 });

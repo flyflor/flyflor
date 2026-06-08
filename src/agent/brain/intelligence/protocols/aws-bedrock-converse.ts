@@ -1,5 +1,5 @@
 import { FModelProtocolName } from '@/config';
-import { AgentChatRole, type AgentChatMessage, type ProtocolAdapter, type ProtocolBuildContext } from '../types';
+import { AgentChatRole, type AgentMemory, type ProtocolAdapter, type ProtocolBuildContext } from '../types';
 
 export const awsBedrockConverseAdapter: ProtocolAdapter = {
     name: FModelProtocolName.AWSBedrockConverse,
@@ -7,7 +7,7 @@ export const awsBedrockConverseAdapter: ProtocolAdapter = {
     auth: 'bearer',
     acceptsJsonStream: true,
     body: (context: ProtocolBuildContext) => {
-        const { system, messages } = bedrockMessages(context.request.messages);
+        const { system, messages } = bedrockMessages(context.messages);
         return {
             messages,
             ...(system.length > 0 ? { system: system.map((text) => ({ text })) } : {}),
@@ -26,7 +26,7 @@ export const awsBedrockConverseAdapter: ProtocolAdapter = {
     missingTerminalMessage: () => 'LLM provider stream ended without a structured Bedrock messageStop event',
 };
 
-function bedrockMessages(messages: AgentChatMessage[]): {
+function bedrockMessages(messages: AgentMemory[]): {
     system: string[];
     messages: Array<{ role: string; content: Array<{ text: string }> }>;
 } {

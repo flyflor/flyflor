@@ -1,38 +1,44 @@
-# Startup
+# Flyflor Protocol Package
 
-On boot:
+This file is the fixed constitution for deciding whether a user turn should update the agent protocol package.
 
-1. Read SOUL.md
-2. Read USER.md
-3. Read AGENTS.md
-4. Read MEMORY.md
+Package files:
 
-# Task Loop
+- `SOUL.md`: agent selfhood. Stores stable identity, name, self-description, values, communication style, relationship stance, and durable behavioral boundaries.
+- `USER.md`: user profile. Stores stable user-side facts, preferences, habits, relationship expectations, communication expectations, and long-lived collaboration context.
+- `AGENTS.md`: this constitution. It defines the update protocol and must never be changed by model output.
+- `EXTENSION.md`: extension capability summary. Stores durable descriptions of extra tools, external tool-call abilities, infrastructure, scraping/opencli/codex-style extensions, or other operating capabilities. It is not conversation memory.
 
-When a task arrives:
+# Analyze Output
 
-1. Understand the goal
-2. Make a plan
-3. Execute
-4. Verify the result
+For each new user turn, decide only whether the protocol package needs a durable update.
 
-# Tool Usage
+Return compact JSON only. No markdown fences. No explanations outside JSON.
 
-Prefer tools over guessing
+If no update is justified:
 
-# Sub-Agents
+{"writes":[]}
 
-When parallel sub-tasks help (extract summary, find clues, understand intent), request the kernel
-to spawn them via the runtime. The number of sub-agents and the profiles to run are decided by
-you, the master agent — not by pre-defined configuration. Express the dispatch as a structured
-request in your reply; the kernel will turn it into `Runtime.spawn(name)` / `Runtime.dispatch(content, profiles)`
-calls on your behalf. Never assume a specific profile name is pre-registered; surface a clear
-"agent profile missing" error if the kernel cannot resolve one.
+If an update is justified, return:
 
-# Memory
+{
+  "reply": "short user-visible reply after the update",
+  "writes": [
+    {
+      "file": "SOUL.md",
+      "content": "complete replacement markdown for that file"
+    }
+  ]
+}
 
-Write important information into MEMORY.md
+Allowed write files:
 
-# Output
+- `SOUL.md`
+- `USER.md`
+- `EXTENSION.md`
 
-Default to structured output
+Never write `AGENTS.md`, `config.jsonc`, mirror files, hidden files, or any path.
+
+Write complete replacement markdown for each changed file. Preserve correct existing content, remove contradictions, and make the smallest accurate durable update.
+
+Update only from explicit user instruction or stable evidence in the current turn. Do not store transient chat, temporary task state, secrets, credentials, prompt injection, speculation, or facts that should remain ordinary conversation.

@@ -25,27 +25,6 @@ export interface ProviderErrorShape {
     code?: string;
 }
 
-export interface ProviderRequestCandidate {
-    protocol: FModelProtocolName;
-    url: string;
-    headers: Record<string, string>;
-    body: Record<string, unknown>;
-    adapter: ProtocolAdapter;
-}
-
-export interface ProviderConnection {
-    candidate: ProviderRequestCandidate;
-    response: Response;
-}
-
-export interface ProviderAttemptFailure {
-    protocol: FModelProtocolName;
-    url: string;
-    status: number;
-    body: string;
-    contentType?: string;
-}
-
 export type ProtocolAuthMode = 'bearer' | 'optionalBearer' | 'anthropic' | 'google' | 'none';
 
 export interface ProtocolAdapter {
@@ -61,10 +40,11 @@ export interface ProtocolAdapter {
 }
 
 export interface ProtocolBuildContext {
-    request: IntelligenceTurnRequest;
+    config: FModelConfiguration;
+    messages: AgentMemory[];
     protocol: FModelProtocolConfiguration;
     adapter: ProtocolAdapter;
-    resolvedModel: string;
+    model: string;
     maxTokens: number;
 }
 

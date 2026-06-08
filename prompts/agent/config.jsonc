@@ -1,0 +1,35 @@
+{
+    // EN: Protocol package schema version.
+    // ZH: 协议包结构版本。
+    version: 1,
+
+    // EN: Agent package name.
+    // ZH: 智能体协议包名称。
+    name: "agent",
+
+    // EN: Human-readable package description.
+    // ZH: 面向人的协议包描述。
+    description: "Agent protocol package template.",
+
+    // EN: Runtime prompt sections loaded into the model.
+    // ZH: 运行时会加载给模型的 prompt section。
+    prompt: {
+        sections: ["SOUL", "USER", "AGENTS", "EXTENSION"],
+    },
+
+    // EN: Controlled protocol-package update policy.
+    // ZH: 受控协议包更新策略。
+    protocolPackage: {
+        // EN: Files that model-reviewed updates may modify.
+        // ZH: 模型审查后的更新允许修改的文件。
+        editable: ["SOUL.md", "USER.md", "EXTENSION.md"],
+
+        // EN: Files that are part of the package but locked against model writes.
+        // ZH: 属于协议包但禁止模型写入的文件。
+        locked: ["AGENTS.md"],
+
+        // EN: Metadata/design files never injected as prompt sections.
+        // ZH: 永远不会作为 prompt section 注入的元信息/设计文件。
+        runtimeIgnored: ["README.md", "README.zh.cn.md", "config.jsonc"],
+    },
+}

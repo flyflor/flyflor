@@ -18,8 +18,8 @@ export const openAIResponsesAdapter: ProtocolAdapter = {
     auth: 'bearer',
     usesV1Fallback: true,
     body: (context: ProtocolBuildContext) => ({
-        model: context.resolvedModel,
-        input: context.request.messages.map((message) => ({ role: message.role, content: message.content })),
+        model: context.model,
+        input: context.messages.map((message) => ({ role: message.role, content: message.content })),
         stream: true,
         max_output_tokens: context.maxTokens,
     }),

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { useContainer, type FileService } from '@/core';
+import { useContainer, type FileNode, type FileService } from '@/core';
 import { FileService as CoreFileService } from './service';
 
 let tempPaths: string[] = [];
@@ -13,8 +13,8 @@ function tempPath(): string {
     return path;
 }
 
-function useFile<T>(path: string): FileService<T> {
-    return useContainer().create(CoreFileService, path) as FileService<T>;
+function useFile<T>(path: string): FileNode<T> {
+    return useContainer().create(CoreFileService, path) as FileNode<T>;
 }
 
 afterEach(() => {
@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 describe('FileService', () => {
-    test('loads prompt directories into data and prompt protocol blocks', () => {
+    test('loads canonical markdown files from directories', () => {
         const root = tempPath();
         writeFileSync(
             join(root, 'SOUL.md'),
@@ -49,28 +49,11 @@ describe('FileService', () => {
 
         const file = useFile<{ SOUL: string; nested: { USER: string } }>(root).reload();
 
-        expect(file.data.SOUL).toBe('You are Flyflor.');
-        expect(file.data.nested.USER).toBe('User rules.');
-        expect(file.blocks.ask_policy?.payload.maxQuestions).toBe(3);
-        expect(file.blocks.ask_policy?.body).toBe('Prefer concrete choices.');
-        expect('SOUL.copy' in file.data).toBe(false);
-    });
-
-    test('throws when a prompt block is malformed', () => {
-        const root = tempPath();
-        writeFileSync(
-            join(root, 'SOUL.md'),
-            [
-                'Before',
-                '<flyflor:broken>',
-                '{ version: }',
-                '</flyflor:broken>',
-                'After',
-            ].join('\n'),
-            'utf-8',
-        );
-
-        expect(() => useFile(root).reload()).toThrow("Prompt block 'broken' payload is invalid JSONC");
+        expect(file.SOUL).toBeInstanceOf(CoreFileService);
+        expect(file.SOUL.data).toContain('<flyflor:ask_policy>');
+        expect(file.SOUL.data).toContain('You are Flyflor.');
+        expect(file.nested.USER.data).toBe('User rules.');
+        expect(file.children['SOUL.copy']?.data).toBe('human mirror only');
     });
 
     test('supports create update upsert delete and eager reload for files', () => {
@@ -94,4 +77,15 @@ describe('FileService', () => {
         expect(file.exists()).toBe(false);
         expect(() => file.update('missing')).toThrow('File does not exist');
     });
+
+    test('loads single jsonc files as structured data', () => {
+        const root = tempPath();
+        const path = join(root, 'config.jsonc');
+        writeFileSync(path, '{ version: 1, name: "flyflor" }', 'utf-8');
+
+        const file = useFile<{ version: number; name: string }>(path).reload();
+
+        expect(file.data).toEqual({ version: 1, name: 'flyflor' });
+    });
+
 });

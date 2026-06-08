@@ -1,46 +1,56 @@
-import { FileService, FService, Inject, Logger, Prompt, Service, useContainer, type FLogger } from '@/core';
-import { AgentChatRole, Intelligence, type AgentMemory } from './intelligence';
-import { Crystall } from './crystall';
+import { FService, Inject, Logger, Service, type FLogger } from '@/core';
+import { type FAgentProfileConfiguration } from '@/config';
+import { AgentChatRole } from './intelligence';
 import { Memory } from '../memory';
-import { SoulSection } from '../types';
-import { ConfigComponent, type FAgentProfileConfiguration } from '@/config';
-import { Investigation, type BrainInvestigationResult } from './investigation';
-
-const PROMPT_SECTION_ORDER = [SoulSection.Soul, SoulSection.User, SoulSection.Agents, SoulSection.Memory] as const;
-
-type PromptSection = (typeof PROMPT_SECTION_ORDER)[number];
-
-type AgentPrompt = Partial<Record<PromptSection, string>>;
+import { Intelligence } from './intelligence';
 
 @Service()
 export class Brain extends FService {
     @Inject()
     public intelligence!: Intelligence;
 
-    @Inject()
-    public crystall!: Crystall;
-
-    public context: AgentMemory[];
-
     @Inject(function (this: Brain) {
         return this.config;
     })
-    public investigation!: Investigation;
+    public memory!: Memory;
 
     @Logger(Brain.name)
     public readonly log!: FLogger;
 
-    @Prompt('agent', function wrapper(this: Brain) {
-        return this.config.name;
-    })
-    public prompt!: FileService<AgentPrompt>;
-
     constructor(public config: FAgentProfileConfiguration) {
         super();
-        this.context = [];
     }
 
     public async *transformer(content: string): AsyncGenerator<string> {
-        this.log.debug('transformer', content);
+        const result = await this.memory.messages(content);
+        if (typeof result === 'string') {
+            this.memory.context.push({ role: AgentChatRole.User, content });
+            this.memory.context.push({ role: AgentChatRole.Assistant, content: result });
+            yield result;
+            return;
+        }
+
+        this.log.debug('transformer', content, result);
+        const reader = this.intelligence.reader(result);
+        let assistant = '';
+        let completed = false;
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                    completed = true;
+                    break;
+                }
+                assistant += value ?? '';
+                yield value ?? '';
+            }
+        } finally {
+            if (!completed) await reader.cancel().catch(() => undefined);
+            reader.releaseLock();
+        }
+
+        if (!completed) return;
+        this.memory.context.push({ role: AgentChatRole.User, content });
+        this.memory.context.push({ role: AgentChatRole.Assistant, content: assistant });
     }
 }

@@ -1,5 +1,5 @@
 import { FModelProtocolName } from '@/config';
-import { AgentChatRole, type AgentChatMessage, type ProtocolAdapter, type ProtocolBuildContext, type ProviderErrorShape } from '../types';
+import { AgentChatRole, type AgentMemory, type ProtocolAdapter, type ProtocolBuildContext, type ProviderErrorShape } from '../types';
 
 export const anthropicMessagesAdapter: ProtocolAdapter = {
     name: FModelProtocolName.AnthropicMessages,
@@ -7,9 +7,9 @@ export const anthropicMessagesAdapter: ProtocolAdapter = {
     auth: 'anthropic',
     defaultVersion: '2023-06-01',
     body: (context: ProtocolBuildContext) => {
-        const { system, messages } = anthropicMessages(context.request.messages);
+        const { system, messages } = anthropicMessages(context.messages);
         return {
-            model: context.resolvedModel,
+            model: context.model,
             messages,
             ...(system.length > 0 ? { system: system.join('\n\n') } : {}),
             stream: true,
@@ -37,7 +37,7 @@ export const anthropicMessagesAdapter: ProtocolAdapter = {
     missingTerminalMessage: () => 'LLM provider stream ended without a structured Anthropic terminal event',
 };
 
-function anthropicMessages(messages: AgentChatMessage[]): { system: string[]; messages: Array<{ role: string; content: string }> } {
+function anthropicMessages(messages: AgentMemory[]): { system: string[]; messages: Array<{ role: string; content: string }> } {
     const system: string[] = [];
     const conversation: Array<{ role: string; content: string }> = [];
     for (const message of messages) {

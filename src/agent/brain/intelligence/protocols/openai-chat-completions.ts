@@ -17,8 +17,8 @@ export const openAIChatCompletionsAdapter: ProtocolAdapter = {
     auth: 'bearer',
     usesV1Fallback: true,
     body: (context: ProtocolBuildContext) => ({
-        model: context.resolvedModel,
-        messages: context.request.messages,
+        model: context.model,
+        messages: context.messages,
         stream: true,
         max_tokens: context.maxTokens,
     }),

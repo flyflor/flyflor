@@ -1,12 +1,12 @@
 import { FModelProtocolName } from '@/config';
-import { AgentChatRole, type AgentChatMessage, type ProtocolAdapter, type ProtocolBuildContext } from '../types';
+import { AgentChatRole, type AgentMemory, type ProtocolAdapter, type ProtocolBuildContext } from '../types';
 
 export const googleGeminiGenerateContentAdapter: ProtocolAdapter = {
     name: FModelProtocolName.GoogleGeminiGenerateContent,
     defaultPath: '/v1beta/models/{model}:streamGenerateContent?alt=sse',
     auth: 'google',
     body: (context: ProtocolBuildContext) => {
-        const { contents, systemInstruction } = geminiRequest(context.request.messages);
+        const { contents, systemInstruction } = geminiRequest(context.messages);
         return {
             contents,
             ...(systemInstruction !== undefined ? { system_instruction: systemInstruction } : {}),
@@ -27,7 +27,7 @@ export const googleGeminiGenerateContentAdapter: ProtocolAdapter = {
     missingTerminalMessage: () => 'LLM provider stream ended without a structured Gemini finishReason',
 };
 
-function geminiRequest(messages: AgentChatMessage[]): {
+function geminiRequest(messages: AgentMemory[]): {
     contents: Array<{ role: string; parts: Array<{ text: string }> }>;
     systemInstruction?: { parts: Array<{ text: string }> };
 } {

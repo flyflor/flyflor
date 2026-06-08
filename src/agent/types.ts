@@ -11,9 +11,9 @@ export enum SoulSection {
     /** User profile (画像). Loaded from `USER.md`. */
     User = 'USER',
 
-    /** Agent operating instructions: startup, task loop, tool usage. Loaded from `AGENTS.md`. */
+    /** Fixed protocol-package constitution. Loaded from `AGENTS.md`. */
     Agents = 'AGENTS',
 
-    /** Short-term rolling memory. Loaded from `MEMORY.md`. */
-    Memory = 'MEMORY',
+    /** Agent extension/capability summary. Loaded from `EXTENSION.md`. */
+    Extension = 'EXTENSION',
 }

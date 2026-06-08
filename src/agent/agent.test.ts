@@ -1,18 +1,14 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { Agent } from './agent';
-import { AgentChatRole, type AgentChatMessage } from './brain/intelligence';
-import { configureLogger, LoggerLevel } from '@/core/logger';
+import { mkdtempSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { useContainer } from '@/core';
-import type { BrainInvestigationResult } from './brain/investigation';
+import { configureLogger, LoggerLevel } from '@/core/logger';
+import { Agent } from './agent';
 
 let tempPaths: string[] = [];
 
 afterEach(() => {
-    const container = useContainer();
-    container.singletons.delete(Agent);
     configureLogger({
         consoleEnabled: true,
         path: './.logs/flyflor.log',
@@ -26,70 +22,49 @@ afterEach(() => {
     tempPaths = [];
 });
 
-describe('Agent runtime memory', () => {
-    test('stores one turn while streaming chunks through the subject', async () => {
-        const agent = await agentWithTempLogger();
-        const messages: AgentChatMessage[] = [{ role: AgentChatRole.User, content: 'prepared hi' }];
-        const investigation = defaultInvestigation();
-        const committed: Array<{ user: string; assistant: string }> = [];
-        Object.assign(agent.brain, {
-            prepareTurn: async () => ({ investigation, messages }),
-            streamTurn: async function* () {
-                yield 'he';
-                yield 'llo';
-            },
-            commitTurn: (user: string, assistant: string) => {
-                committed.push({ user, assistant });
-            },
-        });
+describe('Agent', () => {
+    test('streams Brain transformer output through its Subject', async () => {
+        const agent = await testAgent();
         const outputs: string[] = [];
-        const subscription = agent.subscribe((content) => outputs.push(content));
+        agent.brain.transformer = async function* () {
+            yield 'he';
+            yield 'llo';
+        };
 
-        await agent.next('hi');
+        const subscription = agent.subscribe(content => outputs.push(content));
+        const result = await agent.next('hi');
         subscription.unsubscribe();
 
+        expect(result).toBeUndefined();
         expect(outputs).toEqual(['he', 'llo']);
-        expect(committed).toEqual([{ user: 'hi', assistant: 'hello' }]);
-        expect(agent.memory.turns).toHaveLength(1);
         expect(agent.memory.turns[0]).toMatchObject({
             id: 1,
             status: 'completed',
             userMessage: 'hi',
-            investigation,
-            messages,
             chunks: ['he', 'llo'],
             assistant: 'hello',
         });
     });
 
-    test('marks the current turn failed when streaming fails', async () => {
-        const agent = await agentWithTempLogger();
-        const messages: AgentChatMessage[] = [{ role: AgentChatRole.User, content: 'prepared hi' }];
-        Object.assign(agent.brain, {
-            prepareTurn: async () => ({ investigation: defaultInvestigation(), messages }),
-            streamTurn: async function* () {
-                yield 'partial';
-                throw Error('stream failed');
-            },
-            commitTurn: () => {
-                throw Error('commit should not run');
-            },
-        });
+    test('marks the turn failed when Brain transformer throws', async () => {
+        const agent = await testAgent();
+        agent.brain.transformer = async function* () {
+            yield 'partial';
+            throw Error('failed');
+        };
 
-        await expect(agent.next('hi')).rejects.toThrow('stream failed');
+        await expect(agent.next('hi')).rejects.toThrow('failed');
 
-        expect(agent.memory.turns).toHaveLength(1);
         expect(agent.memory.turns[0]).toMatchObject({
             status: 'failed',
-            userMessage: 'hi',
             chunks: ['partial'],
             assistant: 'partial',
-            error: 'stream failed',
+            error: 'failed',
         });
     });
 });
 
-async function agentWithTempLogger(): Promise<Agent> {
+async function testAgent(): Promise<Agent> {
     const logPath = mkdtempSync(join(tmpdir(), 'flyflor-agent-'));
     tempPaths.push(logPath);
     configureLogger({
@@ -105,26 +80,4 @@ async function agentWithTempLogger(): Promise<Agent> {
         contextLength: 16,
         maxTokens: 8,
     });
-}
-
-function defaultInvestigation(): BrainInvestigationResult {
-    return {
-        state: {
-            explicit_requests: ['hi'],
-            implicit_goals: ['greeting'],
-            constraints: [],
-            unknowns: [],
-            hypotheses: [{
-                goal: 'greet the assistant',
-                supporting_evidence: ['short greeting'],
-                missing_evidence: [],
-                confidence: 0.9,
-            }],
-            evidence: ['user said hi'],
-            information_needed: [],
-            next_question: '',
-            confidence: 0.9,
-        },
-        observations: [],
-    };
 }

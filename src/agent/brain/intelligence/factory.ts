@@ -1,9 +1,15 @@
-import { type FModelProtocolConfiguration, FModelProtocolName } from '@/config';
+import { type FModelConfiguration, type FModelProtocolConfiguration, FModelProtocolName } from '@/config';
 import { anthropicMessagesAdapter, awsBedrockConverseAdapter, cohereChatAdapter, googleGeminiGenerateContentAdapter, huggingFaceAdapter, lmStudioAdapter, ollamaAdapter, openAIChatCompletionsAdapter, openAIResponsesAdapter, vllmAdapter } from './protocols';
-import type { IntelligenceTurnRequest, LlmByteStreamReader, ProtocolAdapter, ProtocolBuildContext, ProviderAttemptFailure, ProviderConnection, ProviderRequestCandidate, StreamingState } from './types';
+import type { AgentMemory, LlmByteStreamReader, ProtocolAdapter, ProtocolBuildContext, StreamingState } from './types';
 
+/**
+ * Default OpenAI-compatible negotiation: stream first, then fall back to Responses.
+ */
 const DEFAULT_PROTOCOLS: FModelProtocolConfiguration[] = [{ name: FModelProtocolName.OpenAIChatCompletions }, { name: FModelProtocolName.OpenAIResponses }];
 
+/**
+ * Protocol adapters are plain composition objects. The factory owns transport, adapters own wire shapes.
+ */
 const PROTOCOLS = new Map<FModelProtocolName, ProtocolAdapter>([
     [FModelProtocolName.AnthropicMessages, anthropicMessagesAdapter],
     [FModelProtocolName.OpenAIResponses, openAIResponsesAdapter],
@@ -17,119 +23,95 @@ const PROTOCOLS = new Map<FModelProtocolName, ProtocolAdapter>([
     [FModelProtocolName.OpenAIChatCompletions, openAIChatCompletionsAdapter],
 ]);
 
-export const createIntelligenceTurnStream = (request: IntelligenceTurnRequest): ReadableStream<string> => {
-    if (request.messages.length === 0) {
+/**
+ * Creates a cancellable text stream for one provider-facing LLM request.
+ */
+export const createIntelligenceTurnStream = (config: FModelConfiguration, messages: AgentMemory[], signal: AbortSignal): ReadableStream<string> => {
+    if (messages.length === 0) {
         throw Error('LLM provider request messages are missing');
     }
-    const abortController = new AbortController();
     return new ReadableStream<string>({
-        start: (controller) => start(controller, request, abortController),
-        cancel: (reason) => abortController.abort(reason),
+        start: (controller) => start(controller, config, messages, signal),
     });
 };
 
-async function start(controller: ReadableStreamDefaultController<string>, request: IntelligenceTurnRequest, abortController: AbortController): Promise<void> {
+async function start(controller: ReadableStreamDefaultController<string>, config: FModelConfiguration, messages: AgentMemory[], signal: AbortSignal): Promise<void> {
     try {
-        await runRequest(controller, request, abortController);
+        await requestLlm(controller, config, messages, signal);
     } catch (error) {
-        abortController.abort(error);
         controller.error(error);
     }
 }
 
-async function runRequest(controller: ReadableStreamDefaultController<string>, request: IntelligenceTurnRequest, abortController: AbortController): Promise<void> {
-    const resolvedModel = request.modelOverride ?? request.llm.model ?? request.llm.default;
-    const connection = await openProviderConnection(request, resolvedModel, abortController);
-    const reader = connection.response.body?.getReader();
-    if (reader === undefined) {
-        throw Object.assign(Error('LLM provider returned no response body'), {
-            detail: { provider: request.llm.provider, protocol: connection.candidate.protocol },
-        });
-    }
-    await readStreamingContent(controller, reader, connection.candidate.adapter);
-}
-
-async function openProviderConnection(request: IntelligenceTurnRequest, resolvedModel: string, abortController: AbortController): Promise<ProviderConnection> {
-    const attempts: ProviderAttemptFailure[] = [];
-    for (const candidate of requestCandidates(request, resolvedModel)) {
-        const response = await fetch(candidate.url, {
-            method: 'POST',
-            headers: candidate.headers,
-            signal: abortController.signal,
-            body: JSON.stringify(candidate.body),
-        });
-        if (response.ok) {
-            const contentType = response.headers.get('content-type') ?? undefined;
-            if (isNonStreamingResponse(candidate.adapter, contentType)) {
-                attempts.push({
-                    protocol: candidate.protocol,
-                    url: candidate.url,
-                    status: response.status,
-                    body: await response.text(),
-                    contentType,
-                });
-                continue;
-            }
-            return { candidate, response };
-        }
-        const body = await response.text();
-        if (!canTryNextProtocol(response.status)) {
-            throw Object.assign(Error('LLM provider request failed'), {
-                detail: { provider: request.llm.provider, protocol: candidate.protocol, status: response.status, body },
-            });
-        }
-        attempts.push({ protocol: candidate.protocol, url: candidate.url, status: response.status, body });
-    }
-    throw Object.assign(Error('LLM provider protocol matching failed'), {
-        detail: { provider: request.llm.provider, attempts },
-    });
-}
-
-function requestCandidates(request: IntelligenceTurnRequest, resolvedModel: string): ProviderRequestCandidate[] {
-    const maxTokens = request.maxTokens ?? request.llm.maxTokens;
-    const candidates: ProviderRequestCandidate[] = [];
-    for (const protocol of resolvedProtocols(request)) {
+async function requestLlm(controller: ReadableStreamDefaultController<string>, config: FModelConfiguration, messages: AgentMemory[], signal: AbortSignal): Promise<void> {
+    const errors: Array<Record<string, unknown>> = [];
+    for (const protocol of protocols(config)) {
         if (protocol.enabled === false) continue;
         const adapter = PROTOCOLS.get(protocol.name);
         if (adapter === undefined) {
             throw Object.assign(Error('Unsupported LLM protocol'), { detail: { protocol: protocol.name } });
         }
-        const context: ProtocolBuildContext = { request, protocol, adapter, resolvedModel, maxTokens };
+        const context: ProtocolBuildContext = { config, messages, protocol, adapter, model: config.model || config.default, maxTokens: config.maxTokens };
         const body = adapter.body(context);
-        for (const url of endpointUrls(context)) {
-            candidates.push(baseCandidate(context, url, body));
+        for (const url of urls(context)) {
+            // Each URL is a full protocol attempt; retry only when the status usually means "wrong endpoint shape".
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: headers(context),
+                signal,
+                body: JSON.stringify(body),
+            });
+            if (!response.ok) {
+                const body = await response.text();
+                if (!canTryNextProtocol(response.status)) {
+                    throw Object.assign(Error('LLM provider request failed'), {
+                        detail: { provider: config.provider, protocol: protocol.name, url, status: response.status, body },
+                    });
+                }
+                errors.push({ protocol: protocol.name, url, status: response.status, body });
+                continue;
+            }
+            const contentType = response.headers.get('content-type') ?? '';
+            if (isJsonResponse(adapter, contentType)) {
+                // Some OpenAI-compatible providers ignore `stream: true`; Responses is the canonical JSON fallback.
+                if (protocol.name !== FModelProtocolName.OpenAIResponses) {
+                    errors.push({ protocol: protocol.name, url, status: response.status, contentType });
+                    break;
+                }
+                controller.enqueue(responsesText(await response.json()));
+                controller.close();
+                return;
+            }
+            const reader = response.body?.getReader();
+            if (reader === undefined) {
+                throw Object.assign(Error('LLM provider returned no response body'), {
+                    detail: { provider: config.provider, protocol: protocol.name, url },
+                });
+            }
+            await readStreamingContent(controller, reader, adapter);
+            return;
         }
     }
-    return candidates;
+    throw Object.assign(Error('LLM provider protocol matching failed'), {
+        detail: { provider: config.provider, errors },
+    });
 }
 
-function resolvedProtocols(request: IntelligenceTurnRequest) {
-    return request.llm.protocols && request.llm.protocols.length > 0 ? request.llm.protocols : DEFAULT_PROTOCOLS;
-}
-
-function baseCandidate(context: ProtocolBuildContext, url: string, body: Record<string, unknown>): ProviderRequestCandidate {
-    return {
-        protocol: context.protocol.name,
-        adapter: context.adapter,
-        url,
-        headers: headers(context),
-        body,
-    };
+function protocols(config: FModelConfiguration): FModelProtocolConfiguration[] {
+    // Config owns protocol preference; the default exists only for empty configs.
+    return config.protocols.length > 0 ? config.protocols : DEFAULT_PROTOCOLS;
 }
 
 function headers(context: ProtocolBuildContext): Record<string, string> {
+    // Auth stays protocol-local because compatible providers differ on header names.
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    const apiKeyEnv = context.protocol.apiKeyEnv ?? context.request.llm.apiKeyEnv;
-    if (context.adapter.auth === 'none') {
-        return headers;
-    }
+    const apiKeyEnv = context.protocol.apiKeyEnv ?? context.config.apiKeyEnv;
+    if (context.adapter.auth === 'none') return headers;
     const apiKey = apiKeyEnv ? process.env[apiKeyEnv] : undefined;
-    if ((apiKey === undefined || apiKey.length === 0) && context.adapter.auth === 'optionalBearer') {
-        return headers;
-    }
+    if ((apiKey === undefined || apiKey.length === 0) && context.adapter.auth === 'optionalBearer') return headers;
     if (apiKey === undefined || apiKey.length === 0) {
         throw Object.assign(Error('LLM provider API key is missing'), {
-            detail: { provider: context.request.llm.provider, protocol: context.protocol.name, apiKeyEnv },
+            detail: { provider: context.config.provider, protocol: context.protocol.name, apiKeyEnv },
         });
     }
     if (context.adapter.auth === 'anthropic') {
@@ -145,10 +127,11 @@ function headers(context: ProtocolBuildContext): Record<string, string> {
     return headers;
 }
 
-function endpointUrls(context: ProtocolBuildContext): string[] {
-    const baseUrl = (context.protocol.baseUrl ?? context.request.llm.baseUrl).replace(/\/+$/, '');
-    const path = replaceModel(context.protocol.path ?? context.adapter.defaultPath, context.resolvedModel);
+function urls(context: ProtocolBuildContext): string[] {
+    const baseUrl = (context.protocol.baseUrl ?? context.config.baseUrl).replace(/\/+$/, '');
+    const path = replaceModel(context.protocol.path ?? context.adapter.defaultPath, context.model);
     const urls = [joinEndpoint(baseUrl, path)];
+    // OpenAI-compatible providers differ on whether `baseUrl` already includes the `/v1` suffix.
     if (context.adapter.usesV1Fallback && !baseUrl.endsWith('/v1')) {
         urls.push(joinEndpoint(baseUrl + '/v1', path));
     }
@@ -168,12 +151,32 @@ function canTryNextProtocol(status: number): boolean {
     return [400, 404, 405, 415, 422, 501].includes(status);
 }
 
-function isNonStreamingResponse(adapter: ProtocolAdapter, contentType?: string): boolean {
+function isJsonResponse(adapter: ProtocolAdapter, contentType: string): boolean {
     if (adapter.acceptsJsonStream) return false;
-    return typeof contentType === 'string' && contentType.toLowerCase().includes('application/json');
+    return contentType.toLowerCase().includes('application/json');
+}
+
+function responsesText(json: unknown): string {
+    // Responses non-streaming JSON is folded back into the same text stream contract.
+    const root = json as { output_text?: unknown; output?: unknown };
+    if (typeof root.output_text === 'string') return root.output_text;
+    const parts: string[] = [];
+    if (Array.isArray(root.output)) {
+        for (const output of root.output) {
+            const content = (output as { content?: unknown }).content;
+            if (!Array.isArray(content)) continue;
+            for (const item of content) {
+                const text = (item as { text?: unknown }).text;
+                if (typeof text === 'string') parts.push(text);
+            }
+        }
+    }
+    if (parts.length > 0) return parts.join('');
+    throw Error('LLM provider Responses JSON did not include text');
 }
 
 async function readStreamingContent(controller: ReadableStreamDefaultController<string>, reader: LlmByteStreamReader, adapter: ProtocolAdapter): Promise<void> {
+    // Providers may split UTF-8 bytes and SSE/JSON lines across chunks, so decoding is buffered.
     const decoder = new TextDecoder();
     const state: StreamingState = { buffer: '', finished: false };
     while (true) {

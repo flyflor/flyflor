@@ -6,8 +6,8 @@ export const cohereChatAdapter: ProtocolAdapter = {
     defaultPath: '/v2/chat',
     auth: 'bearer',
     body: (context: ProtocolBuildContext) => ({
-        model: context.resolvedModel,
-        messages: context.request.messages.map((message) => ({ role: message.role, content: message.content })),
+        model: context.model,
+        messages: context.messages.map((message) => ({ role: message.role, content: message.content })),
         stream: true,
         max_tokens: context.maxTokens,
     }),

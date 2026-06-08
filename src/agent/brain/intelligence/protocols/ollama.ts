@@ -6,8 +6,8 @@ export const ollamaAdapter: ProtocolAdapter = {
     defaultPath: '/api/chat',
     auth: 'optionalBearer',
     body: (context: ProtocolBuildContext) => ({
-        model: context.resolvedModel,
-        messages: context.request.messages,
+        model: context.model,
+        messages: context.messages,
         stream: true,
         options: { num_predict: context.maxTokens },
     }),
