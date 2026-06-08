@@ -14,28 +14,9 @@ export enum AgentChatRole {
  * One message sent to the configured LLM provider.
  * `role` is the provider protocol role; `content` is the text payload for that message.
  */
-export interface AgentChatMessage {
+export interface AgentMemory {
     role: AgentChatRole;
     content: string;
-}
-
-export interface IntelligenceRequest {
-    llm: FModelConfiguration;
-    modelOverride?: string;
-    maxTokens?: number;
-}
-
-export interface IntelligenceTurn {
-    read(): Promise<{ done: boolean; value?: string }>;
-    cancel(reason?: unknown): Promise<void>;
-    release(): void;
-}
-
-export interface IntelligenceTurnRequest {
-    llm: FModelConfiguration;
-    messages: AgentChatMessage[];
-    modelOverride?: string;
-    maxTokens?: number;
 }
 
 export interface ProviderErrorShape {

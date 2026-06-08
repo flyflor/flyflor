@@ -8960,3 +8960,93 @@
   | {
   |   binaryType: 'buffer'
   | }
+[INFO ]  2026-06-08T15:45:03.069Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:45:30.532Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:45:59.645Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:46:33.922Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:47:00.828Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:48:01.743Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:50:25.368Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:50:42.677Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:51:30.345Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:51:32.652Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:51:48.210Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:52:03.989Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:52:57.298Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:53:18.784Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:56:15.158Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:56:53.068Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:57:09.655Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
+[INFO ]  2026-06-08T15:58:01.081Z  FSocket
+  | constructor
+  | {
+  |   binaryType: 'buffer'
+  | }
