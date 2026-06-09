@@ -2,9 +2,11 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { useContainer } from '@/core';
+import { useContainer, type AgentSignal } from '@/core';
 import { configureLogger, LoggerLevel } from '@/core/logger';
+import { from, of, throwError } from 'rxjs';
 import { Agent } from './agent';
+import { AgentChatRole, type AgentMemory } from './brain/intelligence';
 
 let tempPaths: string[] = [];
 
@@ -23,44 +25,55 @@ afterEach(() => {
 });
 
 describe('Agent', () => {
-    test('streams Brain transformer output through its Subject', async () => {
+    test('streams the brain reflex through its Subject and commits the turn', async () => {
         const agent = await testAgent();
-        const outputs: string[] = [];
-        agent.brain.transformer = async function* () {
-            yield 'he';
-            yield 'llo';
-        };
+        const input: AgentMemory[] = [{ role: AgentChatRole.User, content: 'hi' }];
+        agent.memory.messages = async () => input;
+        const signals: AgentSignal[] = [{ type: 'delta', text: 'he' }, { type: 'delta', text: 'llo' }, { type: 'done' }];
+        agent.brain.transform = () => from(signals);
 
+        const outputs: string[] = [];
         const subscription = agent.subscribe(content => outputs.push(content));
         const result = await agent.next('hi');
         subscription.unsubscribe();
 
         expect(result).toBeUndefined();
         expect(outputs).toEqual(['he', 'llo']);
-        expect(agent.memory.turns[0]).toMatchObject({
-            id: 1,
-            status: 'completed',
-            userMessage: 'hi',
-            chunks: ['he', 'llo'],
-            assistant: 'hello',
-        });
+        expect(agent.memory.context).toEqual([
+            { role: AgentChatRole.User, content: 'hi' },
+            { role: AgentChatRole.Assistant, content: 'hello' },
+        ]);
     });
 
-    test('marks the turn failed when Brain transformer throws', async () => {
+    test('replies directly and commits when memory analyzes the turn', async () => {
         const agent = await testAgent();
-        agent.brain.transformer = async function* () {
-            yield 'partial';
-            throw Error('failed');
+        agent.memory.messages = async () => '记住了。';
+        let streamed = false;
+        agent.brain.transform = () => {
+            streamed = true;
+            return of<AgentSignal>({ type: 'done' });
         };
 
-        await expect(agent.next('hi')).rejects.toThrow('failed');
+        const outputs: string[] = [];
+        const subscription = agent.subscribe(content => outputs.push(content));
+        await agent.next('以后你叫 FlyFlor');
+        subscription.unsubscribe();
 
-        expect(agent.memory.turns[0]).toMatchObject({
-            status: 'failed',
-            chunks: ['partial'],
-            assistant: 'partial',
-            error: 'failed',
-        });
+        expect(streamed).toBe(false);
+        expect(outputs).toEqual(['记住了。']);
+        expect(agent.memory.context).toEqual([
+            { role: AgentChatRole.User, content: '以后你叫 FlyFlor' },
+            { role: AgentChatRole.Assistant, content: '记住了。' },
+        ]);
+    });
+
+    test('does not commit the turn when the brain reflex fails', async () => {
+        const agent = await testAgent();
+        agent.memory.messages = async () => [{ role: AgentChatRole.User, content: 'hi' }];
+        agent.brain.transform = () => throwError(() => Error('failed'));
+
+        await expect(agent.next('hi')).rejects.toThrow('failed');
+        expect(agent.memory.context).toEqual([]);
     });
 });
 

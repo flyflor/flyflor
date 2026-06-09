@@ -24,6 +24,8 @@ const ALLOWED_NEW_TARGETS = new Set([
     'Date',
     'Error',
     'Map',
+    'Observable',
+    'Promise',
     'ReadableStream',
     'RegExp',
     'Response',

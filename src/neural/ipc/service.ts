@@ -37,10 +37,10 @@ export class IPCService extends FService {
     public async init() {
         const endpoint = join(ROOT_PATH, this.config.socket);
         const listenEndpoint = this.toListenEndpoint(endpoint);
-        const { socket } = await useContainer().getAsync(FSocket);
+        const socket = await useContainer().getAsync(FSocket);
 
         if (existsSync(listenEndpoint)) await unlink(listenEndpoint);
-        this.socketServer = Bun.listen({ unix: listenEndpoint, socket: socket });
+        this.socketServer = Bun.listen({ unix: listenEndpoint, socket });
         console.log(`[IPC] Socket listening at ${endpoint}`);
     }
 }

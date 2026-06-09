@@ -49,6 +49,7 @@ Core base classes live in `src/core/ioc/abstracts.ts`:
 - `FPlugin`: plugin boundary.
 - `FGuard` and `FSandBox`: policy scopes.
 - `FAgent`: autonomous agent object backed by an RxJS subject.
+- `FCortex`: cortical transform — an RxJS subject that maps one assembled input into an output `Observable`. `Brain` is the only cortex today.
 
 Decorators live in core module files:
 
@@ -70,14 +71,15 @@ Prompt protocol blocks use `<flyflor:name>` tags with a JSONC payload. The rende
 
 `Synapse` reads the active profile from `ConfigComponent`, resolves defaults from model config, then asks the container to create `Agent`.
 
-`Agent` owns:
+`Agent` owns the turn. It injects a `Brain` (cortex) and a `Memory` (prefrontal working cache) and is itself the subject the neural layer subscribes to.
 
-- injected brain services;
-- injected memory component;
-- injected loaded prompt object;
-- user/assistant context turns.
+`Agent.next(text)` asks `Memory.messages(text)` for the assembled mental input, then either replies directly (when memory analyzed the turn) or subscribes `Brain.transform(input)` and streams its `delta` signals out chunk by chunk. On success it calls `Memory.commit(user, assistant)`; a failed or cancelled reflex commits nothing.
 
-The provider-facing message list is built with one `system` message first, followed by user/assistant history. Flyflor sections such as `SOUL`, `USER`, `AGENTS`, and `MEMORY` are internal tags inside the system message; they are not model chat roles.
+`Brain` is a pure `FCortex<AgentMemory[], AgentSignal>`: it maps the mental input into a cold `Observable` of model signals and never touches conversation context.
+
+`Memory` assembles the system message and owns context. The ordinary provider-facing list is one `system` message first, then user/assistant history, then the current raw user message. Runtime Flyflor sections such as `SOUL`, `USER`, and `EXTENSION` are internal tags inside that system message; they are not model chat roles.
+
+`AGENTS.md` is a locked write-control constitution. `Memory.analyze()` uses it to decide whether a user turn may update `SOUL.md`, `USER.md`, or `EXTENSION.md`, but it is not injected into ordinary conversation prompts.
 
 ## Neural And IPC
 

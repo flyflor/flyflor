@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { Agent } from '@/agent';
 import { Brain } from '@/agent/brain';
-import { Init, Inject, Service, Singleton, useContainer } from '@/core';
+import { AgentChatRole, type AgentMemory } from '@/agent/brain/intelligence';
+import { Init, Inject, Service, Singleton, useContainer, type AgentSignal } from '@/core';
+import { from } from 'rxjs';
 import { configureLogger, LoggerLevel } from '@/core/logger';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -173,7 +175,7 @@ describe('Container property injection', () => {
 
         expect(agent.brain).toBeInstanceOf(Brain);
         expect(agent.brain.config).toBe(agentConfig);
-        expect(typeof agent.brain.transformer).toBe('function');
+        expect(typeof agent.brain.transform).toBe('function');
     });
 
     test('streams Agent output through its Subject instead of returning content', async () => {
@@ -194,11 +196,10 @@ describe('Container property injection', () => {
         };
         const agent = await useContainer().getAsync(Agent, agentConfig);
         const outputs: string[] = [];
-        Object.assign(agent.brain, {
-            transformer: async function* () {
-                yield 'stream:hello';
-            },
-        });
+        const input: AgentMemory[] = [{ role: AgentChatRole.User, content: 'hello' }];
+        agent.memory.messages = async () => input;
+        const signals: AgentSignal[] = [{ type: 'delta', text: 'stream:hello' }, { type: 'done' }];
+        agent.brain.transform = () => from(signals);
 
         const subscription = agent.subscribe(content => outputs.push(content));
         const result = await agent.next('hello');
@@ -206,6 +207,6 @@ describe('Container property injection', () => {
 
         expect(result).toBeUndefined();
         expect(outputs).toEqual(['stream:hello']);
-        expect(agent.memory.turns[0]?.assistant).toBe('stream:hello');
+        expect(agent.memory.context.at(-1)).toEqual({ role: AgentChatRole.Assistant, content: 'stream:hello' });
     });
 });

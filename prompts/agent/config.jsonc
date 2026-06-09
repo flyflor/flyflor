@@ -14,7 +14,7 @@
     // EN: Runtime prompt sections loaded into the model.
     // ZH: 运行时会加载给模型的 prompt section。
     prompt: {
-        sections: ["SOUL", "USER", "AGENTS", "EXTENSION"],
+        sections: ["SOUL", "USER", "EXTENSION"],
     },
 
     // EN: Controlled protocol-package update policy.
@@ -28,8 +28,8 @@
         // ZH: 属于协议包但禁止模型写入的文件。
         locked: ["AGENTS.md"],
 
-        // EN: Metadata/design files never injected as prompt sections.
-        // ZH: 永远不会作为 prompt section 注入的元信息/设计文件。
-        runtimeIgnored: ["README.md", "README.zh.cn.md", "config.jsonc"],
+        // EN: Files never injected into ordinary runtime conversation prompts.
+        // ZH: 永远不会注入普通运行时对话 prompt 的文件。
+        runtimeIgnored: ["AGENTS.md", "README.md", "README.zh.cn.md", "config.jsonc"],
     },
 }

@@ -1,23 +1,16 @@
 import { Inject, Provide, Logger, FAgent } from '@/core';
 import { Brain } from './brain';
+import { Memory } from './memory';
 import { ConfigComponent, type FAgentProfileConfiguration } from '@/config';
 import type { FLogger } from '@/core/logger';
 
-interface AgentTurnMemory {
-    id: number;
-    status: 'running' | 'completed' | 'failed' | 'cancelled';
-    userMessage: string;
-    chunks: string[];
-    assistant: string;
-    error?: string;
-    startedAt: string;
-    completedAt?: string;
-}
-
-interface AgentRuntimeMemory {
-    turns: AgentTurnMemory[];
-}
-
+/**
+ * The agent: a person-like runtime object. It owns an injected brain (cortex) and memory (prefrontal
+ * cache), and is itself the `Subject` the neural layer subscribes to for streamed output.
+ *
+ * `next()` is the turn owner: it asks memory for the assembled mental input, streams the brain's
+ * reflex out chunk by chunk, and commits the finished turn to memory only on success.
+ */
 @Provide()
 export class Agent extends FAgent<string> {
     @Inject(function (this: Agent) {
@@ -25,60 +18,46 @@ export class Agent extends FAgent<string> {
     })
     public brain!: Brain;
 
+    @Inject(function (this: Agent) {
+        return this.agentConfig;
+    })
+    public memory!: Memory;
+
     @Inject()
     public config!: ConfigComponent;
 
     @Logger(Agent.name)
     public readonly log!: FLogger;
 
-    public memory: AgentRuntimeMemory;
-
     constructor(public readonly agentConfig: FAgentProfileConfiguration) {
         super();
-        this.memory = { turns: [] };
     }
 
-    public override async next(data: string): Promise<void> {
-        const turn = this.createTurn(data);
-        try {
-            for await (const content of this.brain.transformer(data)) {
-                turn.chunks.push(content);
-                turn.assistant += content;
-                super.next(content);
-            }
-            turn.status = 'completed';
-            turn.completedAt = new Date().toISOString();
-            this.log.info('agent.turn.complete', {
-                id: turn.id,
-                chunks: turn.chunks.length,
-                assistantLength: turn.assistant.length,
-            });
-        } catch (error) {
-            turn.status = 'failed';
-            turn.completedAt = new Date().toISOString();
-            turn.error = error instanceof Error ? error.message : String(error);
-            this.log.error('agent.turn.error', {
-                id: turn.id,
-                error: turn.error,
-            });
-            throw error;
+    public override async next(text: string): Promise<void> {
+        this.log.debug('turn.start', text);
+        const input = await this.memory.messages(text);
+        // Memory answered the turn itself (e.g. a constitution edit): reply directly, no reflex.
+        if (typeof input === 'string') {
+            this.log.debug('turn.reply', input);
+            this.memory.commit(text, input);
+            super.next(input);
+            return;
         }
-    }
-
-    private createTurn(userMessage: string): AgentTurnMemory {
-        const turn: AgentTurnMemory = {
-            id: this.memory.turns.length + 1,
-            status: 'running',
-            userMessage,
-            chunks: [],
-            assistant: '',
-            startedAt: new Date().toISOString(),
-        };
-        this.memory.turns.push(turn);
-        this.log.info('agent.turn.start', {
-            id: turn.id,
-            userMessageLength: userMessage.length,
+        // Stream the brain reflex out chunk by chunk; commit only once it completes (error/cancel won't).
+        this.log.debug('turn.think', input);
+        let assistant = '';
+        await new Promise<void>((resolve, reject) => {
+            this.brain.transform(input).subscribe({
+                next: (signal) => {
+                    if (signal.type !== 'delta') return;
+                    assistant += signal.text;
+                    super.next(signal.text);
+                },
+                error: reject,
+                complete: resolve,
+            });
         });
-        return turn;
+        this.log.debug('turn.commit', assistant);
+        this.memory.commit(text, assistant);
     }
 }

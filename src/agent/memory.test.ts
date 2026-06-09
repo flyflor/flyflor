@@ -18,20 +18,20 @@ afterEach(() => {
 });
 
 describe('Memory', () => {
-    test('builds messages from configured protocol sections only', async () => {
+    test('builds runtime messages without the AGENTS write-control protocol', async () => {
         const memory = await testMemory({
             prompts: {
                 SOUL: 'soul',
                 USER: 'user',
                 AGENTS: 'agents',
                 EXTENSION: 'extension',
-                config: { prompt: { sections: [SoulSection.Soul, SoulSection.Agents, 'README'] } },
+                config: { prompt: { sections: [SoulSection.Soul, SoulSection.User, SoulSection.Agents, SoulSection.Extension, 'README'] } },
             },
         });
         memory.context.push({ role: AgentChatRole.Assistant, content: 'earlier' });
 
         expect(await memory.messages('hi')).toEqual([
-            { role: AgentChatRole.System, content: '<SOUL>\nsoul\n</SOUL>\n\n<AGENTS>\nagents\n</AGENTS>' },
+            { role: AgentChatRole.System, content: '<SOUL>\nsoul\n</SOUL>\n\n<USER>\nuser\n</USER>\n\n<EXTENSION>\nextension\n</EXTENSION>' },
             { role: AgentChatRole.Assistant, content: 'earlier' },
             { role: AgentChatRole.User, content: 'hi' },
         ]);
@@ -67,6 +67,19 @@ describe('Memory', () => {
         expect(JSON.parse(calls[0]?.[1]?.content ?? '{}').turn).toBe('以后你叫 FlyFlor');
     });
 
+    test('commits a finished turn as a user/assistant pair', async () => {
+        const memory = await testMemory({ prompts: { SOUL: 'soul' } });
+        memory.context.push({ role: AgentChatRole.Assistant, content: 'earlier' });
+
+        memory.commit('hi', 'hello');
+
+        expect(memory.context).toEqual([
+            { role: AgentChatRole.Assistant, content: 'earlier' },
+            { role: AgentChatRole.User, content: 'hi' },
+            { role: AgentChatRole.Assistant, content: 'hello' },
+        ]);
+    });
+
     test('does not write when analysis returns an empty write list', async () => {
         const memory = await testMemory({
             prompts: { SOUL: 'soul', AGENTS: 'analysis protocol' },
@@ -74,11 +87,30 @@ describe('Memory', () => {
         });
 
         await expect(memory.messages('你好')).resolves.toEqual([
-            { role: AgentChatRole.System, content: '<SOUL>\nsoul\n</SOUL>\n\n<AGENTS>\nanalysis protocol\n</AGENTS>' },
+            { role: AgentChatRole.System, content: '<SOUL>\nsoul\n</SOUL>' },
             { role: AgentChatRole.User, content: '你好' },
         ]);
 
         expect(memory.prompt.prompts.SOUL!.data).toBe('soul');
+    });
+
+    test('honors runtimeIgnored files when building runtime messages', async () => {
+        const memory = await testMemory({
+            prompts: {
+                SOUL: 'soul',
+                USER: 'user',
+                EXTENSION: 'extension',
+                config: {
+                    prompt: { sections: [SoulSection.Soul, SoulSection.User, SoulSection.Extension] },
+                    protocolPackage: { runtimeIgnored: ['USER.md'] },
+                },
+            },
+        });
+
+        await expect(memory.messages('hi')).resolves.toEqual([
+            { role: AgentChatRole.System, content: '<SOUL>\nsoul\n</SOUL>\n\n<EXTENSION>\nextension\n</EXTENSION>' },
+            { role: AgentChatRole.User, content: 'hi' },
+        ]);
     });
 });
 

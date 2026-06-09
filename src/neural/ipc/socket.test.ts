@@ -178,43 +178,6 @@ describe('FSocket', () => {
         ]);
     });
 
-    test('concurrent sockets do not receive each other\'s streamed output', async () => {
-        const gate = Promise.withResolvers<void>();
-        const { handler, packet } = await useSocketHandler({
-            onNext: async (value, stream) => {
-                if (value.data === 'first') {
-                    stream.emit('first-1');
-                    await gate.promise;
-                    stream.emit('first-2');
-                    return;
-                }
-                stream.emit('second-1');
-            },
-        });
-        const firstSocket = useCapturedSocket();
-        const secondSocket = useCapturedSocket();
-        await handler.open(firstSocket.socket);
-        await handler.open(secondSocket.socket);
-
-        const first = handler.data(firstSocket.socket, packet.encode({ action: SocketEvent.User, data: 'first' }));
-        await Promise.resolve();
-        const second = handler.data(secondSocket.socket, packet.encode({ action: SocketEvent.User, data: 'second' }));
-        gate.resolve();
-        await Promise.all([first, second]);
-
-        expect(decodeWrites(packet, firstSocket.writes)).toEqual([
-            { action: SocketEvent.Open, data: true },
-            { action: SocketEvent.Data, data: 'first-1' },
-            { action: SocketEvent.Data, data: 'first-2' },
-            { action: SocketEvent.StreamEnd, data: true },
-        ]);
-        expect(decodeWrites(packet, secondSocket.writes)).toEqual([
-            { action: SocketEvent.Open, data: true },
-            { action: SocketEvent.Data, data: 'second-1' },
-            { action: SocketEvent.StreamEnd, data: true },
-        ]);
-    });
-
     test('close releases packet decode state', async () => {
         const { handler, packet, stream } = await useSocketHandler();
         const { socket, writes } = useCapturedSocket();

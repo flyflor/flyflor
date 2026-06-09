@@ -1,4 +1,4 @@
-import { Subject } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
 
 export abstract class FlyFlor {}
 
@@ -58,3 +58,23 @@ export abstract class FSandBox extends FGuard {}
  * entry point: the runtime never inspects or rewrites the agent's system prompt.
  */
 export abstract class FAgent<T = object | number | string | boolean | undefined> extends Subject<T> {}
+
+/**
+ * One structured signal emitted by a cortex stream (e.g. `Brain`).
+ * `delta` carries an incremental text fragment; `done` marks the end of a reflex. Isomorphic to
+ * `PluginSignal` so reflection/tool signals can extend this union later without changing the seam.
+ */
+export type AgentSignal =
+    | { type: 'delta'; text: string }
+    | { type: 'done' };
+
+/**
+ * Base class for cortical signal transforms ("synapse" semantic).
+ *
+ * A cortex receives an assembled input, turns it into an output `Observable`, and is itself a
+ * `Subject` others can subscribe to or pipe through — the reusable primitive for the neural network.
+ * Subclasses own only the wire of one reflex: `transform(input)` returns the cold output stream.
+ */
+export abstract class FCortex<I, O> extends Subject<O> {
+    public abstract transform(input: I): Observable<O>;
+}

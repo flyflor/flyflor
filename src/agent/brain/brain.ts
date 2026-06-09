@@ -1,18 +1,19 @@
-import { FService, Inject, Logger, Service, type FLogger } from '@/core';
+import { FCortex, Inject, Logger, Service, type AgentSignal, type FLogger } from '@/core';
 import { type FAgentProfileConfiguration } from '@/config';
-import { AgentChatRole } from './intelligence';
-import { Memory } from '../memory';
-import { Intelligence } from './intelligence';
+import { Observable } from 'rxjs';
+import { Intelligence, type AgentMemory } from './intelligence';
 
+/**
+ * The brain: one cortical reflex that turns assembled mental input into a stream of model signals.
+ *
+ * `Brain` is pure inference — it owns no conversation context and never mutates memory. It maps the
+ * agent's `AgentMemory[]` mental input into a cold `Observable<AgentSignal>`, the seam a future
+ * reflection loop will extend.
+ */
 @Service()
-export class Brain extends FService {
+export class Brain extends FCortex<AgentMemory[], AgentSignal> {
     @Inject()
     public intelligence!: Intelligence;
-
-    @Inject(function (this: Brain) {
-        return this.config;
-    })
-    public memory!: Memory;
 
     @Logger(Brain.name)
     public readonly log!: FLogger;
@@ -21,36 +22,35 @@ export class Brain extends FService {
         super();
     }
 
-    public async *transformer(content: string): AsyncGenerator<string> {
-        const result = await this.memory.messages(content);
-        if (typeof result === 'string') {
-            this.memory.context.push({ role: AgentChatRole.User, content });
-            this.memory.context.push({ role: AgentChatRole.Assistant, content: result });
-            yield result;
-            return;
-        }
-
-        this.log.debug('transformer', content, result);
-        const reader = this.intelligence.reader(result);
-        let assistant = '';
-        let completed = false;
-        try {
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) {
-                    completed = true;
-                    break;
+    public transform(messages: AgentMemory[]): Observable<AgentSignal> {
+        return new Observable<AgentSignal>((subscriber) => {
+            this.log.debug('reflex.start', { messages });
+            const reader = this.intelligence.reader(messages);
+            (async () => {
+                try {
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        if (value) {
+                            this.log.debug('reflex.delta', value);
+                            subscriber.next({ type: 'delta', text: value });
+                        }
+                    }
+                    this.log.debug('reflex.done');
+                    subscriber.next({ type: 'done' });
+                    subscriber.complete();
+                } catch (error) {
+                    this.log.error('reflex.error', error);
+                    subscriber.error(error);
+                } finally {
+                    reader.releaseLock();
                 }
-                assistant += value ?? '';
-                yield value ?? '';
-            }
-        } finally {
-            if (!completed) await reader.cancel().catch(() => undefined);
-            reader.releaseLock();
-        }
-
-        if (!completed) return;
-        this.memory.context.push({ role: AgentChatRole.User, content });
-        this.memory.context.push({ role: AgentChatRole.Assistant, content: assistant });
+            })();
+            // Teardown on unsubscribe (caller stopped early): cancel the provider read, never complete.
+            return () => {
+                this.log.debug('reflex.cancel');
+                void reader.cancel().catch(() => undefined);
+            };
+        });
     }
 }

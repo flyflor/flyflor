@@ -49,6 +49,7 @@ Core base classes 位于 `src/core/ioc/abstracts.ts`：
 - `FPlugin`: plugin boundary。
 - `FGuard` 和 `FSandBox`: policy scopes。
 - `FAgent`: 由 RxJS subject 支撑的 autonomous agent object。
+- `FCortex`: 皮层变换——一个把单个组装输入映射为输出 `Observable` 的 RxJS subject。目前只有 `Brain` 是 cortex。
 
 Decorators 位于 core module files：
 
@@ -70,14 +71,15 @@ Prompt protocol block 使用带 JSONC payload 的 `<flyflor:name>` tag。可渲�
 
 `Synapse` 从 `ConfigComponent` 读取 active profile，从 model config 解析默认值，然后让 container 创建 `Agent`。
 
-`Agent` 拥有：
+`Agent` 拥有这一轮（turn）。它注入一个 `Brain`（皮层）和一个 `Memory`（前额叶工作缓存），自身就是 neural 层订阅的 subject。
 
-- 注入的 brain services；
-- 注入的 memory component；
-- 注入的已加载 prompt object；
-- user/assistant context turns。
+`Agent.next(text)` 向 `Memory.messages(text)` 取组装好的心智输入，然后要么直接回复（memory 已分析这一轮），要么订阅 `Brain.transform(input)` 并把它的 `delta` 信号逐 chunk 流出。成功时调用 `Memory.commit(user, assistant)`；失败或取消的反射弧不提交任何内容。
 
-Provider-facing message list 由一个 `system` message 开始，随后是 user/assistant history。`SOUL`、`USER`、`AGENTS`、`MEMORY` 是 system message 内部的 Flyflor sections，不是模型 chat roles。
+`Brain` 是纯 `FCortex<AgentMemory[], AgentSignal>`：它把心智输入映射为一条冷 `Observable` 的模型信号，从不触碰对话 context。
+
+`Memory` 组装 system message 并拥有 context。普通 provider-facing message list 由一个 `system` message 开始，随后是 user/assistant history，最后是当前原始 user message。`SOUL`、`USER`、`EXTENSION` 这类运行时 Flyflor sections 是该 system message 内部标签，不是模型 chat roles。
+
+`AGENTS.md` 是锁定的写入控制宪法。`Memory.analyze()` 使用它判断某个用户输入是否可以更新 `SOUL.md`、`USER.md` 或 `EXTENSION.md`，但它不会注入普通对话 prompt。
 
 ## Neural And IPC
 

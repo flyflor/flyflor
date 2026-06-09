@@ -18,7 +18,7 @@ The design language is intentionally semantic:
 ## Red Lines
 
 1. Code first. Update docs after code changes, and describe only implemented behavior unless a section is explicitly marked as planned.
-2. Use object boundaries. Business behavior belongs in classes extending the correct core base class: `FModule`, `FService`, `FComponent`, `FFile`, `FRepo`, `FPlugin`, `FGuard`, `FSandBox`, or `FAgent`.
+2. Use object boundaries. Business behavior belongs in classes extending the correct core base class: `FModule`, `FService`, `FComponent`, `FFile`, `FRepo`, `FPlugin`, `FGuard`, `FSandBox`, `FAgent`, or `FCortex`.
 3. Decorators and base classes live under `src/core`. New runtime scopes must be expressed through decorators plus inheritance, not loose registries or string-only flags.
 4. Only the IOC container may construct application classes. Do not call `new` for project classes outside `src/core/ioc/container.ts`; use `useContainer().getAsync()` or `useContainer().create()` where a fresh path-bound object is required.
 5. Preserve reflect metadata. `reflect-metadata` must load before decorated classes, and injected class dependencies must be runtime imports, not type-only imports.

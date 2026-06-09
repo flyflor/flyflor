@@ -18,7 +18,7 @@ Flyflor 是 Bun + TypeScript 的 agent kernel。运行时采用对象优先：ag
 ## 红线
 
 1. 代码优先。代码变更后再更新文档；除非明确标记 planned，否则只描述已经实现的行为。
-2. 使用对象边界。业务行为必须属于继承正确 core 基类的 class：`FModule`、`FService`、`FComponent`、`FFile`、`FRepo`、`FPlugin`、`FGuard`、`FSandBox` 或 `FAgent`。
+2. 使用对象边界。业务行为必须属于继承正确 core 基类的 class：`FModule`、`FService`、`FComponent`、`FFile`、`FRepo`、`FPlugin`、`FGuard`、`FSandBox`、`FAgent` 或 `FCortex`。
 3. decorators 和 base classes 归 `src/core`。新的运行时 scope 必须通过 decorator + inheritance 表达，不使用松散 registry 或纯字符串 flag。
 4. 只有 IOC container 可以构造应用 class。不要在 `src/core/ioc/container.ts` 之外对项目 class 调用 `new`；需要 singleton graph 用 `useContainer().getAsync()`，需要 path-bound 新对象用 `useContainer().create()`。
 5. 保持 reflect metadata。`reflect-metadata` 必须在 decorated classes 之前加载；被注入的 class dependency 必须是 runtime import，不能是 type-only import。
