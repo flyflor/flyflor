@@ -4,7 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { useContainer, type AgentSignal } from '@/core';
 import { configureLogger, LoggerLevel } from '@/core/logger';
-import { from, of, throwError } from 'rxjs';
+import { of } from 'rxjs';
 import { Agent } from './agent';
 import { AgentChatRole, type AgentMemory } from './brain/intelligence';
 
@@ -25,12 +25,12 @@ afterEach(() => {
 });
 
 describe('Agent', () => {
-    test('streams the brain reflex through its Subject and commits the turn', async () => {
+    test('runs execution through its Subject and commits the turn', async () => {
         const agent = await testAgent();
         const input: AgentMemory[] = [{ role: AgentChatRole.User, content: 'hi' }];
+        agent.route.navigate = async () => ({ action: 'execute', content: 'hi' });
         agent.memory.messages = async () => input;
-        const signals: AgentSignal[] = [{ type: 'delta', text: 'he' }, { type: 'delta', text: 'llo' }, { type: 'done' }];
-        agent.brain.transform = () => from(signals);
+        agent.execution.run = async () => ({ ok: true, text: 'hello', reason: 'final', toolCalls: [] });
 
         const outputs: string[] = [];
         const subscription = agent.subscribe(content => outputs.push(content));
@@ -38,20 +38,42 @@ describe('Agent', () => {
         subscription.unsubscribe();
 
         expect(result).toBeUndefined();
-        expect(outputs).toEqual(['he', 'llo']);
+        expect(outputs).toEqual(['hello']);
         expect(agent.memory.context).toEqual([
             { role: AgentChatRole.User, content: 'hi' },
             { role: AgentChatRole.Assistant, content: 'hello' },
         ]);
     });
 
-    test('replies directly and commits when memory analyzes the turn', async () => {
+    test('streams direct chat through the brain and commits the turn', async () => {
         const agent = await testAgent();
-        agent.memory.messages = async () => '记住了。';
+        agent.route.navigate = async () => ({ action: 'chat', content: 'hi' });
+        agent.memory.messages = async () => [{ role: AgentChatRole.User, content: 'hi' }];
+        agent.brain.transform = () => of(
+            { type: 'delta', text: 'hel' } satisfies AgentSignal,
+            { type: 'delta', text: 'lo' } satisfies AgentSignal,
+            { type: 'done' } satisfies AgentSignal,
+        );
+
+        const outputs: string[] = [];
+        const subscription = agent.subscribe(content => outputs.push(content));
+        await agent.next('hi');
+        subscription.unsubscribe();
+
+        expect(outputs).toEqual(['hel', 'lo']);
+        expect(agent.memory.context).toEqual([
+            { role: AgentChatRole.User, content: 'hi' },
+            { role: AgentChatRole.Assistant, content: 'hello' },
+        ]);
+    });
+
+    test('replies directly and commits when route updates the protocol package', async () => {
+        const agent = await testAgent();
+        agent.route.navigate = async () => ({ action: 'reply', content: '以后你叫 FlyFlor', reply: '记住了。' });
         let streamed = false;
-        agent.brain.transform = () => {
+        agent.execution.run = async () => {
             streamed = true;
-            return of<AgentSignal>({ type: 'done' });
+            return { ok: true, text: '', reason: 'final', toolCalls: [] };
         };
 
         const outputs: string[] = [];
@@ -67,10 +89,13 @@ describe('Agent', () => {
         ]);
     });
 
-    test('does not commit the turn when the brain reflex fails', async () => {
+    test('does not commit the turn when execution fails', async () => {
         const agent = await testAgent();
+        agent.route.navigate = async () => ({ action: 'execute', content: 'hi' });
         agent.memory.messages = async () => [{ role: AgentChatRole.User, content: 'hi' }];
-        agent.brain.transform = () => throwError(() => Error('failed'));
+        agent.execution.run = async () => {
+            throw Error('failed');
+        };
 
         await expect(agent.next('hi')).rejects.toThrow('failed');
         expect(agent.memory.context).toEqual([]);

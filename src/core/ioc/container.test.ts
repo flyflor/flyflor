@@ -2,8 +2,9 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { Agent } from '@/agent';
 import { Brain } from '@/agent/brain';
 import { AgentChatRole, type AgentMemory } from '@/agent/brain/intelligence';
-import { Init, Inject, Service, Singleton, useContainer, type AgentSignal } from '@/core';
-import { from } from 'rxjs';
+import { Execution } from '@/agent/execution';
+import { Route } from '@/agent/route';
+import { Init, Inject, Service, Singleton, useContainer } from '@/core';
 import { configureLogger, LoggerLevel } from '@/core/logger';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,7 +15,7 @@ let tempPaths: string[] = [];
 afterEach(() => {
     const container = useContainer();
     container.singletons.delete(Agent);
-    container.singletons.delete(Brain);
+    container.singletons.delete(Execution);
     configureLogger({
         consoleEnabled: true,
         path: './.logs/flyflor.log',
@@ -162,7 +163,7 @@ describe('Container property injection', () => {
         expect(host.dependency.count).toBe(2);
     });
 
-    test('injects Agent brain with the active agent profile', async () => {
+    test('injects Agent execution and memory with the active agent profile', async () => {
         const agentConfig = {
             name: 'flyflor',
             model: 'test-model',
@@ -174,8 +175,10 @@ describe('Container property injection', () => {
         const agent = await useContainer().getAsync(Agent, agentConfig);
 
         expect(agent.brain).toBeInstanceOf(Brain);
-        expect(agent.brain.config).toBe(agentConfig);
-        expect(typeof agent.brain.transform).toBe('function');
+        expect(agent.execution).toBeInstanceOf(Execution);
+        expect(agent.route).toBeInstanceOf(Route);
+        expect(agent.memory.config).toBe(agentConfig);
+        expect(typeof agent.execution.run).toBe('function');
     });
 
     test('streams Agent output through its Subject instead of returning content', async () => {
@@ -197,9 +200,9 @@ describe('Container property injection', () => {
         const agent = await useContainer().getAsync(Agent, agentConfig);
         const outputs: string[] = [];
         const input: AgentMemory[] = [{ role: AgentChatRole.User, content: 'hello' }];
+        agent.route.navigate = async () => ({ action: 'execute', content: 'hello' });
         agent.memory.messages = async () => input;
-        const signals: AgentSignal[] = [{ type: 'delta', text: 'stream:hello' }, { type: 'done' }];
-        agent.brain.transform = () => from(signals);
+        agent.execution.run = async () => ({ ok: true, text: 'stream:hello', reason: 'final', toolCalls: [] });
 
         const subscription = agent.subscribe(content => outputs.push(content));
         const result = await agent.next('hello');

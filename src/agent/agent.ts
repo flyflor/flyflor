@@ -1,8 +1,11 @@
 import { Inject, Provide, Logger, FAgent } from '@/core';
 import { Brain } from './brain';
+import { Execution } from './execution';
 import { Memory } from './memory';
+import { Callosal, CallosalAction, type CallosalTurn } from './callosal';
 import { ConfigComponent, type FAgentProfileConfiguration } from '@/config';
 import type { FLogger } from '@/core/logger';
+import type { AgentMemory } from './brain/intelligence';
 
 /**
  * The agent: a person-like runtime object. It owns an injected brain (cortex) and memory (prefrontal
@@ -21,7 +24,17 @@ export class Agent extends FAgent<string> {
     @Inject(function (this: Agent) {
         return this.agentConfig;
     })
+    public execution!: Execution;
+
+    @Inject(function (this: Agent) {
+        return this.agentConfig;
+    })
     public memory!: Memory;
+
+    @Inject(function (this: Agent) {
+        return this.agentConfig;
+    })
+    public callosal!: Callosal;
 
     @Inject()
     public config!: ConfigComponent;
@@ -33,31 +46,45 @@ export class Agent extends FAgent<string> {
         super();
     }
 
-    public override async next(text: string): Promise<void> {
+    public override async next(text: string) {
         this.log.debug('turn.start', text);
-        const input = await this.memory.messages(text);
-        // Memory answered the turn itself (e.g. a constitution edit): reply directly, no reflex.
-        if (typeof input === 'string') {
-            this.log.debug('turn.reply', input);
-            this.memory.commit(text, input);
-            super.next(input);
-            return;
-        }
-        // Stream the brain reflex out chunk by chunk; commit only once it completes (error/cancel won't).
-        this.log.debug('turn.think', input);
-        const assistant: string[] = [];
-        await new Promise<void>((resolve, reject) => {
-            this.brain.transform(input).subscribe({
+        const callosal = await this.callosal.navigate(this.memory.buildMessage(text));
+        this.log.debug('turn.callosal', callosal);
+
+        if (callosal.action === CallosalAction.REMEMBER) return this.remember(text, callosal.content);
+        if (callosal.action === CallosalAction.RESEARCH) return this.research(text, callosal.content);
+        if (callosal.action === CallosalAction.DIALOGUE) return this.dialogue(text);
+        return false;
+    }
+
+    public async remember(text: string, reply: string) {
+        this.log.debug('turn.remember', text, reply);
+        this.memory.commit(text, reply);
+        super.next(reply);
+        return true;
+    }
+
+    public async research(text: string, direction: string) {
+        const messages = await this.memory.buildMessage(text);
+        this.log.debug('turn.execute', messages, direction);
+        return true;
+    }
+
+    public async dialogue(text: string) {
+        const messages = this.memory.buildMessage(text);
+        const message = await new Promise<string>((resolve, reject) => {
+            const content: string[] = [];
+            this.brain.transform(messages).subscribe({
                 next: (signal) => {
                     if (signal.type !== 'delta') return;
-                    assistant.push(signal.text);
-                    super.next(signal.text);
+                    content.push(signal.text);
+                    super.next(content.join(''));
                 },
                 error: reject,
-                complete: resolve,
+                complete: () => resolve(content.join('')),
             });
         });
-        this.log.debug('turn.commit', assistant.join(''));
-        this.memory.commit(text, assistant.join(''));
+        this.memory.commit(text, message);
+        return true;
     }
 }

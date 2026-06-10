@@ -4,7 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { PromptService, useContainer, type PromptPackage, type PromptPackageData } from '@/core';
 import { FileService as CoreFileService } from '@/core/file/service';
-import { AgentChatRole, type AgentMemory, type Intelligence } from './brain/intelligence';
+import { AgentChatRole } from './brain/intelligence';
 import { Memory } from './memory';
 import { SoulSection } from './types';
 
@@ -37,36 +37,6 @@ describe('Memory', () => {
         ]);
     });
 
-    test('analyzes one user turn and writes complete allowed markdown files', async () => {
-        const calls: AgentMemory[][] = [];
-        const memory = await testMemory({
-            prompts: {
-                SOUL: '# Core Identity\n\nOld identity',
-                USER: '# User Profile',
-                AGENTS: 'analysis protocol',
-                EXTENSION: '',
-                config: { protocolPackage: { editable: ['SOUL.md', 'EXTENSION.md'] } },
-            },
-            analysis: JSON.stringify({
-                reply: '记住了。',
-                writes: [
-                    { file: 'SOUL.md', content: '# Core Identity\n\nNew identity' },
-                    { file: 'EXTENSION.md', content: '# Extensions\n\n- codex' },
-                    { file: 'AGENTS.md', content: 'mutate constitution' },
-                ],
-            }),
-            calls,
-        });
-
-        await expect(memory.messages('以后你叫 FlyFlor')).resolves.toBe('记住了。');
-
-        expect(memory.prompt.prompts.SOUL!.data).toBe('# Core Identity\n\nNew identity');
-        expect(memory.prompt.prompts.EXTENSION!.data).toBe('# Extensions\n\n- codex');
-        expect(memory.prompt.prompts.AGENTS!.data).toBe('analysis protocol');
-        expect(calls[0]?.[0]).toEqual({ role: AgentChatRole.System, content: 'analysis protocol' });
-        expect(JSON.parse(calls[0]?.[1]?.content ?? '{}').turn).toBe('以后你叫 FlyFlor');
-    });
-
     test('commits a finished turn as a user/assistant pair', async () => {
         const memory = await testMemory({ prompts: { SOUL: 'soul' } });
         memory.context.push({ role: AgentChatRole.Assistant, content: 'earlier' });
@@ -78,20 +48,6 @@ describe('Memory', () => {
             { role: AgentChatRole.User, content: 'hi' },
             { role: AgentChatRole.Assistant, content: 'hello' },
         ]);
-    });
-
-    test('does not write when analysis returns an empty write list', async () => {
-        const memory = await testMemory({
-            prompts: { SOUL: 'soul', AGENTS: 'analysis protocol' },
-            analysis: '{"writes":[]}',
-        });
-
-        await expect(memory.messages('你好')).resolves.toEqual([
-            { role: AgentChatRole.System, content: '<SOUL>\nsoul\n</SOUL>' },
-            { role: AgentChatRole.User, content: '你好' },
-        ]);
-
-        expect(memory.prompt.prompts.SOUL!.data).toBe('soul');
     });
 
     test('honors runtimeIgnored files when building runtime messages', async () => {
@@ -116,8 +72,6 @@ describe('Memory', () => {
 
 async function testMemory(options: {
     prompts?: PromptPackageData;
-    analysis?: string;
-    calls?: AgentMemory[][];
 }): Promise<Memory> {
     const config = {
         name: 'flyflor',
@@ -130,12 +84,6 @@ async function testMemory(options: {
     const prompt = await useContainer().getAsync(PromptService, config);
     prompt.prompts = promptPackage(options.prompts ?? {});
     memory.prompt = prompt;
-    memory.intelligence = {
-        async complete(messages: AgentMemory[]) {
-            options.calls?.push(messages);
-            return options.analysis ?? '{"writes":[]}';
-        },
-    } as unknown as Intelligence;
     return memory;
 }
 

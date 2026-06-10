@@ -57,7 +57,16 @@ export abstract class FSandBox extends FGuard {}
  * via `listModule(FAgent)` and to manage their lifecycles. An agent's `chat` is the canonical
  * entry point: the runtime never inspects or rewrites the agent's system prompt.
  */
-export abstract class FAgent<T = object | number | string | boolean | undefined> extends Subject<T> {}
+export abstract class FAgentAtom<T = object | number | string | boolean | undefined> extends Subject<T> {}
+export abstract class FAgent<T = object | number | string | boolean | undefined> extends FAgentAtom<T> {}
+
+/**
+ * Base class for agent-side routing subjects.
+ *
+ * A route is an active observer/inspector in the neural layer: it emits routing signals while it decides
+ * whether a turn is a direct reflex, a protocol-package update, or an execution turn that needs tools.
+ */
+export abstract class FRoute<TSignal = unknown> extends Subject<TSignal> {}
 
 /**
  * One structured signal emitted by a cortex stream (e.g. `Brain`).
