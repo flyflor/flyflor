@@ -1,115 +1,72 @@
 # Boundaries
 
-Flyflor 使用 folder 作为名词，file 作为角色。目录应该说明“这是什么东西”，目录内文件说明“这个东西的哪类职责”。
+共享边界纪律来自 `oop-code-redlines` skill。本文档只说明 Flyflor 当前各目录拥有什么。
 
-## Naming
+## 命名
 
-首选 module shape：
+Flyflor 使用语义目录加角色文件。
 
 ```txt
 src/core/prompt/
   index.ts
+  service.ts
   decorator.ts
   constants.ts
   types.ts
 ```
 
-允许的 compact role files：
+`index.ts` 只能做 barrel。不要在里面添加行为。
 
-- `index.ts`
-- `service.ts`
-- `types.ts`
-- `constants.ts`
-- `decorator.ts`
-- `factory.ts`
-- `container.ts`
-- `abstracts.ts`
-- `socket.ts`
-- `*.test.ts`
+优先使用 `service.ts`、`types.ts`、`constants.ts`、`decorator.ts`、`factory.ts`、`container.ts`、`abstracts.ts`、`socket.ts`、`module.ts`、`entity.ts`、`repository.ts` 和 `*.test.ts` 这类角色文件。
 
-Legacy dotted files 可以在已存在的位置保留。当 folder 已经提供语义名词时，不要为了模仿 Angular/Nest 新增 dotted split。
+legacy dotted names 可以等专门迁移再处理。新代码不应在 folder 已经命名对象时再新增 dotted split。
 
-`index.ts` 永远是 barrel，不能承载逻辑。
+## Source Boundaries
 
-## Object Rule
+- `src/core`：framework primitives、decorators、IOC、base classes、file/prompt/logger primitives。
+- `src/config`：runtime configuration object 和 root path constants。
+- `src/agent`：agent object、memory、brain、intelligence services 和 mode placeholders。
+- `src/neural`：signal routing、IPC socket handling 和 packet framing。
+- `src/entities`：repository/entity classes 和 SQL statement ownership。
+- `src/plugins`：plugin module boundary 和 built-in tool plugin objects。
+- `scripts`：local tooling；这里允许 procedural code。
+- `prompts`：canonical runtime prompt sources 和 human mirrors。
+- `sql`：schema files。
 
-面向对象代码意味着行为属于一个可见的东西：
+## Core Index
 
-- Agent behavior 属于 `Agent`。
-- Prompt loading 属于 `@Prompt()` 和 `FileService`。
-- File persistence 属于 `FileService`。
-- Packet framing 属于 `PacketService`。
-- Socket callbacks 属于 `FSocket`。
-- Model completion 属于 `Intelligence`。
-- SQL statement ownership 属于 repositories。
+- Decorators：
+  - `src/core/decorator.ts`：general IOC/runtime decorators。
+  - `src/core/prompt/decorator.ts`：`@Prompt()`。
+  - `src/core/logger/decorator.ts`：`@Logger()`。
+- Base classes：
+  - `src/core/ioc/abstracts.ts`：`FlyFlor`、`FService`、`FComponent`、`FFile`、`FModule`、`FRepo`、`FPlugin`、`FGuard`、`FSandBox`、`FAgent` 和 `FCortex`。
+- IOC：
+  - `src/core/ioc/container.ts`：`Container`、`useContainer()`、construction、injection、lifecycle 和 metadata helpers。
+- Barrels：
+  - `src/core/index.ts` 导出 public core surface，并导入 `reflect-metadata`。
+  - directory-local `index.ts` 只能 re-export local surfaces。
 
-除非真的出现新的对象边界，否则不要新增 manager/parser/compiler/diagnostic 文件。
+## Object Ownership
 
-## Core
+- `Agent` 拥有 turn，并通过自己的 subject 流式输出。
+- `Memory` 拥有 prompt assembly 和 working conversation context。
+- `Brain` 拥有一个 inference transform。
+- `Intelligence` 拥有 provider communication 和 cancellation。
+- `Synapse` 拥有 active-agent routing。
+- `FSocket` 拥有 Bun socket callbacks。
+- `PacketService` 拥有 frame encoding 和 decoding。
+- `FileService` 拥有 path-bound file state 和 persistence。
+- Repositories 拥有 SQL statements 和 entity shapes。
 
-`src/core` 只拥有 framework primitives：
+不要把行为移出拥有相关 state 或 boundary 的对象。
 
-- `decorator.ts`: common decorators。
-- `factory.ts`: bootstrap factory。
-- `ioc/`: base classes、container、metadata types。
-- `file/`: path-bound file object。
-- `prompt/`: prompt decorator 和 protocol types/constants。
-- `logger/`: logger decorator/service/types/constants。
+## Imports
 
-业务领域应从 `@/core` import primitives。除非是在扩展 core 本身，不要深入无关 core internals。
+跨 source domain 使用 `@/*` imports。同一目录边界内使用 relative imports。
 
-## IOC
-
-Container 是唯一 application class construction point。`getAsync()` 用于 singleton graph objects。`create()` 用于 fresh IOC-owned objects，例如 path-bound files。
-
-业务代码不要对项目 class 使用 `new`。`Error`、`Map`、`Set`、`Date`、`TextDecoder`、`Response`、`RegExp` 等 built-ins 允许使用。
-
-## Decorators
-
-Decorators 是 core API，因此允许导出 decorator functions。
-
-通用 decorators 放在 `src/core/decorator.ts`。专用 decorators 放在自己的语义模块中：
-
-- `@Prompt` 位于 `src/core/prompt/decorator.ts`
-- `@Logger` 位于 `src/core/logger/decorator.ts`
-
-不要把新的 runtime scope 藏在 config string 后面。如果 scope 是真实对象，应新增 base class 和 decorator。
-
-## Prompt And Files
-
-运行时代码只读取 canonical `.md` prompt files。Human mirror files 是文档辅助，runtime rules 会拒绝读取它们。
-
-`FileService.data` 是可渲染内容。`FileService.blocks` 是 prompt application protocol index。除非 agent 实际消费，否则不要添加额外 public state。
-
-## Agent
-
-`src/agent` 拥有 person-like runtime object：
-
-- prompt context assembly；
-- user/assistant turn history；
-- injected brain 和 memory objects；
-- profile-specific runtime state。
-
-不要把 provider wire logic 放进 `Agent`；它属于 `Intelligence`。不要把 packet/socket concerns 放进 `Agent`；它们属于 `neural`。
-
-## Neural
-
-`src/neural` 拥有 signal flow：
-
-- `Synapse` 把 decoded packets 路由到 active agent。
-- `ipc/` 拥有 transport listener 和 socket handler。
-- `packet/` 拥有 byte framing。
-
-外部 client 通过 IPC 通信。业务对象不应该打开临时 socket。
-
-## Config
-
-`src/config` 拥有 configuration object 和 root path constant。配置从 `./.config/config.jsonc` 加载；secrets 必须来自环境变量。
-
-## Entities
-
-`src/entities` 拥有 SQL statement objects 和 entity shapes。当前 repositories 返回 parameterized SQL statements。不要记录还不存在的 persistence behavior。
+被注入的 class dependencies 必须是 runtime imports，确保 reflect metadata 可用。
 
 ## Scripts
 
-`scripts` 是 tooling boundary。这里允许 procedural code，包括必要的 exported helper functions。生产源码优先使用 object methods。
+`scripts` 是 tooling boundary，可以使用 procedural helper functions。生产 runtime code 应使用 object methods，除非属于 `oop-code-redlines` 允许的 boundary API。

@@ -45,19 +45,19 @@ export class Agent extends FAgent<string> {
         }
         // Stream the brain reflex out chunk by chunk; commit only once it completes (error/cancel won't).
         this.log.debug('turn.think', input);
-        let assistant = '';
+        const assistant: string[] = [];
         await new Promise<void>((resolve, reject) => {
             this.brain.transform(input).subscribe({
                 next: (signal) => {
                     if (signal.type !== 'delta') return;
-                    assistant += signal.text;
+                    assistant.push(signal.text);
                     super.next(signal.text);
                 },
                 error: reject,
                 complete: resolve,
             });
         });
-        this.log.debug('turn.commit', assistant);
-        this.memory.commit(text, assistant);
+        this.log.debug('turn.commit', assistant.join(''));
+        this.memory.commit(text, assistant.join(''));
     }
 }

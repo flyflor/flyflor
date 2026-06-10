@@ -1,17 +1,18 @@
 # Flyflor
 
-Flyflor 是 Bun + TypeScript 的 agent kernel，围绕可见运行时对象构建。它使用 decorators、base classes 和 reflect-metadata IOC container，让构造、生命周期、prompt 加载、IPC 和模型调用都保持显式。
+Flyflor 是一个 Bun + TypeScript agent kernel。它使用 decorator、base class 和 reflect-metadata IOC container，让构造、生命周期、prompt 加载、IPC 和模型调用保持显式。
 
-## 对象模型
+## 工程规则
 
-Flyflor 把架构名称当作工程约束：
+Flyflor 使用共享的 `oop-code-redlines` skill 作为通用代码形态规则：
 
-- `Agent` 是类似“人”的对象，拥有 profile configuration、prompt constitution、chat context 和 subscriptions。
-- `Prompt` 是 agent 的宪法和应用层协议。`@Prompt()` 注入已加载的 `FileService`，因此 agent 代码读取 `prompt.data` 和 `prompt.blocks`，不直接碰 filesystem。
-- `FileService` 是可触摸的文件对象，绑定一个 path，加载 markdown data，提取 `<flyflor:xxx>` protocol blocks，并暴露显式 create/update/upsert/delete 方法。
-- `Neural` 是信号层。`Synapse` 把 decoded packets 路由到 active agent。
-- `IPC` 是外界感官边界。Packet 和 socket 对象负责 wire protocol。
-- `IOC` 是构造边界。应用对象由 `Container` 创建，不允许分散的 `new` 调用。
+- OOP 承载业务行为。
+- Composition API 只限明确边界。
+- 默认使用语义目录加角色文件命名。
+- 方法体 300 行为软上限，500 行为硬上限。
+- 只有当抽取能形成真实命名动作、复用、副作用边界或复杂度下降时才拆 helper。
+
+仓库特有规则在 [AGENTS.md](AGENTS.md)。
 
 ## 开发
 
@@ -23,64 +24,43 @@ bun run dev
 bun run build:binary
 ```
 
-`bun run check` 会运行 TypeScript 和项目 red-line checker，是最低健康门槛。
+`bun run check` 会运行 TypeScript 和当前项目红线扫描，是最低健康门槛。
 
 ## 当前运行流程
 
-1. `src/bootstrap.ts` 导入 `reflect-metadata`，然后调用 `Factory.create(AppModule)`。
+1. `src/bootstrap.ts` 先导入 `reflect-metadata`，再调用 `Factory.create(AppModule)`。
 2. `Container` 构建 module imports，注入 decorated properties，运行 `@Init()`，并保存 singleton instances。
-3. `ConfigComponent` 加载 `./.config/config.jsonc`；密钥保存在环境变量中。
+3. `ConfigComponent` 加载 `./.config/config.jsonc`；secret 保持在环境变量。
 4. `IPCService` 启动 Bun Unix socket 或 Windows named pipe。
 5. `FSocket` 接收 bytes，并把 frame parsing 交给 `PacketService`。
-6. `PacketService` 编码/解码 8-byte big-endian length-prefixed JSON frames。
+6. `PacketService` 编解码 8-byte big-endian length-prefixed JSON frames。
 7. `Synapse` 创建配置中的 active `Agent`，并把 decoded packets 路由给它。
-8. `Agent` 从 prompt sections 组装一个 system message，并追加 user/assistant context turns。
-9. `Intelligence` 是 OpenAI-compatible streaming chat-completions client。
+8. `Agent` 向 `Memory` 请求 prompt/context messages，再从 `Brain` 流式输出。
+9. `Intelligence` 通过 protocol adapters 打开配置中的 provider stream。
 
-## 源码结构
+## 源码布局
 
 ```txt
-src/core/          IOC, base classes, decorators, file/prompt/logger primitives
+src/core/          IOC、decorators、base classes、file/prompt/logger primitives
 src/config/        runtime configuration object
-src/agent/         agent, memory placeholder, brain services, modes
-src/neural/        synapse, IPC socket, packet framing
-src/entities/      SQL statement owners and entity shapes
+src/agent/         agent、memory、brain、modes
+src/neural/        synapse、IPC socket、packet framing
+src/entities/      repository/entity classes 和 SQL owners
 src/plugins/       plugin module boundary
 scripts/           local tooling
-prompts/           canonical prompt sources and human mirrors
+prompts/           canonical prompt sources 和 human mirrors
 sql/               schema files
 ```
 
-文件夹是语义名词，内部文件通常使用 `service.ts`、`types.ts`、`constants.ts`、`decorator.ts`、`index.ts` 这样的 compact role 名称。
+目录是语义名词。目录内文件使用 `service.ts`、`types.ts`、`constants.ts`、`decorator.ts`、`repository.ts` 和 `index.ts` 这类角色名。
 
 ## Prompt Runtime
 
-运行时 prompt 文件是 canonical English `.md`。`.zh.cn.md` 这类 human mirror 只给人读，不由运行时代码打开。
+runtime prompt files 是 canonical English `.md`。`.zh.cn.md` 这类 human mirror 只供阅读，运行时代码不打开。
 
-Agent prompt directory 由 `@Prompt()` 加载：
-
-```ts
-@Prompt('agent', function wrapper(this: Agent) {
-    return this.agentConfig.name;
-})
-public prompt!: FileService<AgentPrompt>;
-```
-
-Markdown protocol blocks 是应用层控制：
-
-```md
-<flyflor:ask_policy>
-{
-    version: 1,
-    enabled: true,
-    maxQuestions: 3,
-}
-</flyflor:ask_policy>
-```
-
-可渲染 markdown 进入 `prompt.data`；解析后的 protocol blocks 进入 `prompt.blocks`。
+Agent prompt directory 通过 `@Prompt()` 加载为 `FileService` object。agent 消费已加载的 file data，不直接读 prompt 文件。
 
 ## 更多文档
 
-- [Architecture](docs/architecture.md)
-- [Boundaries](docs/boundaries.md)
+- [Architecture](docs/architecture.md)：runtime flow、decorator index、base class index 和 IOC details。
+- [Boundaries](docs/boundaries.md)：directory ownership、core source locations、object ownership 和 import rules。

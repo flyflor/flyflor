@@ -1,118 +1,124 @@
 # Architecture
 
-Flyflor is code-first. This document describes the current implementation only.
+This document describes the current implementation. Shared code-shape rules live in the `oop-code-redlines` skill; Flyflor-specific rules live in [AGENTS.md](../AGENTS.md).
 
-## Philosophy
+## Runtime Flow
 
-Flyflor uses a semantic object model:
-
-- `Agent` is the person. It has a profile, prompt, memory component, intelligence services, and a message context.
-- `Prompt` is the agent's constitution and application protocol. It is loaded through `@Prompt()` as a file object.
-- `FileService` is the physical object. It owns one filesystem path plus loaded state.
-- `Neural` is signal transmission. `Synapse` owns active-agent routing.
-- `IPC` is the external sensory boundary. Socket and packet classes translate outside bytes into kernel packets.
-- `IOC` is creation and lifecycle. The container is the only application-class construction point.
-
-The point of the metaphor is not decoration. It decides where code belongs. If a behavior cannot be named as an object with ownership, it probably belongs on an existing object.
-
-## Bootstrap
-
-`src/bootstrap.ts` imports `reflect-metadata` before decorated classes load, then calls `Factory.create(AppModule)`.
-
-`Factory` delegates to `useContainer().getAsync(rootModule)`. The root module is `AppModule`, which imports `PluginModule` and injects `IPCService` plus `Synapse`.
+1. `src/bootstrap.ts` imports `reflect-metadata` before decorated classes load.
+2. `Factory.create(AppModule)` delegates construction to the IOC container.
+3. `AppModule` imports `PluginsModule` and injects `IPCService` plus `Synapse`.
+4. `IPCService` starts the configured socket endpoint.
+5. `FSocket` receives bytes, asks `PacketService` to decode frames, and routes valid packets.
+6. `Synapse` owns the active agent pool and sends user packets to the active `Agent`.
+7. `Agent` owns one turn: assemble messages through `Memory`, stream `Brain` output, then commit successful turns.
+8. `Brain` maps assembled memory messages into model signal output.
+9. `Intelligence` opens the configured provider stream through protocol adapters.
 
 ## IOC
 
-`src/core/ioc/container.ts` owns object construction and lifecycle:
+`src/core/ioc/container.ts` is the only construction point for application classes.
 
-- resolves module imports before dependents;
-- caches singleton instances;
-- resolves constructor props from explicit arguments or imported module instances;
-- injects `@Config()` providers before ordinary `@Inject()` dependencies;
-- injects reflected property dependencies;
-- runs one `@Init()` method after injection;
-- removes failed singletons when initialization throws;
-- creates fresh path-bound objects through `create()` when singleton state would be wrong.
+- `useContainer()` returns the process-wide `Container` singleton.
+- `getAsync()` is the normal construction path. It resolves module imports, singleton cache, constructor arguments, property injection, and `@Init()`.
+- `get()` is the sync path. It may return already-initialized singletons, but it refuses fresh graphs that need `@Init()` or async injection factories.
+- `create()` creates a fresh IOC-owned instance without singleton registration. It is used for path-bound objects such as loaded prompt/file objects.
+- `registerObject()` can place an existing object into the singleton map under a class or symbol key.
+- `defineMetadata()`, `getMetadata()`, and `getOwnMetadata()` wrap `Reflect` metadata helpers used by decorators.
 
-Business code must not construct project classes directly. If an object is part of the runtime, the container creates it.
+Business code must not construct project classes directly.
 
-## Core Scopes
+### IOC Lifecycle Detail
+
+`getAsync(Module, ...props)` follows this order:
+
+1. Track the class in `classList`.
+2. Return an existing singleton when `@Singleton()` metadata is present and cached.
+3. Resolve `@Module({ imports })` recursively before constructing the requested class.
+4. Build constructor arguments from explicit `props` first, then from initialized imported module instances by reflected constructor parameter type.
+5. Construct the class inside the container.
+6. Cache the instance early when it is a singleton, so dependency cycles can see the same object.
+7. Inject registered instance providers such as `@Config()` before ordinary property dependencies.
+8. Resolve `@Inject()` properties, including callback-produced constructor args for the injected class.
+9. Run the one method marked by `@Init()`.
+10. Remove a failed singleton from the cache before rethrowing.
+
+Constructor injection is import-graph based: a constructor parameter is resolved only when an initialized imported module instance exactly matches the reflected parameter type. Property injection is metadata based: decorators record property keys and class types, then the container resolves each property through `getAsync()`.
+
+`get(Module, ...props)` mirrors the same graph rules for synchronous construction, but throws if it would need to run `@Init()` or await an async injection callback.
+
+## Decorator Index
+
+General decorators live in `src/core/decorator.ts`:
+
+- `@Module(metadata)`: marks an `FModule` boundary, makes it singleton, and records `imports`.
+- `@Inject()`: injects a property by reflected `design:type`.
+- `@Inject(ClassType)`: injects a property using an explicit class type.
+- `@Inject(callback)`: calls the callback on the host instance and passes its result as constructor args to the injected class.
+- `@Init()`: marks one lifecycle method to run after injection.
+- `@Config(key?)`: injects `ConfigComponent` early and optionally exposes a nested config value.
+- `@Singleton()`: marks a class as cached in the container singleton map.
+- `@Provide()`: marks a class as an IOC provider without singleton caching.
+- `@Service()`, `@Component()`, and `@Plugin()`: provider aliases for service/component/plugin classes.
+- `@Repo()`: marks a repository as singleton.
+- `@Controller()`: marks a controller-style class as singleton.
+- `@Guard()` and `@SandBox()`: singleton markers for policy/sandbox classes.
+
+Specialized decorators are exported through `src/core/index.ts`:
+
+- `@Prompt()` from `src/core/prompt/decorator.ts`: binds a property to a loaded `FileService`, with global or agent-scoped path resolution.
+- `@Logger()` from `src/core/logger/decorator.ts`: binds a property to a lazily created scoped logger.
+
+## Base Class Index
 
 Core base classes live in `src/core/ioc/abstracts.ts`:
 
-- `FlyFlor`: root object.
-- `FService`: stateless or behavior-owning service object.
+- `FlyFlor`: root marker class for framework objects.
+- `FModule`: module boundary.
+- `FService`: behavior-owning service object.
 - `FComponent`: stateful component or lifecycle owner.
 - `FFile`: path-bound file object.
-- `FModule`: module boundary.
 - `FRepo`: repository/entity SQL owner.
-- `FPlugin`: plugin boundary.
+- `FPlugin`: plugin boundary and RxJS `Subject` for plugin signals.
 - `FGuard` and `FSandBox`: policy scopes.
-- `FAgent`: autonomous agent object backed by an RxJS subject.
-- `FCortex`: cortical transform — an RxJS subject that maps one assembled input into an output `Observable`. `Brain` is the only cortex today.
+- `FAgent`: autonomous agent subject used by `Agent`.
+- `FCortex`: signal transform subject; `Brain` extends it and implements `transform(input)`.
 
-Decorators live in core module files:
-
-- `src/core/decorator.ts`: general runtime decorators such as `@Module`, `@Inject`, `@Init`, `@Config`.
-- `src/core/prompt/decorator.ts`: `@Prompt`.
-- `src/core/logger/decorator.ts`: `@Logger`.
-
-The decorator says intent; the base class says object kind. Use both when adding a new runtime scope.
+Decorators live under `src/core`. The decorator expresses intent; the base class expresses object kind.
 
 ## Prompt And File Layer
 
-`@Prompt()` binds an agent property to a loaded `FileService`.
+`@Prompt()` injects a loaded `FileService`.
 
-`FileService` loads one file or directory. For directories, canonical markdown files become object keys such as `SOUL.md -> data.SOUL`. Files with extra dotted stems are skipped by runtime, so human mirrors stay out of execution.
+`FileService` owns one filesystem path, its loaded `data`, child file objects for directories, and persistence methods. Runtime prompt code reads canonical English `.md` files only; `.zh.cn.md` mirrors are human references.
 
-Prompt protocol blocks use `<flyflor:name>` tags with a JSONC payload. The renderable content goes to `data`; parsed controls go to `blocks`. Malformed protocol throws during load because prompt configuration should fail early.
+`PromptService` loads an agent prompt package and can save complete markdown replacements for editable prompt sections.
 
 ## Agent Runtime
 
-`Synapse` reads the active profile from `ConfigComponent`, resolves defaults from model config, then asks the container to create `Agent`.
+`Synapse` resolves the active configured profile and asks the container for an `Agent`.
 
-`Agent` owns the turn. It injects a `Brain` (cortex) and a `Memory` (prefrontal working cache) and is itself the subject the neural layer subscribes to.
+`Agent.next(text)` asks `Memory.messages(text)` for either:
 
-`Agent.next(text)` asks `Memory.messages(text)` for the assembled mental input, then either replies directly (when memory analyzed the turn) or subscribes `Brain.transform(input)` and streams its `delta` signals out chunk by chunk. On success it calls `Memory.commit(user, assistant)`; a failed or cancelled reflex commits nothing.
+- an assembled provider message list; or
+- a direct reply when memory analysis handled the turn.
 
-`Brain` is a pure `FCortex<AgentMemory[], AgentSignal>`: it maps the mental input into a cold `Observable` of model signals and never touches conversation context.
+For model turns, `Agent` streams `Brain.transform(input)` delta signals through its subject. It commits user/assistant context only after successful completion.
 
-`Memory` assembles the system message and owns context. The ordinary provider-facing list is one `system` message first, then user/assistant history, then the current raw user message. Runtime Flyflor sections such as `SOUL`, `USER`, and `EXTENSION` are internal tags inside that system message; they are not model chat roles.
-
-`AGENTS.md` is a locked write-control constitution. `Memory.analyze()` uses it to decide whether a user turn may update `SOUL.md`, `USER.md`, or `EXTENSION.md`, but it is not injected into ordinary conversation prompts.
+`Memory` owns working context and prompt-section assembly. `Brain` owns inference streaming. `Intelligence` owns provider communication and cancellation.
 
 ## Neural And IPC
 
-`IPCService` starts the public socket endpoint from configuration. On Windows the endpoint is converted to a named pipe internally.
-
-`FSocket` owns Bun socket callbacks. It logs lifecycle events, writes the open event, decodes inbound bytes, reports malformed frames, and routes valid packets into `Synapse`.
-
-`PacketService` owns the frame protocol:
+`PacketService` owns the socket frame protocol:
 
 - 8-byte unsigned big-endian body length;
 - UTF-8 JSON body;
 - per-connection decode buffers;
-- partial headers and partial bodies;
+- partial headers and bodies;
 - multiple frames in one chunk;
-- oversized and malformed JSON frames.
+- malformed and oversized frame reporting.
 
-## Logger
-
-`src/core/logger` is compact by design:
-
-- `service.ts`: `useLogger`, shared configuration, formatting, writing.
-- `decorator.ts`: `@Logger`.
-- `types.ts`: logger API and configuration types.
-- `constants.ts`: formatting and default constants.
-
-Formatting and writing are private implementation details inside `service.ts` unless they become large enough to justify a new object.
+`FSocket` owns Bun socket callbacks and scopes each turn's streamed agent output to the requesting socket.
 
 ## Validation
 
-`scripts/check.script.ts` enforces the red lines:
-
-- application-class construction stays in the IOC container;
-- runtime code does not reference human prompt mirrors;
-- canonical prompt files and human mirrors stay paired under `prompts/`;
-- source filenames follow approved role conventions;
-- exported functions stay limited to decorator/container/logger/tooling surfaces.
+`bun run check` currently runs TypeScript and `scripts/check.script.ts`. The checker enforces the rules currently implemented in that script; it is not a replacement for the shared `oop-code-redlines` review discipline.

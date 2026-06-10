@@ -1,118 +1,124 @@
 # Architecture
 
-Flyflor 是 code-first。本文件只描述当前已经实现的代码。
+本文档描述当前实现。共享代码形态规则在 `oop-code-redlines` skill；Flyflor 项目特有规则在 [AGENTS.md](../AGENTS.md)。
 
-## 哲学隐喻
+## 运行流程
 
-Flyflor 使用语义化对象模型：
-
-- `Agent` 是人。它拥有 profile、prompt、memory component、intelligence services 和 message context。
-- `Prompt` 是 agent 的宪法和应用层协议，通过 `@Prompt()` 作为 file object 加载。
-- `FileService` 是物体，拥有一个 filesystem path 和 loaded state。
-- `Neural` 是信号传导。`Synapse` 负责 active-agent routing。
-- `IPC` 是外界感官边界。Socket 和 packet classes 把外部 bytes 翻译成 kernel packets。
-- `IOC` 是创造和生命周期。Container 是唯一的 application-class construction point。
-
-这些隐喻不是装饰。它们决定代码应该放在哪里。如果一个行为不能命名为有所有权的对象，它通常应该属于现有对象。
-
-## Bootstrap
-
-`src/bootstrap.ts` 在 decorated classes 加载前导入 `reflect-metadata`，然后调用 `Factory.create(AppModule)`。
-
-`Factory` 委托给 `useContainer().getAsync(rootModule)`。Root module 是 `AppModule`，它导入 `PluginModule` 并注入 `IPCService` 和 `Synapse`。
+1. `src/bootstrap.ts` 在 decorated classes 加载前导入 `reflect-metadata`。
+2. `Factory.create(AppModule)` 把构造委托给 IOC container。
+3. `AppModule` imports `PluginsModule`，并注入 `IPCService` 和 `Synapse`。
+4. `IPCService` 启动配置中的 socket endpoint。
+5. `FSocket` 接收 bytes，请 `PacketService` decode frames，并路由 valid packets。
+6. `Synapse` 持有 active agent pool，并把 user packets 发给 active `Agent`。
+7. `Agent` 拥有一个 turn：通过 `Memory` 组装 messages，流式输出 `Brain`，然后提交成功 turn。
+8. `Brain` 把 assembled memory messages 映射成 model signal output。
+9. `Intelligence` 通过 protocol adapters 打开配置中的 provider stream。
 
 ## IOC
 
-`src/core/ioc/container.ts` 拥有对象构造和生命周期：
+`src/core/ioc/container.ts` 是 application classes 的唯一构造点。
 
-- 先解析 module imports，再解析 dependents；
-- 缓存 singleton instances；
-- 从显式参数或 imported module instances 解析 constructor props；
-- 先注入 `@Config()` providers，再注入普通 `@Inject()` dependencies；
-- 注入 reflected property dependencies；
-- injection 后运行一个 `@Init()` method；
-- 初始化失败时移除 failed singleton；
-- 对 path-bound file 这类不适合 singleton 的对象，通过 `create()` 创建 fresh object。
+- `useContainer()` 返回进程级 `Container` singleton。
+- `getAsync()` 是常规构造路径，处理 module imports、singleton cache、constructor arguments、property injection 和 `@Init()`。
+- `get()` 是同步路径。它可以返回已经初始化过的 singleton，但会拒绝需要 `@Init()` 或 async injection factory 的 fresh graph。
+- `create()` 创建不注册 singleton 的 fresh IOC-owned instance，主要用于 loaded prompt/file 这类 path-bound object。
+- `registerObject()` 可以把已有对象按 class 或 symbol key 放进 singleton map。
+- `defineMetadata()`、`getMetadata()` 和 `getOwnMetadata()` 包装 decorators 使用的 `Reflect` metadata helpers。
 
-业务代码不能直接构造项目 class。如果对象属于运行时，就由 container 创建。
+业务代码不能直接构造项目 class。
 
-## Core Scopes
+### IOC 生命周期细节
 
-Core base classes 位于 `src/core/ioc/abstracts.ts`：
+`getAsync(Module, ...props)` 顺序如下：
 
-- `FlyFlor`: 根对象。
-- `FService`: 无状态或拥有行为的 service object。
-- `FComponent`: 有状态 component 或 lifecycle owner。
-- `FFile`: path-bound file object。
-- `FModule`: module boundary。
-- `FRepo`: repository/entity SQL owner。
-- `FPlugin`: plugin boundary。
-- `FGuard` 和 `FSandBox`: policy scopes。
-- `FAgent`: 由 RxJS subject 支撑的 autonomous agent object。
-- `FCortex`: 皮层变换——一个把单个组装输入映射为输出 `Observable` 的 RxJS subject。目前只有 `Brain` 是 cortex。
+1. 把 class 记录到 `classList`。
+2. 如果存在 `@Singleton()` metadata 且已经缓存，直接返回现有 singleton。
+3. 在构造当前 class 前递归解析 `@Module({ imports })`。
+4. 构造函数参数优先使用显式 `props`，然后按 reflected constructor parameter type 从已经初始化的 imported module instances 中匹配。
+5. 在 container 内构造 class。
+6. 如果是 singleton，提前缓存 instance，使 dependency cycle 能看到同一个对象。
+7. 先注入 `@Config()` 这类 registered instance provider。
+8. 再解析 `@Inject()` properties，包括 callback 生成的被注入 class constructor args。
+9. 执行一个被 `@Init()` 标记的方法。
+10. 如果初始化失败，从 cache 移除失败 singleton 并重新抛错。
 
-Decorators 位于 core module files：
+constructor injection 基于 import graph：只有当某个 initialized imported module instance 与 reflected parameter type 精确匹配时才会注入。property injection 基于 metadata：decorator 记录 property key 和 class type，container 再用 `getAsync()` 解析每个 property。
 
-- `src/core/decorator.ts`: 通用运行时 decorators，例如 `@Module`、`@Inject`、`@Init`、`@Config`。
-- `src/core/prompt/decorator.ts`: `@Prompt`。
-- `src/core/logger/decorator.ts`: `@Logger`。
+`get(Module, ...props)` 使用相同的图规则做同步构造，但如果需要执行 `@Init()` 或等待 async injection callback，会直接抛错。
 
-decorator 表示意图；base class 表示对象类型。新增 runtime scope 时两者都要有。
+## Decorator Index
+
+通用 decorators 位于 `src/core/decorator.ts`：
+
+- `@Module(metadata)`：标记 `FModule` boundary，使其成为 singleton，并记录 `imports`。
+- `@Inject()`：按 reflected `design:type` 注入 property。
+- `@Inject(ClassType)`：使用显式 class type 注入 property。
+- `@Inject(callback)`：在 host instance 上调用 callback，并把返回值作为被注入 class 的 constructor args。
+- `@Init()`：标记一个 injection 之后运行的 lifecycle method。
+- `@Config(key?)`：提前注入 `ConfigComponent`，并可暴露 nested config value。
+- `@Singleton()`：标记 class 会缓存到 container singleton map。
+- `@Provide()`：标记 class 是 IOC provider，但不做 singleton cache。
+- `@Service()`、`@Component()` 和 `@Plugin()`：service/component/plugin class 的 provider aliases。
+- `@Repo()`：把 repository 标记为 singleton。
+- `@Controller()`：把 controller-style class 标记为 singleton。
+- `@Guard()` 和 `@SandBox()`：policy/sandbox classes 的 singleton markers。
+
+专用 decorators 通过 `src/core/index.ts` 导出：
+
+- `@Prompt()` 来自 `src/core/prompt/decorator.ts`：把 property 绑定到 loaded `FileService`，支持 global 或 agent-scoped path resolution。
+- `@Logger()` 来自 `src/core/logger/decorator.ts`：把 property 绑定到 lazy scoped logger。
+
+## Base Class Index
+
+核心 base classes 位于 `src/core/ioc/abstracts.ts`：
+
+- `FlyFlor`：framework objects 的 root marker class。
+- `FModule`：module boundary。
+- `FService`：behavior-owning service object。
+- `FComponent`：stateful component 或 lifecycle owner。
+- `FFile`：path-bound file object。
+- `FRepo`：repository/entity SQL owner。
+- `FPlugin`：plugin boundary，也是 plugin signals 的 RxJS `Subject`。
+- `FGuard` 和 `FSandBox`：policy scopes。
+- `FAgent`：`Agent` 使用的 autonomous agent subject。
+- `FCortex`：signal transform subject；`Brain` 继承它并实现 `transform(input)`。
+
+Decorators 位于 `src/core`。decorator 表达 intent；base class 表达 object kind。
 
 ## Prompt And File Layer
 
-`@Prompt()` 把 agent property 绑定到已加载的 `FileService`。
+`@Prompt()` 注入一个已加载的 `FileService`。
 
-`FileService` 加载一个 file 或 directory。对 directory，canonical markdown files 会变成 object keys，例如 `SOUL.md -> data.SOUL`。带额外 dotted stem 的文件会被 runtime 跳过，因此 human mirror 不进入执行。
+`FileService` 拥有一个 filesystem path、加载后的 `data`、directory child file objects 和 persistence methods。runtime prompt code 只读取 canonical English `.md`；`.zh.cn.md` mirror 只是人类参考。
 
-Prompt protocol block 使用带 JSONC payload 的 `<flyflor:name>` tag。可渲染内容进入 `data`；解析后的 controls 进入 `blocks`。Malformed protocol 会在加载阶段抛错，因为 prompt 配置应该早失败。
+`PromptService` 加载 agent prompt package，并能为 editable prompt sections 保存完整 markdown replacement。
 
 ## Agent Runtime
 
-`Synapse` 从 `ConfigComponent` 读取 active profile，从 model config 解析默认值，然后让 container 创建 `Agent`。
+`Synapse` 解析 active configured profile，并通过 container 获取 `Agent`。
 
-`Agent` 拥有这一轮（turn）。它注入一个 `Brain`（皮层）和一个 `Memory`（前额叶工作缓存），自身就是 neural 层订阅的 subject。
+`Agent.next(text)` 向 `Memory.messages(text)` 请求：
 
-`Agent.next(text)` 向 `Memory.messages(text)` 取组装好的心智输入，然后要么直接回复（memory 已分析这一轮），要么订阅 `Brain.transform(input)` 并把它的 `delta` 信号逐 chunk 流出。成功时调用 `Memory.commit(user, assistant)`；失败或取消的反射弧不提交任何内容。
+- assembled provider message list；或
+- 当 memory analysis 已处理该 turn 时的 direct reply。
 
-`Brain` 是纯 `FCortex<AgentMemory[], AgentSignal>`：它把心智输入映射为一条冷 `Observable` 的模型信号，从不触碰对话 context。
+对于模型 turn，`Agent` 把 `Brain.transform(input)` 的 delta signals 通过自己的 subject 流出。只有成功完成后才提交 user/assistant context。
 
-`Memory` 组装 system message 并拥有 context。普通 provider-facing message list 由一个 `system` message 开始，随后是 user/assistant history，最后是当前原始 user message。`SOUL`、`USER`、`EXTENSION` 这类运行时 Flyflor sections 是该 system message 内部标签，不是模型 chat roles。
-
-`AGENTS.md` 是锁定的写入控制宪法。`Memory.analyze()` 使用它判断某个用户输入是否可以更新 `SOUL.md`、`USER.md` 或 `EXTENSION.md`，但它不会注入普通对话 prompt。
+`Memory` 拥有 working context 和 prompt-section assembly。`Brain` 拥有 inference streaming。`Intelligence` 拥有 provider communication 和 cancellation。
 
 ## Neural And IPC
 
-`IPCService` 根据配置启动 public socket endpoint。在 Windows 上 endpoint 会在内部转换为 named pipe。
-
-`FSocket` 拥有 Bun socket callbacks。它记录 lifecycle events，写入 open event，解码 inbound bytes，报告 malformed frames，并把 valid packets 路由到 `Synapse`。
-
-`PacketService` 拥有 frame protocol：
+`PacketService` 拥有 socket frame protocol：
 
 - 8-byte unsigned big-endian body length；
 - UTF-8 JSON body；
 - per-connection decode buffers；
-- partial headers 和 partial bodies；
-- 一个 chunk 内多个 frames；
-- oversized 和 malformed JSON frames。
+- partial headers and bodies；
+- one chunk 中的 multiple frames；
+- malformed 和 oversized frame reporting。
 
-## Logger
-
-`src/core/logger` 有意保持紧凑：
-
-- `service.ts`: `useLogger`、shared configuration、formatting、writing。
-- `decorator.ts`: `@Logger`。
-- `types.ts`: logger API 和 configuration types。
-- `constants.ts`: formatting 和 default constants。
-
-除非规模真的需要新对象，否则 formatting 和 writing 都是 `service.ts` 内部实现细节。
+`FSocket` 拥有 Bun socket callbacks，并把每个 turn 的 streamed agent output 限定到发起请求的 socket。
 
 ## Validation
 
-`scripts/check.script.ts` 执行红线检查：
-
-- application-class construction 只能在 IOC container；
-- runtime code 不引用 human prompt mirrors；
-- canonical docs/prompts 与 human mirrors 成对；
-- source filenames 遵守 approved role conventions；
-- exported functions 只出现在 decorator/container/logger/tooling surfaces。
+`bun run check` 当前运行 TypeScript 和 `scripts/check.script.ts`。checker 只执行脚本里已经实现的规则；它不能替代共享 `oop-code-redlines` 的 review discipline。
