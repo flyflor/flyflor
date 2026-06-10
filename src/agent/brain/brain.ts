@@ -1,4 +1,4 @@
-import { FCortex, Inject, Logger, Service, type AgentSignal, type FLogger } from '@/core';
+import { FCortex, Inject, Service, type AgentSignal } from '@/core';
 import { type FAgentProfileConfiguration } from '@/config';
 import { Observable } from 'rxjs';
 import { Intelligence, type AgentMemory } from './intelligence';
@@ -14,9 +14,6 @@ import { Intelligence, type AgentMemory } from './intelligence';
 export class Brain extends FCortex<AgentMemory[], AgentSignal> {
     @Inject()
     public intelligence!: Intelligence;
-
-    @Logger(Brain.name)
-    public readonly log!: FLogger;
 
     constructor(public config: FAgentProfileConfiguration) {
         super();

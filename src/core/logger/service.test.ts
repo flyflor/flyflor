@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { useContainer } from '@/core';
+import { FService, FSubject, useContainer } from '@/core';
 import { Logger } from './decorator';
 import { configureLogger, getLoggerConfiguration, useLogger } from './service';
 import { LoggerLevel, type FLogger } from './types';
@@ -93,5 +93,54 @@ describe('logger service', () => {
         expect(content).toContain('[DEBUG]');
         expect(content).toContain('decorated');
         expect(content).toContain('decorator works');
+    });
+
+    test('FlyFlor base classes expose a scoped logger without a decorator', () => {
+        const path = join(tempPath(), 'base.log');
+        configureLogger({
+            consoleEnabled: false,
+            path,
+            colorEnabled: false,
+            level: LoggerLevel.Debug,
+        });
+
+        class BaseLoggerHost extends FService {
+            public write(): boolean {
+                this.log.debug('base logger works');
+                return this.log === this.log;
+            }
+        }
+
+        const host = useContainer().create(BaseLoggerHost);
+
+        expect(host.write()).toBe(true);
+        const content = readFileSync(path, 'utf8');
+        expect(content).toContain('[DEBUG]');
+        expect(content).toContain('BaseLoggerHost');
+        expect(content).toContain('base logger works');
+    });
+
+    test('Subject-style base classes expose a scoped logger without a decorator', () => {
+        const path = join(tempPath(), 'subject.log');
+        configureLogger({
+            consoleEnabled: false,
+            path,
+            colorEnabled: false,
+            level: LoggerLevel.Debug,
+        });
+
+        class SubjectLoggerHost extends FSubject<string> {
+            public write(): void {
+                this.log.info('subject logger works');
+            }
+        }
+
+        const host = useContainer().create(SubjectLoggerHost);
+        host.write();
+
+        const content = readFileSync(path, 'utf8');
+        expect(content).toContain('[INFO ]');
+        expect(content).toContain('SubjectLoggerHost');
+        expect(content).toContain('subject logger works');
     });
 });

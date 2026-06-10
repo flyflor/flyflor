@@ -1,10 +1,9 @@
-import { Inject, Provide, Logger, FAgent } from '@/core';
+import { Inject, Provide, FAgent } from '@/core';
 import { Brain } from './brain';
 import { Execution } from './execution';
 import { Memory } from './memory';
 import { Callosal, CallosalAction, type CallosalTurn } from './callosal';
 import { ConfigComponent, type FAgentProfileConfiguration } from '@/config';
-import type { FLogger } from '@/core/logger';
 import type { AgentMemory } from './brain/intelligence';
 
 /**
@@ -38,9 +37,6 @@ export class Agent extends FAgent<string> {
 
     @Inject()
     public config!: ConfigComponent;
-
-    @Logger(Agent.name)
-    public readonly log!: FLogger;
 
     constructor(public readonly agentConfig: FAgentProfileConfiguration) {
         super();

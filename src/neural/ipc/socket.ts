@@ -1,4 +1,4 @@
-import { Inject, Logger, Singleton, type FLogger } from '@/core';
+import { FlyFlor, Inject, Singleton } from '@/core';
 import { Synapse } from '@/neural/synapse';
 import { PacketService, SocketEvent, type SocketPacket } from '@/neural/packet';
 import type { BinaryType, Socket, SocketHandler } from 'bun';
@@ -13,10 +13,7 @@ export interface SocketConnectionData {}
  * them; the instance is passed straight to `Bun.listen({ socket })`.
  */
 @Singleton()
-export class FSocket implements SocketHandler<SocketConnectionData, 'buffer'> {
-    @Logger(FSocket.name)
-    public readonly log!: FLogger;
-
+export class FSocket extends FlyFlor implements SocketHandler<SocketConnectionData, 'buffer'> {
     @Inject()
     public synapse!: Synapse;
 

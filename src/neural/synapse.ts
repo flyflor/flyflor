@@ -1,7 +1,6 @@
 import { Agent } from '@/agent';
-import { Config, Init, Logger, Singleton, useContainer, type FLogger } from '@/core';
+import { Config, FSubject, Init, Singleton, useContainer } from '@/core';
 import { ConfigComponent } from '@/config';
-import { Subject } from 'rxjs';
 import { SocketEvent, type SocketPacket } from './packet';
 
 export interface AgentPool {
@@ -10,12 +9,9 @@ export interface AgentPool {
 }
 
 @Singleton()
-export class Synapse<T extends SocketPacket = SocketPacket> extends Subject<T> {
+export class Synapse<T extends SocketPacket = SocketPacket> extends FSubject<T> {
     @Config()
     public readonly config!: ConfigComponent;
-
-    @Logger(Synapse.name)
-    public readonly log!: FLogger;
 
     public agentPool: AgentPool;
 

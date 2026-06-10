@@ -1,6 +1,6 @@
 import { includes } from 'lodash-es';
 import { type FAgentProfileConfiguration } from '@/config';
-import { Component, FComponent, Inject, Logger, PromptService, type FLogger } from '@/core';
+import { Component, FComponent, Inject, PromptService } from '@/core';
 import { AgentChatRole, type AgentMemory } from './brain/intelligence';
 import { SoulSection } from './types';
 
@@ -20,9 +20,6 @@ export class Memory extends FComponent {
         return this.config;
     })
     public prompt!: PromptService;
-
-    @Logger(Memory.name)
-    public readonly log!: FLogger;
 
     public context: AgentMemory[] = [];
 

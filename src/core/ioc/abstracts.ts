@@ -1,6 +1,30 @@
+import { type FLogger, useLogger } from '../logger';
 import { Observable, Subject } from 'rxjs';
 
-export abstract class FlyFlor {}
+const LOGGER_CACHE_KEY = Symbol('flyflor.logger');
+
+interface FlyFlorLoggerHost {
+    [LOGGER_CACHE_KEY]?: FLogger;
+    constructor: { name?: string };
+}
+
+function loggerFor(host: FlyFlorLoggerHost): FLogger {
+    const scope = host.constructor.name;
+    host[LOGGER_CACHE_KEY] ??= scope === undefined || scope.length === 0 ? useLogger() : useLogger(scope);
+    return host[LOGGER_CACHE_KEY];
+}
+
+export abstract class FlyFlor {
+    public get log(): FLogger {
+        return loggerFor(this);
+    }
+}
+
+export abstract class FSubject<T = object | number | string | boolean | undefined> extends Subject<T> {
+    public get log(): FLogger {
+        return loggerFor(this);
+    }
+}
 
 export abstract class FService extends FlyFlor {}
 
@@ -34,7 +58,7 @@ export type PluginSignal<TData = unknown> =
  * Base class for external plugin boundaries (classes decorated with `@Plugin()`).
  * Plugins are active observation objects: they can expose methods and emit turn-local signals.
  */
-export abstract class FPlugin<TSignal = PluginSignal> extends Subject<TSignal> {}
+export abstract class FPlugin<TSignal = PluginSignal> extends FSubject<TSignal> {}
 
 /**
  * Base class for permission/policy subscribers (classes decorated with `@Guard()`).
@@ -57,7 +81,7 @@ export abstract class FSandBox extends FGuard {}
  * via `listModule(FAgent)` and to manage their lifecycles. An agent's `chat` is the canonical
  * entry point: the runtime never inspects or rewrites the agent's system prompt.
  */
-export abstract class FAgentAtom<T = object | number | string | boolean | undefined> extends Subject<T> {}
+export abstract class FAgentAtom<T = object | number | string | boolean | undefined> extends FSubject<T> {}
 export abstract class FAgent<T = object | number | string | boolean | undefined> extends FAgentAtom<T> {}
 
 /**
@@ -66,7 +90,7 @@ export abstract class FAgent<T = object | number | string | boolean | undefined>
  * A route is an active observer/inspector in the neural layer: it emits routing signals while it decides
  * whether a turn is a direct reflex, a protocol-package update, or an execution turn that needs tools.
  */
-export abstract class FRoute<TSignal = unknown> extends Subject<TSignal> {}
+export abstract class FRoute<TSignal = unknown> extends FSubject<TSignal> {}
 
 /**
  * One structured signal emitted by a cortex stream (e.g. `Brain`).
@@ -84,6 +108,6 @@ export type AgentSignal =
  * `Subject` others can subscribe to or pipe through — the reusable primitive for the neural network.
  * Subclasses own only the wire of one reflex: `transform(input)` returns the cold output stream.
  */
-export abstract class FCortex<I, O> extends Subject<O> {
+export abstract class FCortex<I, O> extends FSubject<O> {
     public abstract transform(input: I): Observable<O>;
 }
