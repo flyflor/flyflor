@@ -1,24 +1,5 @@
 import { FModule, Module } from '@/core';
-import {
-    AskTool,
-    BashTool,
-    CodeGraphPlugin,
-    ConfirmTool,
-    DeleteTool,
-    EditTool,
-    GlobPlugin,
-    GlobTool,
-    GrepPlugin,
-    GrepTool,
-    McpTool,
-    PlanTool,
-    ReadFilePlugin,
-    ReadTool,
-    RtkPlugin,
-    SkillTool,
-    TaskTool,
-    WriteTool,
-} from './tools';
+import { Ask } from './ask';
 
 /**
  * The plugins module: external capability boundaries kept isolated from the kernel.
@@ -26,24 +7,25 @@ import {
  */
 @Module({
     imports: [
-        ReadFilePlugin,
-        GlobPlugin,
-        GrepPlugin,
-        RtkPlugin,
-        CodeGraphPlugin,
-        ReadTool,
-        WriteTool,
-        EditTool,
-        DeleteTool,
-        BashTool,
-        GrepTool,
-        GlobTool,
-        PlanTool,
-        TaskTool,
-        AskTool,
-        ConfirmTool,
-        SkillTool,
-        McpTool,
+        Ask,
+        // ReadFilePlugin,
+        // GlobPlugin,
+        // GrepPlugin,
+        // RtkPlugin,
+        // CodeGraphPlugin,
+        // ReadTool,
+        // WriteTool,
+        // EditTool,
+        // DeleteTool,
+        // BashTool,
+        // GrepTool,
+        // GlobTool,
+        // PlanTool,
+        // TaskTool,
+        // AskTool,
+        // ConfirmTool,
+        // SkillTool,
+        // McpTool,
     ],
 })
 export class PluginsModule extends FModule {}

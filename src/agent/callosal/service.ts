@@ -1,6 +1,5 @@
 import { type FAgentProfileConfiguration } from '@/config';
-import { Provide, FAgentAtom, Inject, PromptService, ToolExecutor } from '@/core';
-import { EnvironmentService } from '@/core/environment';
+import { Provide, FAgentAtom, Inject } from '@/core';
 import { Intelligence, type AgentMemory } from '@/agent/brain/intelligence';
 import { type CallosalTurn } from './types';
 import type { Memory } from '../memory';
@@ -24,7 +23,7 @@ export class Callosal extends FAgentAtom {
     public memory!: Memory;
 
     @Inject()
-    public executor!: ToolExecutor;
+    public executor!: any;
 
     constructor(public readonly config: FAgentProfileConfiguration) {
         super();

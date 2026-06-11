@@ -1,6 +1,5 @@
 import { Inject, Provide, FAgent } from '@/core';
 import { Brain } from './brain';
-import { Execution } from './execution';
 import { Memory } from './memory';
 import { Callosal, CallosalAction, type CallosalTurn } from './callosal';
 import { ConfigComponent, type FAgentProfileConfiguration } from '@/config';
@@ -19,11 +18,6 @@ export class Agent extends FAgent<string> {
         return this.agentConfig;
     })
     public brain!: Brain;
-
-    @Inject(function (this: Agent) {
-        return this.agentConfig;
-    })
-    public execution!: Execution;
 
     @Inject(function (this: Agent) {
         return this.agentConfig;
@@ -48,7 +42,7 @@ export class Agent extends FAgent<string> {
         this.log.debug('turn.callosal', callosal);
 
         if (callosal.action === CallosalAction.REMEMBER) return this.remember(text, callosal.content);
-        if (callosal.action === CallosalAction.RESEARCH) return this.research(text, callosal.content);
+        if (callosal.action === CallosalAction.RESEARCH) return this.research(callosal.content);
         if (callosal.action === CallosalAction.DIALOGUE) return this.dialogue(text);
         return false;
     }
@@ -60,9 +54,9 @@ export class Agent extends FAgent<string> {
         return true;
     }
 
-    public async research(text: string, direction: string) {
-        const messages = await this.memory.buildMessage(text);
-        this.log.debug('turn.execute', messages, direction);
+    public async research(direction: string) {
+        this.log.debug('turn.execute', direction);
+        await this.callosal.research(direction)
         return true;
     }
 

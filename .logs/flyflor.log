@@ -12019,3 +12019,65 @@
   | {
   |   file: 'AGENTS.md'
   | }
+[DEBUG]  2026-06-10T18:46:37.267Z  Brain
+  | reflex.start
+  | {
+  |   messages: [
+  |     {
+  |       content: 'hi',
+  |       role: 'user'
+  |     }
+  |   ]
+  | }
+[DEBUG]  2026-06-10T18:46:37.271Z  Brain
+  | reflex.delta
+  | hel
+[DEBUG]  2026-06-10T18:46:37.272Z  Brain
+  | reflex.delta
+  | lo
+[DEBUG]  2026-06-10T18:46:37.272Z  Brain
+  | reflex.done
+[DEBUG]  2026-06-10T18:46:37.273Z  Brain
+  | reflex.cancel
+[DEBUG]  2026-06-10T18:46:37.274Z  Brain
+  | reflex.start
+  | {
+  |   messages: [
+  |     {
+  |       content: 'hi',
+  |       role: 'user'
+  |     }
+  |   ]
+  | }
+[ERROR]  2026-06-10T18:46:37.274Z  Brain
+  | reflex.error
+  | Error: provider failed
+  |     at start (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/agent/brain/brain.test.ts:33:38)
+  |     at <anonymous> (native:1:11)
+  |     at <anonymous> (native:1:11)
+  |     at <anonymous> (native:1:11)
+  |     at <anonymous> (native:1:11)
+  |     at <anonymous> (native:1:11)
+  |     at ReadableStream (unknown)
+  |     at <anonymous> (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/agent/brain/brain.test.ts:30:24)
+  |     at reader (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/agent/brain/brain.test.ts:75:20)
+  |     at <anonymous> (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/agent/brain/brain.ts:25:46)
+[DEBUG]  2026-06-10T18:46:37.274Z  Brain
+  | reflex.cancel
+[DEBUG]  2026-06-10T18:46:37.275Z  Brain
+  | reflex.start
+  | {
+  |   messages: [
+  |     {
+  |       content: 'hi',
+  |       role: 'user'
+  |     }
+  |   ]
+  | }
+[DEBUG]  2026-06-10T18:46:37.275Z  Brain
+  | reflex.delta
+  | partial
+[DEBUG]  2026-06-10T18:46:37.276Z  Brain
+  | reflex.cancel
+[DEBUG]  2026-06-10T18:46:37.276Z  Brain
+  | reflex.done
