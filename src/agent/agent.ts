@@ -2,15 +2,22 @@ import { Inject, Provide, FAgent } from '@/core';
 import { Brain } from './brain';
 import { Memory } from './memory';
 import { Callosal, CallosalAction, type CallosalTurn } from './callosal';
+import { Execution } from './execution';
 import { ConfigComponent, type FAgentProfileConfiguration } from '@/config';
-import type { AgentMemory } from './brain/intelligence';
+import { EnvironmentService } from '@/core';
+import type { AgentChatRole } from './brain/intelligence';
 
 /**
- * The agent: a person-like runtime object. It owns an injected brain (cortex) and memory (prefrontal
- * cache), and is itself the `Subject` the neural layer subscribes to for streamed output.
+ * The agent: a person-like runtime object. It owns a brain (cortex), memory (prefrontal cache),
+ * callosal (corpus callosum route/scheduler), and execution (motor cortex/tool loop). The agent
+ * is itself the `Subject` the neural layer subscribes to for streamed output.
  *
- * `next()` is the turn owner: it asks memory for the assembled mental input, streams the brain's
- * reflex out chunk by chunk, and commits the finished turn to memory only on success.
+ * Three turn paths, determined by the callosal navigation:
+ *   1. Reply — the protocol package was updated, the turn is already answered.
+ *   2. Chat — a direct reflex through the brain's inference stream.
+ *   3. Execute — the distilled brief enters the execution tool loop.
+ *
+ * Each path that produces a final user-facing answer commits the turn to memory.
  */
 @Provide()
 export class Agent extends FAgent<string> {
@@ -30,37 +37,63 @@ export class Agent extends FAgent<string> {
     public callosal!: Callosal;
 
     @Inject()
+    public execution!: Execution;
+
+    @Inject()
+    public environment!: EnvironmentService;
+
+    @Inject()
     public config!: ConfigComponent;
 
     constructor(public readonly agentConfig: FAgentProfileConfiguration) {
         super();
     }
 
-    public override async next(text: string) {
+    public override async next(text: string): Promise<boolean> {
         this.log.debug('turn.start', text);
-        const callosal = await this.callosal.navigate(this.memory.buildMessage(text));
+        const callosal = await this.callosal.navigate(text);
         this.log.debug('turn.callosal', callosal);
 
-        if (callosal.action === CallosalAction.REMEMBER) return this.remember(text, callosal.content);
-        if (callosal.action === CallosalAction.RESEARCH) return this.research(callosal.content);
-        if (callosal.action === CallosalAction.DIALOGUE) return this.dialogue(text);
+        if (callosal.action === CallosalAction.Reply) return this.reply(text, callosal);
+        if (callosal.action === CallosalAction.Chat) return this.dialogue(text);
+        if (callosal.action === CallosalAction.Execute) return this.execute(text, callosal);
         return false;
     }
 
-    public async remember(text: string, reply: string) {
-        this.log.debug('turn.remember', text, reply);
-        this.memory.commit(text, reply);
-        super.next(reply);
+    /**
+     * Reply path: the callosal updated the protocol package and already has a user-facing answer.
+     */
+    public async reply(text: string, callosal: CallosalTurn): Promise<boolean> {
+        this.log.debug('turn.reply', text, callosal.reply);
+        const answer = callosal.reply ?? callosal.content;
+        this.memory.commit(text, answer);
+        super.next(answer);
         return true;
     }
 
-    public async research(direction: string) {
-        this.log.debug('turn.execute', direction);
-        await this.callosal.research(direction)
+    /**
+     * Execute path: the callosal distilled a brief; hand it to the execution loop.
+     * Commits only on a successful final — ask/confirm/max-iterations produce output but do not commit
+     * (their result is a hand-off, not a concluded turn).
+     */
+    public async execute(text: string, callosal: CallosalTurn): Promise<boolean> {
+        this.log.debug('turn.execute', callosal.brief);
+        const summary = this.environment.render();
+        const history = this.memory.buildMessage(callosal.brief?.instructions ?? callosal.content);
+        const preamble = [...history, { role: 'system' as AgentChatRole, content: summary }];
+        const result = await this.execution.run(callosal.brief?.instructions ?? callosal.content, preamble);
+        this.log.debug('turn.result', result);
+        super.next(result.text);
+        if (result.ok && result.reason === 'final') {
+            this.memory.commit(text, result.text);
+        }
         return true;
     }
 
-    public async dialogue(text: string) {
+    /**
+     * Chat path: stream the brain's inference reflex.
+     */
+    public async dialogue(text: string): Promise<boolean> {
         const messages = this.memory.buildMessage(text);
         const message = await new Promise<string>((resolve, reject) => {
             const content: string[] = [];

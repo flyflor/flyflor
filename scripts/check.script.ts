@@ -20,9 +20,11 @@ const SKIPPED_DIR_NAMES = new Set(['node_modules', 'dist', '.agents']);
 const ALLOWED_NEW_TARGETS = new Set([
     'AbortController',
     'BehaviorSubject',
+    'Bun',
     'Container',
     'Date',
     'Error',
+    'Glob',
     'Map',
     'Observable',
     'Promise',
@@ -79,27 +81,12 @@ const ROLE_DIRECTORIES = new Set([
     join('src', 'core', 'ioc'),
     join('src', 'core', 'logger'),
     join('src', 'core', 'prompt'),
-    join('src', 'core', 'tool'),
+    join('src', 'tools'),
     join('src', 'agent', 'execution'),
-    join('src', 'agent', 'route'),
-    join('src', 'agent', 'brain', 'investigation'),
+    join('src', 'agent', 'callosal'),
     join('src', 'agent', 'brain', 'intelligence'),
     join('src', 'neural', 'ipc'),
     join('src', 'neural', 'packet'),
-    join('src', 'plugins'),
-    join('src', 'plugins', 'tools', 'ask'),
-    join('src', 'plugins', 'tools', 'bash'),
-    join('src', 'plugins', 'tools', 'confirm'),
-    join('src', 'plugins', 'tools', 'delete'),
-    join('src', 'plugins', 'tools', 'edit'),
-    join('src', 'plugins', 'tools', 'glob'),
-    join('src', 'plugins', 'tools', 'grep'),
-    join('src', 'plugins', 'tools', 'mcp'),
-    join('src', 'plugins', 'tools', 'plan'),
-    join('src', 'plugins', 'tools', 'read'),
-    join('src', 'plugins', 'tools', 'skill'),
-    join('src', 'plugins', 'tools', 'task'),
-    join('src', 'plugins', 'tools', 'write'),
 ]);
 
 /** Existing compact object files are preserved until a dedicated naming migration finalizes the convention. */
@@ -116,13 +103,6 @@ const COMPACT_TYPESCRIPT_SOURCE_FILES = new Set([
     join('src', 'agent', 'brain', 'intelligence', 'protocols', 'openai-chat-completions.ts'),
     join('src', 'agent', 'brain', 'intelligence', 'protocols', 'openai-responses.ts'),
     join('src', 'agent', 'brain', 'intelligence', 'protocols', 'vllm.ts'),
-    join('src', 'plugins', 'tools', 'codegraph.ts'),
-    join('src', 'plugins', 'tools', 'glob.ts'),
-    join('src', 'plugins', 'tools', 'grep.ts'),
-    join('src', 'plugins', 'module.ts'),
-    join('src', 'plugins', 'tools', 'rtk.ts'),
-    join('src', 'plugins', 'tools', 'task.ts'),
-    join('src', 'plugins', 'tools', 'todo.ts'),
 ]);
 
 /** Existing non-dotted source files are preserved until a dedicated naming migration happens. */
@@ -132,6 +112,16 @@ const LEGACY_TYPESCRIPT_SOURCE_FILES = new Set([
     join('src', 'agent', 'memory.ts'),
     join('src', 'neural', 'synapse.ts'),
     join('src', 'bootstrap.ts'),
+    join('src', 'tools', 'ask.ts'),
+    join('src', 'tools', 'bash.ts'),
+    join('src', 'tools', 'confirm.ts'),
+    join('src', 'tools', 'delete.ts'),
+    join('src', 'tools', 'edit.ts'),
+    join('src', 'tools', 'glob.ts'),
+    join('src', 'tools', 'grep.ts'),
+    join('src', 'tools', 'module.ts'),
+    join('src', 'tools', 'read.ts'),
+    join('src', 'tools', 'write.ts'),
 ]);
 
 /** Exported function APIs are reserved for composition/decorator/bootstrap/check surfaces, not business logic. */

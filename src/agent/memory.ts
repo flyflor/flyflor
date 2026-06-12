@@ -46,12 +46,20 @@ export class Memory extends FComponent {
         for (const section of sections) {
             if (!includes(Object.values(SoulSection), section)) continue;
             if (ignored.has(PROMPT_SECTION_FILES[section]!)) continue;
-            const content = this.prompt.prompts[section]?.data;
-            if (typeof content !== 'string' || content.trim().length === 0) continue;
-            rendered.push(`<${section}>\n${content.trim()}\n</${section}>`);
+            const data = this.prompt.prompts[section]?.data;
+            if (typeof data !== 'string' || data.trim().length === 0) continue;
+            rendered.push(`<${section}>\n${data.trim()}\n</${section}>`);
         }
         const system = rendered.join('\n\n');
-        const messages = system.length > 0 ? [{ role: AgentChatRole.System, content: system }] : [];
-        return [...messages, ...this.context, { role: AgentChatRole.User, content }];
+        const prefix = system.length > 0 ? [{ role: AgentChatRole.System, content: system }] : [];
+        return [...prefix, ...this.context, { role: AgentChatRole.User, content }];
+    }
+
+    /**
+     * Async alias for the working-memory assembly — `buildMessage` today, but the async seam
+     * keeps the door open for future persistent-memory recall without touching every call site.
+     */
+    public async messages(content: string): Promise<AgentMemory[]> {
+        return this.buildMessage(content);
     }
 }

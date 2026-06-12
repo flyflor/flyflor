@@ -138,6 +138,21 @@ export function SandBox(): ClassDecorator {
     };
 }
 
+/**
+ * Class decorator marking a class as an executable tool (the agent's computer-control hands).
+ *
+ * Composes `@Singleton()` (tools are stateless capability objects, one cached instance serves every
+ * turn) and records the class for structural discovery at import time, so `listModule(FTool)` sees a
+ * tool as soon as `ToolsModule` imports it. The runtime grouping itself is expressed by extending
+ * `FTool` — never by a loose registry or string flag.
+ */
+export function Tool(): ClassDecorator {
+    return (target) => {
+        Singleton()(target);
+        useContainer().registerClass(target as unknown as ClassType);
+    };
+}
+
 export function Config(key?: string): PropertyDecorator {
     return (target, propertyKey) => {
         const configStorageKey = Symbol(String(propertyKey));

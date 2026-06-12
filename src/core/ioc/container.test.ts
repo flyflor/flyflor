@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { Agent } from '@/agent';
 import { Brain } from '@/agent/brain';
-import { AgentChatRole, type AgentMemory } from '@/agent/brain/intelligence';
+import { Callosal, CallosalAction } from '@/agent/callosal';
 import { Execution } from '@/agent/execution';
-import { Route } from '@/agent/route';
+import { AgentChatRole, type AgentMemory } from '@/agent/brain/intelligence';
 import { Init, Inject, Service, Singleton, useContainer } from '@/core';
 import { configureLogger, LoggerLevel } from '@/core/logger';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -77,7 +77,7 @@ describe('Container property injection', () => {
     test('reuses async-initialized singletons through get even when they define @Init', async () => {
         @Singleton()
         class InitializedSingleton {
-            public initialized = false;
+            public initialized!: boolean;
 
             @Init()
             public async init() {
@@ -108,7 +108,11 @@ describe('Container property injection', () => {
         }
 
         class AsyncHost {
-            public readonly name = 'async-value';
+            public readonly name: string;
+
+            constructor() {
+                this.name = 'async-value';
+            }
 
             @Inject(async function (this: AsyncHost) {
                 return this.name;
@@ -125,7 +129,11 @@ describe('Container property injection', () => {
         }
 
         class SyncHost {
-            public readonly value = 'sync-value';
+            public readonly value: string;
+
+            constructor() {
+                this.value = 'sync-value';
+            }
 
             @Inject(function (this: SyncHost) {
                 return this.value;
@@ -148,7 +156,11 @@ describe('Container property injection', () => {
         }
 
         class AsyncHost {
-            public readonly name = 'async-value';
+            public readonly name: string;
+
+            constructor() {
+                this.name = 'async-value';
+            }
 
             @Inject(async function (this: AsyncHost) {
                 return [this.name, 2];
@@ -176,7 +188,7 @@ describe('Container property injection', () => {
 
         expect(agent.brain).toBeInstanceOf(Brain);
         expect(agent.execution).toBeInstanceOf(Execution);
-        expect(agent.route).toBeInstanceOf(Route);
+        expect(agent.callosal).toBeInstanceOf(Callosal);
         expect(agent.memory.config).toBe(agentConfig);
         expect(typeof agent.execution.run).toBe('function');
     });
@@ -200,7 +212,7 @@ describe('Container property injection', () => {
         const agent = await useContainer().getAsync(Agent, agentConfig);
         const outputs: string[] = [];
         const input: AgentMemory[] = [{ role: AgentChatRole.User, content: 'hello' }];
-        agent.route.navigate = async () => ({ action: 'execute', content: 'hello' });
+        agent.callosal.navigate = async () => ({ action: CallosalAction.Execute, content: 'hello' });
         agent.memory.messages = async () => input;
         agent.execution.run = async () => ({ ok: true, text: 'stream:hello', reason: 'final', toolCalls: [] });
 

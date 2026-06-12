@@ -12081,3 +12081,549 @@
   | reflex.cancel
 [DEBUG]  2026-06-10T18:46:37.276Z  Brain
   | reflex.done
+[DEBUG]  2026-06-12T11:38:05.974Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: 'sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:05.976Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-Qr5dP5/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:05.976Z  ToolRegistry
+  | tool.error
+  | edit
+  | File was not read this turn; read it before editing
+[DEBUG]  2026-06-12T11:38:05.976Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-Qr5dP5/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:05.976Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-Qr5dP5/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:05.976Z  ToolRegistry
+  | tool.error
+  | edit
+  | File changed on disk since it was read; read it again before editing
+[DEBUG]  2026-06-12T11:38:05.976Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-Qr5dP5/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:05.976Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-Qr5dP5/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:05.976Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: 'missing.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:05.977Z  ToolRegistry
+  | tool.error
+  | read
+  | ENOENT: no such file or directory, open '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-ZEB5SV/missing.txt'
+[DEBUG]  2026-06-12T11:38:12.482Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: 'sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:12.483Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-9NP8DV/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:12.483Z  ToolRegistry
+  | tool.error
+  | edit
+  | File was not read this turn; read it before editing
+[DEBUG]  2026-06-12T11:38:12.483Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-9NP8DV/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:12.483Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-9NP8DV/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:12.483Z  ToolRegistry
+  | tool.error
+  | edit
+  | File changed on disk since it was read; read it again before editing
+[DEBUG]  2026-06-12T11:38:12.483Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-9NP8DV/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:12.483Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-9NP8DV/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:12.484Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: 'missing.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:12.484Z  ToolRegistry
+  | tool.error
+  | read
+  | ENOENT: no such file or directory, open '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-7xYyP5/missing.txt'
+[DEBUG]  2026-06-12T11:38:38.175Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: 'sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:38.176Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-GAeYhO/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:38.176Z  ToolRegistry
+  | tool.error
+  | edit
+  | File was not read this turn; read it before editing
+[DEBUG]  2026-06-12T11:38:38.176Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-GAeYhO/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:38.176Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-GAeYhO/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:38.176Z  ToolRegistry
+  | tool.error
+  | edit
+  | File changed on disk since it was read; read it again before editing
+[DEBUG]  2026-06-12T11:38:38.176Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-GAeYhO/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:38.176Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-GAeYhO/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:38.177Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: 'missing.txt'
+  | }
+[DEBUG]  2026-06-12T11:38:38.177Z  ToolRegistry
+  | tool.error
+  | read
+  | ENOENT: no such file or directory, open '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-LEkoeK/missing.txt'
+[DEBUG]  2026-06-12T11:53:35.052Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: 'sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:53:35.055Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-8EOCL0/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:53:35.055Z  ToolRegistry
+  | tool.error
+  | edit
+  | File was not read this turn; read it before editing
+[DEBUG]  2026-06-12T11:53:35.055Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-8EOCL0/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:53:35.056Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-8EOCL0/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:53:35.056Z  ToolRegistry
+  | tool.error
+  | edit
+  | File changed on disk since it was read; read it again before editing
+[DEBUG]  2026-06-12T11:53:35.056Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-8EOCL0/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:53:35.056Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-8EOCL0/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:53:35.056Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: 'missing.txt'
+  | }
+[DEBUG]  2026-06-12T11:53:35.056Z  ToolRegistry
+  | tool.error
+  | read
+  | ENOENT: no such file or directory, open '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-tsS1Ze/missing.txt'
+[DEBUG]  2026-06-12T11:53:35.075Z  Brain
+  | reflex.start
+  | {
+  |   messages: [
+  |     {
+  |       content: 'hi',
+  |       role: 'user'
+  |     }
+  |   ]
+  | }
+[DEBUG]  2026-06-12T11:53:35.076Z  Brain
+  | reflex.delta
+  | hel
+[DEBUG]  2026-06-12T11:53:35.076Z  Brain
+  | reflex.delta
+  | lo
+[DEBUG]  2026-06-12T11:53:35.076Z  Brain
+  | reflex.done
+[DEBUG]  2026-06-12T11:53:35.076Z  Brain
+  | reflex.cancel
+[DEBUG]  2026-06-12T11:53:35.076Z  Brain
+  | reflex.start
+  | {
+  |   messages: [
+  |     {
+  |       content: 'hi',
+  |       role: 'user'
+  |     }
+  |   ]
+  | }
+[ERROR]  2026-06-12T11:53:35.076Z  Brain
+  | reflex.error
+  | Error: provider failed
+  |     at start (/Users/yi./Desktop/yi/flyflors/flyflor/src/agent/brain/brain.test.ts:33:38)
+  |     at <anonymous> (native:1:11)
+  |     at <anonymous> (native:1:11)
+  |     at <anonymous> (native:1:11)
+  |     at <anonymous> (native:1:11)
+  |     at <anonymous> (native:1:11)
+  |     at ReadableStream (unknown)
+  |     at <anonymous> (/Users/yi./Desktop/yi/flyflors/flyflor/src/agent/brain/brain.test.ts:30:24)
+  |     at reader (/Users/yi./Desktop/yi/flyflors/flyflor/src/agent/brain/brain.test.ts:75:20)
+  |     at <anonymous> (/Users/yi./Desktop/yi/flyflors/flyflor/src/agent/brain/brain.ts:25:46)
+[DEBUG]  2026-06-12T11:53:35.076Z  Brain
+  | reflex.cancel
+[DEBUG]  2026-06-12T11:53:35.076Z  Brain
+  | reflex.start
+  | {
+  |   messages: [
+  |     {
+  |       content: 'hi',
+  |       role: 'user'
+  |     }
+  |   ]
+  | }
+[DEBUG]  2026-06-12T11:53:35.077Z  Brain
+  | reflex.delta
+  | partial
+[DEBUG]  2026-06-12T11:53:35.077Z  Brain
+  | reflex.cancel
+[DEBUG]  2026-06-12T11:53:35.077Z  Brain
+  | reflex.done
+[DEBUG]  2026-06-12T11:57:18.505Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: 'sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:57:18.506Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-lKpGZj/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:57:18.507Z  ToolRegistry
+  | tool.error
+  | edit
+  | File was not read this turn; read it before editing
+[DEBUG]  2026-06-12T11:57:18.507Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-lKpGZj/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:57:18.507Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-lKpGZj/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:57:18.507Z  ToolRegistry
+  | tool.error
+  | edit
+  | File changed on disk since it was read; read it again before editing
+[DEBUG]  2026-06-12T11:57:18.507Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-lKpGZj/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:57:18.507Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-lKpGZj/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:57:18.507Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: 'missing.txt'
+  | }
+[DEBUG]  2026-06-12T11:57:18.507Z  ToolRegistry
+  | tool.error
+  | read
+  | ENOENT: no such file or directory, open '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-gnhlFj/missing.txt'
+[DEBUG]  2026-06-12T11:57:18.524Z  Brain
+  | reflex.start
+  | {
+  |   messages: [
+  |     {
+  |       content: 'hi',
+  |       role: 'user'
+  |     }
+  |   ]
+  | }
+[DEBUG]  2026-06-12T11:57:18.525Z  Brain
+  | reflex.delta
+  | hel
+[DEBUG]  2026-06-12T11:57:18.525Z  Brain
+  | reflex.delta
+  | lo
+[DEBUG]  2026-06-12T11:57:18.525Z  Brain
+  | reflex.done
+[DEBUG]  2026-06-12T11:57:18.525Z  Brain
+  | reflex.cancel
+[DEBUG]  2026-06-12T11:57:18.525Z  Brain
+  | reflex.start
+  | {
+  |   messages: [
+  |     {
+  |       content: 'hi',
+  |       role: 'user'
+  |     }
+  |   ]
+  | }
+[ERROR]  2026-06-12T11:57:18.525Z  Brain
+  | reflex.error
+  | Error: provider failed
+  |     at start (/Users/yi./Desktop/yi/flyflors/flyflor/src/agent/brain/brain.test.ts:33:38)
+  |     at <anonymous> (native:1:11)
+  |     at <anonymous> (native:1:11)
+  |     at <anonymous> (native:1:11)
+  |     at <anonymous> (native:1:11)
+  |     at <anonymous> (native:1:11)
+  |     at ReadableStream (unknown)
+  |     at <anonymous> (/Users/yi./Desktop/yi/flyflors/flyflor/src/agent/brain/brain.test.ts:30:24)
+  |     at reader (/Users/yi./Desktop/yi/flyflors/flyflor/src/agent/brain/brain.test.ts:75:20)
+  |     at <anonymous> (/Users/yi./Desktop/yi/flyflors/flyflor/src/agent/brain/brain.ts:25:46)
+[DEBUG]  2026-06-12T11:57:18.525Z  Brain
+  | reflex.cancel
+[DEBUG]  2026-06-12T11:57:18.525Z  Brain
+  | reflex.start
+  | {
+  |   messages: [
+  |     {
+  |       content: 'hi',
+  |       role: 'user'
+  |     }
+  |   ]
+  | }
+[DEBUG]  2026-06-12T11:57:18.526Z  Brain
+  | reflex.delta
+  | partial
+[DEBUG]  2026-06-12T11:57:18.526Z  Brain
+  | reflex.cancel
+[DEBUG]  2026-06-12T11:57:18.526Z  Brain
+  | reflex.done
+[DEBUG]  2026-06-12T11:59:32.954Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: 'sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:59:32.955Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-Adph4f/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:59:32.956Z  ToolRegistry
+  | tool.error
+  | edit
+  | File was not read this turn; read it before editing
+[DEBUG]  2026-06-12T11:59:32.956Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-Adph4f/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:59:32.956Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-Adph4f/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:59:32.956Z  ToolRegistry
+  | tool.error
+  | edit
+  | File changed on disk since it was read; read it again before editing
+[DEBUG]  2026-06-12T11:59:32.956Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-Adph4f/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:59:32.956Z  ToolRegistry
+  | tool.dispatch
+  | edit
+  | {
+  |   newText: 'gamma',
+  |   oldText: 'alpha',
+  |   path: '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-Adph4f/sample.txt'
+  | }
+[DEBUG]  2026-06-12T11:59:32.957Z  ToolRegistry
+  | tool.dispatch
+  | read
+  | {
+  |   path: 'missing.txt'
+  | }
+[DEBUG]  2026-06-12T11:59:32.957Z  ToolRegistry
+  | tool.error
+  | read
+  | ENOENT: no such file or directory, open '/var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-tools-q0klUc/missing.txt'
+[DEBUG]  2026-06-12T11:59:32.977Z  Brain
+  | reflex.start
+  | {
+  |   messages: [
+  |     {
+  |       content: 'hi',
+  |       role: 'user'
+  |     }
+  |   ]
+  | }
+[DEBUG]  2026-06-12T11:59:32.978Z  Brain
+  | reflex.delta
+  | hel
+[DEBUG]  2026-06-12T11:59:32.978Z  Brain
+  | reflex.delta
+  | lo
+[DEBUG]  2026-06-12T11:59:32.978Z  Brain
+  | reflex.done
+[DEBUG]  2026-06-12T11:59:32.978Z  Brain
+  | reflex.cancel
+[DEBUG]  2026-06-12T11:59:32.978Z  Brain
+  | reflex.start
+  | {
+  |   messages: [
+  |     {
+  |       content: 'hi',
+  |       role: 'user'
+  |     }
+  |   ]
+  | }
+[ERROR]  2026-06-12T11:59:32.978Z  Brain
+  | reflex.error
+  | Error: provider failed
+  |     at start (/Users/yi./Desktop/yi/flyflors/flyflor/src/agent/brain/brain.test.ts:33:38)
+  |     at <anonymous> (native:1:11)
+  |     at <anonymous> (native:1:11)
+  |     at <anonymous> (native:1:11)
+  |     at <anonymous> (native:1:11)
+  |     at <anonymous> (native:1:11)
+  |     at ReadableStream (unknown)
+  |     at <anonymous> (/Users/yi./Desktop/yi/flyflors/flyflor/src/agent/brain/brain.test.ts:30:24)
+  |     at reader (/Users/yi./Desktop/yi/flyflors/flyflor/src/agent/brain/brain.test.ts:75:20)
+  |     at <anonymous> (/Users/yi./Desktop/yi/flyflors/flyflor/src/agent/brain/brain.ts:25:46)
+[DEBUG]  2026-06-12T11:59:32.978Z  Brain
+  | reflex.cancel
+[DEBUG]  2026-06-12T11:59:32.978Z  Brain
+  | reflex.start
+  | {
+  |   messages: [
+  |     {
+  |       content: 'hi',
+  |       role: 'user'
+  |     }
+  |   ]
+  | }
+[DEBUG]  2026-06-12T11:59:32.979Z  Brain
+  | reflex.delta
+  | partial
+[DEBUG]  2026-06-12T11:59:32.979Z  Brain
+  | reflex.cancel
+[DEBUG]  2026-06-12T11:59:32.979Z  Brain
+  | reflex.done

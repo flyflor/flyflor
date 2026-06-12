@@ -1,5 +1,6 @@
 export type ObjectIdentifier = string | Symbol;
 export type ClassType<T = any> = new (...args: any[]) => T;
+export type AbstractClassType<T = any> = abstract new (...args: any[]) => T;
 
 // 依赖注入元数据键
 export const MODULE_METADATA_KEY = Symbol('MODULE_METADATA_KEY');

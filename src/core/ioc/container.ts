@@ -4,6 +4,7 @@ import {
     INJECT_METADATA_KEY,
     MODULE_METADATA_KEY,
     PROVIDER_SINGLETON_KEY,
+    type AbstractClassType,
     type ClassType,
     type InjectInstanceMetadata,
     type InjectMetadata,
@@ -319,6 +320,34 @@ export class Container {
     public registerObject(key: ClassType | symbol, instance: any) {
         this.singletons.set(key, instance);
         return this;
+    }
+
+    /**
+     * Records a class into the discovery list without constructing it.
+     *
+     * Intent decorators (`@Tool()`) call this at import time so structural discovery sees every
+     * imported class before any instance exists — importing the class is the registration act.
+     *
+     * @param classType 依赖注入类类型
+     */
+    public registerClass(classType: ClassType): this {
+        if (!this.classList.includes(classType)) this.classList.push(classType);
+        return this;
+    }
+
+    /**
+     * Lists every registered class whose prototype chain extends the given base class.
+     *
+     * This is the structural discovery surface promised by the abstracts layer (`listModule(FTool)`,
+     * `listModule(FGuard)`, `listModule(FAgent)`): grouping is expressed by inheritance, never by a
+     * loose registry or string flag. Classes enter `classList` when first constructed or registered
+     * through any container entrypoint.
+     *
+     * @param Base 基类（抽象类）类型
+     * @returns 继承自该基类的全部已注册类
+     */
+    public listModule<T>(Base: AbstractClassType<T>): Array<ClassType<T>> {
+        return this.classList.filter((classType): classType is ClassType<T> => classType.prototype instanceof Base);
     }
 }
 

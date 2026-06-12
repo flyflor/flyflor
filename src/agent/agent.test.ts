@@ -6,6 +6,7 @@ import { useContainer, type AgentSignal } from '@/core';
 import { configureLogger, LoggerLevel } from '@/core/logger';
 import { of } from 'rxjs';
 import { Agent } from './agent';
+import { CallosalAction } from './callosal';
 import { AgentChatRole, type AgentMemory } from './brain/intelligence';
 
 let tempPaths: string[] = [];
@@ -28,7 +29,7 @@ describe('Agent', () => {
     test('runs execution through its Subject and commits the turn', async () => {
         const agent = await testAgent();
         const input: AgentMemory[] = [{ role: AgentChatRole.User, content: 'hi' }];
-        agent.route.navigate = async () => ({ action: 'execute', content: 'hi' });
+        agent.callosal.navigate = async () => ({ action: CallosalAction.Execute, content: 'hi' });
         agent.memory.messages = async () => input;
         agent.execution.run = async () => ({ ok: true, text: 'hello', reason: 'final', toolCalls: [] });
 
@@ -37,7 +38,7 @@ describe('Agent', () => {
         const result = await agent.next('hi');
         subscription.unsubscribe();
 
-        expect(result).toBeUndefined();
+        expect(result).toBe(true);
         expect(outputs).toEqual(['hello']);
         expect(agent.memory.context).toEqual([
             { role: AgentChatRole.User, content: 'hi' },
@@ -47,7 +48,7 @@ describe('Agent', () => {
 
     test('streams direct chat through the brain and commits the turn', async () => {
         const agent = await testAgent();
-        agent.route.navigate = async () => ({ action: 'chat', content: 'hi' });
+        agent.callosal.navigate = async () => ({ action: CallosalAction.Chat, content: 'hi' });
         agent.memory.messages = async () => [{ role: AgentChatRole.User, content: 'hi' }];
         agent.brain.transform = () => of(
             { type: 'delta', text: 'hel' } satisfies AgentSignal,
@@ -67,9 +68,9 @@ describe('Agent', () => {
         ]);
     });
 
-    test('replies directly and commits when route updates the protocol package', async () => {
+    test('replies directly and commits when callosal updates the protocol package', async () => {
         const agent = await testAgent();
-        agent.route.navigate = async () => ({ action: 'reply', content: '以后你叫 FlyFlor', reply: '记住了。' });
+        agent.callosal.navigate = async () => ({ action: CallosalAction.Reply, content: '以后你叫 FlyFlor', reply: '记住了。' });
         let streamed = false;
         agent.execution.run = async () => {
             streamed = true;
@@ -91,7 +92,7 @@ describe('Agent', () => {
 
     test('does not commit the turn when execution fails', async () => {
         const agent = await testAgent();
-        agent.route.navigate = async () => ({ action: 'execute', content: 'hi' });
+        agent.callosal.navigate = async () => ({ action: CallosalAction.Execute, content: 'hi' });
         agent.memory.messages = async () => [{ role: AgentChatRole.User, content: 'hi' }];
         agent.execution.run = async () => {
             throw Error('failed');
