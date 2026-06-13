@@ -4,6 +4,8 @@ import { ROOT_PATH } from '@/config';
 import { readFileSync } from 'fs';
 import { JSON5 } from 'bun';
 
+export type FModelProtocolAuthMode = 'bearer' | 'optionalBearer' | 'anthropic' | 'google' | 'none';
+
 /**
  * One provider/model timeout override.
  * `timeoutSeconds` controls a single model request; `staleTimeoutSeconds` controls idle-call detection.
@@ -31,14 +33,14 @@ export interface FModelProtocolConfiguration {
     enabled?: boolean;
     baseUrl?: string;
     apiKeyEnv?: string;
-    path?: string;
+    path: string;
+    auth: FModelProtocolAuthMode;
     version?: string;
+    acceptsJsonStream?: boolean;
+    acceptsJsonResponse?: boolean;
+    usesV1Fallback?: boolean;
+    missingTerminalMessage?: string;
 }
-
-const DEFAULT_MODEL_PROTOCOLS: FModelProtocolConfiguration[] = [
-    { name: FModelProtocolName.OpenAIChatCompletions },
-    { name: FModelProtocolName.OpenAIResponses },
-];
 
 /**
  * One inference provider configuration.
@@ -162,7 +164,7 @@ export class ConfigComponent extends FComponent implements FConfiguration {
             provider: '',
             apiKeyEnv: '',
             baseUrl: '',
-            protocols: [...DEFAULT_MODEL_PROTOCOLS],
+            protocols: [],
             entra: {},
             contextLength: 131072,
             maxTokens: 8192,
@@ -212,6 +214,7 @@ export class ConfigComponent extends FComponent implements FConfiguration {
         const protocols = providerProtocols && providerProtocols.length > 0
             ? providerProtocols
             : this.model.protocols;
-        return protocols && protocols.length > 0 ? protocols : [...DEFAULT_MODEL_PROTOCOLS];
+        if (protocols === undefined || protocols.length === 0) throw Error('LLM provider protocols are missing');
+        return protocols;
     }
 }

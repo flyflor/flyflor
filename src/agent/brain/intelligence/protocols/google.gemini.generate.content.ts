@@ -4,8 +4,6 @@ import { AgentChatRole, type AgentMemory } from '@/agent';
 
 export const googleGeminiGenerateContentAdapter: ProtocolAdapter = {
     name: FModelProtocolName.GoogleGeminiGenerateContent,
-    defaultPath: '/v1beta/models/{model}:streamGenerateContent?alt=sse',
-    auth: 'google',
     body: (context: ProtocolBuildContext) => {
         const { contents, systemInstruction } = geminiRequest(context.messages);
         return {
@@ -17,7 +15,7 @@ export const googleGeminiGenerateContentAdapter: ProtocolAdapter = {
     parseLine: (controller, line) => {
         const data = sseData(line);
         if (data === undefined) return false;
-        const parsed = parseJson<Record<string, unknown>>(data);
+        const parsed = JSON.parse(data) as Record<string, unknown>;
         const candidates = parsed.candidates as Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }> | undefined;
         const candidate = candidates?.[0];
         for (const part of candidate?.content?.parts ?? []) {
@@ -25,7 +23,6 @@ export const googleGeminiGenerateContentAdapter: ProtocolAdapter = {
         }
         return typeof candidate?.finishReason === 'string' && candidate.finishReason.length > 0;
     },
-    missingTerminalMessage: () => 'LLM provider stream ended without a structured Gemini finishReason',
 };
 
 function geminiRequest(messages: AgentMemory[]): {
@@ -54,14 +51,4 @@ function sseData(line: string): string | undefined {
     const trimmed = line.trim();
     if (trimmed.length === 0 || !trimmed.startsWith('data:')) return undefined;
     return trimmed.slice('data:'.length).trim();
-}
-
-function parseJson<T>(data: string): T {
-    try {
-        return JSON.parse(data) as T;
-    } catch (error) {
-        throw Object.assign(Error('LLM provider returned non-JSON stream data'), {
-            detail: { data, cause: error instanceof Error ? error.message : String(error) },
-        });
-    }
 }

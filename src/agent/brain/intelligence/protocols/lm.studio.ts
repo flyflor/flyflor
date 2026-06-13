@@ -5,7 +5,4 @@ import { openAIChatCompletionsAdapter } from './openai.chat.completions';
 export const lmStudioAdapter: ProtocolAdapter = {
     ...openAIChatCompletionsAdapter,
     name: FModelProtocolName.LMStudio,
-    defaultPath: '/v1/chat/completions',
-    auth: 'optionalBearer',
-    usesV1Fallback: false,
 };

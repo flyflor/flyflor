@@ -184,6 +184,12 @@
                 white-space: nowrap;
             }
 
+            .endpoint small {
+                color: var(--faint);
+                font-family: var(--mono);
+                font-size: 0.74rem;
+            }
+
             .workspace {
                 min-height: 0;
                 display: grid;
@@ -248,6 +254,20 @@
                 background: var(--accent);
                 box-shadow: 0 0 0 0.28rem rgba(142, 191, 112, 0.16);
                 animation: pulse 1.1s ease-in-out infinite;
+            }
+
+            .signal-pill {
+                display: inline-flex;
+                align-items: center;
+                min-height: 1.75rem;
+                padding: 0.2rem 0.55rem;
+                border: 1px solid rgba(184, 217, 135, 0.24);
+                border-radius: 999px;
+                color: var(--accent-strong);
+                background: rgba(142, 191, 112, 0.07);
+                font-family: var(--mono);
+                font-size: 0.74rem;
+                white-space: nowrap;
             }
 
             .chat {
@@ -400,6 +420,25 @@
                 gap: 0.55rem;
             }
 
+            .mode-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 0.45rem;
+            }
+
+            .mode-btn {
+                min-height: 2.25rem;
+                padding: 0.5rem 0.6rem;
+                color: var(--muted);
+                background: rgba(255, 255, 255, 0.025);
+            }
+
+            .mode-btn[aria-pressed="true"] {
+                border-color: rgba(184, 217, 135, 0.48);
+                color: #10110f;
+                background: var(--accent-strong);
+            }
+
             .button-row {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
@@ -542,6 +581,11 @@
                 .composer button {
                     width: 100%;
                 }
+
+                .mode-grid,
+                .button-row {
+                    grid-template-columns: 1fr;
+                }
             }
         </style>
     </head>
@@ -557,6 +601,7 @@
                 <div class="endpoint" aria-label="连接端点">
                     <span>WebSocket bridge</span>
                     <code>ws://127.0.0.1:17878</code>
+                    <small id="protocolText">send: JSON bridge</small>
                 </div>
             </header>
 
@@ -564,9 +609,10 @@
                 <section class="conversation" aria-label="对话输出">
                     <div class="conversation-head">
                         <h2 class="panel-title">流式输出</h2>
-                        <div class="stream-state" id="streamState">
-                            <span class="stream-dot"></span>
+                        <div class="stream-state" id="streamState" aria-live="polite">
+                            <span class="stream-dot" aria-hidden="true"></span>
                             <span id="streamText">idle</span>
+                            <span class="signal-pill" id="signalPill">ready</span>
                         </div>
                     </div>
 
@@ -593,12 +639,20 @@
                         </div>
                     </section>
 
+                    <section class="side-section actions">
+                        <h2 class="panel-title">协议模式</h2>
+                        <div class="mode-grid" aria-label="发送协议模式">
+                            <button class="mode-btn" id="jsonModeBtn" type="button" aria-pressed="true">JSON</button>
+                            <button class="mode-btn" id="frameModeBtn" type="button" aria-pressed="false">Frame</button>
+                        </div>
+                    </section>
+
                     <section class="side-section quick-list" id="quickActions" hidden>
                         <h2 class="panel-title">快速输入</h2>
-                        <button class="quick-btn" data-msg="你好">你好</button>
-                        <button class="quick-btn" data-msg="解释 Flyflor 架构">解释 Flyflor 架构</button>
+                        <button class="quick-btn" data-msg="你好自我介绍下">自我介绍</button>
+                        <button class="quick-btn" data-msg="解释 Flyflor 架构">解释架构</button>
                         <button class="quick-btn" data-msg="帮我写一个最小测试">写一个最小测试</button>
-                        <button class="quick-btn" data-msg="总结当前上下文">总结当前上下文</button>
+                        <button class="quick-btn" data-msg="以后你叫飞花，我是你的主人。你要乖乖的哦">写入灵魂</button>
                     </section>
 
                     <section class="side-section">
@@ -611,6 +665,14 @@
                             <div class="stat">
                                 <span class="label">片段</span>
                                 <strong id="chunkCount">0</strong>
+                            </div>
+                            <div class="stat">
+                                <span class="label">帧</span>
+                                <strong id="frameCount">0</strong>
+                            </div>
+                            <div class="stat">
+                                <span class="label">错误</span>
+                                <strong id="errorCount">0</strong>
                             </div>
                         </div>
                     </section>
@@ -625,27 +687,41 @@
 
         <script>
             const BRIDGE_URL = 'ws://127.0.0.1:17878';
+            const HEADER_BYTES = 8;
+            const MAX_FRAME_BYTES = 16 * 1024 * 1024;
+            const textEncoder = new TextEncoder();
+            const textDecoder = new TextDecoder();
 
             let ws = null;
             let pending = false;
             let currentAgentMessage = null;
+            let protocolMode = 'json';
+            let incomingBuffer = new Uint8Array(0);
             let messageTotal = 0;
             let chunkTotal = 0;
+            let frameTotal = 0;
+            let errorTotal = 0;
 
             const status = document.getElementById('status');
             const statusText = document.getElementById('statusText');
             const streamState = document.getElementById('streamState');
             const streamText = document.getElementById('streamText');
+            const signalPill = document.getElementById('signalPill');
+            const protocolText = document.getElementById('protocolText');
             const chat = document.getElementById('chat');
             const connectBtn = document.getElementById('connectBtn');
             const disconnectBtn = document.getElementById('disconnectBtn');
             const clearBtn = document.getElementById('clearBtn');
             const sendBtn = document.getElementById('sendBtn');
             const messageInput = document.getElementById('messageInput');
+            const jsonModeBtn = document.getElementById('jsonModeBtn');
+            const frameModeBtn = document.getElementById('frameModeBtn');
             const quickActions = document.getElementById('quickActions');
             const composer = document.getElementById('composer');
             const messageCount = document.getElementById('messageCount');
             const chunkCount = document.getElementById('chunkCount');
+            const frameCount = document.getElementById('frameCount');
+            const errorCount = document.getElementById('errorCount');
 
             renderEmptyState();
             setStreamState(false);
@@ -665,7 +741,7 @@
                 title.textContent = '等待本地连接';
 
                 const text = document.createElement('p');
-                text.textContent = '连接后发送消息，模型的纯文本增量会追加到同一条回复里。';
+                text.textContent = '连接后发送消息。Reply 片段会追加到同一条助手回复里，Done 后结束本轮。';
 
                 inner.append(mark, title, text);
                 empty.appendChild(inner);
@@ -719,6 +795,7 @@
 
             function renderAgentSignal(data) {
                 const signal = normalizeAgentSignal(data);
+                signalPill.textContent = signal.type;
                 if (signal.type === 'reply') {
                     appendAgentDelta(signal.chunk);
                     return;
@@ -728,7 +805,7 @@
                     return;
                 }
                 if (signal.chunk.length > 0) {
-                    addMessage(signal.chunk, 'system');
+                    addMessage(`${signal.type}: ${signal.chunk}`, 'system');
                 }
             }
 
@@ -769,6 +846,7 @@
             function setStreamState(active) {
                 streamState.classList.toggle('active', active);
                 streamText.textContent = active ? 'streaming' : 'idle';
+                if (!active) signalPill.textContent = 'ready';
             }
 
             function setInputEnabled(enabled) {
@@ -782,13 +860,101 @@
             function updateStats() {
                 messageCount.textContent = String(messageTotal);
                 chunkCount.textContent = String(chunkTotal);
+                frameCount.textContent = String(frameTotal);
+                errorCount.textContent = String(errorTotal);
+            }
+
+            function setProtocolMode(mode) {
+                protocolMode = mode;
+                jsonModeBtn.setAttribute('aria-pressed', String(mode === 'json'));
+                frameModeBtn.setAttribute('aria-pressed', String(mode === 'frame'));
+                protocolText.textContent = mode === 'frame' ? 'send: 8-byte frame' : 'send: JSON bridge';
+            }
+
+            function encodeFrame(packet) {
+                const body = textEncoder.encode(JSON.stringify(packet));
+                if (body.byteLength > MAX_FRAME_BYTES) throw new Error('消息超过 IPC frame 限制');
+                const frame = new Uint8Array(HEADER_BYTES + body.byteLength);
+                const view = new DataView(frame.buffer);
+                view.setBigUint64(0, BigInt(body.byteLength), false);
+                frame.set(body, HEADER_BYTES);
+                return frame;
+            }
+
+            function appendBytes(left, right) {
+                const combined = new Uint8Array(left.byteLength + right.byteLength);
+                combined.set(left, 0);
+                combined.set(right, left.byteLength);
+                return combined;
+            }
+
+            function decodeFrames(bytes) {
+                incomingBuffer = appendBytes(incomingBuffer, bytes);
+                const packets = [];
+                let offset = 0;
+
+                while (incomingBuffer.byteLength - offset >= HEADER_BYTES) {
+                    const view = new DataView(incomingBuffer.buffer, incomingBuffer.byteOffset + offset, HEADER_BYTES);
+                    const bodyLengthBig = view.getBigUint64(0, false);
+                    if (bodyLengthBig > BigInt(MAX_FRAME_BYTES)) throw new Error('收到的 IPC frame 超过限制');
+                    const bodyLength = Number(bodyLengthBig);
+                    const frameLength = HEADER_BYTES + bodyLength;
+                    if (incomingBuffer.byteLength - offset < frameLength) break;
+                    const body = incomingBuffer.slice(offset + HEADER_BYTES, offset + frameLength);
+                    packets.push(JSON.parse(textDecoder.decode(body)));
+                    offset += frameLength;
+                }
+
+                incomingBuffer = incomingBuffer.slice(offset);
+                return packets;
+            }
+
+            function handlePacket(msg) {
+                frameTotal += 1;
+                updateStats();
+                if (msg.action === 'data') {
+                    renderAgentSignal(msg.data);
+                    return;
+                }
+                if (msg.action === 'streamEnd') {
+                    finishAgentStream();
+                    return;
+                }
+                if (msg.action === 'agent') {
+                    renderAgentSignal(msg.data);
+                    finishAgentStream();
+                    return;
+                }
+                if (msg.action === 'open') {
+                    setStatus('connected', '已连接');
+                    addMessage('内核 IPC 已连接', 'system');
+                    return;
+                }
+                if (msg.action === 'error') {
+                    errorTotal += 1;
+                    updateStats();
+                    cancelPendingMessage();
+                    addMessage(`错误: ${String(msg.data ?? '')}`, 'error');
+                    return;
+                }
+                addMessage(`收到: ${JSON.stringify(msg)}`, 'system');
+            }
+
+            async function readSocketMessage(eventData) {
+                if (typeof eventData === 'string') return [JSON.parse(eventData)];
+                if (eventData instanceof Blob) return decodeFrames(new Uint8Array(await eventData.arrayBuffer()));
+                if (eventData instanceof ArrayBuffer) return decodeFrames(new Uint8Array(eventData));
+                if (ArrayBuffer.isView(eventData)) return decodeFrames(new Uint8Array(eventData.buffer, eventData.byteOffset, eventData.byteLength));
+                throw new Error('不支持的 WebSocket 消息类型');
             }
 
             function sendUserMessage(text) {
                 if (!text || !ws || pending || ws.readyState !== WebSocket.OPEN) return;
                 pending = true;
                 setInputEnabled(false);
-                ws.send(JSON.stringify({ action: 'user', data: text }));
+                const packet = { action: 'user', data: text };
+                if (protocolMode === 'frame') ws.send(encodeFrame(packet));
+                else ws.send(JSON.stringify(packet));
                 addMessage(text, 'user');
                 createPendingAgentMessage();
             }
@@ -798,9 +964,11 @@
                 setStatus('connecting', '连接中');
                 connectBtn.disabled = true;
                 ws = new WebSocket(BRIDGE_URL);
+                ws.binaryType = 'arraybuffer';
+                incomingBuffer = new Uint8Array(0);
 
                 ws.onopen = () => {
-                    setStatus('connecting', '等待内核');
+                    setStatus('connecting', '等待握手');
                     disconnectBtn.disabled = false;
                     clearBtn.disabled = false;
                     quickActions.hidden = false;
@@ -808,35 +976,13 @@
                     addMessage('WebSocket bridge 已连接', 'system');
                 };
 
-                ws.onmessage = (event) => {
+                ws.onmessage = async (event) => {
                     try {
-                        const msg = JSON.parse(event.data);
-                        if (msg.action === 'data') {
-                            renderAgentSignal(msg.data);
-                            return;
-                        }
-                        if (msg.action === 'streamEnd') {
-                            finishAgentStream();
-                            return;
-                        }
-                        if (msg.action === 'agent') {
-                            renderAgentSignal(msg.data);
-                            finishAgentStream();
-                            return;
-                        }
-                        if (msg.action === 'open') {
-                            setStatus('connected', '已连接');
-                            addMessage('内核 IPC 已连接', 'system');
-                            return;
-                        }
-                        if (msg.action === 'error') {
-                            cancelPendingMessage();
-                            addMessage(`错误: ${String(msg.data ?? '')}`, 'error');
-                            return;
-                        }
-                        addMessage(`收到: ${event.data}`, 'system');
-                    } catch {
-                        addMessage(`解析错误: ${event.data}`, 'error');
+                        for (const packet of await readSocketMessage(event.data)) handlePacket(packet);
+                    } catch (error) {
+                        errorTotal += 1;
+                        updateStats();
+                        addMessage(`解析错误: ${error instanceof Error ? error.message : String(error)}`, 'error');
                     }
                 };
 
@@ -866,8 +1012,11 @@
             clearBtn.addEventListener('click', () => {
                 currentAgentMessage = null;
                 pending = false;
+                incomingBuffer = new Uint8Array(0);
                 messageTotal = 0;
                 chunkTotal = 0;
+                frameTotal = 0;
+                errorTotal = 0;
                 updateStats();
                 setStreamState(false);
                 renderEmptyState();
@@ -888,6 +1037,9 @@
                     sendUserMessage(text);
                 });
             });
+
+            jsonModeBtn.addEventListener('click', () => setProtocolMode('json'));
+            frameModeBtn.addEventListener('click', () => setProtocolMode('frame'));
         </script>
     </body>
 </html>

@@ -7,18 +7,10 @@ export interface ProviderErrorShape {
     code?: string;
 }
 
-export type ProtocolAuthMode = 'bearer' | 'optionalBearer' | 'anthropic' | 'google' | 'none';
-
 export interface ProtocolAdapter {
     readonly name: FModelProtocolName;
-    readonly defaultPath: string;
-    readonly auth: ProtocolAuthMode;
-    readonly usesV1Fallback?: boolean;
-    readonly defaultVersion?: string;
-    readonly acceptsJsonStream?: boolean;
     body(context: ProtocolBuildContext): Record<string, unknown>;
     parseLine(controller: ReadableStreamDefaultController<string>, line: string): boolean;
-    missingTerminalMessage(): string;
 }
 
 export interface ProtocolBuildContext {

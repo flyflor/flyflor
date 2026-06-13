@@ -1,7 +1,7 @@
 import { Service } from '@/core/decorator';
 import { FService, useContainer } from '@/core/ioc';
 import { JSON5 } from 'bun';
-import { readdirSync, readFileSync, statSync } from 'fs';
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { basename, extname, join } from 'path';
 
 export interface IPrompt<TSection extends string> {
@@ -48,25 +48,44 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
 
     public data!: TData;
 
+    public writable = true;
+
     constructor(public readonly path: string) {
         super();
         // console.log(11111111, this.path);
         if (statSync(path).isDirectory()) {
             this.data = {} as TData;
-            readdirSync(path).forEach((entry) => {
+            const entries = readdirSync(path);
+            entries.forEach((entry) => {
                 const promptPath = join(path, entry);
                 if (promptPath.endsWith('.jsonc')) {
                     this.config = JSON5.parse(readFileSync(promptPath, 'utf-8')) as IPromptConfig<TSection>;
-                } else {
-                    const name = basename(promptPath, extname(promptPath)) as TSection;
-                    const prompt = useContainer().create(PromptService, promptPath) as PromptService<string, string>;
-                    this.data = { ...(this.data as PromptPackageData<TSection>), [name]: prompt } as TData;
                 }
+            });
+            entries.forEach((entry) => {
+                const promptPath = join(path, entry);
+                if (promptPath.endsWith('.jsonc')) return;
+                const name = basename(promptPath, extname(promptPath)) as TSection;
+                const prompt = useContainer().create(PromptService, promptPath) as PromptService<string, string>;
+                const policy = this.config?.protocolPackage;
+                prompt.writable = policy === undefined
+                    || (policy.editable.includes(entry) && !policy.locked.includes(entry) && !policy.runtimeIgnored.includes(entry));
+                (this as unknown as PromptPackageData<TSection>)[name] = prompt;
+                this.data = { ...(this.data as PromptPackageData<TSection>), [name]: prompt } as TData;
             });
             // console.log(files);
         } else {
             this.data = readFileSync(path, 'utf-8') as TData;
         }
+    }
+
+    public set(content: string): void {
+        if (this.config !== undefined) throw Error('Prompt package cannot be written as a file');
+        // 中文：协议包里的只读文件仍可被读取和注入，但不能通过 set 改写。
+        if (!this.writable) throw Object.assign(Error('Prompt file is locked'), { detail: { path: this.path } });
+        if (typeof content !== 'string') throw Error('Prompt content must be a string');
+        writeFileSync(this.path, content, 'utf-8');
+        this.data = content as TData;
     }
 
     public renderXml(options: PromptXmlRenderOptions<TSection>): string {

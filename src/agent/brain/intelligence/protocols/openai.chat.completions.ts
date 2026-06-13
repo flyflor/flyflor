@@ -13,9 +13,6 @@ interface ChatCompletionChunk {
 
 export const openAIChatCompletionsAdapter: ProtocolAdapter = {
     name: FModelProtocolName.OpenAIChatCompletions,
-    defaultPath: '/chat/completions',
-    auth: 'bearer',
-    usesV1Fallback: true,
     body: (context: ProtocolBuildContext) => ({
         model: context.model,
         messages: context.messages,
@@ -25,30 +22,19 @@ export const openAIChatCompletionsAdapter: ProtocolAdapter = {
     parseLine: (controller, line) => {
         const data = sseData(line);
         if (data === undefined) return false;
-        const parsed = parseJson<ChatCompletionChunk>(data);
+        const parsed = JSON.parse(data) as ChatCompletionChunk;
         if (parsed.error !== undefined) throw Error(providerErrorMessage(parsed.error, 'LLM provider stream error'));
         const choice = parsed.choices?.[0];
         const delta = choice?.delta?.content;
         if (typeof delta === 'string' && delta.length > 0) controller.enqueue(delta);
         return typeof choice?.finish_reason === 'string' && choice.finish_reason.length > 0;
     },
-    missingTerminalMessage: () => 'LLM provider stream ended without a structured finish_reason',
 };
 
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();
     if (trimmed.length === 0 || !trimmed.startsWith('data:')) return undefined;
     return trimmed.slice('data:'.length).trim();
-}
-
-function parseJson<T>(data: string): T {
-    try {
-        return JSON.parse(data) as T;
-    } catch (error) {
-        throw Object.assign(Error('LLM provider returned non-JSON stream data'), {
-            detail: { data, cause: error instanceof Error ? error.message : String(error) },
-        });
-    }
 }
 
 function providerErrorMessage(error: ProviderErrorShape | undefined, fallback: string): string {

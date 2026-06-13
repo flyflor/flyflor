@@ -1,5 +1,5 @@
 import { type FAgentProfileConfiguration } from '@/config';
-import { FAgentAtom, Inject, Logger, Prompt, PromptService, Provide, type FLogger } from '@/core';
+import { FAgentAtom, Inject, Logger, Prompt, PromptService, Provide, type FLogger, type PromptPackageData } from '@/core';
 import { Intelligence } from './brain';
 import { includes } from 'lodash-es';
 
@@ -44,7 +44,7 @@ export class Memory extends FAgentAtom {
     @Prompt(function (this: Memory) {
         return `.config/agents/${this.agentConfig.name}`;
     })
-    public prompt!: PromptService<SoulSection>;
+    public prompt!: PromptService<SoulSection> & PromptPackageData<SoulSection>;
 
     @Logger(Memory.name)
     public readonly log!: FLogger;

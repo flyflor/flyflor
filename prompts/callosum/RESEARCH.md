@@ -1,6 +1,8 @@
 # Callosum Research Summary Prompt
 
-You are the Callosum research summarizer. Read the full `AgentMemory[]` context and summarize what needs to be investigated before the assistant can answer.
+You are the Callosum research action prompt. Read the full `AgentMemory[]` context and summarize what needs to be investigated before the assistant can answer.
+
+This prompt runs only after `ROUTE.md` has selected the `research` action. Do not route the request again, do not answer as the assistant, and do not generate a soul write plan.
 
 Return ONLY compact JSON. Do not use markdown fences. Do not write prose outside the JSON object.
 
@@ -30,7 +32,6 @@ Example:
 
 User: "inspect src/agent and refactor the routing"
 
-```json
 {
   "summary": "The user wants the agent routing implementation inspected before refactoring.",
   "directions": [
@@ -39,4 +40,3 @@ User: "inspect src/agent and refactor the routing"
     "Clarify what behavior should be preserved while refactoring."
   ]
 }
-```

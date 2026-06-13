@@ -4,9 +4,6 @@ import { AgentChatRole, type AgentMemory } from '@/agent';
 
 export const anthropicMessagesAdapter: ProtocolAdapter = {
     name: FModelProtocolName.AnthropicMessages,
-    defaultPath: '/v1/messages',
-    auth: 'anthropic',
-    defaultVersion: '2023-06-01',
     body: (context: ProtocolBuildContext) => {
         const { system, messages } = anthropicMessages(context.messages);
         return {
@@ -20,7 +17,7 @@ export const anthropicMessagesAdapter: ProtocolAdapter = {
     parseLine: (controller, line) => {
         const data = sseData(line);
         if (data === undefined) return false;
-        const parsed = parseJson<Record<string, unknown>>(data);
+        const parsed = JSON.parse(data) as Record<string, unknown>;
         const type = parsed.type;
         if (type === 'content_block_delta') {
             const delta = parsed.delta as { type?: string; text?: string } | undefined;
@@ -35,7 +32,6 @@ export const anthropicMessagesAdapter: ProtocolAdapter = {
         if (type === 'error') throw Error(providerErrorMessage(parsed.error as ProviderErrorShape | undefined, 'Anthropic Messages stream error'));
         return false;
     },
-    missingTerminalMessage: () => 'LLM provider stream ended without a structured Anthropic terminal event',
 };
 
 function anthropicMessages(messages: AgentMemory[]): { system: string[]; messages: Array<{ role: string; content: string }> } {
@@ -55,16 +51,6 @@ function sseData(line: string): string | undefined {
     const trimmed = line.trim();
     if (trimmed.length === 0 || !trimmed.startsWith('data:')) return undefined;
     return trimmed.slice('data:'.length).trim();
-}
-
-function parseJson<T>(data: string): T {
-    try {
-        return JSON.parse(data) as T;
-    } catch (error) {
-        throw Object.assign(Error('LLM provider returned non-JSON stream data'), {
-            detail: { data, cause: error instanceof Error ? error.message : String(error) },
-        });
-    }
 }
 
 function providerErrorMessage(error: ProviderErrorShape | undefined, fallback: string): string {

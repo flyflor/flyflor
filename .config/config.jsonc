@@ -15,8 +15,13 @@
     //   - enabled: false 时跳过该协议。
     //   - baseUrl: 覆盖 model.baseUrl。
     //   - apiKeyEnv: 覆盖 model.apiKeyEnv。
-    //   - path: 覆盖协议默认 path；适合 provider 做兼容映射时微调 endpoint。
+    //   - path: 协议 endpoint path，支持 {model} 模板。
+    //   - auth: 鉴权模式，支持 bearer / optionalBearer / anthropic / google / none。
     //   - version: 某些协议需要的显式版本号，例如 Anthropic Messages。
+    //   - usesV1Fallback: true 时额外尝试 baseUrl + /v1。
+    //   - acceptsJsonStream: true 时把 application/json 响应当作流式 JSON 行处理。
+    //   - acceptsJsonResponse: true 时允许 application/json 非流式响应折叠为文本流。
+    //   - missingTerminalMessage: 流结束但没有协议终止事件时的错误信息。
     // 默认注册表支持：
     //   - anthropicMessages
     //   - openaiResponses
@@ -38,8 +43,21 @@
         "apiKeyEnv": "DEEPSEEK_API_KEY",
         "baseUrl": "https://api.deepseek.com",
         "protocols": [
-            { "name": "openaiChatCompletions" },
-            { "name": "openaiResponses" },
+            {
+                "name": "openaiChatCompletions",
+                "path": "/chat/completions",
+                "auth": "bearer",
+                "usesV1Fallback": true,
+                "missingTerminalMessage": "LLM provider stream ended without a structured finish_reason"
+            },
+            {
+                "name": "openaiResponses",
+                "path": "/responses",
+                "auth": "bearer",
+                "usesV1Fallback": true,
+                "acceptsJsonResponse": true,
+                "missingTerminalMessage": "LLM provider stream ended without a structured response terminal event"
+            },
         ],
         "entra": {},
         "contextLength": 131072,
@@ -53,7 +71,7 @@
     //     "apiKeyEnv": "ANTHROPIC_API_KEY",
     //     "baseUrl": "https://api.anthropic.com",
     //     "protocols": [
-    //         { "name": "anthropicMessages", "version": "2023-06-01" },
+    //         { "name": "anthropicMessages", "path": "/v1/messages", "auth": "anthropic", "version": "2023-06-01", "missingTerminalMessage": "LLM provider stream ended without a structured Anthropic terminal event" },
     //     ],
     //     "entra": {},
     //     "contextLength": 200000,
@@ -66,8 +84,8 @@
     //     "apiKeyEnv": "OPENAI_API_KEY",
     //     "baseUrl": "https://api.openai.com",
     //     "protocols": [
-    //         { "name": "openaiResponses" },
-    //         { "name": "openaiChatCompletions" },
+    //         { "name": "openaiResponses", "path": "/responses", "auth": "bearer", "usesV1Fallback": true, "acceptsJsonResponse": true, "missingTerminalMessage": "LLM provider stream ended without a structured response terminal event" },
+    //         { "name": "openaiChatCompletions", "path": "/chat/completions", "auth": "bearer", "usesV1Fallback": true, "missingTerminalMessage": "LLM provider stream ended without a structured finish_reason" },
     //     ],
     //     "entra": {},
     //     "contextLength": 200000,
@@ -80,7 +98,7 @@
     //     "apiKeyEnv": "GOOGLE_API_KEY",
     //     "baseUrl": "https://generativelanguage.googleapis.com",
     //     "protocols": [
-    //         { "name": "googleGeminiGenerateContent" },
+    //         { "name": "googleGeminiGenerateContent", "path": "/v1beta/models/{model}:streamGenerateContent?alt=sse", "auth": "google", "missingTerminalMessage": "LLM provider stream ended without a structured Gemini finishReason" },
     //     ],
     //     "entra": {},
     //     "contextLength": 1048576,
@@ -93,7 +111,7 @@
     //     "apiKeyEnv": "COHERE_API_KEY",
     //     "baseUrl": "https://api.cohere.com",
     //     "protocols": [
-    //         { "name": "cohereChat" },
+    //         { "name": "cohereChat", "path": "/v2/chat", "auth": "bearer", "missingTerminalMessage": "LLM provider stream ended without a structured Cohere terminal event" },
     //     ],
     //     "entra": {},
     //     "contextLength": 128000,
@@ -106,7 +124,7 @@
     //     "apiKeyEnv": "",
     //     "baseUrl": "http://127.0.0.1:11434",
     //     "protocols": [
-    //         { "name": "ollama" },
+    //         { "name": "ollama", "path": "/api/chat", "auth": "optionalBearer", "missingTerminalMessage": "LLM provider stream ended without a structured Ollama done event" },
     //     ],
     //     "entra": {},
     //     "contextLength": 32768,
@@ -119,8 +137,8 @@
     //     "apiKeyEnv": "",
     //     "baseUrl": "http://127.0.0.1:8000",
     //     "protocols": [
-    //         { "name": "vllm" },
-    //         { "name": "openaiResponses", "enabled": false },
+    //         { "name": "vllm", "path": "/v1/chat/completions", "auth": "optionalBearer", "missingTerminalMessage": "LLM provider stream ended without a structured finish_reason" },
+    //         { "name": "openaiResponses", "enabled": false, "path": "/responses", "auth": "bearer", "acceptsJsonResponse": true },
     //     ],
     //     "entra": {},
     //     "contextLength": 32768,
@@ -151,7 +169,7 @@
     //         "requestTimeoutSeconds": 60,
     //         "staleTimeoutSeconds": 30,
     //         "protocols": [
-    //             { "name": "anthropicMessages", "version": "2023-06-01" },
+    //             { "name": "anthropicMessages", "path": "/v1/messages", "auth": "anthropic", "version": "2023-06-01", "missingTerminalMessage": "LLM provider stream ended without a structured Anthropic terminal event" },
     //         ],
     //         "models": {
     //             "claude-sonnet-4-5": {
@@ -164,8 +182,8 @@
     //         "requestTimeoutSeconds": 60,
     //         "staleTimeoutSeconds": 30,
     //         "protocols": [
-    //             { "name": "openaiResponses" },
-    //             { "name": "openaiChatCompletions" },
+    //             { "name": "openaiResponses", "path": "/responses", "auth": "bearer", "usesV1Fallback": true, "acceptsJsonResponse": true, "missingTerminalMessage": "LLM provider stream ended without a structured response terminal event" },
+    //             { "name": "openaiChatCompletions", "path": "/chat/completions", "auth": "bearer", "usesV1Fallback": true, "missingTerminalMessage": "LLM provider stream ended without a structured finish_reason" },
     //         ],
     //         "models": {
     //             "gpt-5": {
@@ -178,7 +196,7 @@
     //         "requestTimeoutSeconds": 60,
     //         "staleTimeoutSeconds": 30,
     //         "protocols": [
-    //             { "name": "googleGeminiGenerateContent" },
+    //             { "name": "googleGeminiGenerateContent", "path": "/v1beta/models/{model}:streamGenerateContent?alt=sse", "auth": "google", "missingTerminalMessage": "LLM provider stream ended without a structured Gemini finishReason" },
     //         ],
     //         "models": {
     //             "gemini-2.5-pro": {
@@ -191,7 +209,7 @@
     //         "requestTimeoutSeconds": 60,
     //         "staleTimeoutSeconds": 30,
     //         "protocols": [
-    //             { "name": "awsBedrockConverse", "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com" },
+    //             { "name": "awsBedrockConverse", "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com", "path": "/model/{model}/converse-stream", "auth": "bearer", "acceptsJsonStream": true, "missingTerminalMessage": "LLM provider stream ended without a structured Bedrock messageStop event" },
     //         ],
     //         "models": {
     //             "anthropic.claude-sonnet-4-5-20250929-v1:0": {
@@ -204,7 +222,7 @@
     //         "requestTimeoutSeconds": 60,
     //         "staleTimeoutSeconds": 30,
     //         "protocols": [
-    //             { "name": "cohereChat" },
+    //             { "name": "cohereChat", "path": "/v2/chat", "auth": "bearer", "missingTerminalMessage": "LLM provider stream ended without a structured Cohere terminal event" },
     //         ],
     //         "models": {
     //             "command-r-plus": {
@@ -217,7 +235,7 @@
     //         "requestTimeoutSeconds": 60,
     //         "staleTimeoutSeconds": 30,
     //         "protocols": [
-    //             { "name": "ollama" },
+    //             { "name": "ollama", "path": "/api/chat", "auth": "optionalBearer", "missingTerminalMessage": "LLM provider stream ended without a structured Ollama done event" },
     //         ],
     //         "models": {
     //             "llama3.1:8b": {

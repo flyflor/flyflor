@@ -24,6 +24,24 @@ export class Intelligence extends FAgentAtom {
     }
 
     /**
+     * Streams one LLM turn and releases the reader at the provider boundary.
+     * 中文：业务对象只关心 chunk；reader 生命周期留在 Intelligence 内部统一处理。
+     */
+    public async stream(messages: AgentMemory[], next: (chunk: string) => void): Promise<void> {
+        const reader = this.reader(messages);
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (value === undefined || value.length === 0) continue;
+                next(value);
+            }
+        } finally {
+            reader.releaseLock();
+        }
+    }
+
+    /**
      * Cancels the active LLM request, if one is still running.
      */
     public cancel(reason?: unknown): void {

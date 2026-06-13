@@ -1,12 +1,7 @@
-import { type FModelConfiguration, type FModelProtocolConfiguration, FModelProtocolName } from '@/config';
+import { type FModelConfiguration, FModelProtocolName } from '@/config';
 import { anthropicMessagesAdapter, awsBedrockConverseAdapter, cohereChatAdapter, googleGeminiGenerateContentAdapter, huggingFaceAdapter, lmStudioAdapter, ollamaAdapter, openAIChatCompletionsAdapter, openAIResponsesAdapter, vllmAdapter } from './protocols';
 import type { AgentMemory } from '@/agent/memory';
 import type { LlmByteStreamReader, ProtocolAdapter, ProtocolBuildContext, StreamingState } from './types';
-
-/**
- * Default OpenAI-compatible negotiation: stream first, then fall back to Responses.
- */
-const DEFAULT_PROTOCOLS: FModelProtocolConfiguration[] = [{ name: FModelProtocolName.OpenAIChatCompletions }, { name: FModelProtocolName.OpenAIResponses }];
 
 /**
  * Protocol adapters are plain composition objects. The factory owns transport, adapters own wire shapes.
@@ -73,9 +68,8 @@ async function requestLlm(controller: ReadableStreamDefaultController<string>, c
                 continue;
             }
             const contentType = response.headers.get('content-type') ?? '';
-            if (isJsonResponse(adapter, contentType)) {
-                // Some OpenAI-compatible providers ignore `stream: true`; Responses is the canonical JSON fallback.
-                if (protocol.name !== FModelProtocolName.OpenAIResponses) {
+            if (isJsonResponse(context, contentType)) {
+                if (protocol.acceptsJsonResponse !== true) {
                     errors.push({ protocol: protocol.name, url, status: response.status, contentType });
                     break;
                 }
@@ -89,7 +83,7 @@ async function requestLlm(controller: ReadableStreamDefaultController<string>, c
                     detail: { provider: config.provider, protocol: protocol.name, url },
                 });
             }
-            await readStreamingContent(controller, reader, adapter);
+            await readStreamingContent(controller, reader, context);
             return;
         }
     }
@@ -98,29 +92,34 @@ async function requestLlm(controller: ReadableStreamDefaultController<string>, c
     });
 }
 
-function protocols(config: FModelConfiguration): FModelProtocolConfiguration[] {
-    // Config owns protocol preference; the default exists only for empty configs.
-    return config.protocols.length > 0 ? config.protocols : DEFAULT_PROTOCOLS;
+function protocols(config: FModelConfiguration) {
+    if (config.protocols.length === 0) throw Error('LLM provider protocols are missing');
+    return config.protocols;
 }
 
 function headers(context: ProtocolBuildContext): Record<string, string> {
     // Auth stays protocol-local because compatible providers differ on header names.
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const apiKeyEnv = context.protocol.apiKeyEnv ?? context.config.apiKeyEnv;
-    if (context.adapter.auth === 'none') return headers;
+    if (context.protocol.auth === 'none') return headers;
     const apiKey = apiKeyEnv ? process.env[apiKeyEnv] : undefined;
-    if ((apiKey === undefined || apiKey.length === 0) && context.adapter.auth === 'optionalBearer') return headers;
+    if ((apiKey === undefined || apiKey.length === 0) && context.protocol.auth === 'optionalBearer') return headers;
     if (apiKey === undefined || apiKey.length === 0) {
         throw Object.assign(Error('LLM provider API key is missing'), {
             detail: { provider: context.config.provider, protocol: context.protocol.name, apiKeyEnv },
         });
     }
-    if (context.adapter.auth === 'anthropic') {
+    if (context.protocol.auth === 'anthropic') {
         headers['x-api-key'] = apiKey;
-        headers['anthropic-version'] = context.protocol.version ?? context.adapter.defaultVersion ?? '2023-06-01';
+        if (context.protocol.version === undefined || context.protocol.version.length === 0) {
+            throw Object.assign(Error('LLM provider protocol version is missing'), {
+                detail: { provider: context.config.provider, protocol: context.protocol.name },
+            });
+        }
+        headers['anthropic-version'] = context.protocol.version;
         return headers;
     }
-    if (context.adapter.auth === 'google') {
+    if (context.protocol.auth === 'google') {
         headers['x-goog-api-key'] = apiKey;
         return headers;
     }
@@ -130,10 +129,9 @@ function headers(context: ProtocolBuildContext): Record<string, string> {
 
 function urls(context: ProtocolBuildContext): string[] {
     const baseUrl = (context.protocol.baseUrl ?? context.config.baseUrl).replace(/\/+$/, '');
-    const path = replaceModel(context.protocol.path ?? context.adapter.defaultPath, context.model);
+    const path = replaceModel(context.protocol.path, context.model);
     const urls = [joinEndpoint(baseUrl, path)];
-    // OpenAI-compatible providers differ on whether `baseUrl` already includes the `/v1` suffix.
-    if (context.adapter.usesV1Fallback && !baseUrl.endsWith('/v1')) {
+    if (context.protocol.usesV1Fallback === true && !baseUrl.endsWith('/v1')) {
         urls.push(joinEndpoint(baseUrl + '/v1', path));
     }
     return [...new Set(urls)];
@@ -152,8 +150,8 @@ function canTryNextProtocol(status: number): boolean {
     return [400, 404, 405, 415, 422, 501].includes(status);
 }
 
-function isJsonResponse(adapter: ProtocolAdapter, contentType: string): boolean {
-    if (adapter.acceptsJsonStream) return false;
+function isJsonResponse(context: ProtocolBuildContext, contentType: string): boolean {
+    if (context.protocol.acceptsJsonStream === true) return false;
     return contentType.toLowerCase().includes('application/json');
 }
 
@@ -176,7 +174,7 @@ function responsesText(json: unknown): string {
     throw Error('LLM provider Responses JSON did not include text');
 }
 
-async function readStreamingContent(controller: ReadableStreamDefaultController<string>, reader: LlmByteStreamReader, adapter: ProtocolAdapter): Promise<void> {
+async function readStreamingContent(controller: ReadableStreamDefaultController<string>, reader: LlmByteStreamReader, context: ProtocolBuildContext): Promise<void> {
     // Providers may split UTF-8 bytes and SSE/JSON lines across chunks, so decoding is buffered.
     const decoder = new TextDecoder();
     const state: StreamingState = { buffer: '', finished: false };
@@ -184,15 +182,15 @@ async function readStreamingContent(controller: ReadableStreamDefaultController<
         const { done, value } = await reader.read();
         if (done) break;
         state.buffer += decoder.decode(value, { stream: true });
-        await drainStreamingLines(controller, reader, state, adapter);
+        await drainStreamingLines(controller, reader, state, context.adapter);
         if (state.finished) return;
     }
     state.buffer += decoder.decode();
     if (state.buffer.trim().length > 0) {
-        await drainStreamingLines(controller, reader, state, adapter, true);
+        await drainStreamingLines(controller, reader, state, context.adapter, true);
         if (state.finished) return;
     }
-    throw Error(adapter.missingTerminalMessage());
+    throw Error(context.protocol.missingTerminalMessage ?? 'LLM provider stream ended without a terminal event');
 }
 
 async function drainStreamingLines(controller: ReadableStreamDefaultController<string>, reader: LlmByteStreamReader, state: StreamingState, adapter: ProtocolAdapter, flush = false): Promise<void> {

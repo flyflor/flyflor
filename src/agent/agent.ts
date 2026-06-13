@@ -28,13 +28,19 @@ export class Agent extends FAgent<CallosumSignal> {
     public async run(text: string): Promise<void> {
         this.log.debug('turn.start', text);
         await new Promise<void>((resolve, reject) => {
+            let assistant = '';
             const subscription = this.brain.subscribe({
                 next: (signal) => {
-                    this.emit(signal);
+                    if (signal.type === CallosumSignalType.Reply) assistant += signal.chunk;
                     if (signal.type === CallosumSignalType.Done) {
+                        // 中文：只在完整 turn 成功结束后提交，避免半截流式回复污染下一轮上下文。
+                        if (assistant.trim().length > 0) this.memory.commit(text, assistant);
+                        this.emit(signal);
                         subscription.unsubscribe();
                         resolve();
+                        return;
                     }
+                    this.emit(signal);
                 },
                 error: (error) => {
                     subscription.unsubscribe();

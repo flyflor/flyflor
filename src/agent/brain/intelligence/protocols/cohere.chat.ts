@@ -3,8 +3,6 @@ import type { ProtocolAdapter, ProtocolBuildContext } from '../types';
 
 export const cohereChatAdapter: ProtocolAdapter = {
     name: FModelProtocolName.CohereChat,
-    defaultPath: '/v2/chat',
-    auth: 'bearer',
     body: (context: ProtocolBuildContext) => ({
         model: context.model,
         messages: context.messages.map((message) => ({ role: message.role, content: message.content })),
@@ -14,7 +12,7 @@ export const cohereChatAdapter: ProtocolAdapter = {
     parseLine: (controller, line) => {
         const data = sseData(line);
         if (data === undefined) return false;
-        const parsed = parseJson<Record<string, unknown>>(data);
+        const parsed = JSON.parse(data) as Record<string, unknown>;
         const type = parsed.type;
         const delta = parsed.delta as { message?: { content?: { text?: string } | Array<{ text?: string }> } } | undefined;
         const content = delta?.message?.content;
@@ -27,21 +25,10 @@ export const cohereChatAdapter: ProtocolAdapter = {
         }
         return type === 'message-end' || type === 'stream-end' || typeof parsed.finish_reason === 'string';
     },
-    missingTerminalMessage: () => 'LLM provider stream ended without a structured Cohere terminal event',
 };
 
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();
     if (trimmed.length === 0 || !trimmed.startsWith('data:')) return undefined;
     return trimmed.slice('data:'.length).trim();
-}
-
-function parseJson<T>(data: string): T {
-    try {
-        return JSON.parse(data) as T;
-    } catch (error) {
-        throw Object.assign(Error('LLM provider returned non-JSON stream data'), {
-            detail: { data, cause: error instanceof Error ? error.message : String(error) },
-        });
-    }
 }
