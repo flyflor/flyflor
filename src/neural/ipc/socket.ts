@@ -48,28 +48,22 @@ export class FSocket implements SocketHandler<SocketConnectionData, 'buffer'> {
         for (const { error } of errors) {
             socket.write(this.packet.encode({ action: SocketEvent.Error, data: error.message }));
         }
-        // Route valid frames one at a time so a turn's streamEnd is written before the next frame starts.
-        for (const packet of packets) {
-            try {
-                await this.routePacket(socket, packet);
-            } catch (error) {
-                const cause = error instanceof Error ? error : Error(String(error));
-                this.log.error(SocketEvent.Data, cause);
-                socket.write(this.packet.encode({ action: SocketEvent.Error, data: cause.message }));
-            }
-        }
-    };
-
-    private async routePacket(socket: Socket<SocketConnectionData>, packet: SocketPacket): Promise<void> {
         // Scope this turn's streamed chunks to the requesting socket for as long as the turn runs.
         const subscription = this.synapse.agent.subscribe((content) => {
             socket.write(this.packet.encode({ action: SocketEvent.Data, data: content }));
         });
         try {
-            await this.synapse.next(packet);
-            socket.write(this.packet.encode({ action: SocketEvent.StreamEnd, data: true }));
+            // Route valid frames one at a time so a turn's streamEnd is written before the next frame starts.
+            for (const packet of packets) {
+                await this.synapse.next(packet);
+                socket.write(this.packet.encode({ action: SocketEvent.StreamEnd, data: true }));
+            }
+        } catch (error) {
+            const cause = error instanceof Error ? error : Error(String(error));
+            this.log.error(SocketEvent.Data, cause);
+            socket.write(this.packet.encode({ action: SocketEvent.Error, data: cause.message }));
         } finally {
             subscription.unsubscribe();
         }
-    }
+    };
 }

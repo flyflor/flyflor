@@ -44,7 +44,7 @@ export function Component(): ClassDecorator {
     return (target) => Provide()(target);
 }
 
-export function Plugin(): ClassDecorator {
+export function Tool(): ClassDecorator {
     return (target) => Provide()(target);
 }
 
@@ -94,14 +94,21 @@ export function Inject(): PropertyDecorator | void {
     }
 }
 
+export function Scope(): PropertyDecorator {
+    return (target: object, propertyKey: string | symbol) => {
+        registerInject(target, propertyKey, getMetadata('design:type', target, propertyKey), undefined, true);
+    };
+}
+
 function registerInject(
     target: object,
     propertyKey: string | symbol,
     classType: ClassType,
     factoryArgs?: InjectMetadata['factoryArgs'],
+    inheritProps?: boolean,
 ): void {
     const data: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, target.constructor) || [];
-    data.push({ propertyKey, classType, factoryArgs });
+    data.push({ propertyKey, classType, factoryArgs, inheritProps });
     defineMetadata(INJECT_METADATA_KEY, data, target.constructor);
 }
 

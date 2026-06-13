@@ -73,9 +73,9 @@ function useCapturedSocket(): CapturedSocket {
 }
 
 function useAgentStream() {
-    const subscribers: Array<(value: string) => void> = [];
+    const subscribers: Array<(value: unknown) => void> = [];
     const agent = {
-        subscribe: (subscriber: (value: string) => void) => {
+        subscribe: (subscriber: (value: unknown) => void) => {
             subscribers.push(subscriber);
             return {
                 unsubscribe: () => {
@@ -87,7 +87,7 @@ function useAgentStream() {
     };
     return {
         agent,
-        emit: (value: string) => {
+        emit: (value: unknown) => {
             for (const subscriber of [...subscribers]) subscriber(value);
         },
         count: () => subscribers.length,
@@ -140,6 +140,26 @@ describe('FSocket', () => {
         expect(decodeWrites(packet, writes)).toEqual([
             { action: SocketEvent.Data, data: 'he' },
             { action: SocketEvent.Data, data: 'llo' },
+            { action: SocketEvent.StreamEnd, data: true },
+        ]);
+    });
+
+    test('forwards structured agent signals without string coercion', async () => {
+        const reply = { type: 'reply', chunk: 'hello' };
+        const done = { type: 'done', chunk: '' };
+        const { handler, packet } = await useSocketHandler({
+            onNext: async (_packet, stream) => {
+                stream.emit(reply);
+                stream.emit(done);
+            },
+        });
+        const { socket, writes } = useCapturedSocket();
+
+        await handler.data(socket, packet.encode({ action: SocketEvent.User, data: 'hello' }));
+
+        expect(decodeWrites(packet, writes)).toEqual([
+            { action: SocketEvent.Data, data: reply },
+            { action: SocketEvent.Data, data: done },
             { action: SocketEvent.StreamEnd, data: true },
         ]);
     });

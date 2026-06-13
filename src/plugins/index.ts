@@ -1,2 +1,2 @@
-export * from './module';
 export * from './tools';
+export * from './module';

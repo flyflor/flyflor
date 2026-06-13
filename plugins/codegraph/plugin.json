@@ -1,8 +1,0 @@
-{
-    "name": "codegraph",
-    "source": "https://github.com/colbymchenry/codegraph",
-    "version": "",
-    "platform": "",
-    "binary": "bin/<platform>/codegraph",
-    "sha256": ""
-}

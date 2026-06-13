@@ -10,11 +10,6 @@ export abstract class FService extends FlyFlor {}
 export abstract class FComponent extends FService {}
 
 /**
- * Base class for path-bound file objects. A file object owns a concrete filesystem path and its loaded state.
- */
-export abstract class FFile extends FComponent {}
-
-/**
  * Base class for module boundaries declared with `@Module()` (capillary, ipc, guard, agent, root).
  */
 export abstract class FModule extends FComponent {}
@@ -24,17 +19,11 @@ export abstract class FModule extends FComponent {}
  */
 export abstract class FRepo extends FService {}
 
-export type PluginSignal<TData = unknown> =
-    | { type: 'start'; plugin: string; data?: TData }
-    | { type: 'delta'; plugin: string; data: TData }
-    | { type: 'end'; plugin: string; data?: TData }
-    | { type: 'error'; plugin: string; error: Error };
-
 /**
  * Base class for external plugin boundaries (classes decorated with `@Plugin()`).
  * Plugins are active observation objects: they can expose methods and emit turn-local signals.
  */
-export abstract class FPlugin<TSignal = PluginSignal> extends Subject<TSignal> {}
+export abstract class FTool<T = object | number | string | boolean | undefined> extends Subject<T> {}
 
 /**
  * Base class for permission/policy subscribers (classes decorated with `@Guard()`).
@@ -57,24 +46,16 @@ export abstract class FSandBox extends FGuard {}
  * via `listModule(FAgent)` and to manage their lifecycles. An agent's `chat` is the canonical
  * entry point: the runtime never inspects or rewrites the agent's system prompt.
  */
-export abstract class FAgent<T = object | number | string | boolean | undefined> extends Subject<T> {}
+export abstract class FAgentAtom<T = object | number | string | boolean | undefined> extends Subject<T> {
+    protected emit(value: T): void {
+        super.next(value);
+    }
+}
+export abstract class FAgent<T> extends FAgentAtom<T> {}
 
 /**
  * One structured signal emitted by a cortex stream (e.g. `Brain`).
  * `delta` carries an incremental text fragment; `done` marks the end of a reflex. Isomorphic to
  * `PluginSignal` so reflection/tool signals can extend this union later without changing the seam.
  */
-export type AgentSignal =
-    | { type: 'delta'; text: string }
-    | { type: 'done' };
-
-/**
- * Base class for cortical signal transforms ("synapse" semantic).
- *
- * A cortex receives an assembled input, turns it into an output `Observable`, and is itself a
- * `Subject` others can subscribe to or pipe through — the reusable primitive for the neural network.
- * Subclasses own only the wire of one reflex: `transform(input)` returns the cold output stream.
- */
-export abstract class FCortex<I, O> extends Subject<O> {
-    public abstract transform(input: I): Observable<O>;
-}
+export type AgentSignal = { type: 'delta'; text: string } | { type: 'done' };

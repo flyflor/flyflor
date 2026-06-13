@@ -1,6 +1,7 @@
 import { type FModelConfiguration, type FModelProtocolConfiguration, FModelProtocolName } from '@/config';
 import { anthropicMessagesAdapter, awsBedrockConverseAdapter, cohereChatAdapter, googleGeminiGenerateContentAdapter, huggingFaceAdapter, lmStudioAdapter, ollamaAdapter, openAIChatCompletionsAdapter, openAIResponsesAdapter, vllmAdapter } from './protocols';
-import type { AgentMemory, LlmByteStreamReader, ProtocolAdapter, ProtocolBuildContext, StreamingState } from './types';
+import type { AgentMemory } from '@/agent/memory';
+import type { LlmByteStreamReader, ProtocolAdapter, ProtocolBuildContext, StreamingState } from './types';
 
 /**
  * Default OpenAI-compatible negotiation: stream first, then fall back to Responses.

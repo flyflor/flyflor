@@ -1,13 +1,4 @@
-import {
-    INIT_METADATA_KEY,
-    INJECT_METADATA_INSTANCE_KEY,
-    INJECT_METADATA_KEY,
-    MODULE_METADATA_KEY,
-    PROVIDER_SINGLETON_KEY,
-    type ClassType,
-    type InjectInstanceMetadata,
-    type InjectMetadata,
-} from './types';
+import { INIT_METADATA_KEY, INJECT_METADATA_INSTANCE_KEY, INJECT_METADATA_KEY, MODULE_METADATA_KEY, PROVIDER_SINGLETON_KEY, type ClassType, type InjectInstanceMetadata, type InjectMetadata } from './types';
 
 export interface InjectConfig {
     key?: string;
@@ -24,9 +15,6 @@ export interface MetadataQueue {
 
 export const CONST_METADATA_KEY = 'CONST_METADATA_KEY';
 const CONSTRUCTOR_PARAM_METADATA_KEY = 'design:paramtypes';
-const CONSTRUCTOR_DEPENDENCY_NOT_FOUND = 'Constructor dependency not found';
-const SYNC_INIT_UNSUPPORTED = 'Synchronous container get() does not support @Init; use getAsync()';
-const SYNC_ASYNC_DEPENDENCY_UNSUPPORTED = 'Synchronous container get() does not support async dependency factories; use getAsync()';
 
 /**
  * 依赖注入容器类，用于管理应用程序的依赖注入 - 单例
@@ -77,18 +65,25 @@ export class Container {
              */
             const injectInstances: InjectInstanceMetadata[] = getMetadata(INJECT_METADATA_INSTANCE_KEY, Module) || getMetadata(INJECT_METADATA_INSTANCE_KEY, Module.prototype) || [];
             for (const inject of injectInstances) {
-                const instance = await inject.instance?.();
+                const instance = await inject.instance?.call(clz);
                 clz[inject.propertyKey] = instance;
             }
             /**
              * 通过 INJECT_METADATA_KEY 注入依赖
              * 为实例化 new Module
              */
-            const injects: InjectMetadata[] = this.getInjectMetadata(Module);
+            const injects: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, Module) || getMetadata(INJECT_METADATA_KEY, Module.prototype) || [];
             for (const inject of injects) {
                 const resolvedProps = inject.factoryArgs ? await inject.factoryArgs.call(clz) : undefined;
-                const props = resolvedProps === undefined ? [] : Array.isArray(resolvedProps) ? resolvedProps : [resolvedProps];
-                const instance = await this.getAsync(inject.classType, ...props);
+                const isInjectSingleton = getMetadata(PROVIDER_SINGLETON_KEY, inject.classType) === true;
+                const injectProps = inject.inheritProps && !isInjectSingleton
+                    ? props
+                    : resolvedProps === undefined
+                        ? []
+                        : Array.isArray(resolvedProps)
+                            ? resolvedProps
+                            : [resolvedProps];
+                const instance = await this.getAsync(inject.classType, ...injectProps);
                 clz[inject.propertyKey] = instance;
             }
             /**
@@ -104,186 +99,26 @@ export class Container {
         }
     }
 
-    /**
-     * Gets one IOC-managed instance through the synchronous path.
-     *
-     * Cached singletons are returned directly, including singletons that were initialized earlier through
-     * `getAsync()`. Fresh synchronous construction is allowed only when the provider graph does not require
-     * `@Init` or any async injection factory.
-     *
-     * @param Module 依赖注入类类型
-     * @param props 传给构造函数的显式参数
-     * @returns 同步可构造的依赖注入类实例
-     */
-    public get<T extends ClassType, P extends unknown[]>(Module: T, ...props: P): InstanceType<T> {
-        if (!this.classList.includes(Module)) this.classList.push(Module);
-        const isSingleton = getMetadata(PROVIDER_SINGLETON_KEY, Module) === true;
-        if (isSingleton && this.singletons.has(Module)) return this.singletons.get(Module) as InstanceType<T>;
-        if (this.hasInit(Module)) {
-            throw Object.assign(Error(SYNC_INIT_UNSUPPORTED), { detail: { module: Module.name } });
-        }
-        const config = getMetadata(MODULE_METADATA_KEY, Module);
-        if ((config?.imports || []).length !== 0) {
-            for (const importModule of config.imports) {
-                this.get(importModule);
-            }
-        }
-        const constructorProps = this.getConstructorProps(Module, this.getModuleImportInstances(Module), props);
-        const clz = new Module(...constructorProps);
-        if (isSingleton) this.singletons.set(Module, clz);
-        try {
-            const injectInstances: InjectInstanceMetadata[] = getMetadata(INJECT_METADATA_INSTANCE_KEY, Module) || getMetadata(INJECT_METADATA_INSTANCE_KEY, Module.prototype) || [];
-            for (const inject of injectInstances) {
-                const instance = inject.instance?.();
-                if (this.isPromiseLike(instance)) {
-                    throw Object.assign(Error(SYNC_ASYNC_DEPENDENCY_UNSUPPORTED), {
-                        detail: { module: Module.name, propertyKey: String(inject.propertyKey) },
-                    });
-                }
-                clz[inject.propertyKey] = instance;
-            }
-            const injects: InjectMetadata[] = this.getInjectMetadata(Module);
-            for (const inject of injects) {
-                const resolvedProps = inject.factoryArgs ? inject.factoryArgs.call(clz) : undefined;
-                if (this.isPromiseLike(resolvedProps)) {
-                    throw Object.assign(Error(SYNC_ASYNC_DEPENDENCY_UNSUPPORTED), {
-                        detail: { module: Module.name, propertyKey: String(inject.propertyKey) },
-                    });
-                }
-                const props = resolvedProps === undefined ? [] : Array.isArray(resolvedProps) ? resolvedProps : [resolvedProps];
-                const instance = this.get(inject.classType, ...props);
-                clz[inject.propertyKey] = instance;
-            }
-            return clz;
-        } catch (error) {
-            if (isSingleton) this.singletons.delete(Module);
-            throw error;
-        }
-    }
-
-    /**
-     * Creates a fresh IOC-owned instance without registering it as a singleton.
-     *
-     * Path-bound objects such as prompt files need independent state per property, but construction still stays
-     * inside the container boundary rather than leaking `new` into business code.
-     *
-     * @param Module 依赖注入类类型
-     * @param props 显式传给构造函数的参数
-     * @returns 未缓存的新实例
-     */
     public create<T extends ClassType, P extends unknown[]>(Module: T, ...props: P): InstanceType<T> {
         if (!this.classList.includes(Module)) this.classList.push(Module);
-        const constructorProps = this.getConstructorProps(Module, this.getModuleImportInstances(Module), props);
-        return new Module(...constructorProps);
+        return new Module(...props);
     }
 
-    /**
-     * Collects initialized instances reachable from a module's `imports` graph.
-     *
-     * @param Module 依赖注入类类型
-     * @returns 当前模块 imports 图中已经实例化完成的对象
-     */
-    private getModuleImportInstances(Module: ClassType): Array<{ classType: ClassType; instance: InstanceType<ClassType> }> {
-        const instances: Array<{ classType: ClassType; instance: InstanceType<ClassType> }> = [];
-        for (const classType of this.getModuleImportClassTypes(Module)) {
-            if (!this.singletons.has(classType)) continue;
-            instances.push({ classType, instance: this.singletons.get(classType) as InstanceType<ClassType> });
-        }
-        return instances;
-    }
-
-    /**
-     * Walks a module's `imports` graph so constructor injection can resolve direct and nested imports.
-     *
-     * @param Module 依赖注入类类型
-     * @param visited 已访问的 import 类型集合，用于避免重复递归
-     * @returns 去重后的 imports 图类型列表
-     */
-    private getModuleImportClassTypes(Module: ClassType, visited = new Set<ClassType>()): ClassType[] {
+    public getModuleImportInstances(Module: ClassType): Array<{ classType: ClassType; instance: InstanceType<ClassType> }> {
         const config = getMetadata(MODULE_METADATA_KEY, Module);
         const imports: ClassType[] = config?.imports || [];
-        const classTypes: ClassType[] = [];
-        for (const importModule of imports) {
-            if (visited.has(importModule)) continue;
-            visited.add(importModule);
-            classTypes.push(importModule, ...this.getModuleImportClassTypes(importModule, visited));
-        }
-        return classTypes;
+        return imports.filter((classType) => this.singletons.has(classType)).map((classType) => ({ classType, instance: this.singletons.get(classType) as InstanceType<ClassType> }));
     }
 
-    /**
-     * Resolves constructor arguments from explicit `getAsync` props first, then from the module `imports` graph
-     * by reflected parameter type.
-     *
-     * @param Module 依赖注入类类型
-     * @param importInstances 当前模块 imports 中已经实例化完成的对象
-     * @param props 调用方显式传入的构造函数参数
-     * @returns 最终传给构造函数的参数列表
-     */
-    private getConstructorProps<P extends unknown[]>(
-        Module: ClassType,
-        importInstances: Array<{ classType: ClassType; instance: InstanceType<ClassType> }>,
-        props: P,
-    ): unknown[] {
+    public getConstructorProps<P extends unknown[]>(Module: ClassType, importInstances: Array<{ classType: ClassType; instance: InstanceType<ClassType> }>, props: P): unknown[] {
         const paramTypes: ClassType[] = getMetadata(CONSTRUCTOR_PARAM_METADATA_KEY, Module) || [];
         if (paramTypes.length === 0) return props;
-        const constructorProps = paramTypes.map((paramType, index) => {
+        return paramTypes.map((paramType, index) => {
             if (index < props.length) return props[index];
-            const instance = this.getConstructorImportInstance(paramType, importInstances);
-            if (instance !== undefined) return instance;
-            throw Object.assign(Error(CONSTRUCTOR_DEPENDENCY_NOT_FOUND), {
-                detail: {
-                    module: Module.name,
-                    index,
-                    paramType: paramType?.name,
-                    imports: importInstances.map((item) => item.classType.name),
-                },
-            });
+            const matched = importInstances.find((item) => item.classType === paramType);
+            if (matched) return matched.instance;
+            throw Error(`Constructor dependency not found: ${Module.name}[${index}]`);
         });
-        if (props.length > paramTypes.length) constructorProps.push(...props.slice(paramTypes.length));
-        return constructorProps;
-    }
-
-    /**
-     * Finds an import-graph instance for a constructor parameter by exact reflected class type.
-     *
-     * @param paramType 构造函数参数的反射类型
-     * @param importInstances 当前模块 imports 中已经实例化完成的对象
-     * @returns 匹配到的 import 实例；未匹配时返回 `undefined` 交由调用方抛错
-     */
-    private getConstructorImportInstance(
-        paramType: ClassType,
-        importInstances: Array<{ classType: ClassType; instance: InstanceType<ClassType> }>,
-    ): InstanceType<ClassType> | undefined {
-        const exactImport = importInstances.find((item) => item.classType === paramType);
-        return exactImport?.instance;
-    }
-
-    /**
-     * Reads dependency metadata from the constructor first, then the prototype for compatibility with both
-     * decorator storage styles. Duplicate property bindings keep the first declaration.
-     *
-     * @param Module 依赖注入类类型
-     * @returns 去重后的属性注入元数据
-     */
-    private getInjectMetadata(Module: ClassType): InjectMetadata[] {
-        const injects: InjectMetadata[] = [...(getMetadata(INJECT_METADATA_KEY, Module) || []), ...(getMetadata(INJECT_METADATA_KEY, Module.prototype) || [])];
-        const unique: InjectMetadata[] = [];
-        for (const inject of injects) {
-            if (unique.some((item) => item.propertyKey === inject.propertyKey)) {
-                continue;
-            }
-            unique.push(inject);
-        }
-        return unique;
-    }
-
-    private hasInit(Module: ClassType): boolean {
-        return getMetadata(INIT_METADATA_KEY, Module.prototype) !== undefined || getMetadata(INIT_METADATA_KEY, Module) !== undefined;
-    }
-
-    private isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-        return typeof value === 'object' && value !== null && typeof (value as PromiseLike<unknown>).then === 'function';
     }
 
     /**

@@ -1,10 +1,10 @@
 import type { FModelConfiguration } from '@/config';
-import { Config, FService, Service } from '@/core';
+import { Config, FAgentAtom, Provide } from '@/core';
 import { createIntelligenceTurnStream } from './factory';
-import type { AgentMemory } from './types';
+import type { AgentMemory } from '@/agent/memory';
 
-@Service()
-export class Intelligence extends FService {
+@Provide()
+export class Intelligence extends FAgentAtom {
     @Config('model')
     public config!: FModelConfiguration;
 
@@ -33,7 +33,7 @@ export class Intelligence extends FService {
     /**
      * Runs one full LLM call by consuming the same stream used by `reader()`.
      */
-    public async complete(messages: AgentMemory[]): Promise<string> {
+    public async completeText(messages: AgentMemory[]): Promise<string> {
         const reader = this.reader(messages);
         let content = '';
         try {

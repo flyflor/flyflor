@@ -4,7 +4,7 @@ import { unlink } from 'fs/promises';
 import { ConfigComponent } from '@/config';
 import type { UnixSocketListener } from 'bun';
 import { join } from 'path';
-import { ROOT_PATH } from '@/config/config.constants';
+import { ROOT_PATH } from '@/config';
 import { FSocket } from './socket';
 
 /** Windows named-pipe prefix used internally while the public endpoint remains `./flyflor.sock`. */

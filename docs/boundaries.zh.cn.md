@@ -40,7 +40,7 @@ legacy dotted names 可以等专门迁移再处理。新代码不应在 folder �
   - `src/core/prompt/decorator.ts`：`@Prompt()`。
   - `src/core/logger/decorator.ts`：`@Logger()`。
 - Base classes：
-  - `src/core/ioc/abstracts.ts`：`FlyFlor`、`FService`、`FComponent`、`FFile`、`FModule`、`FRepo`、`FPlugin`、`FGuard`、`FSandBox`、`FAgent` 和 `FCortex`。
+  - `src/core/ioc/abstracts.ts`：`FlyFlor`、`FService`、`FComponent`、`FModule`、`FRepo`、`FPlugin`、`FGuard`、`FSandBox`、`FAgent` 和 `FCortex`。
 - IOC：
   - `src/core/ioc/container.ts`：`Container`、`useContainer()`、construction、injection、lifecycle 和 metadata helpers。
 - Barrels：

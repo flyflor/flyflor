@@ -1,4 +1,4 @@
 import { FTool, Tool } from '@/core';
 
 @Tool()
-export class ReadFileTool extends FTool {}
+export class EditFileTool extends FTool {}

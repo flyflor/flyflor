@@ -9,6 +9,7 @@ export interface InjectMetadata {
     propertyKey: string | symbol;
     classType: ClassType;
     factoryArgs?: (this: any) => unknown | unknown[] | Promise<unknown | unknown[]>;
+    inheritProps?: boolean;
 }
 export interface InjectInstanceMetadata {
     propertyKey: string | symbol;

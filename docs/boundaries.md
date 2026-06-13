@@ -40,7 +40,7 @@ Legacy dotted names may remain until a focused migration. New code should not ad
   - `src/core/prompt/decorator.ts`: `@Prompt()`.
   - `src/core/logger/decorator.ts`: `@Logger()`.
 - Base classes:
-  - `src/core/ioc/abstracts.ts`: `FlyFlor`, `FService`, `FComponent`, `FFile`, `FModule`, `FRepo`, `FPlugin`, `FGuard`, `FSandBox`, `FAgent`, and `FCortex`.
+  - `src/core/ioc/abstracts.ts`: `FlyFlor`, `FService`, `FComponent`, `FModule`, `FRepo`, `FPlugin`, `FGuard`, `FSandBox`, `FAgent`, and `FCortex`.
 - IOC:
   - `src/core/ioc/container.ts`: `Container`, `useContainer()`, construction, injection, lifecycle, and metadata helpers.
 - Barrels:

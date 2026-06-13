@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { dirname, extname, join } from 'path';
 import { JSON5 } from 'bun';
 import { isPlainObject } from 'lodash-es';
-import { FFile, useContainer } from '@/core/ioc';
+import { FService, useContainer } from '@/core/ioc';
 import { FILE_TEXT_ENCODING, JSONC_FILE_EXTENSION, MARKDOWN_FILE_EXTENSION } from './constants';
 import type { FileData, FileEntity, FileWriteOptions } from './types';
 
@@ -12,7 +12,7 @@ type FileChildren<TData> = NonNullable<TData> extends Record<string, unknown>
 
 export type FileNode<TData = FileData> = FileService<TData> & FileChildren<TData>;
 
-export class FileService<TData = FileData> extends FFile implements FileEntity<TData> {
+export class FileService<TData = FileData> extends FService implements FileEntity<TData> {
     public data!: TData;
 
     public children: Record<string, FileService<any>> = {};

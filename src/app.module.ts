@@ -1,5 +1,5 @@
-import { FModule, Init, Inject, Module } from '@/core';
-import { PluginsModule } from '@/plugins';
+import { FModule, Inject, Module } from '@/core';
+import { PluginModule } from '@/plugins';
 import { IPCService } from './neural/ipc';
 import { Synapse } from '@/neural';
 
@@ -11,7 +11,7 @@ import { Synapse } from '@/neural';
  * import (convention > configuration: `listModule(FAgent)` is the discovery surface for agents).
  */
 @Module({
-    imports: [PluginsModule],
+    imports: [PluginModule],
 })
 export class AppModule extends FModule {
     @Inject()

@@ -1,23 +1,5 @@
+import type { AgentMemory } from '@/agent/memory';
 import { type FModelConfiguration, type FModelProtocolConfiguration, FModelProtocolName } from '@/config';
-
-/**
- * Roles accepted by provider chat protocols.
- * These values are provider protocol strings, not Flyflor context section names.
- */
-export enum AgentChatRole {
-    System = 'system',
-    User = 'user',
-    Assistant = 'assistant',
-}
-
-/**
- * One message sent to the configured LLM provider.
- * `role` is the provider protocol role; `content` is the text payload for that message.
- */
-export interface AgentMemory {
-    role: AgentChatRole;
-    content: string;
-}
 
 export interface ProviderErrorShape {
     message?: string;

@@ -1,11 +1,10 @@
 import { FModelProtocolName } from '@/config';
 import type { ProtocolAdapter } from '../types';
-import { openAIChatCompletionsAdapter } from './openai-chat-completions';
+import { openAIChatCompletionsAdapter } from './openai.chat.completions';
 
-export const lmStudioAdapter: ProtocolAdapter = {
+export const huggingFaceAdapter: ProtocolAdapter = {
     ...openAIChatCompletionsAdapter,
-    name: FModelProtocolName.LMStudio,
+    name: FModelProtocolName.HuggingFace,
     defaultPath: '/v1/chat/completions',
-    auth: 'optionalBearer',
     usesV1Fallback: false,
 };

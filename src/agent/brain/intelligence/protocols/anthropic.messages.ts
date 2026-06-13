@@ -1,5 +1,6 @@
 import { FModelProtocolName } from '@/config';
-import { AgentChatRole, type AgentMemory, type ProtocolAdapter, type ProtocolBuildContext, type ProviderErrorShape } from '../types';
+import type { ProtocolAdapter, ProtocolBuildContext, ProviderErrorShape } from '../types';
+import { AgentChatRole, type AgentMemory } from '@/agent';
 
 export const anthropicMessagesAdapter: ProtocolAdapter = {
     name: FModelProtocolName.AnthropicMessages,

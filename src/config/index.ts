@@ -1,2 +1,2 @@
-export * from './config.component';
-export * from './config.constants';
+export * from './component';
+export * from './constants';

@@ -1,35 +1,90 @@
 {
     // EN: Protocol package schema version.
     // ZH: 协议包结构版本。
-    version: 1,
-
-    // EN: Agent package name.
-    // ZH: 智能体协议包名称。
-    name: "flyflor",
-
+    "version": 1,
     // EN: Human-readable package description.
     // ZH: 面向人的协议包描述。
-    description: "Flyflor agent protocol package.",
-
+    "description": "Flyflor agent protocol package.",
     // EN: Runtime prompt sections loaded into the model.
     // ZH: 运行时会加载给模型的 prompt section。
-    prompt: {
-        sections: ["SOUL", "USER", "AGENTS", "EXTENSION"],
+    "prompt": {
+        "sections": [
+            "SOUL",
+            "USER",
+            "AGENTS",
+            "EXTENSION"
+        ]
     },
-
     // EN: Controlled protocol-package update policy.
     // ZH: 受控协议包更新策略。
-    protocolPackage: {
+    "protocolPackage": {
         // EN: Files that model-reviewed updates may modify.
         // ZH: 模型审查后的更新允许修改的文件。
-        editable: ["SOUL.md", "USER.md", "EXTENSION.md"],
-
+        "editable": [
+            "SOUL.md",
+            "USER.md",
+            "EXTENSION.md"
+        ],
         // EN: Files that are part of the package but locked against model writes.
         // ZH: 属于协议包但禁止模型写入的文件。
-        locked: ["AGENTS.md"],
-
+        "locked": [
+            "AGENTS.md"
+        ],
         // EN: Metadata files read by runtime services but never injected as prompt sections.
         // ZH: 运行时服务可读取、但不会作为 prompt section 注入的元信息文件。
-        runtimeIgnored: ["config.jsonc"],
-    },
+        "runtimeIgnored": [
+            "config.jsonc"
+        ],
+        // EN: Context blocks used by Callosum when asking the model to plan durable protocol-package writes.
+        // ZH: Callosum 生成长期协议包写入计划时使用的上下文块。
+        "context": {
+            // EN: Root XML tag for the rendered protocol package context.
+            // ZH: 渲染协议包上下文时使用的 XML 根标签。
+            "root": "package",
+            // EN: Ordered files included in the soul write-plan prompt context.
+            // ZH: soul 写入计划 prompt 中按顺序注入的文件。
+            "blocks": [
+                {
+                    // EN: Include this config file as package metadata and policy context.
+                    // ZH: 注入当前配置文件，作为包元信息和写入策略上下文。
+                    "key": "config",
+                    "tag": "config",
+                    "file": "config.jsonc",
+                    "note": "package metadata and write policy"
+                },
+                {
+                    // EN: Include immutable package rules and minimal durable-memory unit definitions.
+                    // ZH: 注入不可写包规则和最小长期记忆单元定义。
+                    "key": "AGENTS",
+                    "tag": "rules",
+                    "file": "AGENTS.md",
+                    "note": "package rules and minimum durable-memory units"
+                },
+                {
+                    // EN: Include editable agent identity, values, style, boundaries, and mission.
+                    // ZH: 注入可编辑的智能体身份、价值观、风格、边界和使命。
+                    "key": "SOUL",
+                    "tag": "editable",
+                    "file": "SOUL.md",
+                    "note": "agent identity, values, style, boundaries, and mission"
+                },
+                {
+                    // EN: Include editable user profile, relationship, preferences, strengths, goals, and expectations.
+                    // ZH: 注入可编辑的用户画像、关系、偏好、擅长领域、目标和沟通期待。
+                    "key": "USER",
+                    "tag": "editable",
+                    "file": "USER.md",
+                    "note": "user profile, relationship, preferences, strengths, goals, and expectations"
+                },
+                {
+                    // EN: Include editable long-term tools, integrations, infrastructure, and reusable workflows.
+                    // ZH: 注入可编辑的长期工具、集成、基础设施和可复用工作流。
+                    "key": "EXTENSION",
+                    "tag": "editable",
+                    "file": "EXTENSION.md",
+                    "note": "long-term tools, integrations, infrastructure, and reusable workflows"
+                }
+            ]
+        }
+    }
 }

@@ -7,7 +7,7 @@ Flyflor 默认使用共享的 `oop-code-redlines` skill 作为工程纪律。在
 ## Flyflor 代码规则
 
 1. 代码是事实源。文档只能描述已经实现的行为，或者明确标注为计划。
-2. 运行时代码以 OOP 为主。业务行为必须归属到继承正确核心基类的 class 上：`FModule`、`FService`、`FComponent`、`FFile`、`FRepo`、`FPlugin`、`FGuard`、`FSandBox`、`FAgent` 或 `FCortex`。
+2. 运行时代码以 OOP 为主。业务行为必须归属到继承正确核心基类的 class 上：`FModule`、`FService`、`FComponent`、`FRepo`、`FPlugin`、`FGuard`、`FSandBox`、`FAgent` 或 `FCortex`。
 3. Composition 风格的 exported function 只允许出现在明确边界：decorator、factory、bootstrap、scripts、protocol adapter 和低层 framework helper。
 4. 方法体 300 行是软上限，500 行是硬上限。500 行以内不要乱抽 helper；只有当拆分能命名真实对象动作、隔离副作用、形成复用或降低真实复杂度时才拆。
 5. 目录名表达语义名词。文件名表达目录内角色，例如 `index.ts`、`service.ts`、`types.ts`、`constants.ts`、`decorator.ts`、`factory.ts`、`container.ts`、`abstracts.ts`、`socket.ts`、`module.ts`、`entity.ts`、`repository.ts` 和 `*.test.ts`。

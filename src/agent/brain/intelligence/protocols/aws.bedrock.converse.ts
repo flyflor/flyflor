@@ -1,5 +1,6 @@
 import { FModelProtocolName } from '@/config';
-import { AgentChatRole, type AgentMemory, type ProtocolAdapter, type ProtocolBuildContext } from '../types';
+import type { ProtocolAdapter, ProtocolBuildContext } from '../types';
+import { AgentChatRole, type AgentMemory } from '@/agent';
 
 export const awsBedrockConverseAdapter: ProtocolAdapter = {
     name: FModelProtocolName.AWSBedrockConverse,

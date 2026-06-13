@@ -76,7 +76,6 @@ Core base classes live in `src/core/ioc/abstracts.ts`:
 - `FModule`: module boundary.
 - `FService`: behavior-owning service object.
 - `FComponent`: stateful component or lifecycle owner.
-- `FFile`: path-bound file object.
 - `FRepo`: repository/entity SQL owner.
 - `FPlugin`: plugin boundary and RxJS `Subject` for plugin signals.
 - `FGuard` and `FSandBox`: policy scopes.

@@ -60,6 +60,6 @@ export class Synapse<T extends SocketPacket = SocketPacket> extends Subject<T> {
         if (typeof packet.data !== 'string' || packet.data.trim().length === 0) {
             throw Object.assign(Error('User message must be a non-empty string'), { detail: { data: packet.data } });
         }
-        await this.agent.next(packet.data.trim());
+        await this.agent.run(packet.data.trim());
     }
 }

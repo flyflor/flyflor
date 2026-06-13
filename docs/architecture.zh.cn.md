@@ -76,7 +76,6 @@ constructor injection 基于 import graph：只有当某个 initialized imported
 - `FModule`：module boundary。
 - `FService`：behavior-owning service object。
 - `FComponent`：stateful component 或 lifecycle owner。
-- `FFile`：path-bound file object。
 - `FRepo`：repository/entity SQL owner。
 - `FPlugin`：plugin boundary，也是 plugin signals 的 RxJS `Subject`。
 - `FGuard` 和 `FSandBox`：policy scopes。

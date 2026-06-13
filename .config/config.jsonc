@@ -261,9 +261,9 @@
     // provider: profile 使用的 provider key。
     // ConfigComponent 已有 main 占位默认值；需要多 agent 或覆盖模型时取消注释。
     // "agents": {
-    //     "main": {
-    //         "name": "main",
-    //         "model": "deepseek-chat",
+    //     "flyflor": {
+    //         "name": "flyflor",
+    //         "model": "deepseek-v4-flash",
     //         "provider": "deepseek",
     //     },
     // },

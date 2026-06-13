@@ -708,6 +708,30 @@
                 chat.scrollTop = chat.scrollHeight;
             }
 
+            function normalizeAgentSignal(data) {
+                if (typeof data === 'string') return { type: 'reply', chunk: data };
+                if (!data || typeof data !== 'object') return { type: 'reply', chunk: String(data ?? '') };
+                return {
+                    type: typeof data.type === 'string' ? data.type : 'reply',
+                    chunk: typeof data.chunk === 'string' ? data.chunk : '',
+                };
+            }
+
+            function renderAgentSignal(data) {
+                const signal = normalizeAgentSignal(data);
+                if (signal.type === 'reply') {
+                    appendAgentDelta(signal.chunk);
+                    return;
+                }
+                if (signal.type === 'done') {
+                    finishAgentStream();
+                    return;
+                }
+                if (signal.chunk.length > 0) {
+                    addMessage(signal.chunk, 'system');
+                }
+            }
+
             function finishAgentStream() {
                 if (currentAgentMessage && currentAgentMessage.textContent.trim().length === 0) {
                     currentAgentMessage.remove();
@@ -788,7 +812,7 @@
                     try {
                         const msg = JSON.parse(event.data);
                         if (msg.action === 'data') {
-                            appendAgentDelta(String(msg.data ?? ''));
+                            renderAgentSignal(msg.data);
                             return;
                         }
                         if (msg.action === 'streamEnd') {
@@ -796,7 +820,7 @@
                             return;
                         }
                         if (msg.action === 'agent') {
-                            appendAgentDelta(String(msg.data ?? ''));
+                            renderAgentSignal(msg.data);
                             finishAgentStream();
                             return;
                         }

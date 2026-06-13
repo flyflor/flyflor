@@ -1,9 +1,9 @@
-import { FService, Service } from '@/core';
-import { AgentChatRole, type AgentMemory } from './intelligence';
+import { FAgentAtom, FService, Service } from '@/core';
+import { AgentChatRole, type AgentMemory } from '../memory';
 
 // 晶体智力
 @Service()
-export class Crystall extends FService {
+export class Crystall extends FAgentAtom {
     public prepareTurn(messages: AgentMemory[]): AgentMemory[] {
         return messages;
     }
