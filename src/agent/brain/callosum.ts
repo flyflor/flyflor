@@ -1,6 +1,5 @@
 import { type FAgentProfileConfiguration } from '@/config';
-import { FAgentAtom, Inject, Logger, Prompt, PromptService, Provide, type FLogger } from '@/core';
-import { Intelligence } from './intelligence';
+import { FAgentAtom, Logger, Prompt, PromptService, Provide, type FLogger } from '@/core';
 import { AgentChatRole, type AgentMemory } from '@/agent/memory';
 
 export enum CallosumPrompt {
@@ -11,6 +10,10 @@ export enum CallosumSignalType {
     Soul = 'soul',
     Reply = 'reply',
     Research = 'research',
+    ResearchSummary = 'research_summary',
+    Clarification = 'clarification',
+    ToolStart = 'tool_start',
+    ToolResult = 'tool_result',
     Done = 'done',
 }
 
@@ -26,14 +29,12 @@ export type CallosumSignal<TType extends CallosumSignalType = CallosumSignalType
     ? {
           type: TType;
           chunk: TType extends CallosumSignalType.Done ? '' : string;
+          data?: unknown;
       }
     : never;
 
 @Provide()
 export class Callosum extends FAgentAtom<CallosumSignal> {
-    @Inject()
-    public intelligence!: Intelligence;
-
     @Prompt('prompts/callosum')
     public prompt!: PromptService<CallosumPrompt>;
 
@@ -48,7 +49,7 @@ export class Callosum extends FAgentAtom<CallosumSignal> {
      * 根据 ROUTE 先判断本轮路径。
      * Callosum 只负责 route，不执行 reply、research 或 soul action。
      */
-    public async run(memory: AgentMemory[]): Promise<void> {
+    public async run(memory: AgentMemory[], completeText: (messages: AgentMemory[]) => Promise<string>): Promise<void> {
         this.log.debug('callosum.start');
         let latestUserContent = '';
         for (let index = memory.length - 1; index >= 0; index -= 1) {
@@ -59,7 +60,7 @@ export class Callosum extends FAgentAtom<CallosumSignal> {
         }
 
         // route 只做轻量分流，故意不接收普通 agent system、协议包和历史，避免把 action 职责污染到路由判断。
-        const routeContent = await this.intelligence.completeText([
+        const routeContent = await completeText([
             { role: AgentChatRole.System, content: String(this.prompt.data.ROUTE?.data) },
             { role: AgentChatRole.User, content: `<latest_user_message>\n${latestUserContent}\n</latest_user_message>` },
         ]);

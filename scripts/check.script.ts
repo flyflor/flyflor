@@ -78,12 +78,15 @@ const ROLE_DIRECTORIES = new Set([
     join('src', 'core', 'ioc'),
     join('src', 'core', 'logger'),
     join('src', 'core', 'prompt'),
+    join('src', 'config'),
     join('src', 'agent', 'callosum'),
     join('src', 'agent', 'brain', 'investigation'),
+    join('src', 'agent', 'brain', 'research'),
     join('src', 'agent', 'brain', 'intelligence'),
     join('src', 'neural', 'ipc'),
     join('src', 'neural', 'packet'),
     join('src', 'plugins'),
+    join('src', 'plugins', 'tools'),
 ]);
 
 /** Existing compact object files are preserved until a dedicated naming migration finalizes the convention. */
@@ -91,11 +94,16 @@ const COMPACT_TYPESCRIPT_SOURCE_FILES = new Set([
     join('src', 'agent', 'brain', 'brain.ts'),
     join('src', 'agent', 'brain', 'callosum.ts'),
     join('src', 'agent', 'brain', 'crystall.ts'),
+    join('src', 'config', 'component.ts'),
     join('src', 'plugins', 'tools', 'codegraph.ts'),
+    join('src', 'plugins', 'tools', 'ask.ts'),
+    join('src', 'plugins', 'tools', 'boundary.ts'),
+    join('src', 'plugins', 'tools', 'confirm.ts'),
     join('src', 'plugins', 'tools', 'glob.ts'),
     join('src', 'plugins', 'tools', 'grep.ts'),
     join('src', 'plugins', 'module.ts'),
     join('src', 'plugins', 'tools', 'rtk.ts'),
+    join('src', 'plugins', 'tools', 'scraping.ts'),
     join('src', 'plugins', 'tools', 'task.ts'),
     join('src', 'plugins', 'tools', 'todo.ts'),
 ]);

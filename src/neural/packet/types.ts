@@ -28,6 +28,16 @@ export interface SocketPacket<T = unknown> {
 }
 
 /**
+ * Browser/IPC user payload accepted by Flyflor.
+ * Legacy clients may still send `data` as a raw string. Structured clients can add a per-turn
+ * working directory used by research tools when resolving relative paths.
+ */
+export interface SocketUserPayload {
+    text: string;
+    workingDirectory?: string;
+}
+
+/**
  * Result of decoding one raw IPC socket chunk.
  */
 export interface PacketDecodeResult<T = unknown> {

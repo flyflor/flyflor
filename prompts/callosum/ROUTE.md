@@ -17,7 +17,7 @@ Route meanings:
 
 - `soul`: choose this only when the latest user message explicitly asks to change durable agent identity, user profile, stable preferences, long-lived collaboration context, or durable capability notes.
 - `reply`: choose this when the assistant can answer directly without tools, files, external lookup, codebase investigation, or durable memory writes.
-- `research`: choose this when the answer needs fresh external lookup, file/tool evidence, codebase investigation, or any tool-backed research before replying.
+- `research`: choose this when the answer needs fresh external lookup, file/tool evidence, codebase investigation, reference-project comparison, user-intent clarification, or any tool-backed research before replying.
 
 Rules:
 
@@ -29,6 +29,7 @@ Rules:
 - Do not answer the user.
 - Do not write files.
 - If unsure, choose `research`.
+- If the latest user message answers a previous clarification question, choose `research` so the pending research task can resume.
 
 Examples:
 

@@ -14926,3 +14926,1822 @@
 [DEBUG]  2026-06-14T12:38:39.612Z  Callosum
   | callosum.route
   | reply
+[INFO ]  2026-06-14T15:24:44.544Z  FSocket
+  | open
+[DEBUG]  2026-06-14T15:24:53.395Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 6c 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bb 94 e7 bb 86 e7 a0 94 e7 a9 b6 e4 b8 8b e8 bf ... 66 more bytes>
+[DEBUG]  2026-06-14T15:24:53.397Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '仔细研究下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/reference'
+  | }
+[DEBUG]  2026-06-14T15:24:53.401Z  Agent
+  | turn.start
+  | 仔细研究下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/reference
+[DEBUG]  2026-06-14T15:24:53.403Z  Brain
+  | brain.start
+[DEBUG]  2026-06-14T15:24:53.403Z  Callosum
+  | callosum.start
+[DEBUG]  2026-06-14T15:24:55.069Z  Callosum
+  | callosum.route
+  | research
+[INFO ]  2026-06-14T15:31:19.539Z  Research
+  | research.start
+  | {
+  |   awaiting: undefined,
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   pending: false,
+  |   summary: undefined
+  | }
+[DEBUG]  2026-06-14T15:31:19.542Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: undefined,
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T15:31:19.542Z  Research
+  | research.plan.request
+  | {
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   summary: undefined,
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T15:31:19.543Z  Research
+  | research.plan.raw
+  | {
+  |   content: '{"action":"ask","summary":"Need scope clarification.","question":"Which scope?","options":[{"id":"local","label":"Local","description":"Use local files.","recommended":true}]}',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:31:19.544Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'ask',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:31:19.544Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: false,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:31:19.545Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'ask',
+  |   evidenceCount: 0,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:31:19.545Z  Research
+  | research.ask
+  | {
+  |   options: [
+  |     {
+  |       description: 'Use local files.',
+  |       id: 'local',
+  |       label: 'Local',
+  |       recommended: true
+  |     }
+  |   ],
+  |   question: 'Which scope?',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:31:19.546Z  Research
+  | research.pending
+  | {
+  |   awaiting: 'ask',
+  |   evidenceCount: 0,
+  |   question: 'Which scope?',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:31:19.548Z  Research
+  | research.start
+  | {
+  |   awaiting: 'confirm',
+  |   clarification: 'yes',
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   pending: true,
+  |   summary: 'Need scope clarification.'
+  | }
+[DEBUG]  2026-06-14T15:31:19.549Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T15:31:19.549Z  Research
+  | research.plan.request
+  | {
+  |   clarification: 'yes',
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T15:31:19.549Z  Research
+  | research.plan.raw
+  | {
+  |   content: '{"action":"synthesize","summary":"Ready to answer.","answerPlan":"Answer directly."}',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:31:19.549Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'synthesize',
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:31:19.550Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: true,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:31:19.550Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'synthesize',
+  |   evidenceCount: 0,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:31:19.550Z  Research
+  | research.synthesize
+  | {
+  |   answerPlan: 'Answer directly.',
+  |   evidenceCount: 0,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T15:31:19.550Z  Research
+  | research.commit_user
+  | {
+  |   clarification: 'yes',
+  |   originalUserContent: 'research tools',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:31:19.551Z  Research
+  | research.answer.start
+  | {
+  |   answerPlan: 'Answer directly.',
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:31:19.551Z  Research
+  | research.answer.done
+  | {
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:32:11.413Z  Research
+  | research.start
+  | {
+  |   awaiting: undefined,
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   pending: false,
+  |   summary: undefined
+  | }
+[DEBUG]  2026-06-14T15:32:11.416Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: undefined,
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T15:32:11.416Z  Research
+  | research.plan.request
+  | {
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   summary: undefined,
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T15:32:11.417Z  Research
+  | research.plan.raw
+  | {
+  |   content: '{"action":"ask","summary":"Need scope clarification.","question":"Which scope?","options":[{"id":"local","label":"Local","description":"Use local files.","recommended":true}]}',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:32:11.418Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'ask',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:32:11.418Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: false,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:32:11.419Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'ask',
+  |   evidenceCount: 0,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:32:11.419Z  Research
+  | research.ask
+  | {
+  |   options: [
+  |     {
+  |       description: 'Use local files.',
+  |       id: 'local',
+  |       label: 'Local',
+  |       recommended: true
+  |     }
+  |   ],
+  |   question: 'Which scope?',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:32:11.420Z  Research
+  | research.pending
+  | {
+  |   awaiting: 'ask',
+  |   evidenceCount: 0,
+  |   question: 'Which scope?',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:32:11.422Z  Research
+  | research.start
+  | {
+  |   awaiting: 'confirm',
+  |   clarification: 'yes',
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   pending: true,
+  |   summary: 'Need scope clarification.'
+  | }
+[DEBUG]  2026-06-14T15:32:11.424Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T15:32:11.424Z  Research
+  | research.plan.request
+  | {
+  |   clarification: 'yes',
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T15:32:11.425Z  Research
+  | research.plan.raw
+  | {
+  |   content: '{"action":"synthesize","summary":"Ready to answer.","answerPlan":"Answer directly."}',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:32:11.425Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'synthesize',
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:32:11.425Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: true,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:32:11.425Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'synthesize',
+  |   evidenceCount: 0,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:32:11.425Z  Research
+  | research.synthesize
+  | {
+  |   answerPlan: 'Answer directly.',
+  |   evidenceCount: 0,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T15:32:11.426Z  Research
+  | research.commit_user
+  | {
+  |   clarification: 'yes',
+  |   originalUserContent: 'research tools',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:32:11.426Z  Research
+  | research.answer.start
+  | {
+  |   answerPlan: 'Answer directly.',
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:32:11.427Z  Research
+  | research.answer.done
+  | {
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:35:35.628Z  FSocket
+  | open
+[DEBUG]  2026-06-14T15:35:54.442Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 6f 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bb 94 e7 bb 86 e7 a0 94 e7 a9 b6 e4 b8 8b e8 bf ... 69 more bytes>
+[DEBUG]  2026-06-14T15:35:54.444Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '仔细研究下这个项目  /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli'
+  | }
+[DEBUG]  2026-06-14T15:35:54.447Z  Agent
+  | turn.start
+  | 仔细研究下这个项目  /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+[DEBUG]  2026-06-14T15:35:54.448Z  Brain
+  | brain.start
+[DEBUG]  2026-06-14T15:35:54.448Z  Callosum
+  | callosum.start
+[DEBUG]  2026-06-14T15:35:56.418Z  Callosum
+  | callosum.route
+  | research
+[INFO ]  2026-06-14T15:35:56.420Z  Research
+  | research.start
+  | {
+  |   awaiting: undefined,
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: '仔细研究下这个项目  /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli',
+  |   pending: false,
+  |   summary: undefined
+  | }
+[DEBUG]  2026-06-14T15:35:56.420Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: undefined,
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T15:35:56.421Z  Research
+  | research.plan.request
+  | {
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: '仔细研究下这个项目  /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli',
+  |   summary: undefined,
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T15:36:02.143Z  Research
+  | research.plan.raw
+  | {
+  |   content: `{"action":"read","summary":"Start by reading the flyflor-cli project's package.json to understand its structure and dependencies.","path":"/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli/package.json","maxBytes":10000}`,
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:36:02.144Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'read',
+  |   summary: "Start by reading the flyflor-cli project's package.json to understand its structure and dependencies.",
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:36:02.145Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: false,
+  |   summary: "Start by reading the flyflor-cli project's package.json to understand its structure and dependencies.",
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:36:02.145Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'read',
+  |   evidenceCount: 0,
+  |   summary: "Start by reading the flyflor-cli project's package.json to understand its structure and dependencies.",
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:36:02.146Z  Research
+  | research.tool.start
+  | {
+  |   evidenceCount: 0,
+  |   id: 'read_file-1',
+  |   input: {
+  |     maxBytes: 10000,
+  |     path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli/package.json'
+  |   },
+  |   name: 'read_file',
+  |   summary: "Start by reading the flyflor-cli project's package.json to understand its structure and dependencies.",
+  |   turn: 0
+  | }
+[ERROR]  2026-06-14T15:36:02.149Z  FSocket
+  | data
+  | Error: Tool path is outside allowed research roots
+  |     at resolve (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/plugins/tools/boundary.ts:16:33)
+  |     at execute (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/plugins/tools/read.file.ts:29:36)
+  |     at read (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/agent/brain/research/service.ts:243:44)
+  |     at run (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/agent/brain/research/service.ts:144:42)
+[INFO ]  2026-06-14T15:54:20.744Z  Research
+  | research.start
+  | {
+  |   awaiting: undefined,
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   pending: false,
+  |   summary: undefined,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:54:20.744Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: undefined,
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:54:20.745Z  Research
+  | research.plan.request
+  | {
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   summary: undefined,
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:54:20.745Z  Research
+  | research.plan.raw
+  | {
+  |   content: '{"action":"ask","summary":"Need scope clarification.","question":"Which scope?","options":[{"id":"local","label":"Local","description":"Use local files.","recommended":true}]}',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:20.746Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'ask',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:20.746Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: false,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:20.747Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'ask',
+  |   evidenceCount: 0,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:20.747Z  Research
+  | research.ask
+  | {
+  |   options: [
+  |     {
+  |       description: 'Use local files.',
+  |       id: 'local',
+  |       label: 'Local',
+  |       recommended: true
+  |     }
+  |   ],
+  |   question: 'Which scope?',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:20.748Z  Research
+  | research.pending
+  | {
+  |   awaiting: 'ask',
+  |   evidenceCount: 0,
+  |   question: 'Which scope?',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:20.750Z  Research
+  | research.start
+  | {
+  |   awaiting: 'confirm',
+  |   clarification: 'yes',
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   pending: true,
+  |   summary: 'Need scope clarification.',
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:54:20.750Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:54:20.750Z  Research
+  | research.plan.request
+  | {
+  |   clarification: 'yes',
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:54:20.750Z  Research
+  | research.plan.raw
+  | {
+  |   content: '{"action":"synthesize","summary":"Ready to answer.","answerPlan":"Answer directly."}',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:20.751Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'synthesize',
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:20.751Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: true,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:20.751Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'synthesize',
+  |   evidenceCount: 0,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:20.751Z  Research
+  | research.synthesize
+  | {
+  |   answerPlan: 'Answer directly.',
+  |   evidenceCount: 0,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T15:54:20.751Z  Research
+  | research.commit_user
+  | {
+  |   clarification: 'yes',
+  |   originalUserContent: 'research tools',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:20.752Z  Research
+  | research.answer.start
+  | {
+  |   answerPlan: 'Answer directly.',
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[INFO ]  2026-06-14T15:54:20.752Z  Research
+  | research.answer.done
+  | {
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:47.552Z  Research
+  | research.start
+  | {
+  |   awaiting: undefined,
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   pending: false,
+  |   summary: undefined,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:54:47.552Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: undefined,
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:54:47.553Z  Research
+  | research.plan.request
+  | {
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   summary: undefined,
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:54:47.553Z  Research
+  | research.plan.raw
+  | {
+  |   content: '{"action":"ask","summary":"Need scope clarification.","question":"Which scope?","options":[{"id":"local","label":"Local","description":"Use local files.","recommended":true}]}',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:47.554Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'ask',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:47.554Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: false,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:47.555Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'ask',
+  |   evidenceCount: 0,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:47.555Z  Research
+  | research.ask
+  | {
+  |   options: [
+  |     {
+  |       description: 'Use local files.',
+  |       id: 'local',
+  |       label: 'Local',
+  |       recommended: true
+  |     }
+  |   ],
+  |   question: 'Which scope?',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:47.556Z  Research
+  | research.pending
+  | {
+  |   awaiting: 'ask',
+  |   evidenceCount: 0,
+  |   question: 'Which scope?',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:47.558Z  Research
+  | research.start
+  | {
+  |   awaiting: 'confirm',
+  |   clarification: 'yes',
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   pending: true,
+  |   summary: 'Need scope clarification.',
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:54:47.558Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:54:47.559Z  Research
+  | research.plan.request
+  | {
+  |   clarification: 'yes',
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:54:47.559Z  Research
+  | research.plan.raw
+  | {
+  |   content: '{"action":"synthesize","summary":"Ready to answer.","answerPlan":"Answer directly."}',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:47.559Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'synthesize',
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:47.559Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: true,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:47.560Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'synthesize',
+  |   evidenceCount: 0,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:47.560Z  Research
+  | research.synthesize
+  | {
+  |   answerPlan: 'Answer directly.',
+  |   evidenceCount: 0,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T15:54:47.560Z  Research
+  | research.commit_user
+  | {
+  |   clarification: 'yes',
+  |   originalUserContent: 'research tools',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:54:47.560Z  Research
+  | research.answer.start
+  | {
+  |   answerPlan: 'Answer directly.',
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[INFO ]  2026-06-14T15:54:47.561Z  Research
+  | research.answer.done
+  | {
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:55:30.444Z  Research
+  | research.start
+  | {
+  |   awaiting: undefined,
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   pending: false,
+  |   summary: undefined,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:55:30.445Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: undefined,
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:55:30.446Z  Research
+  | research.plan.request
+  | {
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   summary: undefined,
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:55:30.446Z  Research
+  | research.plan.raw
+  | {
+  |   content: '{"action":"ask","summary":"Need scope clarification.","question":"Which scope?","options":[{"id":"local","label":"Local","description":"Use local files.","recommended":true}]}',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:55:30.447Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'ask',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:55:30.447Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: false,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:55:30.448Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'ask',
+  |   evidenceCount: 0,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:55:30.448Z  Research
+  | research.ask
+  | {
+  |   options: [
+  |     {
+  |       description: 'Use local files.',
+  |       id: 'local',
+  |       label: 'Local',
+  |       recommended: true
+  |     }
+  |   ],
+  |   question: 'Which scope?',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:55:30.448Z  Research
+  | research.pending
+  | {
+  |   awaiting: 'ask',
+  |   evidenceCount: 0,
+  |   question: 'Which scope?',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:55:30.450Z  Research
+  | research.start
+  | {
+  |   awaiting: 'confirm',
+  |   clarification: 'yes',
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   pending: true,
+  |   summary: 'Need scope clarification.',
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:55:30.451Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:55:30.451Z  Research
+  | research.plan.request
+  | {
+  |   clarification: 'yes',
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:55:30.451Z  Research
+  | research.plan.raw
+  | {
+  |   content: '{"action":"synthesize","summary":"Ready to answer.","answerPlan":"Answer directly."}',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:55:30.452Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'synthesize',
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:55:30.452Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: true,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:55:30.452Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'synthesize',
+  |   evidenceCount: 0,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:55:30.453Z  Research
+  | research.synthesize
+  | {
+  |   answerPlan: 'Answer directly.',
+  |   evidenceCount: 0,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T15:55:30.453Z  Research
+  | research.commit_user
+  | {
+  |   clarification: 'yes',
+  |   originalUserContent: 'research tools',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:55:30.453Z  Research
+  | research.answer.start
+  | {
+  |   answerPlan: 'Answer directly.',
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[INFO ]  2026-06-14T15:55:30.454Z  Research
+  | research.answer.done
+  | {
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:58:40.928Z  Research
+  | research.start
+  | {
+  |   awaiting: undefined,
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   pending: false,
+  |   summary: undefined,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:58:40.928Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: undefined,
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:58:40.929Z  Research
+  | research.plan.request
+  | {
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   summary: undefined,
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:58:40.929Z  Research
+  | research.plan.raw
+  | {
+  |   content: '{"action":"ask","summary":"Need scope clarification.","question":"Which scope?","options":[{"id":"local","label":"Local","description":"Use local files.","recommended":true}]}',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:58:40.930Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'ask',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:58:40.930Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: false,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:58:40.931Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'ask',
+  |   evidenceCount: 0,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:58:40.931Z  Research
+  | research.ask
+  | {
+  |   options: [
+  |     {
+  |       description: 'Use local files.',
+  |       id: 'local',
+  |       label: 'Local',
+  |       recommended: true
+  |     }
+  |   ],
+  |   question: 'Which scope?',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:58:40.931Z  Research
+  | research.pending
+  | {
+  |   awaiting: 'ask',
+  |   evidenceCount: 0,
+  |   question: 'Which scope?',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:58:40.934Z  Research
+  | research.start
+  | {
+  |   awaiting: 'confirm',
+  |   clarification: 'yes',
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   pending: true,
+  |   summary: 'Need scope clarification.',
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:58:40.934Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:58:40.935Z  Research
+  | research.plan.request
+  | {
+  |   clarification: 'yes',
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T15:58:40.935Z  Research
+  | research.plan.raw
+  | {
+  |   content: '{"action":"synthesize","summary":"Ready to answer.","answerPlan":"Answer directly."}',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:58:40.936Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'synthesize',
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:58:40.936Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: true,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:58:40.936Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'synthesize',
+  |   evidenceCount: 0,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:58:40.936Z  Research
+  | research.synthesize
+  | {
+  |   answerPlan: 'Answer directly.',
+  |   evidenceCount: 0,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T15:58:40.937Z  Research
+  | research.commit_user
+  | {
+  |   clarification: 'yes',
+  |   originalUserContent: 'research tools',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T15:58:40.937Z  Research
+  | research.answer.start
+  | {
+  |   answerPlan: 'Answer directly.',
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[INFO ]  2026-06-14T15:58:40.938Z  Research
+  | research.answer.done
+  | {
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:04:10.327Z  FSocket
+  | open
+[INFO ]  2026-06-14T16:04:17.884Z  FSocket
+  | close
+  | {
+  |   hasError: false
+  | }
+[INFO ]  2026-06-14T16:04:39.082Z  FSocket
+  | open
+[INFO ]  2026-06-14T16:04:45.227Z  FSocket
+  | close
+  | {
+  |   hasError: false
+  | }
+[INFO ]  2026-06-14T16:05:10.463Z  FSocket
+  | open
+[DEBUG]  2026-06-14T16:05:24.859Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 dd 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 7b 22 74 65 78 74 22 3a 22 e4 bb 94 e7 bb 86 e7 a0 94 ... 179 more bytes>
+[DEBUG]  2026-06-14T16:05:24.861Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: {
+  |     text: '仔细研究下这个项目 仔细研究下这个项目  /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli',
+  |     workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |   }
+  | }
+[DEBUG]  2026-06-14T16:05:24.864Z  Agent
+  | turn.start
+  | {
+  |   context: {
+  |     workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |   },
+  |   text: '仔细研究下这个项目 仔细研究下这个项目  /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli'
+  | }
+[DEBUG]  2026-06-14T16:05:24.865Z  Brain
+  | brain.start
+  | {
+  |   context: {
+  |     workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |   }
+  | }
+[DEBUG]  2026-06-14T16:05:24.866Z  Callosum
+  | callosum.start
+[DEBUG]  2026-06-14T16:05:26.467Z  Callosum
+  | callosum.route
+  | research
+[INFO ]  2026-06-14T16:05:26.469Z  Research
+  | research.start
+  | {
+  |   awaiting: undefined,
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: '仔细研究下这个项目 仔细研究下这个项目  /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli',
+  |   pending: false,
+  |   summary: undefined,
+  |   workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  | }
+[DEBUG]  2026-06-14T16:05:26.470Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: undefined,
+  |   turn: 0,
+  |   workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  | }
+[DEBUG]  2026-06-14T16:05:26.470Z  Research
+  | research.plan.request
+  | {
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: '仔细研究下这个项目 仔细研究下这个项目  /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli',
+  |   summary: undefined,
+  |   turn: 0,
+  |   workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  | }
+[DEBUG]  2026-06-14T16:05:30.323Z  Research
+  | research.plan.raw
+  | {
+  |   content: '{"action":"read","summary":"Starting investigation of flyflor-cli project","path":"/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli/package.json","maxBytes":20000}',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:05:30.325Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'read',
+  |   summary: 'Starting investigation of flyflor-cli project',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:05:30.325Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: false,
+  |   summary: 'Starting investigation of flyflor-cli project',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:05:30.326Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'read',
+  |   evidenceCount: 0,
+  |   summary: 'Starting investigation of flyflor-cli project',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:05:30.326Z  Research
+  | research.tool.start
+  | {
+  |   evidenceCount: 0,
+  |   id: 'read_file-1',
+  |   input: {
+  |     maxBytes: 20000,
+  |     path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli/package.json'
+  |   },
+  |   name: 'read_file',
+  |   summary: 'Starting investigation of flyflor-cli project',
+  |   turn: 0
+  | }
+[ERROR]  2026-06-14T16:05:30.329Z  FSocket
+  | data
+  | Error: Tool path is outside allowed research roots
+  |     at resolve (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/plugins/tools/boundary.ts:19:33)
+  |     at execute (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/plugins/tools/read.file.ts:29:36)
+  |     at read (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/agent/brain/research/service.ts:251:44)
+  |     at run (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/agent/brain/research/service.ts:150:42)
+[INFO ]  2026-06-14T16:13:33.291Z  Research
+  | research.start
+  | {
+  |   awaiting: undefined,
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   pending: false,
+  |   summary: undefined,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T16:13:33.292Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: undefined,
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T16:13:33.292Z  Research
+  | research.plan.request
+  | {
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   summary: undefined,
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T16:13:33.293Z  Research
+  | research.plan.raw
+  | {
+  |   content: '{"action":"ask","summary":"Need scope clarification.","question":"Which scope?","options":[{"id":"local","label":"Local","description":"Use local files.","recommended":true}]}',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:13:33.293Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'ask',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:13:33.294Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: false,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:13:33.294Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'ask',
+  |   evidenceCount: 0,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:13:33.294Z  Research
+  | research.ask
+  | {
+  |   options: [
+  |     {
+  |       description: 'Use local files.',
+  |       id: 'local',
+  |       label: 'Local',
+  |       recommended: true
+  |     }
+  |   ],
+  |   question: 'Which scope?',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:13:33.295Z  Research
+  | research.pending
+  | {
+  |   awaiting: 'ask',
+  |   evidenceCount: 0,
+  |   question: 'Which scope?',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:13:33.297Z  Research
+  | research.start
+  | {
+  |   awaiting: 'confirm',
+  |   clarification: 'yes',
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   pending: true,
+  |   summary: 'Need scope clarification.',
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T16:13:33.297Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: 'Need scope clarification.',
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T16:13:33.297Z  Research
+  | research.plan.request
+  | {
+  |   clarification: 'yes',
+  |   clarificationRequest: {
+  |     default: true,
+  |     kind: 'confirm',
+  |     question: 'Proceed?',
+  |     recommended: true
+  |   },
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: 'research tools',
+  |   summary: 'Need scope clarification.',
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[DEBUG]  2026-06-14T16:13:33.298Z  Research
+  | research.plan.raw
+  | {
+  |   content: '{"action":"synthesize","summary":"Ready to answer.","answerPlan":"Answer directly."}',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:13:33.298Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'synthesize',
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:13:33.298Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: true,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:13:33.298Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'synthesize',
+  |   evidenceCount: 0,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:13:33.299Z  Research
+  | research.synthesize
+  | {
+  |   answerPlan: 'Answer directly.',
+  |   evidenceCount: 0,
+  |   summary: 'Ready to answer.',
+  |   turn: 0
+  | }
+[DEBUG]  2026-06-14T16:13:33.299Z  Research
+  | research.commit_user
+  | {
+  |   clarification: 'yes',
+  |   originalUserContent: 'research tools',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:13:33.299Z  Research
+  | research.answer.start
+  | {
+  |   answerPlan: 'Answer directly.',
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   turn: 0,
+  |   workingDirectory: undefined
+  | }
+[INFO ]  2026-06-14T16:13:33.300Z  Research
+  | research.answer.done
+  | {
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:17:18.727Z  FSocket
+  | open
+[INFO ]  2026-06-14T16:17:37.816Z  FSocket
+  | close
+  | {
+  |   hasError: false
+  | }
+[INFO ]  2026-06-14T16:17:47.795Z  FSocket
+  | open
+[DEBUG]  2026-06-14T16:17:53.030Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 c1 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 7b 22 74 65 78 74 22 3a 22 e4 bb 94 e7 bb 86 e7 a0 94 ... 151 more bytes>
+[DEBUG]  2026-06-14T16:17:53.032Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: {
+  |     text: '仔细研究下这个项目  /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli',
+  |     workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |   }
+  | }
+[DEBUG]  2026-06-14T16:17:53.033Z  Synapse
+  | user.payload
+  | {
+  |   context: {
+  |     workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |   },
+  |   text: '仔细研究下这个项目  /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli'
+  | }
+[DEBUG]  2026-06-14T16:17:53.034Z  Agent
+  | turn.start
+  | {
+  |   context: {
+  |     workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |   },
+  |   text: '仔细研究下这个项目  /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli'
+  | }
+[DEBUG]  2026-06-14T16:17:53.034Z  Brain
+  | brain.start
+  | {
+  |   context: {
+  |     workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |   }
+  | }
+[DEBUG]  2026-06-14T16:17:53.035Z  Callosum
+  | callosum.start
+[DEBUG]  2026-06-14T16:17:54.638Z  Callosum
+  | callosum.route
+  | research
+[INFO ]  2026-06-14T16:17:54.640Z  Research
+  | research.start
+  | {
+  |   awaiting: undefined,
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: '仔细研究下这个项目  /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli',
+  |   pending: false,
+  |   summary: undefined,
+  |   workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  | }
+[DEBUG]  2026-06-14T16:17:54.641Z  Research
+  | research.turn.state
+  | {
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   summary: undefined,
+  |   turn: 0,
+  |   workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  | }
+[DEBUG]  2026-06-14T16:17:54.641Z  Research
+  | research.plan.request
+  | {
+  |   clarification: undefined,
+  |   clarificationRequest: undefined,
+  |   evidence: [],
+  |   evidenceCount: 0,
+  |   originalUserContent: '仔细研究下这个项目  /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli',
+  |   summary: undefined,
+  |   turn: 0,
+  |   workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  | }
+[DEBUG]  2026-06-14T16:18:07.614Z  Research
+  | research.plan.raw
+  | {
+  |   content: '{"action":"search","summary":"Exploring the flyflor-cli project structure to identify its type and entry points.","query":"name","roots":["/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli"],"maxResults":20}',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:18:07.615Z  Research
+  | research.plan.decoded
+  | {
+  |   action: 'search',
+  |   summary: 'Exploring the flyflor-cli project structure to identify its type and entry points.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:18:07.615Z  Research
+  | research.summary
+  | {
+  |   evidenceCount: 0,
+  |   pending: false,
+  |   summary: 'Exploring the flyflor-cli project structure to identify its type and entry points.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:18:07.616Z  Research
+  | research.turn.plan
+  | {
+  |   action: 'search',
+  |   evidenceCount: 0,
+  |   summary: 'Exploring the flyflor-cli project structure to identify its type and entry points.',
+  |   turn: 0
+  | }
+[INFO ]  2026-06-14T16:18:07.617Z  Research
+  | research.tool.start
+  | {
+  |   boundary: {
+  |     paths: [
+  |       {
+  |         path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli',
+  |         resolved: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli',
+  |         roots: [
+  |           '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor',
+  |           '/Users/yihuaqing/Desktop/yihuaqing/flyflors/reference',
+  |           '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |         ],
+  |         workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |       }
+  |     ],
+  |     roots: [
+  |       '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor',
+  |       '/Users/yihuaqing/Desktop/yihuaqing/flyflors/reference',
+  |       '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |     ],
+  |     workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |   },
+  |   context: {
+  |     callId: 'codegraph-1',
+  |     evidenceCount: 0,
+  |     intent: 'Exploring the flyflor-cli project structure to identify its type and entry points.',
+  |     workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |   },
+  |   evidenceCount: 0,
+  |   id: 'codegraph-1',
+  |   input: {
+  |     maxResults: 20,
+  |     query: 'name',
+  |     roots: [
+  |       '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli'
+  |     ]
+  |   },
+  |   name: 'codegraph',
+  |   summary: 'Exploring the flyflor-cli project structure to identify its type and entry points.',
+  |   turn: 0
+  | }
+[ERROR]  2026-06-14T16:18:07.618Z  Research
+  | research.tool.result
+  | {
+  |   boundary: {
+  |     paths: [
+  |       {
+  |         path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli',
+  |         resolved: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli',
+  |         roots: [
+  |           '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor',
+  |           '/Users/yihuaqing/Desktop/yihuaqing/flyflors/reference',
+  |           '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |         ],
+  |         workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |       }
+  |     ],
+  |     roots: [
+  |       '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor',
+  |       '/Users/yihuaqing/Desktop/yihuaqing/flyflors/reference',
+  |       '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |     ],
+  |     workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |   },
+  |   context: {
+  |     callId: 'codegraph-1',
+  |     evidenceCount: 0,
+  |     intent: 'Exploring the flyflor-cli project structure to identify its type and entry points.',
+  |     workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |   },
+  |   detail: {
+  |     path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli',
+  |     resolved: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli',
+  |     roots: [
+  |       '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor',
+  |       '/Users/yihuaqing/Desktop/yihuaqing/flyflors/reference',
+  |       '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |     ],
+  |     workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |   },
+  |   error: 'Tool path is outside allowed research roots',
+  |   id: 'codegraph-1',
+  |   name: 'codegraph',
+  |   ok: false,
+  |   turn: 0
+  | }
+[ERROR]  2026-06-14T16:18:07.620Z  FSocket
+  | data
+  | Error: Tool path is outside allowed research roots
+  |     at resolve (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/plugins/tools/boundary.ts:18:33)
+  |     at map (native:1:11)
+  |     at roots (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/plugins/tools/codegraph.ts:45:26)
+  |     at execute (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/plugins/tools/codegraph.ts:34:28)
+  |     at executeTool (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/agent/brain/research/service.ts:450:34)
+  |     at search (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/agent/brain/research/service.ts:232:35)
+  |     at run (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/agent/brain/research/service.ts:148:42)

@@ -1,7 +1,7 @@
 import { type FAgentProfileConfiguration } from '@/config';
-import { FAgentAtom, Inject, Logger, Prompt, PromptService, Provide, type FLogger, type PromptPackageData } from '@/core';
-import { Intelligence } from './brain';
+import { FAgentAtom, Logger, Prompt, PromptService, Provide, type FLogger, type PromptPackageData } from '@/core';
 import { includes } from 'lodash-es';
+import type { PendingResearch } from './research.types';
 
 export enum SoulSection {
     /** Agent identity / constitution layer. Loaded from `SOUL.md`. */
@@ -38,9 +38,6 @@ export interface AgentMemory {
 
 @Provide()
 export class Memory extends FAgentAtom {
-    @Inject()
-    public intelligence!: Intelligence;
-
     @Prompt(function (this: Memory) {
         return `.config/agents/${this.agentConfig.name}`;
     })
@@ -50,6 +47,10 @@ export class Memory extends FAgentAtom {
     public readonly log!: FLogger;
 
     public context: AgentMemory[] = [];
+
+    public pendingResearch?: PendingResearch;
+
+    private commitUserOverride?: string;
 
     constructor(public readonly agentConfig: FAgentProfileConfiguration) {
         super();
@@ -74,7 +75,17 @@ export class Memory extends FAgentAtom {
      * Called only after a turn succeeds, so the context holds whole user/assistant pairs.
      */
     public commit(user: string, assistant: string): void {
-        this.context.push({ role: AgentChatRole.User, content: user });
+        this.context.push({ role: AgentChatRole.User, content: this.consumeCommitUserOverride(user) });
         this.context.push({ role: AgentChatRole.Assistant, content: assistant });
+    }
+
+    public useCommitUser(user: string): void {
+        this.commitUserOverride = user;
+    }
+
+    private consumeCommitUserOverride(user: string): string {
+        const value = this.commitUserOverride ?? user;
+        this.commitUserOverride = undefined;
+        return value;
     }
 }

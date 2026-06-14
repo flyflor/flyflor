@@ -23,7 +23,49 @@ export abstract class FRepo extends FService {}
  * Base class for external plugin boundaries (classes decorated with `@Plugin()`).
  * Plugins are active observation objects: they can expose methods and emit turn-local signals.
  */
-export abstract class FTool<T = object | number | string | boolean | undefined> extends Subject<T> {}
+export interface ToolParameterProperty {
+    type: 'string' | 'number' | 'boolean' | 'array' | 'object';
+    description: string;
+    required?: boolean;
+}
+
+export interface ToolParameterSchema {
+    type: 'object';
+    properties: Record<string, ToolParameterProperty>;
+}
+
+export interface ToolExecutionContext {
+    callId: string;
+    intent: string;
+    evidenceCount: number;
+    workingDirectory?: string;
+}
+
+export type ToolResult<TData = unknown> =
+    | {
+          ok: true;
+          data: TData;
+      }
+    | {
+          ok: false;
+          error: string;
+      };
+
+export abstract class FTool<
+    TInput = Record<string, unknown>,
+    TData = unknown,
+    TSignal = object | number | string | boolean | undefined,
+> extends Subject<TSignal> {
+    public abstract readonly name: string;
+
+    public abstract readonly description: string;
+
+    public abstract readonly parameters: ToolParameterSchema;
+
+    public readonly research: boolean = false;
+
+    public abstract execute(input: TInput, context: ToolExecutionContext): Promise<ToolResult<TData>>;
+}
 
 /**
  * Base class for permission/policy subscribers (classes decorated with `@Guard()`).

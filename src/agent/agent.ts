@@ -3,6 +3,7 @@ import { Brain, CallosumSignalType, type CallosumSignal } from './brain';
 import { Memory } from './memory';
 import { type FAgentProfileConfiguration } from '@/config';
 import type { FLogger } from '@/core/logger';
+import type { AgentTurnContext } from './types';
 
 /**
  * The agent: a person-like runtime object. It owns an injected brain (cortex) and memory (prefrontal
@@ -25,8 +26,8 @@ export class Agent extends FAgent<CallosumSignal> {
         super();
     }
 
-    public async run(text: string): Promise<void> {
-        this.log.debug('turn.start', text);
+    public async run(text: string, context: AgentTurnContext = {}): Promise<void> {
+        this.log.debug('turn.start', { text, context });
         await new Promise<void>((resolve, reject) => {
             let assistant = '';
             const subscription = this.brain.subscribe({
@@ -47,7 +48,7 @@ export class Agent extends FAgent<CallosumSignal> {
                     reject(error);
                 },
             });
-            void this.brain.run(this.memory.buildMessage(text)).catch((error) => {
+            void this.brain.run(this.memory.buildMessage(text), context).catch((error) => {
                 subscription.unsubscribe();
                 reject(error);
             });

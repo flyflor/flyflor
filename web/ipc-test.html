@@ -475,6 +475,24 @@
                 color: var(--text);
             }
 
+            .hint {
+                color: var(--faint);
+                font-size: 0.76rem;
+                line-height: 1.5;
+            }
+
+            .side-section input {
+                width: 100%;
+                min-height: 2.45rem;
+                padding: 0 0.75rem;
+                border: 1px solid var(--line);
+                border-radius: 0.45rem;
+                color: var(--text);
+                background: #11120f;
+                font-family: var(--mono);
+                font-size: 0.82rem;
+            }
+
             .stats {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
@@ -647,6 +665,12 @@
                         </div>
                     </section>
 
+                    <section class="side-section actions">
+                        <h2 class="panel-title">执行目录</h2>
+                        <input id="workingDirectoryInput" type="text" value="/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor" placeholder="例如：/Users/.../flyflor-cli 或 ./reference/pi" />
+                        <small class="hint">相对路径会按这里的目录解析；绝对路径仍必须位于允许根内。</small>
+                    </section>
+
                     <section class="side-section quick-list" id="quickActions" hidden>
                         <h2 class="panel-title">快速输入</h2>
                         <button class="quick-btn" data-msg="你好自我介绍下">自我介绍</button>
@@ -716,6 +740,7 @@
             const messageInput = document.getElementById('messageInput');
             const jsonModeBtn = document.getElementById('jsonModeBtn');
             const frameModeBtn = document.getElementById('frameModeBtn');
+            const workingDirectoryInput = document.getElementById('workingDirectoryInput');
             const quickActions = document.getElementById('quickActions');
             const composer = document.getElementById('composer');
             const messageCount = document.getElementById('messageCount');
@@ -852,6 +877,7 @@
             function setInputEnabled(enabled) {
                 sendBtn.disabled = !enabled;
                 messageInput.disabled = !enabled;
+                workingDirectoryInput.disabled = !enabled;
                 document.querySelectorAll('.quick-btn').forEach((button) => {
                     button.disabled = !enabled;
                 });
@@ -952,10 +978,12 @@
                 if (!text || !ws || pending || ws.readyState !== WebSocket.OPEN) return;
                 pending = true;
                 setInputEnabled(false);
-                const packet = { action: 'user', data: text };
+                const workingDirectory = workingDirectoryInput.value.trim() || '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor';
+                const packet = { action: 'user', data: { text, workingDirectory } };
                 if (protocolMode === 'frame') ws.send(encodeFrame(packet));
                 else ws.send(JSON.stringify(packet));
                 addMessage(text, 'user');
+                addMessage(`执行目录: ${workingDirectory}`, 'system');
                 createPendingAgentMessage();
             }
 

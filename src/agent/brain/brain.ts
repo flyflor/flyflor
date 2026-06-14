@@ -2,7 +2,9 @@ import { FAgentAtom, Inject, Logger, Prompt, PromptService, Provide, Scope, type
 import { type FAgentProfileConfiguration } from '@/config';
 import { Callosum, CallosumSignalType, type CallosumSignal } from './callosum';
 import { AgentChatRole, Memory, SoulSection, type AgentMemory } from '../memory';
-import { Intelligence } from './intelligence';
+import { Intelligence } from './intelligence/service';
+import { Research } from './research';
+import type { AgentTurnContext } from '@/agent/types';
 
 export enum BrainPrompt {
     Soul = 'SOUL',
@@ -27,6 +29,9 @@ export class Brain extends FAgentAtom<CallosumSignal> {
     @Scope()
     public memory!: Memory;
 
+    @Scope()
+    public researchAction!: Research;
+
     @Logger(Brain.name)
     public readonly log!: FLogger;
 
@@ -34,8 +39,14 @@ export class Brain extends FAgentAtom<CallosumSignal> {
         super();
     }
 
-    public async run(memory: AgentMemory[]): Promise<void> {
-        this.log.debug('brain.start');
+    public async run(memory: AgentMemory[], context: AgentTurnContext = {}): Promise<void> {
+        this.log.debug('brain.start', { context });
+        const pendingUser = this.latestUserContent(memory);
+        if (this.memory.pendingResearch !== undefined && pendingUser.length > 0) {
+            await this.runResearch(memory, pendingUser, context);
+            this.emit({ type: CallosumSignalType.Done, chunk: '' });
+            return;
+        }
         await new Promise<void>((resolve, reject) => {
             let action = Promise.resolve();
             const subscription = this.callosum.subscribe({
@@ -44,7 +55,7 @@ export class Brain extends FAgentAtom<CallosumSignal> {
                         action = action.then(() => this.reply(signal));
                     }
                     else if (signal.type === CallosumSignalType.Research) {
-                        action = action.then(() => this.research(signal));
+                        action = action.then(() => this.research(signal, context));
                     }
                     else if (signal.type === CallosumSignalType.Soul) {
                         action = action.then(() => this.soul(signal));
@@ -65,7 +76,7 @@ export class Brain extends FAgentAtom<CallosumSignal> {
                     reject(error);
                 },
             });
-            void this.callosum.run(memory).catch((error) => {
+            void this.callosum.run(memory, (messages) => this.intelligence.completeText(messages)).catch((error) => {
                 subscription.unsubscribe();
                 reject(error);
             });
@@ -79,14 +90,27 @@ export class Brain extends FAgentAtom<CallosumSignal> {
         });
     }
 
-    public async research(data: CallosumSignal) {
-        this.log.info('researching', data);
-        // // 中文：research action 只生成调查摘要和方向，不在这里伪造最终调查结果。
-        // const chunk = await this.intelligence.completeText([
-        //     { role: AgentChatRole.System, content: String(this.prompt.data.RESEARCH?.data) },
-        //     ...this.memory.buildMessage(data.chunk),
-        // ]);
-        // this.log.info('researching', { query: chunk.trim() });
+    public async research(data: CallosumSignal, context: AgentTurnContext = {}) {
+        await this.runResearch(this.memory.buildMessage(data.chunk), data.chunk, context);
+    }
+
+    private async runResearch(memory: AgentMemory[], latestUserContent: string, context: AgentTurnContext): Promise<void> {
+        await new Promise<void>((resolve, reject) => {
+            const subscription = this.researchAction.subscribe({
+                next: (signal) => this.emit(signal),
+                error: (error) => {
+                    subscription.unsubscribe();
+                    reject(error);
+                },
+            });
+            void this.researchAction.run(memory, latestUserContent, context).then(() => {
+                subscription.unsubscribe();
+                resolve();
+            }, (error) => {
+                subscription.unsubscribe();
+                reject(error);
+            });
+        });
     }
 
     public async soul(data: CallosumSignal) {
@@ -133,5 +157,14 @@ export class Brain extends FAgentAtom<CallosumSignal> {
         await this.intelligence.stream(this.memory.buildMessage(data.chunk), (chunk) => {
             this.emit({ type: CallosumSignalType.Reply, chunk });
         });
+    }
+
+    private latestUserContent(memory: AgentMemory[]): string {
+        for (let index = memory.length - 1; index >= 0; index -= 1) {
+            const message = memory[index];
+            if (message?.role !== AgentChatRole.User) continue;
+            return message.content;
+        }
+        return '';
     }
 }
