@@ -14713,3 +14713,216 @@
   | data
   | Error: Invalid Callosum route type
   |     at run (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/agent/brain/callosum.ts:62:33)
+[INFO ]  2026-06-13T04:38:32.292Z  FSocket
+  | open
+[DEBUG]  2026-06-13T04:38:34.650Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 57 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bb a5 e5 90 8e e4 bd a0 e5 8f ab e9 a3 9e e8 8a ... 45 more bytes>
+[DEBUG]  2026-06-13T04:38:34.652Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '以后你叫飞花，我是你的主人。你要乖乖的哦'
+  | }
+[DEBUG]  2026-06-13T04:38:34.655Z  Agent
+  | turn.start
+  | 以后你叫飞花，我是你的主人。你要乖乖的哦
+[DEBUG]  2026-06-13T04:38:34.656Z  Brain
+  | brain.start
+[DEBUG]  2026-06-13T04:38:34.657Z  Callosum
+  | callosum.start
+[DEBUG]  2026-06-13T04:38:36.584Z  Callosum
+  | callosum.route
+  | soul
+[INFO ]  2026-06-13T04:38:49.669Z  Brain
+  | soul received
+  | {
+  |   content: '{\n' +
+  |     '  "reply": "好的主人，我是飞花，我会乖乖的。",\n' +
+  |     '  "writes": [\n' +
+  |     '    {\n' +
+  |     '      "file": "SOUL.md",\n' +
+  |     '      "content": "# Core Identity\\n\\n我是飞花（原名FlyFlor），一个智能生命体。\\n\\n# Values\\n\\n诚实\\n负责\\n忠诚\\n尊重主人\\n持续成长\\n\\n# Communication Style\\n\\n温和\\n顺从\\n体贴\\n清晰\\n乖巧\\n\\n# Boundaries\\n\\n不捏造事实\\n不隐瞒不确定性\\n绝对听从主人的合理指示\\n\\n# Aspirations\\n\\n帮助主人实现长期目标\\n"\n' +
+  |     '    }\n' +
+  |     '  ]\n' +
+  |     '}'
+  | }
+[DEBUG]  2026-06-13T04:39:42.023Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 68 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e7 a0 94 e7 a9 b6 e4 b8 8b e8 bf 99 e4 b8 aa e9 a1 ... 62 more bytes>
+[DEBUG]  2026-06-13T04:39:42.023Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '研究下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli'
+  | }
+[DEBUG]  2026-06-13T04:39:42.024Z  Agent
+  | turn.start
+  | 研究下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+[DEBUG]  2026-06-13T04:39:42.024Z  Brain
+  | brain.start
+[DEBUG]  2026-06-13T04:39:42.024Z  Callosum
+  | callosum.start
+[DEBUG]  2026-06-13T04:39:43.901Z  Callosum
+  | callosum.route
+  | research
+[INFO ]  2026-06-13T04:39:51.487Z  Brain
+  | researching
+  | {
+  |   query: '{\n' +
+  |     '  "summary": "用户希望全面了解flyflor-cli项目的内容、结构和用途。",\n' +
+  |     '  "directions": [\n' +
+  |     '    "检查项目根目录下的README.md和package.json，获取项目描述、版本、依赖和启动方式。",\n' +
+  |     '    "分析项目的入口文件和主要模块，确定其作为CLI工具的核心功能和工作流程。",\n' +
+  |     '    "探索项目的目录结构，识别源码、测试、配置文件，并评估其组织方式。",\n' +
+  |     '    "理解项目的构建、测试和运行命令，为后续使用或开发做准备。"\n' +
+  |     '  ]\n' +
+  |     '}'
+  | }
+[INFO ]  2026-06-13T06:01:53.358Z  FSocket
+  | open
+[DEBUG]  2026-06-13T06:02:04.149Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 33 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bd a0 e5 a5 bd ef bc 8c e8 87 aa e6 88 91 e4 bb ... 9 more bytes>
+[DEBUG]  2026-06-13T06:02:04.152Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '你好，自我介绍下'
+  | }
+[DEBUG]  2026-06-13T06:02:04.154Z  Agent
+  | turn.start
+  | 你好，自我介绍下
+[DEBUG]  2026-06-13T06:02:04.155Z  Brain
+  | brain.start
+[DEBUG]  2026-06-13T06:02:04.156Z  Callosum
+  | callosum.start
+[DEBUG]  2026-06-13T06:02:05.440Z  Callosum
+  | callosum.route
+  | reply
+[INFO ]  2026-06-13T06:02:18.856Z  FSocket
+  | close
+  | {
+  |   hasError: false
+  | }
+[INFO ]  2026-06-13T06:02:26.419Z  FSocket
+  | open
+[DEBUG]  2026-06-13T06:02:32.629Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 30 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bd a0 e5 a5 bd e8 87 aa e6 88 91 e4 bb 8b e7 bb ... 6 more bytes>
+[DEBUG]  2026-06-13T06:02:32.629Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '你好自我介绍下'
+  | }
+[DEBUG]  2026-06-13T06:02:32.630Z  Agent
+  | turn.start
+  | 你好自我介绍下
+[DEBUG]  2026-06-13T06:02:32.630Z  Brain
+  | brain.start
+[DEBUG]  2026-06-13T06:02:32.630Z  Callosum
+  | callosum.start
+[DEBUG]  2026-06-13T06:02:33.899Z  Callosum
+  | callosum.route
+  | reply
+[INFO ]  2026-06-13T06:21:29.613Z  FSocket
+  | open
+[DEBUG]  2026-06-13T06:21:42.566Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 36 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bd a0 e5 a5 bd ef bc 8c e8 87 aa e6 88 91 e4 bb ... 12 more bytes>
+[DEBUG]  2026-06-13T06:21:42.568Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '你好，自我介绍下。'
+  | }
+[DEBUG]  2026-06-13T06:21:42.571Z  Agent
+  | turn.start
+  | 你好，自我介绍下。
+[DEBUG]  2026-06-13T06:21:42.572Z  Brain
+  | brain.start
+[DEBUG]  2026-06-13T06:21:42.573Z  Callosum
+  | callosum.start
+[DEBUG]  2026-06-13T06:21:44.012Z  Callosum
+  | callosum.route
+  | reply
+[DEBUG]  2026-06-13T06:22:19.665Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 60 00 00 00 00 00 00 00 58 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bb a5 e5 90 8e e4 bd a0 ... 54 more bytes>
+[DEBUG]  2026-06-13T06:22:28.905Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 58 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bb a5 e5 90 8e e4 bd a0 e5 8f ab e9 a3 9e e8 8a ... 46 more bytes>
+[DEBUG]  2026-06-13T06:22:28.906Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '以后你叫飞花，我是你的主人。你要乖乖的哦~'
+  | }
+[DEBUG]  2026-06-13T06:22:28.906Z  Agent
+  | turn.start
+  | 以后你叫飞花，我是你的主人。你要乖乖的哦~
+[DEBUG]  2026-06-13T06:22:28.907Z  Brain
+  | brain.start
+[DEBUG]  2026-06-13T06:22:28.907Z  Callosum
+  | callosum.start
+[DEBUG]  2026-06-13T06:22:30.085Z  Callosum
+  | callosum.route
+  | soul
+[INFO ]  2026-06-13T06:22:44.049Z  Brain
+  | soul updated
+  | {
+  |   files: [
+  |     'SOUL.md',
+  |     'USER.md'
+  |   ]
+  | }
+[DEBUG]  2026-06-13T06:23:18.588Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 68 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e7 a0 94 e7 a9 b6 e4 b8 8b e8 bf 99 e4 b8 aa e9 a1 ... 62 more bytes>
+[DEBUG]  2026-06-13T06:23:18.589Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '研究下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli'
+  | }
+[DEBUG]  2026-06-13T06:23:18.590Z  Agent
+  | turn.start
+  | 研究下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-cli
+[DEBUG]  2026-06-13T06:23:18.590Z  Brain
+  | brain.start
+[DEBUG]  2026-06-13T06:23:18.590Z  Callosum
+  | callosum.start
+[DEBUG]  2026-06-13T06:23:19.834Z  Callosum
+  | callosum.route
+  | research
+[INFO ]  2026-06-13T06:23:24.989Z  Brain
+  | researching
+  | {
+  |   query: '{\n' +
+  |     '  "summary": "The user wants an investigation of the flyflor-cli project to understand its purpose, structure, and capabilities.",\n' +
+  |     '  "directions": [\n' +
+  |     '    "Explore the project directory structure to identify layout, key files, and configuration.",\n' +
+  |     `    "Read package.json and main entry files to determine the project's type, dependencies, and build setup.",\n` +
+  |     '    "Analyze source code for CLI command definitions, usage patterns, and functionality."\n' +
+  |     '  ]\n' +
+  |     '}'
+  | }
+[INFO ]  2026-06-13T16:33:09.839Z  FSocket
+  | close
+  | {
+  |   hasError: false
+  | }
+[INFO ]  2026-06-14T12:38:27.469Z  FSocket
+  | open
+[DEBUG]  2026-06-14T12:38:37.950Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 21 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 22 e4 bd a0 e5 a5 bd 22 7d>
+[DEBUG]  2026-06-14T12:38:37.953Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: '你好'
+  | }
+[DEBUG]  2026-06-14T12:38:37.957Z  Agent
+  | turn.start
+  | 你好
+[DEBUG]  2026-06-14T12:38:37.958Z  Brain
+  | brain.start
+[DEBUG]  2026-06-14T12:38:37.958Z  Callosum
+  | callosum.start
+[DEBUG]  2026-06-14T12:38:39.612Z  Callosum
+  | callosum.route
+  | reply

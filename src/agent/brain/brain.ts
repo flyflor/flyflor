@@ -80,12 +80,13 @@ export class Brain extends FAgentAtom<CallosumSignal> {
     }
 
     public async research(data: CallosumSignal) {
-        // 中文：research action 只生成调查摘要和方向，不在这里伪造最终调查结果。
-        const chunk = await this.intelligence.completeText([
-            { role: AgentChatRole.System, content: String(this.prompt.data.RESEARCH?.data) },
-            ...this.memory.buildMessage(data.chunk),
-        ]);
-        this.log.info('researching', { query: chunk.trim() });
+        this.log.info('researching', data);
+        // // 中文：research action 只生成调查摘要和方向，不在这里伪造最终调查结果。
+        // const chunk = await this.intelligence.completeText([
+        //     { role: AgentChatRole.System, content: String(this.prompt.data.RESEARCH?.data) },
+        //     ...this.memory.buildMessage(data.chunk),
+        // ]);
+        // this.log.info('researching', { query: chunk.trim() });
     }
 
     public async soul(data: CallosumSignal) {
