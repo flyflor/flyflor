@@ -94,11 +94,11 @@ function useAgentStream() {
     };
 }
 
-function decodeWrites(packet: PacketService, writes: Buffer[]): SocketPacket[] {
+function decodeWrites(packet: PacketService, writes: Buffer[]): SocketPacket<unknown>[] {
     const connection = {};
-    const packets: SocketPacket[] = [];
+    const packets: SocketPacket<unknown>[] = [];
     for (const write of writes) {
-        packets.push(...packet.decode<SocketPacket>(connection, write).packets);
+        packets.push(...packet.decode<SocketPacket<unknown>>(connection, write).packets);
     }
     return packets;
 }

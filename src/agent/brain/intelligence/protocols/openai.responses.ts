@@ -25,10 +25,13 @@ export const openAIResponsesAdapter: ProtocolAdapter = {
         if (data === undefined) return false;
         const parsed = JSON.parse(data) as ResponsesEvent;
         if (parsed.type === 'response.output_text.delta') {
-            if (typeof parsed.delta === 'string' && parsed.delta.length > 0) controller.enqueue(parsed.delta);
+            if (typeof parsed.delta === 'string' && parsed.delta.length > 0) controller.enqueue({ type: 'text_delta', text: parsed.delta });
             return false;
         }
-        if (parsed.type === 'response.completed' || parsed.type === 'response.incomplete') return true;
+        if (parsed.type === 'response.completed' || parsed.type === 'response.incomplete') {
+            controller.enqueue({ type: 'done', stopReason: parsed.type === 'response.incomplete' ? 'length' : 'stop' });
+            return true;
+        }
         if (parsed.type === 'response.failed' || parsed.type === 'error') {
             throw Error(providerErrorMessage(parsed.error ?? parsed.response?.error, 'LLM provider Responses stream error', parsed.message, parsed.code));
         }

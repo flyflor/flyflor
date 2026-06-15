@@ -18,8 +18,12 @@ export const awsBedrockConverseAdapter: ProtocolAdapter = {
         const parsed = JSON.parse(data) as Record<string, unknown>;
         const contentBlockDelta = parsed.contentBlockDelta as { delta?: { text?: string } } | undefined;
         const text = contentBlockDelta?.delta?.text;
-        if (typeof text === 'string' && text.length > 0) controller.enqueue(text);
-        return parsed.messageStop !== undefined || typeof (parsed.messageStop as { stopReason?: string } | undefined)?.stopReason === 'string';
+        if (typeof text === 'string' && text.length > 0) controller.enqueue({ type: 'text_delta', text });
+        if (parsed.messageStop !== undefined || typeof (parsed.messageStop as { stopReason?: string } | undefined)?.stopReason === 'string') {
+            controller.enqueue({ type: 'done', stopReason: 'stop' });
+            return true;
+        }
+        return false;
     },
 };
 

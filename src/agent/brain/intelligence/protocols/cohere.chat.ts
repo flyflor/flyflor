@@ -18,12 +18,16 @@ export const cohereChatAdapter: ProtocolAdapter = {
         const content = delta?.message?.content;
         if (Array.isArray(content)) {
             for (const item of content) {
-                if (typeof item.text === 'string' && item.text.length > 0) controller.enqueue(item.text);
+                if (typeof item.text === 'string' && item.text.length > 0) controller.enqueue({ type: 'text_delta', text: item.text });
             }
         } else if (typeof content?.text === 'string' && content.text.length > 0) {
-            controller.enqueue(content.text);
+            controller.enqueue({ type: 'text_delta', text: content.text });
         }
-        return type === 'message-end' || type === 'stream-end' || typeof parsed.finish_reason === 'string';
+        if (type === 'message-end' || type === 'stream-end' || typeof parsed.finish_reason === 'string') {
+            controller.enqueue({ type: 'done', stopReason: 'stop' });
+            return true;
+        }
+        return false;
     },
 };
 

@@ -18,7 +18,7 @@ export class PacketService extends FService {
      * @param packet - Packet payload to write to the IPC socket.
      * @returns Binary IPC frame with a big-endian unsigned int64 byte-length header.
      */
-    public encode(packet: SocketPacket): Buffer {
+    public encode(packet: SocketPacket<unknown>): Buffer {
         const content = JSON.stringify(packet);
         const body = Buffer.from(content, PACKET_TEXT_ENCODING);
         if (body.byteLength > PACKET_MAX_CONTENT_BYTES) {

@@ -1,4 +1,5 @@
 import { Agent } from '@/agent';
+import { Memory } from '@/agent/memory';
 import { Config, Init, Logger, Singleton, useContainer, type FLogger } from '@/core';
 import { ConfigComponent } from '@/config';
 import { Subject } from 'rxjs';
@@ -47,7 +48,10 @@ export class Synapse<T extends SocketPacket = SocketPacket> extends Subject<T> {
         agentConfig.provider = agentConfig.provider || this.config.model.provider;
         agentConfig.contextLength = agentConfig.contextLength || this.config.model.contextLength;
         agentConfig.maxTokens = agentConfig.maxTokens || this.config.model.maxTokens;
-        this.agentPool.agents[active] = await useContainer().getAsync(Agent, agentConfig);
+        // Build the agent's working memory once and pass it down the agent subtree, so Agent and Brain share
+        // one Memory per agent (a person's memory), while different agents stay isolated.
+        const memory = await useContainer().getAsync(Memory, agentConfig);
+        this.agentPool.agents[active] = await useContainer().getAsync(Agent, agentConfig, memory);
     }
 
     public override async next(packet: SocketPacket): Promise<void> {

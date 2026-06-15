@@ -1,7 +1,7 @@
 import { type FModelConfiguration, FModelProtocolName } from '@/config';
 import { anthropicMessagesAdapter, awsBedrockConverseAdapter, cohereChatAdapter, googleGeminiGenerateContentAdapter, huggingFaceAdapter, lmStudioAdapter, ollamaAdapter, openAIChatCompletionsAdapter, openAIResponsesAdapter, vllmAdapter } from './protocols';
 import type { AgentMemory } from '@/agent/memory';
-import type { LlmByteStreamReader, ProtocolAdapter, ProtocolBuildContext, StreamingState } from './types';
+import type { IntelligenceEvent, IntelligenceToolDefinition, LlmByteStreamReader, ProtocolAdapter, ProtocolBuildContext, ProtocolStreamState } from './types';
 
 /**
  * Protocol adapters are plain composition objects. The factory owns transport, adapters own wire shapes.
@@ -20,26 +20,45 @@ const PROTOCOLS = new Map<FModelProtocolName, ProtocolAdapter>([
 ]);
 
 /**
- * Creates a cancellable text stream for one provider-facing LLM request.
+ * Creates a fresh per-request streaming-accumulation state.
+ * The two maps route interleaved provider `tool_calls[]` deltas to the right call across lines.
  */
-export const createIntelligenceTurnStream = (config: FModelConfiguration, messages: AgentMemory[], signal: AbortSignal): ReadableStream<string> => {
+export const createProtocolStreamState = (): ProtocolStreamState => ({
+    buffer: '',
+    finished: false,
+    toolCallsByIndex: new Map(),
+    toolCallsById: new Map(),
+    nextToolIndex: 0,
+});
+
+/**
+ * Creates a cancellable structured event stream for one provider-facing LLM request.
+ * Text turns yield `text_delta` events; tool turns also yield `toolcall_*` events. A terminal `done`
+ * event is always emitted before the stream closes on success.
+ */
+export const createIntelligenceTurnStream = (
+    config: FModelConfiguration,
+    messages: AgentMemory[],
+    signal: AbortSignal,
+    tools?: IntelligenceToolDefinition[],
+): ReadableStream<IntelligenceEvent> => {
     if (messages.length === 0) {
         throw Error('LLM provider request messages are missing');
     }
-    return new ReadableStream<string>({
-        start: (controller) => start(controller, config, messages, signal),
+    return new ReadableStream<IntelligenceEvent>({
+        start: (controller) => start(controller, config, messages, signal, tools),
     });
 };
 
-async function start(controller: ReadableStreamDefaultController<string>, config: FModelConfiguration, messages: AgentMemory[], signal: AbortSignal): Promise<void> {
+async function start(controller: ReadableStreamDefaultController<IntelligenceEvent>, config: FModelConfiguration, messages: AgentMemory[], signal: AbortSignal, tools?: IntelligenceToolDefinition[]): Promise<void> {
     try {
-        await requestLlm(controller, config, messages, signal);
+        await requestLlm(controller, config, messages, signal, tools);
     } catch (error) {
         controller.error(error);
     }
 }
 
-async function requestLlm(controller: ReadableStreamDefaultController<string>, config: FModelConfiguration, messages: AgentMemory[], signal: AbortSignal): Promise<void> {
+async function requestLlm(controller: ReadableStreamDefaultController<IntelligenceEvent>, config: FModelConfiguration, messages: AgentMemory[], signal: AbortSignal, tools?: IntelligenceToolDefinition[]): Promise<void> {
     const errors: Array<Record<string, unknown>> = [];
     for (const protocol of protocols(config)) {
         if (protocol.enabled === false) continue;
@@ -47,7 +66,7 @@ async function requestLlm(controller: ReadableStreamDefaultController<string>, c
         if (adapter === undefined) {
             throw Object.assign(Error('Unsupported LLM protocol'), { detail: { protocol: protocol.name } });
         }
-        const context: ProtocolBuildContext = { config, messages, protocol, adapter, model: config.model || config.default, maxTokens: config.maxTokens };
+        const context: ProtocolBuildContext = { config, messages, protocol, adapter, model: config.model || config.default, maxTokens: config.maxTokens, tools };
         const body = adapter.body(context);
         for (const url of urls(context)) {
             // Each URL is a full protocol attempt; retry only when the status usually means "wrong endpoint shape".
@@ -73,7 +92,9 @@ async function requestLlm(controller: ReadableStreamDefaultController<string>, c
                     errors.push({ protocol: protocol.name, url, status: response.status, contentType });
                     break;
                 }
-                controller.enqueue(responsesText(await response.json()));
+                const text = responsesText(await response.json());
+                if (text.length > 0) controller.enqueue({ type: 'text_delta', text });
+                controller.enqueue({ type: 'done', stopReason: 'stop' });
                 controller.close();
                 return;
             }
@@ -156,7 +177,7 @@ function isJsonResponse(context: ProtocolBuildContext, contentType: string): boo
 }
 
 function responsesText(json: unknown): string {
-    // Responses non-streaming JSON is folded back into the same text stream contract.
+    // Responses non-streaming JSON is folded back into the same text event contract.
     const root = json as { output_text?: unknown; output?: unknown };
     if (typeof root.output_text === 'string') return root.output_text;
     const parts: string[] = [];
@@ -174,10 +195,10 @@ function responsesText(json: unknown): string {
     throw Error('LLM provider Responses JSON did not include text');
 }
 
-async function readStreamingContent(controller: ReadableStreamDefaultController<string>, reader: LlmByteStreamReader, context: ProtocolBuildContext): Promise<void> {
+async function readStreamingContent(controller: ReadableStreamDefaultController<IntelligenceEvent>, reader: LlmByteStreamReader, context: ProtocolBuildContext): Promise<void> {
     // Providers may split UTF-8 bytes and SSE/JSON lines across chunks, so decoding is buffered.
     const decoder = new TextDecoder();
-    const state: StreamingState = { buffer: '', finished: false };
+    const state = createProtocolStreamState();
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -193,11 +214,11 @@ async function readStreamingContent(controller: ReadableStreamDefaultController<
     throw Error(context.protocol.missingTerminalMessage ?? 'LLM provider stream ended without a terminal event');
 }
 
-async function drainStreamingLines(controller: ReadableStreamDefaultController<string>, reader: LlmByteStreamReader, state: StreamingState, adapter: ProtocolAdapter, flush = false): Promise<void> {
+async function drainStreamingLines(controller: ReadableStreamDefaultController<IntelligenceEvent>, reader: LlmByteStreamReader, state: ProtocolStreamState, adapter: ProtocolAdapter, flush = false): Promise<void> {
     const lines = state.buffer.split('\n');
     state.buffer = flush ? '' : (lines.pop() ?? '');
     for (const line of lines) {
-        if (adapter.parseLine(controller, line)) {
+        if (adapter.parseLine(controller, line, state)) {
             state.finished = true;
             controller.close();
             await reader.cancel();

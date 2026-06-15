@@ -14,8 +14,12 @@ export const ollamaAdapter: ProtocolAdapter = {
         if (data.length === 0) return false;
         const parsed = JSON.parse(data) as { message?: { content?: string }; response?: string; done?: boolean };
         const delta = parsed.message?.content ?? parsed.response;
-        if (typeof delta === 'string' && delta.length > 0) controller.enqueue(delta);
-        return parsed.done === true;
+        if (typeof delta === 'string' && delta.length > 0) controller.enqueue({ type: 'text_delta', text: delta });
+        if (parsed.done === true) {
+            controller.enqueue({ type: 'done', stopReason: 'stop' });
+            return true;
+        }
+        return false;
     },
 };
 

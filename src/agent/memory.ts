@@ -1,7 +1,9 @@
 import { type FAgentProfileConfiguration } from '@/config';
 import { FAgentAtom, Logger, Prompt, PromptService, Provide, type FLogger, type PromptPackageData } from '@/core';
 import { includes } from 'lodash-es';
-import type { PendingResearch } from './research.types';
+import type { AgentToolCallMemory, AgentToolResultMemory, PendingResearch } from './research.types';
+
+export type { AgentToolCall, AgentToolCallMemory, AgentToolResultMemory } from './research.types';
 
 export enum SoulSection {
     /** Agent identity / constitution layer. Loaded from `SOUL.md`. */
@@ -25,16 +27,26 @@ export enum AgentChatRole {
     System = 'system',
     User = 'user',
     Assistant = 'assistant',
+    Tool = 'tool',
 }
 
 /**
- * One message sent to the configured LLM provider.
+ * One plain text message sent to the configured LLM provider.
  * `role` is the provider protocol role; `content` is the text payload for that message.
  */
-export interface AgentMemory {
-    role: AgentChatRole;
+export interface AgentTextMemory {
+    role: AgentChatRole.System | AgentChatRole.User | AgentChatRole.Assistant;
     content: string;
 }
+
+/**
+ * One message in working memory.
+ *
+ * Most messages are plain text (`AgentTextMemory`). An assistant turn that requested tools is an
+ * `AgentToolCallMemory`; a fed-back tool result is an `AgentToolResultMemory`. Every member keeps a
+ * string `content`, so the text-only protocol adapters can render any message without knowing about tools.
+ */
+export type AgentMemory = AgentTextMemory | AgentToolCallMemory | AgentToolResultMemory;
 
 @Provide()
 export class Memory extends FAgentAtom {
@@ -52,11 +64,13 @@ export class Memory extends FAgentAtom {
 
     private commitUserOverride?: string;
 
+    private pendingExchange: AgentMemory[] = [];
+
     constructor(public readonly agentConfig: FAgentProfileConfiguration) {
         super();
     }
 
-    public buildMessage(content: string) {
+    public buildMessage(content: string): AgentMemory[] {
         const rendered: string[] = [];
         const sections = this.prompt.config?.prompt?.sections ?? [];
         for (const section of sections) {
@@ -66,17 +80,33 @@ export class Memory extends FAgentAtom {
             rendered.push(`<${section}>\n${content.trim()}\n</${section}>`);
         }
         const system = rendered.join('\n\n');
-        const messages = system.length > 0 ? [{ role: AgentChatRole.System, content: system }] : [];
+        const messages: AgentMemory[] = system.length > 0 ? [{ role: AgentChatRole.System, content: system }] : [];
         return [...messages, ...this.context, { role: AgentChatRole.User, content }];
     }
 
     /**
      * Commits one finished turn to working memory.
-     * Called only after a turn succeeds, so the context holds whole user/assistant pairs.
+     * Called only after a turn succeeds, so the context holds whole user/assistant pairs. Any tool exchange
+     * recorded during the turn (by the research loop) is folded in between the user and assistant messages.
      */
     public commit(user: string, assistant: string): void {
         this.context.push({ role: AgentChatRole.User, content: this.consumeCommitUserOverride(user) });
+        this.context.push(...this.consumePendingExchange());
         this.context.push({ role: AgentChatRole.Assistant, content: assistant });
+    }
+
+    /**
+     * Records the tool round-trip of the in-flight turn so the next successful `commit` keeps the evidence
+     * trail. Held separately from `context` so an aborted turn never leaks a half-finished exchange.
+     */
+    public recordExchange(exchange: AgentMemory[]): void {
+        this.pendingExchange = exchange;
+    }
+
+    private consumePendingExchange(): AgentMemory[] {
+        const exchange = this.pendingExchange;
+        this.pendingExchange = [];
+        return exchange;
     }
 
     public useCommitUser(user: string): void {

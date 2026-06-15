@@ -3,11 +3,19 @@ import { type FAgentProfileConfiguration } from '@/config';
 import { Callosum, CallosumSignalType, type CallosumSignal } from './callosum';
 import { AgentChatRole, Memory, SoulSection, type AgentMemory } from '../memory';
 import { Intelligence } from './intelligence/service';
+import { Research } from './research';
 
 export enum BrainPrompt {
     Soul = 'SOUL',
     Research = 'RESEARCH',
 }
+
+/**
+ * Maximum characters for one durable soul section replacement.
+ * Every section is injected into the system prompt each turn, so this bounds how far identity/profile writes
+ * can grow the prompt. It is a guardrail against runaway growth, not a quality target.
+ */
+const SOUL_SECTION_CHAR_LIMIT = 4000;
 
 /**
  * 大脑皮层负责承接 Callosum 的路由结果。
@@ -21,16 +29,16 @@ export class Brain extends FAgentAtom<CallosumSignal> {
     @Inject()
     public intelligence!: Intelligence;
 
+    @Inject()
+    public researcher!: Research;
+
     @Prompt('prompts/callosum')
     public prompt!: PromptService<BrainPrompt>;
-
-    @Scope()
-    public memory!: Memory;
 
     @Logger(Brain.name)
     public readonly log!: FLogger;
 
-    constructor(public config: FAgentProfileConfiguration) {
+    constructor(public config: FAgentProfileConfiguration, public memory: Memory) {
         super();
     }
 
@@ -80,6 +88,18 @@ export class Brain extends FAgentAtom<CallosumSignal> {
     }
 
     public async research(data: CallosumSignal) {
+        // 中文：research 路由进入工具调查循环。Callosum 只给意图，证据收集和回答由 Research loop 完成。
+        const outcome = await this.researcher.run(this.memory.buildMessage(data.chunk), (signal) => {
+            if (signal.type === 'reply') {
+                this.emit({ type: CallosumSignalType.Reply, chunk: signal.chunk });
+            } else if (signal.type === 'tool_start') {
+                this.emit({ type: CallosumSignalType.ToolStart, chunk: signal.name, data: signal.arguments });
+            } else {
+                this.emit({ type: CallosumSignalType.ToolResult, chunk: signal.content, data: { name: signal.name, isError: signal.isError } });
+            }
+        });
+        // 中文：把工具往返记入待提交 exchange，Agent 成功结束本轮时随 commit 一起落盘，保留证据链。
+        this.memory.recordExchange(outcome.exchange);
     }
 
     public async soul(data: CallosumSignal) {
@@ -112,6 +132,11 @@ export class Brain extends FAgentAtom<CallosumSignal> {
             }
             if (!file.endsWith('.md') || file.startsWith('.') || file.includes('/') || file.includes('\\') || file.includes('..')) {
                 throw Object.assign(Error('Invalid soul write file'), { detail: { file } });
+            }
+            // Guardrail: a durable section is injected into every future system prompt, so an unbounded write
+            // would silently bloat cost and context. Refuse an oversized replacement rather than persist it.
+            if (content.length > SOUL_SECTION_CHAR_LIMIT) {
+                throw Object.assign(Error('Soul write exceeds the section character budget'), { detail: { file, length: content.length, limit: SOUL_SECTION_CHAR_LIMIT } });
             }
             const name = file.slice(0, -'.md'.length) as SoulSection;
             const prompt = this.memory.prompt[name];

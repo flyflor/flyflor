@@ -1,0 +1,112 @@
+import { FAgentAtom, Inject, Logger, Provide, type FLogger } from '@/core';
+import { Intelligence } from '../intelligence/service';
+import { ToolRegistry } from './tool.registry';
+import { AgentChatRole, type AgentMemory, type AgentToolCall } from '@/agent/memory';
+import { RESEARCH_MAX_STEPS, type ResearchOutcome } from './types';
+import type { IntelligenceToolDefinition } from '../intelligence/types';
+
+/**
+ * One signal surfaced while research runs.
+ * The loop streams `reply` text live and announces each tool call so the Brain can forward UI events without
+ * knowing the loop's internals.
+ */
+export type ResearchSignal =
+    | { type: 'reply'; chunk: string }
+    | { type: 'tool_start'; name: string; arguments: Record<string, unknown> }
+    | { type: 'tool_result'; name: string; content: string; isError: boolean };
+
+/**
+ * A pre-execution permission gate.
+ * Returns a block decision to veto a tool call before it runs; returning `undefined` allows it. This is the
+ * defense-in-depth seam (pi's `beforeToolCall`): isolated investigations use it to refuse anything but reads.
+ */
+export type ResearchGate = (name: string, args: Record<string, unknown>) => { block: true; reason: string } | undefined;
+
+/**
+ * Per-run overrides for the research loop.
+ * `tools` replaces the advertised tool set (an isolated investigation narrows it to read-only); `gate` vetoes
+ * individual calls even when a tool is advertised.
+ */
+export interface ResearchRunOptions {
+    tools?: IntelligenceToolDefinition[];
+    gate?: ResearchGate;
+}
+
+/**
+ * The research loop: native function-calling investigation (intent → tools → evidence → answer).
+ *
+ * It streams an assistant response, runs any requested read-only tools, feeds the results back, and repeats
+ * until the model stops requesting tools or the step ceiling is hit. The loop owns no routing or persistence —
+ * the Brain assembles its input messages and forwards its signals.
+ */
+@Provide()
+export class Research extends FAgentAtom {
+    @Logger(Research.name)
+    public readonly log!: FLogger;
+
+    @Inject()
+    public intelligence!: Intelligence;
+
+    @Inject()
+    public registry!: ToolRegistry;
+
+    /**
+     * Runs the investigation to a final answer.
+     * `messages` is the assembled turn input; `emit` forwards streamed reply text and tool lifecycle signals;
+     * `options` can narrow the tool set and add a permission gate (used by isolated deep investigation).
+     */
+    public async run(messages: AgentMemory[], emit: (signal: ResearchSignal) => void, options: ResearchRunOptions = {}): Promise<ResearchOutcome> {
+        const working: AgentMemory[] = [...messages];
+        const exchange: AgentMemory[] = [];
+        const tools = options.tools ?? this.registry.definitions();
+        let answer = '';
+        for (let step = 1; step <= RESEARCH_MAX_STEPS; step += 1) {
+            this.log.debug('research.turn', step);
+            const turn = await this.intelligence.streamTurn(working, tools, (chunk) => emit({ type: 'reply', chunk }));
+            answer = turn.text;
+            if (turn.toolCalls.length === 0) {
+                return { answer, exchange, steps: step };
+            }
+            // The assistant tool-call turn and its results are part of the durable evidence trail, but the
+            // final pure-text answer is committed by the Agent, so it is never pushed into `exchange`.
+            const assistant: AgentMemory = { role: AgentChatRole.Assistant, content: turn.text, toolCalls: turn.toolCalls, reasoning: turn.reasoning };
+            working.push(assistant);
+            exchange.push(assistant);
+            const results = await this.runTools(turn.toolCalls, step, emit, options.gate);
+            working.push(...results);
+            exchange.push(...results);
+        }
+        this.log.info('research.maxSteps', RESEARCH_MAX_STEPS);
+        const notice = `\n\n[Research stopped after ${RESEARCH_MAX_STEPS} steps.]`;
+        emit({ type: 'reply', chunk: notice });
+        return { answer: answer + notice, exchange, steps: RESEARCH_MAX_STEPS };
+    }
+
+    /**
+     * Runs one assistant turn's tool calls in parallel and returns their result messages in source order.
+     * Order is preserved so the tool results line up with the assistant tool calls on the next provider call.
+     */
+    private async runTools(toolCalls: AgentToolCall[], step: number, emit: (signal: ResearchSignal) => void, gate?: ResearchGate): Promise<AgentMemory[]> {
+        const results = await Promise.all(toolCalls.map((toolCall) => this.runTool(toolCall, step, emit, gate)));
+        return results.map((result) => ({ role: AgentChatRole.Tool, content: result.content, toolCallId: result.id, toolName: result.name, isError: result.isError }));
+    }
+
+    /**
+     * Runs one tool call, emitting its start and result signals.
+     * A `gate` veto short-circuits execution with an error result, so a blocked tool is surfaced to the model
+     * but never runs.
+     */
+    private async runTool(toolCall: AgentToolCall, step: number, emit: (signal: ResearchSignal) => void, gate?: ResearchGate): Promise<{ id: string; name: string; content: string; isError: boolean }> {
+        emit({ type: 'tool_start', name: toolCall.name, arguments: toolCall.arguments });
+        const blocked = gate?.(toolCall.name, toolCall.arguments);
+        const outcome = blocked !== undefined
+            ? { content: blocked.reason, isError: true }
+            : await this.registry.dispatch(toolCall.name, toolCall.arguments, {
+                  callId: toolCall.id,
+                  intent: toolCall.name,
+                  evidenceCount: step,
+              });
+        emit({ type: 'tool_result', name: toolCall.name, content: outcome.content, isError: outcome.isError });
+        return { id: toolCall.id, name: toolCall.name, content: outcome.content, isError: outcome.isError };
+    }
+}

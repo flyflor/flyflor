@@ -21,14 +21,21 @@ export const anthropicMessagesAdapter: ProtocolAdapter = {
         const type = parsed.type;
         if (type === 'content_block_delta') {
             const delta = parsed.delta as { type?: string; text?: string } | undefined;
-            if (delta?.type === 'text_delta' && typeof delta.text === 'string' && delta.text.length > 0) controller.enqueue(delta.text);
+            if (delta?.type === 'text_delta' && typeof delta.text === 'string' && delta.text.length > 0) controller.enqueue({ type: 'text_delta', text: delta.text });
             return false;
         }
         if (type === 'message_delta') {
             const delta = parsed.delta as { stop_reason?: string } | undefined;
-            return typeof delta?.stop_reason === 'string' && delta.stop_reason.length > 0;
+            if (typeof delta?.stop_reason === 'string' && delta.stop_reason.length > 0) {
+                controller.enqueue({ type: 'done', stopReason: delta.stop_reason === 'max_tokens' ? 'length' : 'stop' });
+                return true;
+            }
+            return false;
         }
-        if (type === 'message_stop') return true;
+        if (type === 'message_stop') {
+            controller.enqueue({ type: 'done', stopReason: 'stop' });
+            return true;
+        }
         if (type === 'error') throw Error(providerErrorMessage(parsed.error as ProviderErrorShape | undefined, 'Anthropic Messages stream error'));
         return false;
     },

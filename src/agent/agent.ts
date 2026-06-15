@@ -15,13 +15,10 @@ export class Agent extends FAgent<CallosumSignal> {
     @Scope()
     public brain!: Brain;
 
-    @Scope()
-    public memory!: Memory;
-
     @Logger(Agent.name)
     public readonly log!: FLogger;
 
-    constructor(public readonly agentConfig: FAgentProfileConfiguration) {
+    constructor(public readonly agentConfig: FAgentProfileConfiguration, public readonly memory: Memory) {
         super();
     }
 

@@ -19,9 +19,13 @@ export const googleGeminiGenerateContentAdapter: ProtocolAdapter = {
         const candidates = parsed.candidates as Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }> | undefined;
         const candidate = candidates?.[0];
         for (const part of candidate?.content?.parts ?? []) {
-            if (typeof part.text === 'string' && part.text.length > 0) controller.enqueue(part.text);
+            if (typeof part.text === 'string' && part.text.length > 0) controller.enqueue({ type: 'text_delta', text: part.text });
         }
-        return typeof candidate?.finishReason === 'string' && candidate.finishReason.length > 0;
+        if (typeof candidate?.finishReason === 'string' && candidate.finishReason.length > 0) {
+            controller.enqueue({ type: 'done', stopReason: candidate.finishReason === 'MAX_TOKENS' ? 'length' : 'stop' });
+            return true;
+        }
+        return false;
     },
 };
 
