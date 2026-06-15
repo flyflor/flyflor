@@ -1,9 +1,8 @@
 import { Agent } from '@/agent';
-import type { AgentTurnContext } from '@/agent/types';
 import { Config, Init, Logger, Singleton, useContainer, type FLogger } from '@/core';
 import { ConfigComponent } from '@/config';
 import { Subject } from 'rxjs';
-import { SocketEvent, type SocketPacket, type SocketUserPayload } from './packet';
+import { type SocketPacket } from './packet';
 
 export interface AgentPool {
     active: string;
@@ -55,35 +54,7 @@ export class Synapse<T extends SocketPacket = SocketPacket> extends Subject<T> {
         this.log.debug(packet);
         // Broadcast inbound packets for observers, then route user input into the active agent.
         super.next(packet as T);
-        if (packet.action !== SocketEvent.User) {
-            throw Object.assign(Error('Unsupported IPC action'), { detail: { action: packet.action } });
-        }
-        const user = this.parseUserPayload(packet.data);
-        this.log.debug('user.payload', user);
-        if (user.text.length === 0) {
-            throw Object.assign(Error('User message must be a non-empty string'), { detail: { data: packet.data } });
-        }
-        await this.agent.run(user.text, user.context);
-    }
-
-    private parseUserPayload(data: unknown): { text: string; context: AgentTurnContext } {
-        if (typeof data === 'string') {
-            return { text: data.trim(), context: {} };
-        }
-        if (typeof data !== 'object' || data === null) {
-            throw Object.assign(Error('User message must be a non-empty string or structured payload'), { detail: { data } });
-        }
-        const payload = data as SocketUserPayload;
-        if (typeof payload.text !== 'string') {
-            throw Object.assign(Error('User message payload text must be a non-empty string'), { detail: { data } });
-        }
-        return {
-            text: payload.text.trim(),
-            context: {
-                workingDirectory: typeof payload.workingDirectory === 'string' && payload.workingDirectory.trim().length > 0
-                    ? payload.workingDirectory.trim()
-                    : undefined,
-            },
-        };
+        this.log.debug('user.payload', packet);
+        await this.agent.run(packet.data);
     }
 }

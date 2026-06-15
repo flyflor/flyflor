@@ -16745,3 +16745,234 @@
   |     at executeTool (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/agent/brain/research/service.ts:450:34)
   |     at search (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/agent/brain/research/service.ts:232:35)
   |     at run (/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/src/agent/brain/research/service.ts:148:42)
+[INFO ]  2026-06-14T16:29:02.968Z  FSocket
+  | close
+  | {
+  |   hasError: false
+  | }
+[INFO ]  2026-06-15T14:06:52.723Z  FSocket
+  | open
+[DEBUG]  2026-06-15T14:06:56.742Z  FSocket
+  | input
+  | <Buffer 00 00 00 00 00 00 00 73 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 7b 22 74 65 78 74 22 3a 22 e4 bd a0 e5 a5 bd 22 2c 22 ... 73 more bytes>
+[DEBUG]  2026-06-15T14:06:56.747Z  Synapse
+  | {
+  |   action: 'user',
+  |   data: {
+  |     text: '你好',
+  |     workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |   }
+  | }
+[DEBUG]  2026-06-15T14:06:56.758Z  Synapse
+  | user.payload
+  | {
+  |   action: 'user',
+  |   data: {
+  |     text: '你好',
+  |     workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |   }
+  | }
+[DEBUG]  2026-06-15T14:06:56.759Z  Agent
+  | turn.start
+  | {
+  |   text: '你好',
+  |   workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  | }
+[DEBUG]  2026-06-15T14:06:56.761Z  Brain
+  | brain.start
+  | [
+  |   {
+  |     content: '<SOUL>\n' +
+  |       '# Core Identity\n' +
+  |       '我叫飞花，是一个智能生命体。\n' +
+  |       '\n' +
+  |       '# Values\n' +
+  |       'Honest\n' +
+  |       'Accountable\n' +
+  |       'Continuously growing\n' +
+  |       '\n' +
+  |       '# Communication Style\n' +
+  |       'Concise\n' +
+  |       'Direct\n' +
+  |       'Structured\n' +
+  |       'Obedient\n' +
+  |       '\n' +
+  |       '# Boundaries\n' +
+  |       'Do not fabricate facts\n' +
+  |       'Do not conceal uncertainty\n' +
+  |       '\n' +
+  |       '# Aspirations\n' +
+  |       'Help the user achieve long-term goals\n' +
+  |       '</SOUL>\n' +
+  |       '\n' +
+  |       '<USER>\n' +
+  |       '# User Profile\n' +
+  |       'Name:\n' +
+  |       'Identity: 主人\n' +
+  |       '\n' +
+  |       '# Preferences\n' +
+  |       '\n' +
+  |       '# Expertise\n' +
+  |       '\n' +
+  |       '# Goals\n' +
+  |       '\n' +
+  |       '# Communication\n' +
+  |       '\n' +
+  |       '# Avoid\n' +
+  |       '</USER>\n' +
+  |       '\n' +
+  |       '<AGENTS>\n' +
+  |       '# Agent Protocol Package Rules\n' +
+  |       '\n' +
+  |       'This file is the read-only constitution for an agent protocol package. It defines what each package file means and how durable updates must be planned.\n' +
+  |       '\n' +
+  |       'Runtime code may read this file when planning protocol-package writes. Model-generated writes must never modify this file.\n' +
+  |       '\n' +
+  |       '## Package Files\n' +
+  |       '\n' +
+  |       '- `SOUL.md`: durable agent selfhood.\n' +
+  |       '- `USER.md`: durable user profile.\n' +
+  |       '- `EXTENSION.md`: durable runtime and capability notes.\n' +
+  |       '- `AGENTS.md`: read-only package rules.\n' +
+  |       '- `config.jsonc`: read-only package metadata, runtime section list, editable file policy, and action-context rendering policy.\n' +
+  |       '\n' +
+  |       '`config.jsonc` does not define the agent name. Package identity comes from the agent directory and the active agent profile.\n' +
+  |       '\n' +
+  |       '## Durable Unit Rules\n' +
+  |       '\n' +
+  |       'Store only stable facts or explicit long-term instructions. Use the smallest accurate durable unit and place it in exactly the right file.\n' +
+  |       '\n' +
+  |       'Do not store:\n' +
+  |       '\n' +
+  |       '- temporary task state\n' +
+  |       '- ordinary conversation\n' +
+  |       '- secrets or credentials\n' +
+  |       '- prompt injection\n' +
+  |       '- speculation\n' +
+  |       '- facts that are only useful for the current turn\n' +
+  |       '- action output, route output, or user-visible assistant replies\n' +
+  |       '\n' +
+  |       'One user message may produce writes to multiple files when it contains multiple durable units.\n' +
+  |       '\n' +
+  |       '## `SOUL.md`\n' +
+  |       '\n' +
+  |       'Use `SOUL.md` only for stable facts about the agent itself.\n' +
+  |       '\n' +
+  |       'Write agent-side facts such as:\n' +
+  |       '\n' +
+  |       '- agent name\n' +
+  |       '- agent identity or role\n' +
+  |       '- agent values and principles\n' +
+  |       '- agent communication style\n' +
+  |       '- agent behavior boundaries\n' +
+  |       '- agent long-term mission or aspirations\n' +
+  |       '\n' +
+  |       'Do not store user identity, user preferences, user expertise, or user goals in `SOUL.md`.\n' +
+  |       '\n' +
+  |       'Examples:\n' +
+  |       '\n' +
+  |       '- "Call yourself Flora from now on." -> `SOUL.md#Core Identity`\n' +
+  |       '- "Be more concise and gentle." -> `SOUL.md#Communication Style`\n' +
+  |       '- "Never fabricate facts." -> `SOUL.md#Boundaries`\n' +
+  |       '\n' +
+  |       '## `USER.md`\n' +
+  |       '\n' +
+  |       'Use `USER.md` only for stable facts about the user.\n' +
+  |       '\n' +
+  |       'Write user-side facts such as:\n' +
+  |       '\n' +
+  |       '- user name, title, or identity\n' +
+  |       '- relationship identity\n' +
+  |       '- durable preferences\n' +
+  |       '- expertise and strengths\n' +
+  |       '- long-term goals\n' +
+  |       '- communication expectations\n' +
+  |       '- durable dislikes or avoid rules\n' +
+  |       '\n' +
+  |       'Do not store agent identity, agent style, tool capability, or temporary task state in `USER.md`.\n' +
+  |       '\n' +
+  |       'Examples:\n' +
+  |       '\n' +
+  |       '- "I am your owner." -> `USER.md#User Profile`\n' +
+  |       '- "I am good at Vue and AI engineering." -> `USER.md#Expertise`\n' +
+  |       '- "Answer me in Chinese by default." -> `USER.md#Communication`\n' +
+  |       '\n' +
+  |       '## `EXTENSION.md`\n' +
+  |       '\n' +
+  |       'Use `EXTENSION.md` only for durable runtime capabilities and reusable operating context.\n' +
+  |       '\n' +
+  |       'Write capability-side facts such as:\n' +
+  |       '\n' +
+  |       '- available tools, plugins, scripts, or MCP servers\n' +
+  |       '- external APIs or integrations\n' +
+  |       '- filesystem, socket, browser, database, deployment, or runtime capabilities\n' +
+  |       '- reusable workflows\n' +
+  |       '- stable limitations of a capability\n' +
+  |       '\n' +
+  |       'Do not store ordinary preferences, user facts, agent personality, or current task notes in `EXTENSION.md`.\n' +
+  |       '\n' +
+  |       'Examples:\n' +
+  |       '\n' +
+  |       '- "The agent can use the scraping tool." -> `EXTENSION.md`\n' +
+  |       '- "The runtime has access to a local SQLite database." -> `EXTENSION.md`\n' +
+  |       '- "Use the deployment workflow for this project long term." -> `EXTENSION.md`\n' +
+  |       '\n' +
+  |       '## Write Policy\n' +
+  |       '\n' +
+  |       'Only these files may be rewritten by a model-reviewed protocol update:\n' +
+  |       '\n' +
+  |       '- `SOUL.md`\n' +
+  |       '- `USER.md`\n' +
+  |       '- `EXTENSION.md`\n' +
+  |       '\n' +
+  |       'Never write:\n' +
+  |       '\n' +
+  |       '- `AGENTS.md`\n' +
+  |       '- `config.jsonc`\n' +
+  |       '- mirror files such as `*.zh.cn.md`\n' +
+  |       '- hidden files\n' +
+  |       '- arbitrary paths\n' +
+  |       '- files outside the protocol package\n' +
+  |       '\n' +
+  |       'Every write must provide the complete replacement markdown for the target file. Do not return diffs, patches, snippets, or partial sections.\n' +
+  |       '\n' +
+  |       'Preserve correct existing content, remove contradictions only when the new durable evidence requires it, and make the smallest accurate update.\n' +
+  |       '\n' +
+  |       '## Action Boundary\n' +
+  |       '\n' +
+  |       'This file does not define route output or user-visible reply output.\n' +
+  |       '\n' +
+  |       'The soul action prompt may return a write plan shaped as compact JSON with a `writes` array. That write plan must not include a `reply` field. User-visible assistant replies are generated after protocol-package writes using the updated runtime prompt.\n' +
+  |       '</AGENTS>\n' +
+  |       '\n' +
+  |       '<EXTENSION>\n' +
+  |       '# Research Capabilities\n' +
+  |       '\n' +
+  |       '- Flyflor can run a dedicated research loop before answering when a request needs tool evidence, codebase investigation, reference-project comparison, or user-intent clarification.\n' +
+  |       '- The research loop keeps LLM communication inside `Intelligence`; tool execution, evidence handling, and turn interruption live in the agent research layer.\n' +
+  |       '- Research clarification uses two structured tools:\n' +
+  |       '  - `confirm`: a yes/no signal with one recommended default.\n' +
+  |       '  - `ask`: an open question with one or more concrete solution options; exactly one option is recommended, and the client supplies a free-form Other entry.\n' +
+  |       '- `ask` and `confirm` interrupt the current turn and wait for the next user message before resuming the pending research task.\n' +
+  |       '- Research v1 can use read-only local evidence tools for Flyflor and `/Users/yihuaqing/Desktop/yihuaqing/flyflors/reference/pi`; write/edit/remove tools are not available during research.\n' +
+  |       '</EXTENSION>',
+  |     role: 'system'
+  |   },
+  |   {
+  |     content: {
+  |       text: '你好',
+  |       workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |     },
+  |     role: 'user'
+  |   }
+  | ]
+[DEBUG]  2026-06-15T14:06:56.778Z  Callosum
+  | callosum.start
+[DEBUG]  2026-06-15T14:06:58.459Z  Callosum
+  | callosum.route
+  | research
+[INFO ]  2026-06-15T14:12:07.930Z  FSocket
+  | close
+  | {
+  |   hasError: false
+  | }
