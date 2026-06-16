@@ -47,8 +47,8 @@ export class Brain extends FAgentAtom<CallosumSignal> {
         super();
     }
 
-    public async run(memory: AgentMemory[], input: AgentTurnInput): Promise<void> {
-        this.log.debug('brain.start', memory);
+    public async run(input: AgentTurnInput): Promise<void> {
+        this.log.debug('brain.start', this.memory.current);
         await new Promise<void>((resolve, reject) => {
             let action = Promise.resolve();
             const subscription = this.callosum.subscribe({
@@ -78,7 +78,7 @@ export class Brain extends FAgentAtom<CallosumSignal> {
                     reject(error);
                 },
             });
-            void this.callosum.run(memory, (messages) => this.intelligence.completeText(messages)).catch((error) => {
+            void this.callosum.run(this.memory.buildMessage(), (messages) => this.intelligence.completeText(messages)).catch((error) => {
                 subscription.unsubscribe();
                 reject(error);
             });
@@ -97,6 +97,17 @@ export class Brain extends FAgentAtom<CallosumSignal> {
         const outcome = await this.researcher.run(this.researchMessages(data.chunk, input), (signal) => {
             if (signal.type === 'reply') {
                 this.emit({ type: CallosumSignalType.Reply, chunk: signal.chunk });
+            } else if (signal.type === 'llm_turn') {
+                this.emit({
+                    type: CallosumSignalType.LlmTurn,
+                    chunk: signal.text,
+                    data: {
+                        step: signal.step,
+                        stopReason: signal.stopReason,
+                        toolCalls: signal.toolCalls,
+                        textLength: signal.text.length,
+                    },
+                });
             } else if (signal.type === 'tool_start') {
                 this.emit({ type: CallosumSignalType.ToolStart, chunk: signal.name, data: signal.arguments });
             } else {
@@ -107,7 +118,7 @@ export class Brain extends FAgentAtom<CallosumSignal> {
             toolRoots: input.toolRoots,
         });
         // 中文：把工具往返记入待提交 exchange，Agent 成功结束本轮时随 commit 一起落盘，保留证据链。
-        this.memory.recordExchange(outcome.exchange);
+        this.memory.recordWork(outcome.exchange);
     }
 
     private researchMessages(content: string, input: AgentTurnInput): AgentMemory[] {

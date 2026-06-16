@@ -72,6 +72,20 @@ function useCapturedSocket(): CapturedSocket {
     return { socket, writes };
 }
 
+function useBackpressuredSocket(limit: number): CapturedSocket {
+    const writes: Buffer[] = [];
+    const socket = {
+        data: {},
+        write: (data: Buffer) => {
+            const written = Math.min(limit, data.byteLength);
+            writes.push(Buffer.from(data.subarray(0, written)));
+            return written;
+        },
+    } as unknown as Socket<SocketConnectionData>;
+
+    return { socket, writes };
+}
+
 function useAgentStream() {
     const subscribers: Array<(value: unknown) => void> = [];
     const agent = {
@@ -103,7 +117,7 @@ function decodeWrites(packet: PacketService, writes: Buffer[]): SocketPacket<unk
     return packets;
 }
 
-function frameFromJson(content: string): Buffer {
+function packetBufferFromJson(content: string): Buffer {
     const body = Buffer.from(content, PACKET_TEXT_ENCODING);
     const header = Buffer.alloc(PACKET_LENGTH_HEADER_BYTES);
     header.writeBigUInt64BE(BigInt(body.byteLength), 0);
@@ -183,11 +197,32 @@ describe('FSocket', () => {
         ]);
     });
 
-    test('writes an error response for malformed JSON frames', async () => {
+    test('continues writing packet bytes after socket backpressure drains', async () => {
+        const large = { type: 'tool_result', chunk: 'x'.repeat(9000) };
+        const next = { type: 'done', chunk: '' };
+        const { handler, packet } = await useSocketHandler({
+            onNext: async (_packet, stream) => {
+                stream.emit(large);
+                stream.emit(next);
+            },
+        });
+        const { socket, writes } = useBackpressuredSocket(8192);
+
+        await handler.data(socket, packet.encode({ action: SocketEvent.User, data: 'hello' }));
+        handler.drain(socket);
+
+        expect(decodeWrites(packet, writes)).toEqual([
+            { action: SocketEvent.Data, data: large },
+            { action: SocketEvent.Data, data: next },
+            { action: SocketEvent.StreamEnd, data: true },
+        ]);
+    });
+
+    test('writes an error response for malformed JSON packets', async () => {
         const { handler, packet, calls } = await useSocketHandler();
         const { socket, writes } = useCapturedSocket();
 
-        await handler.data(socket, frameFromJson('{"action":'));
+        await handler.data(socket, packetBufferFromJson('{"action":'));
 
         const responses = decodeWrites(packet, writes);
         expect(calls).toEqual([]);

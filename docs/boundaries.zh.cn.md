@@ -26,7 +26,7 @@ legacy dotted names 可以等专门迁移再处理。新代码不应在 folder �
 - `src/core`：framework primitives、decorators、IOC、base classes、file/prompt/logger primitives。
 - `src/config`：runtime configuration object 和 root path constants。
 - `src/agent`：agent object、memory、brain、intelligence services 和 mode placeholders。
-- `src/neural`：signal routing、IPC socket handling 和 packet framing。
+- `src/neural`：signal routing、IPC socket handling 和 packet encoding。
 - `src/entities`：repository/entity classes 和 SQL statement ownership。
 - `src/plugins`：plugin module boundary 和 built-in tool plugin objects。
 - `scripts`：local tooling；这里允许 procedural code。
@@ -55,7 +55,7 @@ legacy dotted names 可以等专门迁移再处理。新代码不应在 folder �
 - `Intelligence` 拥有 provider communication 和 cancellation。
 - `Synapse` 拥有 active-agent routing。
 - `FSocket` 拥有 Bun socket callbacks。
-- `PacketService` 拥有 frame encoding 和 decoding。
+- `PacketService` 拥有 length-prefixed JSON packet encoding 和 decoding。
 - `FileService` 拥有 path-bound file state 和 persistence。
 - Repositories 拥有 SQL statements 和 entity shapes。
 

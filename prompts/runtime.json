@@ -1,6 +1,5 @@
 {
   "research": {
-    "maxStepsNotice": "\n\n[Research stopped after {steps} steps.]",
     "toolUnavailable": "Tool {name} is not available during research.",
     "runtimeToolContext": {
       "verifiedRootsIntro": "Runtime has already verified these user-provided absolute paths. Use them directly with read_file/codegraph. Do not ask the user to confirm, correct, or rewrite them.",

@@ -26,7 +26,7 @@ Legacy dotted names may remain until a focused migration. New code should not ad
 - `src/core`: framework primitives, decorators, IOC, base classes, file/prompt/logger primitives.
 - `src/config`: runtime configuration object and root path constants.
 - `src/agent`: agent object, memory, brain, intelligence services, and mode placeholders.
-- `src/neural`: signal routing, IPC socket handling, and packet framing.
+- `src/neural`: signal routing, IPC socket handling, and packet encoding.
 - `src/entities`: repository/entity classes and SQL statement ownership.
 - `src/plugins`: plugin module boundary and built-in tool plugin objects.
 - `scripts`: local tooling; procedural code is allowed here.
@@ -55,7 +55,7 @@ Legacy dotted names may remain until a focused migration. New code should not ad
 - `Intelligence` owns provider communication and cancellation.
 - `Synapse` owns active-agent routing.
 - `FSocket` owns Bun socket callbacks.
-- `PacketService` owns frame encoding and decoding.
+- `PacketService` owns length-prefixed JSON packet encoding and decoding.
 - `FileService` owns path-bound file state and persistence.
 - Repositories own SQL statements and entity shapes.
 

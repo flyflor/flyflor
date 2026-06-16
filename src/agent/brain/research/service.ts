@@ -2,7 +2,7 @@ import { FAgentAtom, Inject, Logger, Provide, RuntimeText, type FLogger } from '
 import { Intelligence } from '../intelligence/service';
 import { ToolRegistry } from './tool.registry';
 import { AgentChatRole, type AgentMemory, type AgentToolCall } from '@/agent/memory';
-import { RESEARCH_MAX_STEPS, type ResearchOutcome, type ResearchToolPreview } from './types';
+import { type ResearchOutcome, type ResearchToolPreview } from './types';
 import type { IntelligenceToolDefinition } from '../intelligence/types';
 
 const RESEARCH_SYSTEM_TEXT_KEY = 'research.system.brief';
@@ -14,6 +14,7 @@ const RESEARCH_SYSTEM_TEXT_KEY = 'research.system.brief';
  */
 export type ResearchSignal =
     | { type: 'reply'; chunk: string }
+    | { type: 'llm_turn'; step: number; text: string; stopReason: string; toolCalls: string[] }
     | { type: 'tool_start'; name: string; arguments: Record<string, unknown> }
     | { type: 'tool_result'; name: string; content: string; isError: boolean; preview: ResearchToolPreview };
 
@@ -40,7 +41,7 @@ export interface ResearchRunOptions {
  * The research loop: native function-calling investigation (intent → tools → evidence → answer).
  *
  * It streams an assistant response, runs any requested read-only tools, feeds the results back, and repeats
- * until the model stops requesting tools or the step ceiling is hit. The loop owns no routing or persistence —
+ * until the model stops requesting tools. The loop owns no routing or persistence —
  * the Brain assembles its input messages and forwards its signals.
  */
 @Provide()
@@ -68,10 +69,17 @@ export class Research extends FAgentAtom {
         const exchange: AgentMemory[] = [];
         const tools = options.tools ?? this.registry.definitions();
         let answer = '';
-        for (let step = 1; step <= RESEARCH_MAX_STEPS; step += 1) {
+        for (let step = 1; ; step += 1) {
             this.log.debug('research.turn', step);
             const turn = await this.intelligence.runTurn(working, tools);
             answer = turn.text;
+            emit({
+                type: 'llm_turn',
+                step,
+                text: turn.text,
+                stopReason: turn.stopReason,
+                toolCalls: turn.toolCalls.map((toolCall) => toolCall.name),
+            });
             if (turn.toolCalls.length === 0 && turn.text.length > 0) {
                 emit({ type: 'reply', chunk: turn.text });
             }
@@ -87,10 +95,6 @@ export class Research extends FAgentAtom {
             working.push(...results);
             exchange.push(...results);
         }
-        this.log.info('research.maxSteps', RESEARCH_MAX_STEPS);
-        const notice = this.runtimeText.text('research.maxStepsNotice', { steps: RESEARCH_MAX_STEPS });
-        emit({ type: 'reply', chunk: notice });
-        return { answer: answer + notice, exchange, steps: RESEARCH_MAX_STEPS };
     }
 
     private withResearchSystem(messages: AgentMemory[]): AgentMemory[] {

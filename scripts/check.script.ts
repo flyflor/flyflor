@@ -33,6 +33,7 @@ const ALLOWED_NEW_TARGETS = new Set([
     'TextDecoder',
     'TextEncoder',
     'TransformStream',
+    'WeakMap',
 ]);
 
 /** Container internals are the repository's only custom-class construction entry. */
@@ -99,6 +100,7 @@ const ROLE_DIRECTORIES = new Set([
     join('src', 'agent', 'brain', 'investigation'),
     join('src', 'agent', 'brain', 'research'),
     join('src', 'agent', 'brain', 'intelligence'),
+    join('src', 'neural', 'context'),
     join('src', 'neural', 'ipc'),
     join('src', 'neural', 'packet'),
     join('src', 'plugins'),
@@ -109,7 +111,6 @@ const ROLE_DIRECTORIES = new Set([
 const COMPACT_TYPESCRIPT_SOURCE_FILES = new Set([
     join('src', 'agent', 'brain', 'brain.ts'),
     join('src', 'agent', 'brain', 'callosum.ts'),
-    join('src', 'agent', 'brain', 'crystall.ts'),
     join('src', 'config', 'component.ts'),
     join('src', 'plugins', 'tools', 'codegraph.ts'),
     join('src', 'plugins', 'tools', 'ask.ts'),

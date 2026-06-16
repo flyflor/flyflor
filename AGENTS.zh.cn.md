@@ -22,7 +22,7 @@ Flyflor 默认使用共享的 `oop-code-redlines` skill 作为工程纪律。在
 3. 被注入的 class dependency 必须是 runtime import，不能是 type-only import。
 4. decorator 和 base class 位于 `src/core`。新的 runtime scope 必须通过 decorator 加 inheritance 表达，不能靠松散 registry 或字符串 flag。
 5. 配置放在 `./.config/config.jsonc`；secret 放在环境变量。
-6. IPC frame 是 8-byte big-endian length-prefixed JSON。Socket 代码必须容忍 chunking、frame coalescing、malformed frame 和 split UTF-8 bytes。
+6. IPC packet 使用 8-byte big-endian JSON body length header 加 UTF-8 JSON body。Socket 代码必须容忍 chunking、packet coalescing、malformed packet 和 split UTF-8 bytes。
 
 ## 文档规则
 

@@ -46,10 +46,10 @@ export interface PacketDecodeResult<T = unknown> {
 }
 
 /**
- * One malformed complete frame observed while decoding an IPC stream.
+ * One malformed complete packet observed while decoding an IPC stream.
  */
 export interface PacketDecodeError {
-    frame: string;
+    packet: string;
     error: Error;
 }
 

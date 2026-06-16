@@ -22,7 +22,7 @@ This file contains only Flyflor-specific additions. If a shared rule and a proje
 3. Injected class dependencies must be runtime imports, not type-only imports.
 4. Decorators and base classes live under `src/core`. New runtime scopes must use decorators plus inheritance, not loose registries or string-only flags.
 5. Config belongs in `./.config/config.jsonc`; secrets belong in environment variables.
-6. IPC frames are 8-byte big-endian length-prefixed JSON. Socket code must tolerate chunking, frame coalescing, malformed frames, and split UTF-8 bytes.
+6. IPC packets use an 8-byte big-endian JSON body length header followed by a UTF-8 JSON body. Socket code must tolerate chunking, packet coalescing, malformed packets, and split UTF-8 bytes.
 
 ## Documentation Rules
 

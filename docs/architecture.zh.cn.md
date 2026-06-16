@@ -8,7 +8,7 @@
 2. `Factory.create(AppModule)` 把构造委托给 IOC container。
 3. `AppModule` imports `PluginsModule`，并注入 `IPCService` 和 `Synapse`。
 4. `IPCService` 启动配置中的 socket endpoint。
-5. `FSocket` 接收 bytes，请 `PacketService` decode frames，并路由 valid packets。
+5. `FSocket` 接收 bytes，请 `PacketService` decode packets，并路由 valid packets。
 6. `Synapse` 持有 active agent pool，并把 user packets 发给 active `Agent`。
 7. `Agent` 拥有一个 turn：通过 `Memory` 组装 messages，流式输出 `Brain`，然后提交成功 turn。
 8. `Brain` 把 assembled memory messages 映射成 model signal output。
@@ -107,14 +107,14 @@ Decorators 位于 `src/core`。decorator 表达 intent；base class 表达 objec
 
 ## Neural And IPC
 
-`PacketService` 拥有 socket frame protocol：
+`PacketService` 拥有 length-prefixed JSON packet protocol：
 
 - 8-byte unsigned big-endian body length；
 - UTF-8 JSON body；
 - per-connection decode buffers；
 - partial headers and bodies；
-- one chunk 中的 multiple frames；
-- malformed 和 oversized frame reporting。
+- one chunk 中的 multiple packets；
+- malformed 和 oversized packet reporting。
 
 `FSocket` 拥有 Bun socket callbacks，并把每个 turn 的 streamed agent output 限定到发起请求的 socket。
 

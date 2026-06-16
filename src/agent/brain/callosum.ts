@@ -14,6 +14,7 @@ export enum CallosumSignalType {
     Clarification = 'clarification',
     ToolStart = 'tool_start',
     ToolResult = 'tool_result',
+    LlmTurn = 'llm_turn',
     Done = 'done',
 }
 

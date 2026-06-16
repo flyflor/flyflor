@@ -10,7 +10,6 @@ export interface RuntimeToolText {
 
 export interface RuntimeTextData {
     research?: {
-        maxStepsNotice?: string;
         toolUnavailable?: string;
         runtimeToolContext?: {
             verifiedRootsIntro?: string;

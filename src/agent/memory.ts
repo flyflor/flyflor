@@ -1,6 +1,8 @@
 import { type FAgentProfileConfiguration } from '@/config';
-import { FAgentAtom, Logger, Prompt, PromptService, Provide, type FLogger, type PromptPackageData } from '@/core';
+import { FAgentAtom, Inject, Logger, Prompt, PromptService, Provide, type FLogger, type PromptPackageData } from '@/core';
 import { includes } from 'lodash-es';
+import { Context } from '@/neural/context';
+import type { CompletedSummary, TurnUnderstanding } from '@/neural/context/types';
 
 export enum SoulSection {
     /** Agent identity / constitution layer. Loaded from `SOUL.md`. */
@@ -111,19 +113,44 @@ export class Memory extends FAgentAtom {
     @Logger(Memory.name)
     public readonly log!: FLogger;
 
-    public context: AgentMemory[] = [];
+    @Inject()
+    public context!: Context;
+
+    public current?: TurnUnderstanding;
+
+    public working: AgentMemory[] = [];
+
+    public completed: CompletedSummary[] = [];
 
     public pendingResearch?: PendingResearch;
-
-    private commitUserOverride?: string;
-
-    private pendingExchange: AgentMemory[] = [];
 
     constructor(public readonly agentConfig: FAgentProfileConfiguration) {
         super();
     }
 
-    public buildMessage(content: string): AgentMemory[] {
+    public load(understanding: TurnUnderstanding): void {
+        this.current = understanding;
+    }
+
+    public async ingest(input: AgentTurnInput): Promise<TurnUnderstanding> {
+        return this.context.ingest(this, input);
+    }
+
+    public recordWork(exchange: AgentMemory[]): void {
+        this.working = this.compactWork(exchange);
+    }
+
+    public async settle(result: { user: string; assistant: string; completed: boolean }): Promise<CompletedSummary | undefined> {
+        return this.context.settle(this, { ...result, working: this.working });
+    }
+
+    public rememberCompletion(summary: CompletedSummary): void {
+        this.completed.push(summary);
+        this.completed = this.completed.slice(-12);
+        this.working = [];
+    }
+
+    public buildMessage(content?: string): AgentMemory[] {
         const rendered: string[] = [];
         const sections = this.prompt.config?.prompt?.sections ?? [];
         for (const section of sections) {
@@ -132,43 +159,37 @@ export class Memory extends FAgentAtom {
             if (typeof content !== 'string' || content.trim().length === 0) continue;
             rendered.push(`<${section}>\n${content.trim()}\n</${section}>`);
         }
+        const state = this.renderState();
+        if (state.length > 0) rendered.push(state);
         const system = rendered.join('\n\n');
         const messages: AgentMemory[] = system.length > 0 ? [{ role: AgentChatRole.System, content: system }] : [];
-        return [...messages, ...this.context, { role: AgentChatRole.User, content }];
+        const user = this.current === undefined
+            ? content?.trim() ?? ''
+            : JSON.stringify({
+                  goal: this.current.goal,
+                  user: this.truncate(content ?? this.current.userText, 4000),
+              });
+        if (user.length > 0) messages.push({ role: AgentChatRole.User, content: user });
+        return messages;
     }
 
-    /**
-     * Commits one finished turn to working memory.
-     * Called only after a turn succeeds, so the context holds whole user/assistant pairs. Any tool exchange
-     * recorded during the turn (by the research loop) is folded in between the user and assistant messages.
-     */
-    public commit(user: string, assistant: string): void {
-        this.context.push({ role: AgentChatRole.User, content: this.consumeCommitUserOverride(user) });
-        this.context.push(...this.consumePendingExchange());
-        this.context.push({ role: AgentChatRole.Assistant, content: assistant });
+    private renderState(): string {
+        if (this.current === undefined && this.completed.length === 0 && this.working.length === 0) return '';
+        return `<agent_memory>\n${JSON.stringify({
+            current: this.current,
+            completed: this.completed.slice(-8),
+            working: this.working.slice(-8).map((item) => ({ role: item.role, content: this.truncate(item.content, 1000) })),
+        }, null, 2)}\n</agent_memory>`;
     }
 
-    /**
-     * Records the tool round-trip of the in-flight turn so the next successful `commit` keeps the evidence
-     * trail. Held separately from `context` so an aborted turn never leaks a half-finished exchange.
-     */
-    public recordExchange(exchange: AgentMemory[]): void {
-        this.pendingExchange = exchange;
+    private compactWork(exchange: AgentMemory[]): AgentMemory[] {
+        return exchange.slice(-24).map((message) => ({
+            ...message,
+            content: this.truncate(message.content, 2000),
+        }));
     }
 
-    private consumePendingExchange(): AgentMemory[] {
-        const exchange = this.pendingExchange;
-        this.pendingExchange = [];
-        return exchange;
-    }
-
-    public useCommitUser(user: string): void {
-        this.commitUserOverride = user;
-    }
-
-    private consumeCommitUserOverride(user: string): string {
-        const value = this.commitUserOverride ?? user;
-        this.commitUserOverride = undefined;
-        return value;
+    private truncate(content: string, max: number): string {
+        return content.length <= max ? content : `${content.slice(0, max)}...`;
     }
 }

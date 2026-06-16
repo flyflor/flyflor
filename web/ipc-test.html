@@ -514,6 +514,52 @@
                 font-variant-numeric: tabular-nums;
             }
 
+            .debug-log {
+                display: grid;
+                gap: 0.45rem;
+                max-height: 18rem;
+                overflow-y: auto;
+                padding-right: 0.1rem;
+                scrollbar-color: #4a4c41 transparent;
+            }
+
+            .debug-entry {
+                display: grid;
+                gap: 0.2rem;
+                padding-top: 0.45rem;
+                border-top: 1px solid var(--line-soft);
+            }
+
+            .debug-entry:first-child {
+                padding-top: 0;
+                border-top: 0;
+            }
+
+            .debug-entry-head {
+                color: var(--accent-strong);
+                font-family: var(--mono);
+                font-size: 0.74rem;
+                font-variant-numeric: tabular-nums;
+            }
+
+            .debug-entry.ipc .debug-entry-head {
+                color: var(--warning);
+            }
+
+            .debug-entry.error .debug-entry-head {
+                color: var(--danger);
+            }
+
+            .debug-entry-body {
+                margin: 0;
+                color: var(--muted);
+                font-family: var(--mono);
+                font-size: 0.72rem;
+                line-height: 1.55;
+                white-space: pre-wrap;
+                word-break: break-word;
+            }
+
             .composer {
                 display: grid;
                 grid-template-columns: minmax(0, 1fr) auto;
@@ -619,7 +665,7 @@
                 <div class="endpoint" aria-label="连接端点">
                     <span>WebSocket bridge</span>
                     <code>ws://127.0.0.1:17878</code>
-                    <small id="protocolText">send: JSON bridge</small>
+                    <small id="protocolText">send: JSON packet</small>
                 </div>
             </header>
 
@@ -658,14 +704,6 @@
                     </section>
 
                     <section class="side-section actions">
-                        <h2 class="panel-title">协议模式</h2>
-                        <div class="mode-grid" aria-label="发送协议模式">
-                            <button class="mode-btn" id="jsonModeBtn" type="button" aria-pressed="true">JSON</button>
-                            <button class="mode-btn" id="frameModeBtn" type="button" aria-pressed="false">Frame</button>
-                        </div>
-                    </section>
-
-                    <section class="side-section actions">
                         <h2 class="panel-title">执行目录</h2>
                         <input id="workingDirectoryInput" type="text" value="/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor" placeholder="例如：/Users/.../flyflor-cli 或 ./reference/pi" />
                         <small class="hint">相对路径会按这里的目录解析；绝对路径仍必须位于允许根内。</small>
@@ -691,14 +729,19 @@
                                 <strong id="chunkCount">0</strong>
                             </div>
                             <div class="stat">
-                                <span class="label">帧</span>
-                                <strong id="frameCount">0</strong>
+                                <span class="label">包</span>
+                                <strong id="packetCount">0</strong>
                             </div>
                             <div class="stat">
                                 <span class="label">错误</span>
                                 <strong id="errorCount">0</strong>
                             </div>
                         </div>
+                    </section>
+
+                    <section class="side-section">
+                        <h2 class="panel-title">调试日志</h2>
+                        <div class="debug-log" id="debugLog" aria-live="polite"></div>
                     </section>
                 </aside>
             </main>
@@ -711,19 +754,14 @@
 
         <script>
             const BRIDGE_URL = 'ws://127.0.0.1:17878';
-            const HEADER_BYTES = 8;
-            const MAX_FRAME_BYTES = 16 * 1024 * 1024;
-            const textEncoder = new TextEncoder();
-            const textDecoder = new TextDecoder();
+            const IPC_DEBUG = true;
 
             let ws = null;
             let pending = false;
             let currentAgentMessage = null;
-            let protocolMode = 'json';
-            let incomingBuffer = new Uint8Array(0);
             let messageTotal = 0;
             let chunkTotal = 0;
-            let frameTotal = 0;
+            let packetTotal = 0;
             let errorTotal = 0;
 
             const status = document.getElementById('status');
@@ -731,22 +769,20 @@
             const streamState = document.getElementById('streamState');
             const streamText = document.getElementById('streamText');
             const signalPill = document.getElementById('signalPill');
-            const protocolText = document.getElementById('protocolText');
             const chat = document.getElementById('chat');
             const connectBtn = document.getElementById('connectBtn');
             const disconnectBtn = document.getElementById('disconnectBtn');
             const clearBtn = document.getElementById('clearBtn');
             const sendBtn = document.getElementById('sendBtn');
             const messageInput = document.getElementById('messageInput');
-            const jsonModeBtn = document.getElementById('jsonModeBtn');
-            const frameModeBtn = document.getElementById('frameModeBtn');
             const workingDirectoryInput = document.getElementById('workingDirectoryInput');
             const quickActions = document.getElementById('quickActions');
             const composer = document.getElementById('composer');
             const messageCount = document.getElementById('messageCount');
             const chunkCount = document.getElementById('chunkCount');
-            const frameCount = document.getElementById('frameCount');
+            const packetCount = document.getElementById('packetCount');
             const errorCount = document.getElementById('errorCount');
+            const debugLog = document.getElementById('debugLog');
 
             renderEmptyState();
             setStreamState(false);
@@ -810,16 +846,18 @@
             }
 
             function normalizeAgentSignal(data) {
-                if (typeof data === 'string') return { type: 'reply', chunk: data };
-                if (!data || typeof data !== 'object') return { type: 'reply', chunk: String(data ?? '') };
+                if (typeof data === 'string') return { type: 'reply', chunk: data, data: undefined };
+                if (!data || typeof data !== 'object') return { type: 'reply', chunk: String(data ?? ''), data: undefined };
                 return {
                     type: typeof data.type === 'string' ? data.type : 'reply',
                     chunk: typeof data.chunk === 'string' ? data.chunk : '',
+                    data: 'data' in data ? data.data : undefined,
                 };
             }
 
             function renderAgentSignal(data) {
                 const signal = normalizeAgentSignal(data);
+                appendDebugEntry('signal', `signal.${signal.type}`, signal);
                 signalPill.textContent = signal.type;
                 if (signal.type === 'reply') {
                     appendAgentDelta(signal.chunk);
@@ -829,8 +867,20 @@
                     finishAgentStream();
                     return;
                 }
-                if (signal.chunk.length > 0) {
-                    addMessage(`${signal.type}: ${signal.chunk}`, 'system');
+                if (signal.type === 'tool_start') {
+                    addMessage(`工具开始: ${signal.chunk || 'unknown'}\n${signalDetail(signal)}`.trim(), 'system');
+                    return;
+                }
+                if (signal.type === 'tool_result') {
+                    addMessage(`工具结果: ${signal.chunk || 'unknown'}\n${signalDetail(signal)}`.trim(), 'system');
+                    return;
+                }
+                if (signal.type === 'llm_turn') {
+                    addMessage(`LLM 返回: ${signal.data?.stopReason ?? 'unknown'}\n${signalDetail(signal)}`.trim(), 'system');
+                    return;
+                }
+                if (signal.chunk.length > 0 || signal.data !== undefined) {
+                    addMessage(`${signal.type}: ${signalDetail(signal) || signal.chunk}`, 'system');
                 }
             }
 
@@ -886,58 +936,14 @@
             function updateStats() {
                 messageCount.textContent = String(messageTotal);
                 chunkCount.textContent = String(chunkTotal);
-                frameCount.textContent = String(frameTotal);
+                packetCount.textContent = String(packetTotal);
                 errorCount.textContent = String(errorTotal);
             }
 
-            function setProtocolMode(mode) {
-                protocolMode = mode;
-                jsonModeBtn.setAttribute('aria-pressed', String(mode === 'json'));
-                frameModeBtn.setAttribute('aria-pressed', String(mode === 'frame'));
-                protocolText.textContent = mode === 'frame' ? 'send: 8-byte frame' : 'send: JSON bridge';
-            }
-
-            function encodeFrame(packet) {
-                const body = textEncoder.encode(JSON.stringify(packet));
-                if (body.byteLength > MAX_FRAME_BYTES) throw new Error('消息超过 IPC frame 限制');
-                const frame = new Uint8Array(HEADER_BYTES + body.byteLength);
-                const view = new DataView(frame.buffer);
-                view.setBigUint64(0, BigInt(body.byteLength), false);
-                frame.set(body, HEADER_BYTES);
-                return frame;
-            }
-
-            function appendBytes(left, right) {
-                const combined = new Uint8Array(left.byteLength + right.byteLength);
-                combined.set(left, 0);
-                combined.set(right, left.byteLength);
-                return combined;
-            }
-
-            function decodeFrames(bytes) {
-                incomingBuffer = appendBytes(incomingBuffer, bytes);
-                const packets = [];
-                let offset = 0;
-
-                while (incomingBuffer.byteLength - offset >= HEADER_BYTES) {
-                    const view = new DataView(incomingBuffer.buffer, incomingBuffer.byteOffset + offset, HEADER_BYTES);
-                    const bodyLengthBig = view.getBigUint64(0, false);
-                    if (bodyLengthBig > BigInt(MAX_FRAME_BYTES)) throw new Error('收到的 IPC frame 超过限制');
-                    const bodyLength = Number(bodyLengthBig);
-                    const frameLength = HEADER_BYTES + bodyLength;
-                    if (incomingBuffer.byteLength - offset < frameLength) break;
-                    const body = incomingBuffer.slice(offset + HEADER_BYTES, offset + frameLength);
-                    packets.push(JSON.parse(textDecoder.decode(body)));
-                    offset += frameLength;
-                }
-
-                incomingBuffer = incomingBuffer.slice(offset);
-                return packets;
-            }
-
             function handlePacket(msg) {
-                frameTotal += 1;
+                packetTotal += 1;
                 updateStats();
+                appendDebugEntry('packet', `packet.${String(msg.action)}`, msg.data);
                 if (msg.action === 'data') {
                     renderAgentSignal(msg.data);
                     return;
@@ -966,12 +972,83 @@
                 addMessage(`收到: ${JSON.stringify(msg)}`, 'system');
             }
 
+            function debugIpc(event, detail) {
+                if (!IPC_DEBUG) return;
+                if (detail === undefined) console.debug(`[IPC/browser] ${event}`);
+                else console.debug(`[IPC/browser] ${event}`, detail);
+                appendDebugEntry('ipc', event, detail);
+            }
+
+            function previewText(value, max = 160) {
+                const clean = String(value).replaceAll('\0', '\\0');
+                return clean.length > max ? `${clean.slice(0, max)}...` : clean;
+            }
+
+            function charCodes(value, max = 32) {
+                return Array.from(String(value).slice(0, max), (char) => char.charCodeAt(0));
+            }
+
+            function appendDebugEntry(kind, title, detail) {
+                if (!debugLog) return;
+                const entry = document.createElement('article');
+                entry.className = `debug-entry ${kind}`;
+
+                const head = document.createElement('div');
+                head.className = 'debug-entry-head';
+                head.textContent = title;
+
+                const body = document.createElement('pre');
+                body.className = 'debug-entry-body';
+                body.textContent = formatDebugDetail(detail);
+
+                entry.append(head, body);
+                debugLog.appendChild(entry);
+                while (debugLog.children.length > 80) {
+                    debugLog.removeChild(debugLog.firstElementChild);
+                }
+                debugLog.scrollTop = debugLog.scrollHeight;
+            }
+
+            function formatDebugDetail(detail) {
+                if (detail === undefined) return '';
+                if (typeof detail === 'string') return previewText(detail, 800);
+                try {
+                    return previewText(JSON.stringify(detail, null, 2), 1200);
+                } catch (error) {
+                    return previewText(error instanceof Error ? error.message : String(detail), 800);
+                }
+            }
+
+            function signalDetail(signal) {
+                const lines = [];
+                if (signal.data !== undefined) lines.push(formatDebugDetail(signal.data));
+                if (signal.chunk.length > 0 && signal.type !== 'reply') lines.unshift(signal.chunk);
+                return lines.filter(Boolean).join('\n');
+            }
+
             async function readSocketMessage(eventData) {
-                if (typeof eventData === 'string') return [JSON.parse(eventData)];
-                if (eventData instanceof Blob) return decodeFrames(new Uint8Array(await eventData.arrayBuffer()));
-                if (eventData instanceof ArrayBuffer) return decodeFrames(new Uint8Array(eventData));
-                if (ArrayBuffer.isView(eventData)) return decodeFrames(new Uint8Array(eventData.buffer, eventData.byteOffset, eventData.byteLength));
-                throw new Error('不支持的 WebSocket 消息类型');
+                if (typeof eventData === 'string') {
+                    debugIpc('ws.in', {
+                        type: 'string',
+                        chars: eventData.length,
+                        preview: previewText(eventData),
+                        charCodes: charCodes(eventData),
+                    });
+                    try {
+                        return [JSON.parse(eventData)];
+                    } catch (error) {
+                        debugIpc('ws.in.json-error', {
+                            message: error instanceof Error ? error.message : String(error),
+                            preview: previewText(eventData),
+                            charCodes: charCodes(eventData),
+                        });
+                        throw error;
+                    }
+                }
+                debugIpc('ws.in', {
+                    type: eventData?.constructor?.name ?? typeof eventData,
+                });
+                throw new Error('WebSocket bridge 只支持 JSON 文本消息');
             }
 
             function sendUserMessage(text) {
@@ -980,8 +1057,12 @@
                 setInputEnabled(false);
                 const workingDirectory = workingDirectoryInput.value.trim() || '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor';
                 const packet = { action: 'user', data: { text, workingDirectory } };
-                if (protocolMode === 'frame') ws.send(encodeFrame(packet));
-                else ws.send(JSON.stringify(packet));
+                debugIpc('ws.out', {
+                    action: packet.action,
+                    textLength: text.length,
+                    workingDirectory,
+                });
+                ws.send(JSON.stringify(packet));
                 addMessage(text, 'user');
                 addMessage(`执行目录: ${workingDirectory}`, 'system');
                 createPendingAgentMessage();
@@ -992,8 +1073,6 @@
                 setStatus('connecting', '连接中');
                 connectBtn.disabled = true;
                 ws = new WebSocket(BRIDGE_URL);
-                ws.binaryType = 'arraybuffer';
-                incomingBuffer = new Uint8Array(0);
 
                 ws.onopen = () => {
                     setStatus('connecting', '等待握手');
@@ -1040,10 +1119,9 @@
             clearBtn.addEventListener('click', () => {
                 currentAgentMessage = null;
                 pending = false;
-                incomingBuffer = new Uint8Array(0);
                 messageTotal = 0;
                 chunkTotal = 0;
-                frameTotal = 0;
+                packetTotal = 0;
                 errorTotal = 0;
                 updateStats();
                 setStreamState(false);
@@ -1065,9 +1143,6 @@
                     sendUserMessage(text);
                 });
             });
-
-            jsonModeBtn.addEventListener('click', () => setProtocolMode('json'));
-            frameModeBtn.addEventListener('click', () => setProtocolMode('frame'));
         </script>
     </body>
 </html>

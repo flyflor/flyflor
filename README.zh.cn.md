@@ -32,8 +32,8 @@ bun run build:binary
 2. `Container` 构建 module imports，注入 decorated properties，运行 `@Init()`，并保存 singleton instances。
 3. `ConfigComponent` 加载 `./.config/config.jsonc`；secret 保持在环境变量。
 4. `IPCService` 启动 Bun Unix socket 或 Windows named pipe。
-5. `FSocket` 接收 bytes，并把 frame parsing 交给 `PacketService`。
-6. `PacketService` 编解码 8-byte big-endian length-prefixed JSON frames。
+5. `FSocket` 接收 bytes，并把 packet decoding 交给 `PacketService`。
+6. `PacketService` 编解码 8-byte big-endian length-prefixed JSON packets。
 7. `Synapse` 创建配置中的 active `Agent`，并把 decoded packets 路由给它。
 8. `Agent` 向 `Memory` 请求 prompt/context messages，再从 `Brain` 流式输出。
 9. `Intelligence` 通过 protocol adapters 打开配置中的 provider stream。
@@ -44,7 +44,7 @@ bun run build:binary
 src/core/          IOC、decorators、base classes、file/prompt/logger primitives
 src/config/        runtime configuration object
 src/agent/         agent、memory、brain、modes
-src/neural/        synapse、IPC socket、packet framing
+src/neural/        synapse、IPC socket、packet encoding
 src/entities/      repository/entity classes 和 SQL owners
 src/plugins/       plugin module boundary
 scripts/           local tooling

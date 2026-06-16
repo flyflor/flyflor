@@ -32,8 +32,8 @@ bun run build:binary
 2. `Container` builds module imports, injects decorated properties, runs `@Init()`, and stores singleton instances.
 3. `ConfigComponent` loads `./.config/config.jsonc`; secrets stay in environment variables.
 4. `IPCService` starts the Bun Unix socket or Windows named pipe.
-5. `FSocket` receives bytes and delegates frame parsing to `PacketService`.
-6. `PacketService` encodes and decodes 8-byte big-endian length-prefixed JSON frames.
+5. `FSocket` receives bytes and delegates packet decoding to `PacketService`.
+6. `PacketService` encodes and decodes 8-byte big-endian length-prefixed JSON packets.
 7. `Synapse` creates the configured active `Agent` and routes decoded packets into it.
 8. `Agent` asks `Memory` for prompt/context messages, then streams output from `Brain`.
 9. `Intelligence` opens the configured provider stream through protocol adapters.
@@ -44,7 +44,7 @@ bun run build:binary
 src/core/          IOC, decorators, base classes, file/prompt/logger primitives
 src/config/        runtime configuration object
 src/agent/         agent, memory, brain, modes
-src/neural/        synapse, IPC socket, packet framing
+src/neural/        synapse, IPC socket, packet encoding
 src/entities/      repository/entity classes and SQL owners
 src/plugins/       plugin module boundary
 scripts/           local tooling

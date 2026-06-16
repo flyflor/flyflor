@@ -3,12 +3,58 @@ import { useContainer } from '@/core';
 import { SocketEvent, type SocketPacket } from './packet';
 import { Synapse } from './synapse';
 import type { AgentTurnInput } from '@/agent/memory';
+import { ContextIntent, type CompletedSummary, type TurnUnderstanding } from './context';
 import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 class TestSynapse extends Synapse {
     public readonly inputs: AgentTurnInput[] = [];
+    public readonly memory: {
+        current?: TurnUnderstanding;
+        working: [];
+        completed: CompletedSummary[];
+        load: (understanding: TurnUnderstanding) => void;
+        ingest: (input: AgentTurnInput) => Promise<TurnUnderstanding>;
+        settle: () => Promise<CompletedSummary>;
+        rememberCompletion: (summary: CompletedSummary) => void;
+    } = {
+        working: [],
+        completed: [],
+        load: (understanding) => {
+            this.memory.current = understanding;
+        },
+        ingest: async (input) => {
+            const understanding = {
+                userText: input.content,
+                intent: ContextIntent.Reply,
+                goal: input.content,
+                constraints: [],
+                references: [],
+                knownDone: [],
+                openQuestions: [],
+                shouldInvestigate: false,
+            };
+            this.memory.load(understanding);
+            return understanding;
+        },
+        settle: async () => {
+            const summary = {
+                goal: this.memory.current?.goal ?? '',
+                result: 'done',
+                changedFiles: [],
+                decisions: [],
+                evidence: [],
+                remaining: [],
+                createdAt: 1,
+            };
+            this.memory.rememberCompletion(summary);
+            return summary;
+        },
+        rememberCompletion: (summary) => {
+            this.memory.completed.push(summary);
+        },
+    };
 
     public constructor() {
         super();
@@ -16,8 +62,10 @@ class TestSynapse extends Synapse {
             active: 'test',
             agents: {
                 test: {
+                    memory: this.memory,
                     run: async (input: AgentTurnInput) => {
                         this.inputs.push(input);
+                        return { user: input.content, assistant: 'done', completed: true };
                     },
                 } as never,
             },
@@ -73,5 +121,7 @@ describe('Synapse', () => {
         await synapse.next({ action: SocketEvent.User, data: 'hello' });
 
         expect(synapse.inputs).toEqual([{ content: 'hello' }]);
+        expect(synapse.memory.current?.goal).toBe('hello');
+        expect(synapse.memory.completed).toHaveLength(1);
     });
 });

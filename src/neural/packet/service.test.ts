@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { useContainer } from '@/core';
-import { PACKET_LENGTH_HEADER_BYTES, PACKET_MAX_CONTENT_BYTES, PACKET_PROTOCOL_MISMATCH_MESSAGE, PACKET_TEXT_ENCODING, PacketService, SocketEvent } from '@/neural/packet';
+import { PACKET_LENGTH_HEADER_BYTES, PACKET_PROTOCOL_MISMATCH_MESSAGE, PACKET_TEXT_ENCODING, PacketService, SocketEvent } from '@/neural/packet';
 
 async function usePacketService(): Promise<PacketService> {
     return useContainer().getAsync(PacketService);
@@ -10,7 +10,7 @@ function packet(data: unknown) {
     return { action: SocketEvent.Data, data };
 }
 
-function frameFromJson(content: string): Buffer {
+function packetBufferFromJson(content: string): Buffer {
     const body = Buffer.from(content, PACKET_TEXT_ENCODING);
     const header = Buffer.alloc(PACKET_LENGTH_HEADER_BYTES);
     header.writeBigUInt64BE(BigInt(body.byteLength), 0);
@@ -18,7 +18,7 @@ function frameFromJson(content: string): Buffer {
 }
 
 describe('PacketService', () => {
-    test('encodes an 8-byte big-endian body length header', async () => {
+    test('encodes an 8-byte big-endian packet body length header', async () => {
         const service = await usePacketService();
         const value = packet('hello');
         const encoded = service.encode(value);
@@ -54,7 +54,7 @@ describe('PacketService', () => {
         });
     });
 
-    test('decodes multiple coalesced frames from one chunk', async () => {
+    test('decodes multiple coalesced packets from one chunk', async () => {
         const service = await usePacketService();
         const connection = {};
         const first = packet('first');
@@ -72,24 +72,24 @@ describe('PacketService', () => {
         expect(service.decode(connection, service.encode(value))).toEqual({ packets: [value], errors: [] });
     });
 
-    test('reports malformed JSON and continues with following frames', async () => {
+    test('reports malformed JSON and continues with following packets', async () => {
         const service = await usePacketService();
         const connection = {};
         const valid = packet('after malformed json');
-        const chunk = Buffer.concat([frameFromJson('{"action":'), service.encode(valid)]);
+        const chunk = Buffer.concat([packetBufferFromJson('{"action":'), service.encode(valid)]);
         const result = service.decode(connection, chunk);
 
         expect(result.packets).toEqual([valid]);
         expect(result.errors).toHaveLength(1);
-        expect(result.errors[0]?.frame).toBe('{"action":');
+        expect(result.errors[0]?.packet).toBe('{"action":');
     });
 
-    test('rejects an oversized declared frame length and clears the buffer', async () => {
+    test('rejects a declared packet body length outside JavaScript safe integer range and clears the buffer', async () => {
         const service = await usePacketService();
         const connection = {};
         const badHeader = Buffer.alloc(PACKET_LENGTH_HEADER_BYTES);
-        badHeader.writeBigUInt64BE(BigInt(PACKET_MAX_CONTENT_BYTES) + 1n, 0);
-        const valid = packet('fresh frame');
+        badHeader.writeBigUInt64BE(BigInt(Number.MAX_SAFE_INTEGER) + 1n, 0);
+        const valid = packet('fresh packet');
 
         const rejected = service.decode(connection, badHeader);
         expect(rejected.packets).toEqual([]);
@@ -118,9 +118,10 @@ describe('PacketService', () => {
         expect(result.errors[0]?.error.message).toBe(PACKET_PROTOCOL_MISMATCH_MESSAGE);
     });
 
-    test('throws when encoded content exceeds the maximum frame size', async () => {
+    test('encodes content beyond the old transport business limit', async () => {
         const service = await usePacketService();
+        const oldLimit = 16 * 1024 * 1024;
 
-        expect(() => service.encode(packet('x'.repeat(PACKET_MAX_CONTENT_BYTES)))).toThrow('Packet content length exceeds maximum');
+        expect(() => service.encode(packet('x'.repeat(oldLimit)))).not.toThrow();
     });
 });

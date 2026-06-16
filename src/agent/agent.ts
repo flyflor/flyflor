@@ -1,8 +1,14 @@
-import { Provide, Logger, FAgent, Scope } from '@/core';
+import { Inject, Provide, Logger, FAgent } from '@/core';
 import { Brain, CallosumSignalType, type CallosumSignal } from './brain';
 import { Memory, type AgentTurnInput } from './memory';
 import { type FAgentProfileConfiguration } from '@/config';
 import type { FLogger } from '@/core/logger';
+
+export interface AgentTurnResult {
+    user: string;
+    assistant: string;
+    completed: boolean;
+}
 
 /**
  * The agent: a person-like runtime object. It owns an injected brain (cortex) and memory (prefrontal
@@ -12,29 +18,38 @@ import type { FLogger } from '@/core/logger';
  */
 @Provide()
 export class Agent extends FAgent<CallosumSignal> {
-    @Scope()
+    @Inject(function (this: Agent) {
+        return [this.agentConfig];
+    })
+    public memory!: Memory;
+
+    @Inject(function (this: Agent) {
+        return [this.agentConfig, this.memory];
+    })
     public brain!: Brain;
 
     @Logger(Agent.name)
     public readonly log!: FLogger;
 
-    constructor(public readonly agentConfig: FAgentProfileConfiguration, public readonly memory: Memory) {
+    constructor(public readonly agentConfig: FAgentProfileConfiguration) {
         super();
     }
 
-    public async run(input: AgentTurnInput): Promise<void> {
+    public async run(input: AgentTurnInput): Promise<AgentTurnResult> {
         this.log.debug('turn.start', input);
-        await new Promise<void>((resolve, reject) => {
+        return new Promise<AgentTurnResult>((resolve, reject) => {
             let assistant = '';
             const subscription = this.brain.subscribe({
                 next: (signal) => {
                     if (signal.type === CallosumSignalType.Reply) assistant += signal.chunk;
                     if (signal.type === CallosumSignalType.Done) {
-                        // 中文：只在完整 turn 成功结束后提交，避免半截流式回复污染下一轮上下文。
-                        if (assistant.trim().length > 0) this.memory.commit(input.content, assistant);
                         this.emit(signal);
                         subscription.unsubscribe();
-                        resolve();
+                        resolve({
+                            user: input.content,
+                            assistant,
+                            completed: assistant.trim().length > 0,
+                        });
                         return;
                     }
                     this.emit(signal);
@@ -44,7 +59,7 @@ export class Agent extends FAgent<CallosumSignal> {
                     reject(error);
                 },
             });
-            void this.brain.run(this.memory.buildMessage(input.content), input).catch((error) => {
+            void this.brain.run(input).catch((error) => {
                 subscription.unsubscribe();
                 reject(error);
             });

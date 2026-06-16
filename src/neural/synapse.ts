@@ -1,9 +1,8 @@
 import { Agent } from '@/agent';
-import { Memory } from '@/agent/memory';
-import { Config, Init, Logger, Singleton, useContainer, type FLogger } from '@/core';
+import { Config, Init, Inject, Logger, Singleton, useContainer, type FLogger } from '@/core';
 import { ConfigComponent } from '@/config';
 import { existsSync, realpathSync, statSync } from 'node:fs';
-import { Subject } from 'rxjs';
+import { Subject, concatMap, defaultIfEmpty, filter, firstValueFrom, map, of, tap } from 'rxjs';
 import { SocketEvent, type SocketPacket, type SocketUserPayload } from './packet';
 import type { AgentTurnInput } from '@/agent/memory';
 
@@ -50,19 +49,29 @@ export class Synapse<T extends SocketPacket = SocketPacket> extends Subject<T> {
         agentConfig.provider = agentConfig.provider || this.config.model.provider;
         agentConfig.contextLength = agentConfig.contextLength || this.config.model.contextLength;
         agentConfig.maxTokens = agentConfig.maxTokens || this.config.model.maxTokens;
-        // Build the agent's working memory once and pass it down the agent subtree, so Agent and Brain share
-        // one Memory per agent (a person's memory), while different agents stay isolated.
-        const memory = await useContainer().getAsync(Memory, agentConfig);
-        this.agentPool.agents[active] = await useContainer().getAsync(Agent, agentConfig, memory);
+        // Agent owns its private Memory through IOC injection; Synapse only selects and drives the active person.
+        this.agentPool.agents[active] = await useContainer().getAsync(Agent, agentConfig);
     }
 
     public override async next(packet: SocketPacket): Promise<void> {
-        this.log.debug(packet);
-        // Broadcast inbound packets for observers, then route user input into the active agent.
-        super.next(packet as T);
-        this.log.debug('user.payload', packet);
-        if (packet.action !== SocketEvent.User) return;
-        await this.agent.run(this.turnInput(packet.data));
+        await firstValueFrom(
+            of(packet).pipe(
+                tap((value) => {
+                    this.log.debug(value);
+                    super.next(value as T);
+                }),
+                filter((value): value is SocketPacket => value.action === SocketEvent.User),
+                map((value) => this.turnInput(value.data)),
+                concatMap((input) => this.runTurn(input)),
+                defaultIfEmpty(undefined),
+            ),
+        );
+    }
+
+    private async runTurn(input: AgentTurnInput): Promise<void> {
+        await this.agent.memory.ingest(input);
+        const result = await this.agent.run(input);
+        await this.agent.memory.settle(result);
     }
 
     private turnInput(data: unknown): AgentTurnInput {

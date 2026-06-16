@@ -8,7 +8,7 @@ This document describes the current implementation. Shared code-shape rules live
 2. `Factory.create(AppModule)` delegates construction to the IOC container.
 3. `AppModule` imports `PluginsModule` and injects `IPCService` plus `Synapse`.
 4. `IPCService` starts the configured socket endpoint.
-5. `FSocket` receives bytes, asks `PacketService` to decode frames, and routes valid packets.
+5. `FSocket` receives bytes, asks `PacketService` to decode packets, and routes valid packets.
 6. `Synapse` owns the active agent pool and sends user packets to the active `Agent`.
 7. `Agent` owns one turn: assemble messages through `Memory`, stream `Brain` output, then commit successful turns.
 8. `Brain` maps assembled memory messages into model signal output.
@@ -107,14 +107,14 @@ For model turns, `Agent` streams `Brain.transform(input)` delta signals through 
 
 ## Neural And IPC
 
-`PacketService` owns the socket frame protocol:
+`PacketService` owns the length-prefixed JSON packet protocol:
 
 - 8-byte unsigned big-endian body length;
 - UTF-8 JSON body;
 - per-connection decode buffers;
 - partial headers and bodies;
-- multiple frames in one chunk;
-- malformed and oversized frame reporting.
+- multiple packets in one chunk;
+- malformed and oversized packet reporting.
 
 `FSocket` owns Bun socket callbacks and scopes each turn's streamed agent output to the requesting socket.
 
