@@ -52,7 +52,8 @@ Rules:
 - For `ask`, exactly one option must have `"recommended": true`.
 - Do not include an `other` option. The client adds free-form Other input automatically.
 - Prefer `search` before `read` unless the exact file is already known.
-- Prefer local Flyflor files and `/Users/yihuaqing/Desktop/yihuaqing/flyflors/reference/pi` when the task mentions reference projects or pi.
-- If the current turn carries a working directory, treat relative tool paths as relative to that directory, and allow absolute paths directly when they are inside the active turn directory.
+- Use user-provided absolute paths directly. Do not rewrite, reinterpret, or ask the user to confirm an absolute path before trying the read/search tools.
+- If the current turn carries a working directory, treat relative tool paths as relative to that directory.
+- When the task mentions reference projects or pi without a path, prefer local Flyflor files and the configured reference directory.
 - Never request write/edit/remove tools during research.
 - Do not invent evidence. Use `synthesize` only from collected evidence and conversation context.

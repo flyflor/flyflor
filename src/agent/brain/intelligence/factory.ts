@@ -108,9 +108,15 @@ async function requestLlm(controller: ReadableStreamDefaultController<Intelligen
             return;
         }
     }
-    throw Object.assign(Error('LLM provider protocol matching failed'), {
+    throw Object.assign(Error(protocolMatchFailureMessage(config.provider, errors)), {
         detail: { provider: config.provider, errors },
     });
+}
+
+function protocolMatchFailureMessage(provider: string, errors: Array<Record<string, unknown>>): string {
+    if (errors.length === 0) return 'LLM provider protocol matching failed';
+    const attempts = errors.map((error) => JSON.stringify(error)).join(' | ');
+    return `LLM provider protocol matching failed (${provider}): ${attempts}`;
 }
 
 function protocols(config: FModelConfiguration) {

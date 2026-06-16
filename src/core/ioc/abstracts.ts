@@ -39,6 +39,7 @@ export interface ToolExecutionContext {
     intent: string;
     evidenceCount: number;
     workingDirectory?: string;
+    toolRoots?: string[];
     /** Cancels the tool when the surrounding turn is aborted. Tools should honor it for long work. */
     signal?: AbortSignal;
 }

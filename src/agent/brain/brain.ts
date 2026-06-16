@@ -1,7 +1,7 @@
-import { FAgentAtom, Inject, Logger, Prompt, PromptService, Provide, Scope, type FLogger } from '@/core';
+import { FAgentAtom, Inject, Logger, Prompt, PromptService, Provide, RuntimeText, Scope, type FLogger } from '@/core';
 import { type FAgentProfileConfiguration } from '@/config';
 import { Callosum, CallosumSignalType, type CallosumSignal } from './callosum';
-import { AgentChatRole, Memory, SoulSection, type AgentMemory } from '../memory';
+import { AgentChatRole, Memory, SoulSection, type AgentMemory, type AgentTurnInput } from '../memory';
 import { Intelligence } from './intelligence/service';
 import { Research } from './research';
 
@@ -16,6 +16,8 @@ export enum BrainPrompt {
  * can grow the prompt. It is a guardrail against runaway growth, not a quality target.
  */
 const SOUL_SECTION_CHAR_LIMIT = 4000;
+const RESEARCH_VERIFIED_ROOTS_TEXT_KEY = 'research.runtimeToolContext.verifiedRootsIntro';
+const RESEARCH_WORKING_DIRECTORY_TEXT_KEY = 'research.runtimeToolContext.workingDirectory';
 
 /**
  * 大脑皮层负责承接 Callosum 的路由结果。
@@ -32,6 +34,9 @@ export class Brain extends FAgentAtom<CallosumSignal> {
     @Inject()
     public researcher!: Research;
 
+    @Inject()
+    public runtimeText!: RuntimeText;
+
     @Prompt('prompts/callosum')
     public prompt!: PromptService<BrainPrompt>;
 
@@ -42,7 +47,7 @@ export class Brain extends FAgentAtom<CallosumSignal> {
         super();
     }
 
-    public async run(memory: AgentMemory[]): Promise<void> {
+    public async run(memory: AgentMemory[], input: AgentTurnInput): Promise<void> {
         this.log.debug('brain.start', memory);
         await new Promise<void>((resolve, reject) => {
             let action = Promise.resolve();
@@ -52,7 +57,7 @@ export class Brain extends FAgentAtom<CallosumSignal> {
                         action = action.then(() => this.reply(signal));
                     }
                     else if (signal.type === CallosumSignalType.Research) {
-                        action = action.then(() => this.research(signal));
+                        action = action.then(() => this.research(signal, input));
                     }
                     else if (signal.type === CallosumSignalType.Soul) {
                         action = action.then(() => this.soul(signal));
@@ -87,19 +92,48 @@ export class Brain extends FAgentAtom<CallosumSignal> {
         });
     }
 
-    public async research(data: CallosumSignal) {
+    public async research(data: CallosumSignal, input: AgentTurnInput) {
         // 中文：research 路由进入工具调查循环。Callosum 只给意图，证据收集和回答由 Research loop 完成。
-        const outcome = await this.researcher.run(this.memory.buildMessage(data.chunk), (signal) => {
+        const outcome = await this.researcher.run(this.researchMessages(data.chunk, input), (signal) => {
             if (signal.type === 'reply') {
                 this.emit({ type: CallosumSignalType.Reply, chunk: signal.chunk });
             } else if (signal.type === 'tool_start') {
                 this.emit({ type: CallosumSignalType.ToolStart, chunk: signal.name, data: signal.arguments });
             } else {
-                this.emit({ type: CallosumSignalType.ToolResult, chunk: signal.content, data: { name: signal.name, isError: signal.isError } });
+                this.emit({ type: CallosumSignalType.ToolResult, chunk: signal.content, data: signal.preview });
             }
+        }, {
+            workingDirectory: input.workingDirectory,
+            toolRoots: input.toolRoots,
         });
         // 中文：把工具往返记入待提交 exchange，Agent 成功结束本轮时随 commit 一起落盘，保留证据链。
         this.memory.recordExchange(outcome.exchange);
+    }
+
+    private researchMessages(content: string, input: AgentTurnInput): AgentMemory[] {
+        const messages = this.memory.buildMessage(content);
+        const context = this.researchRuntimeContext(input);
+        if (context === undefined) return messages;
+        const insertAt = messages.findIndex((message) => message.role !== AgentChatRole.System);
+        const system: AgentMemory = { role: AgentChatRole.System, content: context };
+        if (insertAt < 0) return [...messages, system];
+        return [...messages.slice(0, insertAt), system, ...messages.slice(insertAt)];
+    }
+
+    private researchRuntimeContext(input: AgentTurnInput): string | undefined {
+        const lines: string[] = [];
+        if (input.toolRoots !== undefined && input.toolRoots.length > 0) {
+            lines.push(this.runtimeText.text(RESEARCH_VERIFIED_ROOTS_TEXT_KEY));
+            for (const root of input.toolRoots) lines.push(`- ${root}`);
+        }
+        if (input.workingDirectory !== undefined && input.workingDirectory.length > 0) {
+            lines.push(this.runtimeText.text(
+                RESEARCH_WORKING_DIRECTORY_TEXT_KEY,
+                { workingDirectory: input.workingDirectory },
+            ));
+        }
+        if (lines.length === 0) return undefined;
+        return `<runtime_tool_context>\n${lines.join('\n')}\n</runtime_tool_context>`;
     }
 
     public async soul(data: CallosumSignal) {

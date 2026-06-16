@@ -1,9 +1,6 @@
 import { type FAgentProfileConfiguration } from '@/config';
 import { FAgentAtom, Logger, Prompt, PromptService, Provide, type FLogger, type PromptPackageData } from '@/core';
 import { includes } from 'lodash-es';
-import type { AgentToolCallMemory, AgentToolResultMemory, PendingResearch } from './research.types';
-
-export type { AgentToolCall, AgentToolCallMemory, AgentToolResultMemory } from './research.types';
 
 export enum SoulSection {
     /** Agent identity / constitution layer. Loaded from `SOUL.md`. */
@@ -40,6 +37,42 @@ export interface AgentTextMemory {
 }
 
 /**
+ * One tool call requested by the model inside an assistant turn.
+ * `arguments` is the parsed object form; the raw streamed JSON string lives only inside the protocol
+ * adapter during accumulation and never reaches working memory.
+ */
+export interface AgentToolCall {
+    id: string;
+    name: string;
+    arguments: Record<string, unknown>;
+}
+
+/**
+ * One assembled mental input that also carries the model's tool requests for a turn.
+ * It is the assistant-role member of `AgentMemory`; `content` keeps the visible text so the text-only
+ * protocol adapters can project it unchanged. `reasoning` carries provider thinking text that some models
+ * (e.g. DeepSeek thinking mode) require replayed alongside the tool calls on the next request.
+ */
+export interface AgentToolCallMemory {
+    role: AgentChatRole.Assistant;
+    content: string;
+    toolCalls: AgentToolCall[];
+    reasoning?: string;
+}
+
+/**
+ * One tool result fed back to the model after a tool runs.
+ * `content` is the model-visible rendering; `isError` marks a failed call so the model can recover.
+ */
+export interface AgentToolResultMemory {
+    role: AgentChatRole.Tool;
+    content: string;
+    toolCallId: string;
+    toolName: string;
+    isError: boolean;
+}
+
+/**
  * One message in working memory.
  *
  * Most messages are plain text (`AgentTextMemory`). An assistant turn that requested tools is an
@@ -47,6 +80,26 @@ export interface AgentTextMemory {
  * string `content`, so the text-only protocol adapters can render any message without knowing about tools.
  */
 export type AgentMemory = AgentTextMemory | AgentToolCallMemory | AgentToolResultMemory;
+
+/**
+ * One in-flight research task awaiting user clarification.
+ * Stored on `Memory` so a follow-up user message can resume the same investigation instead of routing anew.
+ */
+export interface PendingResearch {
+    request: string;
+    clarification?: string;
+    summary?: string;
+}
+
+/**
+ * Per-turn input accepted by the agent runtime.
+ * `content` is the only text sent to LLM providers; `workingDirectory` is operational context for tools.
+ */
+export interface AgentTurnInput {
+    content: string;
+    workingDirectory?: string;
+    toolRoots?: string[];
+}
 
 @Provide()
 export class Memory extends FAgentAtom {

@@ -22,7 +22,7 @@ export enum SocketEvent {
  *
  * @template T Payload type associated with the socket lifecycle action.
  */
-export interface SocketPacket<T = string> {
+export interface SocketPacket<T = unknown> {
     action: SocketEvent;
     data: T;
 }

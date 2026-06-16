@@ -52,7 +52,8 @@ Schemas：
 - `ask` 必须且只能有一个选项为 `"recommended": true`。
 - 不要包含 `other` 选项；客户端会自动提供自由填写的 Other 入口。
 - 除非已经知道精确文件，否则优先 `search` 再 `read`。
-- 当任务提到参考项目或 pi 时，优先查看 Flyflor 本地文件和 `/Users/yihuaqing/Desktop/yihuaqing/flyflors/reference/pi`。
-- 如果当前 turn 带有 working directory，相对工具路径按该目录解析；绝对路径如果位于当前 turn 目录内可以直接使用。
+- 用户提供绝对路径时直接使用。不要改写、重新解释，也不要在尝试 read/search 工具前要求用户确认绝对路径。
+- 如果当前 turn 带有 working directory，相对工具路径按该目录解析。
+- 当任务提到参考项目或 pi 但未提供路径时，优先查看 Flyflor 本地文件和已配置的 reference 目录。
 - research 阶段永远不要请求 write/edit/remove 工具。
 - 不要编造证据。只有基于已收集 evidence 和对话上下文时才使用 `synthesize`。

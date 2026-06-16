@@ -5,12 +5,12 @@ import type { DisabledToolInput, DisabledToolResult } from './types';
 export class RtkTool extends FTool<DisabledToolInput, { disabled: true; reason: string }> {
     public readonly name = 'rtk';
 
-    public readonly description = 'Runtime toolkit hook. Disabled until a concrete runtime contract is implemented.';
+    public readonly description = '';
 
     public readonly parameters = {
         type: 'object',
         properties: {
-            reason: { type: 'string', description: 'Reason the model wanted runtime toolkit access.' },
+            reason: { type: 'string', description: '' },
         },
     } as const;
 

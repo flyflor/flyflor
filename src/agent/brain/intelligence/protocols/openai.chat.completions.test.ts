@@ -129,4 +129,12 @@ describe('openai chat request body', () => {
         });
         expect(messages[1]).toEqual({ role: 'tool', tool_call_id: 'a', content: 'file body' });
     });
+
+    test('replays empty assistant tool-call content as an empty string instead of null', () => {
+        const body = openAIChatCompletionsAdapter.body(context([
+            { role: AgentChatRole.Assistant, content: '', toolCalls: [{ id: 'a', name: 'read_file', arguments: { path: 'x' } }] },
+        ]));
+        const messages = body.messages as Array<Record<string, unknown>>;
+        expect(messages[0]?.content).toBe('');
+    });
 });

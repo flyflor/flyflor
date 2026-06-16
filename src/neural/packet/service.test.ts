@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { useContainer } from '@/core';
-import { PACKET_LENGTH_HEADER_BYTES, PACKET_MAX_CONTENT_BYTES, PACKET_TEXT_ENCODING, PacketService, SocketEvent } from '@/neural/packet';
+import { PACKET_LENGTH_HEADER_BYTES, PACKET_MAX_CONTENT_BYTES, PACKET_PROTOCOL_MISMATCH_MESSAGE, PACKET_TEXT_ENCODING, PacketService, SocketEvent } from '@/neural/packet';
 
 async function usePacketService(): Promise<PacketService> {
     return useContainer().getAsync(PacketService);
@@ -96,6 +96,26 @@ describe('PacketService', () => {
         expect(rejected.errors).toHaveLength(1);
 
         expect(service.decode(connection, service.encode(valid))).toEqual({ packets: [valid], errors: [] });
+    });
+
+    test('rejects raw JSON text sent without an IPC length header', async () => {
+        const service = await usePacketService();
+        const connection = {};
+        const result = service.decode(connection, Buffer.from('{"action":"user","data":"hello"}', PACKET_TEXT_ENCODING));
+
+        expect(result.packets).toEqual([]);
+        expect(result.errors).toHaveLength(1);
+        expect(result.errors[0]?.error.message).toBe(PACKET_PROTOCOL_MISMATCH_MESSAGE);
+    });
+
+    test('rejects raw unicode text sent without an IPC length header', async () => {
+        const service = await usePacketService();
+        const connection = {};
+        const result = service.decode(connection, Buffer.from('研究下这个项目', PACKET_TEXT_ENCODING));
+
+        expect(result.packets).toEqual([]);
+        expect(result.errors).toHaveLength(1);
+        expect(result.errors[0]?.error.message).toBe(PACKET_PROTOCOL_MISMATCH_MESSAGE);
     });
 
     test('throws when encoded content exceeds the maximum frame size', async () => {

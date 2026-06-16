@@ -1,5 +1,5 @@
 import { FService, Service } from '@/core';
-import { PACKET_LENGTH_HEADER_BYTES, PACKET_MAX_CONTENT_BYTES, PACKET_TEXT_ENCODING } from './constants';
+import { PACKET_LENGTH_HEADER_BYTES, PACKET_MAX_CONTENT_BYTES, PACKET_PROTOCOL_MISMATCH_MESSAGE, PACKET_TEXT_ENCODING } from './constants';
 import type { PacketDecodeError, PacketDecodeResult, PacketDecodeState, SocketPacket } from './types';
 
 /**
@@ -75,6 +75,14 @@ export class PacketService extends FService {
         const errors: PacketDecodeError[] = [];
 
         while (state.buffer.byteLength >= PACKET_LENGTH_HEADER_BYTES) {
+            if (this.looksLikeTextProtocol(state.buffer)) {
+                errors.push({
+                    frame: this.describeBytes(state.buffer),
+                    error: Error(PACKET_PROTOCOL_MISMATCH_MESSAGE),
+                });
+                state.buffer = Buffer.alloc(0);
+                break;
+            }
             const contentLength = state.buffer.readBigUInt64BE(0);
             if (contentLength > BigInt(Number.MAX_SAFE_INTEGER) || contentLength > BigInt(PACKET_MAX_CONTENT_BYTES)) {
                 errors.push({
@@ -116,5 +124,19 @@ export class PacketService extends FService {
         const previewLength = Math.min(buffer.byteLength, 128);
         const preview = Buffer.from(buffer.subarray(0, previewLength)).toString(PACKET_TEXT_ENCODING);
         return buffer.byteLength > previewLength ? `${preview}... (${buffer.byteLength} bytes)` : preview;
+    }
+
+    private looksLikeTextProtocol(buffer: Buffer): boolean {
+        let index = 0;
+        while (index < buffer.byteLength) {
+            const byte = buffer[index];
+            if (byte === undefined) return false;
+            if (byte === 0x20 || byte === 0x09 || byte === 0x0a || byte === 0x0d) {
+                index += 1;
+                continue;
+            }
+            return byte === 0x7b || byte === 0x5b || byte >= 0x20;
+        }
+        return false;
     }
 }

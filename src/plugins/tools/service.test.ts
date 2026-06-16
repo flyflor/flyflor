@@ -69,7 +69,39 @@ describe('research tools', () => {
         expect(result.data.path).toBe('package.json');
         expect(result.data.bytes).toBeGreaterThan(20);
         expect(result.data.content.length).toBeGreaterThan(0);
+        expect(result.data.startLine).toBe(1);
+        expect(result.data.endLine).toBeGreaterThanOrEqual(1);
+        expect(result.data.totalLines).toBeGreaterThan(1);
         expect(result.data.truncated).toBe(true);
+    });
+
+    test('read_file returns a paged head by default and supports later line offsets', async () => {
+        const tool = await useContainer().getAsync(ReadFileTool);
+        const root = mkdtempSync(join(tmpdir(), 'flyflor-read-file-pages-'));
+        const source = join(root, 'notes.txt');
+        writeFileSync(source, Array.from({ length: 240 }, (_, index) => `line-${index + 1}`).join('\n'), 'utf-8');
+
+        const head = await tool.execute({ path: source }, {
+            ...context(),
+            workingDirectory: root,
+        });
+        const page = await tool.execute({ path: source, offsetLines: 200, limitLines: 20 }, {
+            ...context(),
+            workingDirectory: root,
+        });
+
+        expect(head.ok).toBe(true);
+        expect(page.ok).toBe(true);
+        if (!head.ok || !page.ok) throw Error('read_file failed');
+        expect(head.data.startLine).toBe(1);
+        expect(head.data.endLine).toBe(200);
+        expect(head.data.totalLines).toBe(240);
+        expect(head.data.truncated).toBe(true);
+        expect(head.data.content).toContain('line-1');
+        expect(head.data.content).not.toContain('line-201');
+        expect(page.data.startLine).toBe(201);
+        expect(page.data.endLine).toBe(220);
+        expect(page.data.content).toContain('line-201');
     });
 
     test('read_file rejects paths outside research roots', async () => {
@@ -114,6 +146,24 @@ describe('research tools', () => {
         if (!result.ok) throw Error(result.error);
         expect(realpathSync(result.data.path)).toBe(realpathSync(source));
         expect(result.data.content).toBe('export const value = 1;');
+    });
+
+    test('read_file accepts absolute paths explicitly allowed for the turn', async () => {
+        const tool = await useContainer().getAsync(ReadFileTool);
+        const root = mkdtempSync(join(tmpdir(), 'flyflor-explicit-root-'));
+        const source = join(root, 'package.json');
+        writeFileSync(source, '{"name":"explicit"}', 'utf-8');
+
+        const result = await tool.execute({ path: source }, {
+            ...context(),
+            workingDirectory: '/path/that/does/not/exist',
+            toolRoots: [root],
+        });
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw Error(result.error);
+        expect(realpathSync(result.data.path)).toBe(realpathSync(source));
+        expect(result.data.content).toBe('{"name":"explicit"}');
     });
 
     test('read_file rejects absolute paths outside the turn working directory with root detail', async () => {
@@ -177,6 +227,66 @@ describe('research tools', () => {
         if (!result.ok) throw Error(result.error);
         expect(result.data.matches).toEqual([
             { path: realpathSync(join(root, 'target.ts')), line: 1, text: 'const uniqueNeedle = true;' },
+        ]);
+    });
+
+    test('codegraph searches text files without language or extension whitelisting', async () => {
+        const tool = await useContainer().getAsync(CodeGraphTool);
+        const root = mkdtempSync(join(tmpdir(), 'flyflor-codegraph-text-'));
+        writeFileSync(join(root, 'BUILD.bazelish'), 'customLanguageNeedle()', 'utf-8');
+        writeFileSync(join(root, 'NO_EXTENSION'), 'customLanguageNeedle without extension', 'utf-8');
+
+        const result = await tool.execute({ query: 'customLanguageNeedle', maxResults: 5 }, {
+            ...context(),
+            workingDirectory: root,
+        });
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw Error(result.error);
+        expect(result.data.matches.map((match) => match.path).sort()).toEqual([
+            realpathSync(join(root, 'BUILD.bazelish')),
+            realpathSync(join(root, 'NO_EXTENSION')),
+        ].sort());
+    });
+
+    test('codegraph skips binary-looking files and rejects broad queries', async () => {
+        const tool = await useContainer().getAsync(CodeGraphTool);
+        const root = mkdtempSync(join(tmpdir(), 'flyflor-codegraph-binary-'));
+        writeFileSync(join(root, 'binary.bin'), Buffer.from([0, 1, 2, 3, 4]));
+        writeFileSync(join(root, 'source.weird'), 'binaryNeedle text', 'utf-8');
+
+        await expect(tool.execute({ query: '.', maxResults: 5 }, {
+            ...context(),
+            workingDirectory: root,
+        })).rejects.toThrow('Codegraph query is too broad');
+
+        const result = await tool.execute({ query: 'binaryNeedle', maxResults: 5 }, {
+            ...context(),
+            workingDirectory: root,
+        });
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw Error(result.error);
+        expect(result.data.matches).toEqual([
+            { path: realpathSync(join(root, 'source.weird')), line: 1, text: 'binaryNeedle text' },
+        ]);
+    });
+
+    test('codegraph searches explicit turn roots by default', async () => {
+        const tool = await useContainer().getAsync(CodeGraphTool);
+        const root = mkdtempSync(join(tmpdir(), 'flyflor-codegraph-explicit-root-'));
+        writeFileSync(join(root, 'target.ts'), 'const explicitNeedle = true;', 'utf-8');
+
+        const result = await tool.execute({ query: 'explicitNeedle', maxResults: 5 }, {
+            ...context(),
+            workingDirectory: '/path/that/does/not/exist',
+            toolRoots: [root],
+        });
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw Error(result.error);
+        expect(result.data.matches).toEqual([
+            { path: realpathSync(join(root, 'target.ts')), line: 1, text: 'const explicitNeedle = true;' },
         ]);
     });
 });

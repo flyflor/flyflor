@@ -1,6 +1,6 @@
 import { Provide, Logger, FAgent, Scope } from '@/core';
 import { Brain, CallosumSignalType, type CallosumSignal } from './brain';
-import { Memory } from './memory';
+import { Memory, type AgentTurnInput } from './memory';
 import { type FAgentProfileConfiguration } from '@/config';
 import type { FLogger } from '@/core/logger';
 
@@ -22,8 +22,8 @@ export class Agent extends FAgent<CallosumSignal> {
         super();
     }
 
-    public async run(text: string): Promise<void> {
-        this.log.debug('turn.start', text);
+    public async run(input: AgentTurnInput): Promise<void> {
+        this.log.debug('turn.start', input);
         await new Promise<void>((resolve, reject) => {
             let assistant = '';
             const subscription = this.brain.subscribe({
@@ -31,7 +31,7 @@ export class Agent extends FAgent<CallosumSignal> {
                     if (signal.type === CallosumSignalType.Reply) assistant += signal.chunk;
                     if (signal.type === CallosumSignalType.Done) {
                         // 中文：只在完整 turn 成功结束后提交，避免半截流式回复污染下一轮上下文。
-                        if (assistant.trim().length > 0) this.memory.commit(text, assistant);
+                        if (assistant.trim().length > 0) this.memory.commit(input.content, assistant);
                         this.emit(signal);
                         subscription.unsubscribe();
                         resolve();
@@ -44,7 +44,7 @@ export class Agent extends FAgent<CallosumSignal> {
                     reject(error);
                 },
             });
-            void this.brain.run(this.memory.buildMessage(text)).catch((error) => {
+            void this.brain.run(this.memory.buildMessage(input.content), input).catch((error) => {
                 subscription.unsubscribe();
                 reject(error);
             });

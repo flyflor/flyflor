@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { useContainer } from '@/core';
 import { Investigation } from './service';
 import { Research, type ResearchSignal } from '../research';
+import type { IntelligenceToolDefinition } from '../intelligence/types';
 
 /**
  * Live deep-investigation test. Requires DEEPSEEK_API_KEY and hits the real provider, per the no-mock
@@ -31,7 +32,7 @@ describe('investigation primitive (live)', () => {
     test('the gate refuses a tool outside the read-only subset', async () => {
         const research = await useContainer().getAsync(Research);
         const tools = research.registry.readOnlyDefinitions();
-        const names = tools.map((tool) => tool.name).sort();
+        const names = tools.map((tool: IntelligenceToolDefinition) => tool.name).sort();
 
         // The investigation advertises only evidence tools; ask/confirm are not offered to a sub-agent.
         expect(names).toEqual(['codegraph', 'read_file']);

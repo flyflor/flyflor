@@ -18,3 +18,29 @@ export interface ResearchOutcome {
     exchange: AgentMemory[];
     steps: number;
 }
+
+export interface ResearchToolArtifact {
+    id: string;
+    bytes: number;
+    truncated: boolean;
+    content: string;
+}
+
+export interface ResearchToolPreview {
+    toolCallId: string;
+    name: string;
+    kind: 'preview' | 'summary' | 'error';
+    status: 'ok' | 'error';
+    summary: string;
+    preview: string;
+    bytes: number;
+    truncated: boolean;
+    artifactId?: string;
+}
+
+export interface ResearchToolDispatch {
+    content: string;
+    isError: boolean;
+    preview: ResearchToolPreview;
+    artifact?: ResearchToolArtifact;
+}

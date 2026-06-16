@@ -5,15 +5,15 @@ import type { AskToolData, AskToolInput } from './types';
 export class AskTool extends FTool<AskToolInput, AskToolData> {
     public readonly name = 'ask';
 
-    public readonly description = 'Ask the user an open clarification question with one or more concrete solution options.';
+    public readonly description = '';
 
     public override readonly research = true;
 
     public readonly parameters = {
         type: 'object',
         properties: {
-            question: { type: 'string', description: 'The clarification question shown to the user.', required: true },
-            options: { type: 'array', description: 'One or more concrete solution options. Exactly one should be recommended.', required: true },
+            question: { type: 'string', description: '', required: true },
+            options: { type: 'array', description: '', required: true },
         },
     } as const;
 

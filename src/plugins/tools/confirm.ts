@@ -5,15 +5,15 @@ import type { ConfirmToolData, ConfirmToolInput } from './types';
 export class ConfirmTool extends FTool<ConfirmToolInput, ConfirmToolData> {
     public readonly name = 'confirm';
 
-    public readonly description = 'Ask the user to confirm one yes/no decision.';
+    public readonly description = '';
 
     public override readonly research = true;
 
     public readonly parameters = {
         type: 'object',
         properties: {
-            question: { type: 'string', description: 'The yes/no confirmation question shown to the user.', required: true },
-            recommended: { type: 'boolean', description: 'The recommended yes/no default.', required: true },
+            question: { type: 'string', description: '', required: true },
+            recommended: { type: 'boolean', description: '', required: true },
         },
     } as const;
 

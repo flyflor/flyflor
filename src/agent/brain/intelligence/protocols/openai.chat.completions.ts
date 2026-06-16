@@ -145,7 +145,8 @@ function chatMessages(messages: AgentMemory[]): Array<Record<string, unknown>> {
         if (message.role === AgentChatRole.Assistant && 'toolCalls' in message) {
             return {
                 role: 'assistant',
-                content: message.content.length > 0 ? message.content : null,
+                // DeepSeek rejects replayed assistant tool-call messages when `content` is null.
+                content: message.content,
                 // DeepSeek thinking mode rejects a replayed tool-call turn unless its reasoning is passed back.
                 ...(message.reasoning ? { reasoning_content: message.reasoning } : {}),
                 tool_calls: message.toolCalls.map((toolCall) => ({

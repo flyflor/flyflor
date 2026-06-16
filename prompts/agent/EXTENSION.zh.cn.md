@@ -6,4 +6,4 @@
   - `confirm`：是/否信号，带一个推荐默认值。
   - `ask`：开放问题，带 1 条或更多具体解决方案；必须且只能有一个推荐选项，客户端提供自由填写的 Other 入口。
 - `ask` 和 `confirm` 会中断当前 turn，并等待下一条用户消息后继续 pending research。
-- Research v1 可使用只读本地证据工具调查 Flyflor 和 `/Users/yihuaqing/Desktop/yihuaqing/flyflors/reference/pi`；research 阶段不开放 write/edit/remove 工具。
+- Research v1 可使用只读本地证据工具调查 Flyflor、已配置的 reference 目录、当前 turn 的工作目录，以及用户在本轮明确提供的绝对路径；research 阶段不开放 write/edit/remove 工具。

@@ -1,9 +1,11 @@
-import { FAgentAtom, Inject, Logger, Provide, type FLogger } from '@/core';
+import { FAgentAtom, Inject, Logger, Provide, RuntimeText, type FLogger } from '@/core';
 import { Intelligence } from '../intelligence/service';
 import { ToolRegistry } from './tool.registry';
 import { AgentChatRole, type AgentMemory, type AgentToolCall } from '@/agent/memory';
-import { RESEARCH_MAX_STEPS, type ResearchOutcome } from './types';
+import { RESEARCH_MAX_STEPS, type ResearchOutcome, type ResearchToolPreview } from './types';
 import type { IntelligenceToolDefinition } from '../intelligence/types';
+
+const RESEARCH_SYSTEM_TEXT_KEY = 'research.system.brief';
 
 /**
  * One signal surfaced while research runs.
@@ -13,7 +15,7 @@ import type { IntelligenceToolDefinition } from '../intelligence/types';
 export type ResearchSignal =
     | { type: 'reply'; chunk: string }
     | { type: 'tool_start'; name: string; arguments: Record<string, unknown> }
-    | { type: 'tool_result'; name: string; content: string; isError: boolean };
+    | { type: 'tool_result'; name: string; content: string; isError: boolean; preview: ResearchToolPreview };
 
 /**
  * A pre-execution permission gate.
@@ -30,6 +32,8 @@ export type ResearchGate = (name: string, args: Record<string, unknown>) => { bl
 export interface ResearchRunOptions {
     tools?: IntelligenceToolDefinition[];
     gate?: ResearchGate;
+    workingDirectory?: string;
+    toolRoots?: string[];
 }
 
 /**
@@ -50,20 +54,27 @@ export class Research extends FAgentAtom {
     @Inject()
     public registry!: ToolRegistry;
 
+    @Inject()
+    public runtimeText!: RuntimeText;
+
     /**
      * Runs the investigation to a final answer.
      * `messages` is the assembled turn input; `emit` forwards streamed reply text and tool lifecycle signals;
      * `options` can narrow the tool set and add a permission gate (used by isolated deep investigation).
      */
     public async run(messages: AgentMemory[], emit: (signal: ResearchSignal) => void, options: ResearchRunOptions = {}): Promise<ResearchOutcome> {
-        const working: AgentMemory[] = [...messages];
+        this.registry.resetArtifacts();
+        const working: AgentMemory[] = this.withResearchSystem(messages);
         const exchange: AgentMemory[] = [];
         const tools = options.tools ?? this.registry.definitions();
         let answer = '';
         for (let step = 1; step <= RESEARCH_MAX_STEPS; step += 1) {
             this.log.debug('research.turn', step);
-            const turn = await this.intelligence.streamTurn(working, tools, (chunk) => emit({ type: 'reply', chunk }));
+            const turn = await this.intelligence.runTurn(working, tools);
             answer = turn.text;
+            if (turn.toolCalls.length === 0 && turn.text.length > 0) {
+                emit({ type: 'reply', chunk: turn.text });
+            }
             if (turn.toolCalls.length === 0) {
                 return { answer, exchange, steps: step };
             }
@@ -72,22 +83,29 @@ export class Research extends FAgentAtom {
             const assistant: AgentMemory = { role: AgentChatRole.Assistant, content: turn.text, toolCalls: turn.toolCalls, reasoning: turn.reasoning };
             working.push(assistant);
             exchange.push(assistant);
-            const results = await this.runTools(turn.toolCalls, step, emit, options.gate);
+            const results = await this.runTools(turn.toolCalls, step, emit, options);
             working.push(...results);
             exchange.push(...results);
         }
         this.log.info('research.maxSteps', RESEARCH_MAX_STEPS);
-        const notice = `\n\n[Research stopped after ${RESEARCH_MAX_STEPS} steps.]`;
+        const notice = this.runtimeText.text('research.maxStepsNotice', { steps: RESEARCH_MAX_STEPS });
         emit({ type: 'reply', chunk: notice });
         return { answer: answer + notice, exchange, steps: RESEARCH_MAX_STEPS };
+    }
+
+    private withResearchSystem(messages: AgentMemory[]): AgentMemory[] {
+        const brief: AgentMemory = { role: AgentChatRole.System, content: this.runtimeText.text(RESEARCH_SYSTEM_TEXT_KEY) };
+        const insertAt = messages.findIndex((message) => message.role !== AgentChatRole.System);
+        if (insertAt < 0) return [...messages, brief];
+        return [...messages.slice(0, insertAt), brief, ...messages.slice(insertAt)];
     }
 
     /**
      * Runs one assistant turn's tool calls in parallel and returns their result messages in source order.
      * Order is preserved so the tool results line up with the assistant tool calls on the next provider call.
      */
-    private async runTools(toolCalls: AgentToolCall[], step: number, emit: (signal: ResearchSignal) => void, gate?: ResearchGate): Promise<AgentMemory[]> {
-        const results = await Promise.all(toolCalls.map((toolCall) => this.runTool(toolCall, step, emit, gate)));
+    private async runTools(toolCalls: AgentToolCall[], step: number, emit: (signal: ResearchSignal) => void, options: ResearchRunOptions): Promise<AgentMemory[]> {
+        const results = await Promise.all(toolCalls.map((toolCall) => this.runTool(toolCall, step, emit, options)));
         return results.map((result) => ({ role: AgentChatRole.Tool, content: result.content, toolCallId: result.id, toolName: result.name, isError: result.isError }));
     }
 
@@ -96,17 +114,26 @@ export class Research extends FAgentAtom {
      * A `gate` veto short-circuits execution with an error result, so a blocked tool is surfaced to the model
      * but never runs.
      */
-    private async runTool(toolCall: AgentToolCall, step: number, emit: (signal: ResearchSignal) => void, gate?: ResearchGate): Promise<{ id: string; name: string; content: string; isError: boolean }> {
+    private async runTool(toolCall: AgentToolCall, step: number, emit: (signal: ResearchSignal) => void, options: ResearchRunOptions): Promise<{ id: string; name: string; content: string; isError: boolean }> {
         emit({ type: 'tool_start', name: toolCall.name, arguments: toolCall.arguments });
-        const blocked = gate?.(toolCall.name, toolCall.arguments);
-        const outcome = blocked !== undefined
-            ? { content: blocked.reason, isError: true }
-            : await this.registry.dispatch(toolCall.name, toolCall.arguments, {
-                  callId: toolCall.id,
-                  intent: toolCall.name,
-                  evidenceCount: step,
-              });
-        emit({ type: 'tool_result', name: toolCall.name, content: outcome.content, isError: outcome.isError });
+        const blocked = options.gate?.(toolCall.name, toolCall.arguments);
+        const outcome =
+            blocked !== undefined
+                ? this.registry.blocked(toolCall.name, blocked.reason, {
+                      callId: toolCall.id,
+                      intent: toolCall.name,
+                      evidenceCount: step,
+                      workingDirectory: options.workingDirectory,
+                      toolRoots: options.toolRoots,
+                  })
+                : await this.registry.dispatch(toolCall.name, toolCall.arguments, {
+                      callId: toolCall.id,
+                      intent: toolCall.name,
+                      evidenceCount: step,
+                      workingDirectory: options.workingDirectory,
+                      toolRoots: options.toolRoots,
+                  });
+        emit({ type: 'tool_result', name: toolCall.name, content: outcome.preview.preview, isError: outcome.isError, preview: outcome.preview });
         return { id: toolCall.id, name: toolCall.name, content: outcome.content, isError: outcome.isError };
     }
 }

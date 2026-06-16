@@ -5,12 +5,12 @@ import type { DisabledToolInput, DisabledToolResult } from './types';
 export class WriteFileTool extends FTool<DisabledToolInput, { disabled: true; reason: string }> {
     public readonly name = 'write_file';
 
-    public readonly description = 'Write a file. Disabled in research mode.';
+    public readonly description = '';
 
     public readonly parameters = {
         type: 'object',
         properties: {
-            reason: { type: 'string', description: 'Reason the model wanted to write a file.' },
+            reason: { type: 'string', description: '' },
         },
     } as const;
 

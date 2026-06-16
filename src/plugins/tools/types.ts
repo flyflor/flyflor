@@ -33,20 +33,28 @@ export interface ConfirmToolData {
 
 export interface ReadFileToolInput {
     path: string;
+    offsetLines?: number;
+    limitLines?: number;
     maxBytes?: number;
 }
 
 export interface ReadFileToolData {
     path: string;
     content: string;
+    startLine: number;
+    endLine: number;
+    totalLines: number;
     truncated: boolean;
     bytes: number;
+    artifact?: ToolEvidenceArtifact;
 }
 
 export interface CodeGraphToolInput {
     query: string;
     roots?: string[];
     maxResults?: number;
+    maxFileBytes?: number;
+    perFileLimit?: number;
 }
 
 export interface CodeGraphMatch {
@@ -58,6 +66,14 @@ export interface CodeGraphMatch {
 export interface CodeGraphToolData {
     query: string;
     matches: CodeGraphMatch[];
+}
+
+export interface ToolEvidenceArtifact {
+    id: string;
+    bytes: number;
+    preview: string;
+    content?: string;
+    truncated: boolean;
 }
 
 export interface DisabledToolInput {

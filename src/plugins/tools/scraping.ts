@@ -5,12 +5,12 @@ import type { DisabledToolInput, DisabledToolResult } from './types';
 export class ScrapingTool extends FTool<DisabledToolInput, { disabled: true; reason: string }> {
     public readonly name = 'scraping';
 
-    public readonly description = 'External web scraping hook. Disabled until network evidence policy is defined.';
+    public readonly description = '';
 
     public readonly parameters = {
         type: 'object',
         properties: {
-            reason: { type: 'string', description: 'Reason the model wanted external scraping.' },
+            reason: { type: 'string', description: '' },
         },
     } as const;
 

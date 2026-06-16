@@ -2,6 +2,7 @@ import { FAgentAtom, Inject, Logger, Provide, type FLogger } from '@/core';
 import { Research, type ResearchSignal } from '../research';
 import { AgentChatRole, type AgentMemory } from '@/agent/memory';
 import { INVESTIGATION_SYSTEM, type InvestigationOutcome } from './types';
+import type { IntelligenceToolDefinition } from '../intelligence/types';
 
 /**
  * Deep investigation: an isolated, read-only sub-agent.
@@ -29,8 +30,8 @@ export class Investigation extends FAgentAtom {
             { role: AgentChatRole.System, content: INVESTIGATION_SYSTEM },
             { role: AgentChatRole.User, content: task },
         ];
-        const tools = this.research.registry.readOnlyDefinitions();
-        const allowed = new Set(tools.map((tool) => tool.name));
+        const tools: IntelligenceToolDefinition[] = this.research.registry.readOnlyDefinitions();
+        const allowed = new Set(tools.map((tool: IntelligenceToolDefinition) => tool.name));
         const outcome = await this.research.run(messages, (signal) => emit?.(signal), {
             tools,
             // Defense in depth: even if a write/edit tool leaked into the advertised set, deny it here.

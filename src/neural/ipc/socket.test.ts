@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { useContainer } from '@/core';
 import { configureLogger, LoggerLevel } from '@/core/logger';
-import { PACKET_LENGTH_HEADER_BYTES, PACKET_TEXT_ENCODING, PacketService, SocketEvent, type SocketPacket } from '@/neural/packet';
+import { PACKET_LENGTH_HEADER_BYTES, PACKET_PROTOCOL_MISMATCH_MESSAGE, PACKET_TEXT_ENCODING, PacketService, SocketEvent, type SocketPacket } from '@/neural/packet';
 import type { Synapse } from '@/neural/synapse';
 import type { Socket } from 'bun';
 import { FSocket, type SocketConnectionData } from './socket';
@@ -144,6 +144,25 @@ describe('FSocket', () => {
         ]);
     });
 
+    test('preserves structured user payloads for Synapse', async () => {
+        const { handler, packet, calls } = await useSocketHandler();
+        const { socket, writes } = useCapturedSocket();
+        const input = {
+            action: SocketEvent.User,
+            data: {
+                text: 'hello',
+                workingDirectory: '/tmp/workspace',
+            },
+        };
+
+        await handler.data(socket, packet.encode(input));
+
+        expect(calls).toEqual([input]);
+        expect(decodeWrites(packet, writes)).toEqual([
+            { action: SocketEvent.StreamEnd, data: true },
+        ]);
+    });
+
     test('forwards structured agent signals without string coercion', async () => {
         const reply = { type: 'reply', chunk: 'hello' };
         const done = { type: 'done', chunk: '' };
@@ -175,6 +194,19 @@ describe('FSocket', () => {
         expect(responses).toHaveLength(1);
         expect(responses[0]?.action).toBe(SocketEvent.Error);
         expect(String(responses[0]?.data).length).toBeGreaterThan(0);
+    });
+
+    test('writes an explicit error response for raw JSON sent to IPC', async () => {
+        const { handler, packet, calls } = await useSocketHandler();
+        const { socket, writes } = useCapturedSocket();
+
+        await handler.data(socket, Buffer.from('{"action":"user","data":"hello"}', PACKET_TEXT_ENCODING));
+
+        const responses = decodeWrites(packet, writes);
+        expect(calls).toEqual([]);
+        expect(responses).toEqual([
+            { action: SocketEvent.Error, data: PACKET_PROTOCOL_MISMATCH_MESSAGE },
+        ]);
     });
 
     test('routes coalesced user packets through Synapse in order', async () => {

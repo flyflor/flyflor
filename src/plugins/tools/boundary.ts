@@ -21,23 +21,25 @@ export class ToolBoundary extends FService {
     }
 
     public describe(path: string, context?: ToolExecutionContext): ToolBoundaryDescription {
-        const workingDirectory = this.workingDirectory(context);
+        const absolute = isAbsolute(path);
+        const workingDirectory = this.workingDirectory(context, !absolute);
         const base = workingDirectory ?? realpathSync(ROOT_PATH);
         const resolved = isAbsolute(path) ? resolve(path) : resolve(base, path);
         return {
             path,
             resolved,
-            workingDirectory,
-            roots: this.roots(workingDirectory),
+            ...(workingDirectory !== undefined ? { workingDirectory } : {}),
+            roots: this.roots(workingDirectory, context),
         };
     }
 
     public allowedRoots(context?: ToolExecutionContext): string[] {
-        return this.roots(this.workingDirectory(context));
+        return this.roots(this.workingDirectory(context, false), context);
     }
 
     public isAllowed(path: string, context?: ToolExecutionContext): boolean {
-        const normalized = existsSync(path) ? realpathSync(path) : resolve(path);
+        const normalized = this.normalizePath(path);
+        if (normalized === undefined) return false;
         return this.allowedRoots(context).some((root) => normalized === root || normalized.startsWith(root + '/'));
     }
 
@@ -57,20 +59,54 @@ export class ToolBoundary extends FService {
         return existsSync(path) && statSync(path).isFile();
     }
 
-    private workingDirectory(context?: ToolExecutionContext): string | undefined {
+    public isDirectory(path: string): boolean {
+        return existsSync(path) && statSync(path).isDirectory();
+    }
+
+    public workingRoot(context?: ToolExecutionContext): string {
+        return this.workingDirectory(context, false) ?? realpathSync(ROOT_PATH);
+    }
+
+    public toolRoots(context?: ToolExecutionContext): string[] {
+        const roots: string[] = [];
+        for (const path of context?.toolRoots ?? []) {
+            if (typeof path !== 'string' || path.trim().length === 0) continue;
+            const resolved = isAbsolute(path) ? resolve(path) : resolve(ROOT_PATH, path);
+            if (!existsSync(resolved)) continue;
+            const real = realpathSync(resolved);
+            if (!roots.includes(real)) roots.push(real);
+        }
+        return roots;
+    }
+
+    private workingDirectory(context?: ToolExecutionContext, strict = false): string | undefined {
         const path = context?.workingDirectory;
         if (typeof path !== 'string' || path.trim().length === 0) {
             return undefined;
         }
         const resolved = isAbsolute(path) ? resolve(path) : resolve(ROOT_PATH, path);
         if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
+            if (!strict) return undefined;
             throw Object.assign(Error('Working directory is not a directory'), { detail: { path, resolved } });
         }
         return realpathSync(resolved);
     }
 
-    private roots(workingDirectory?: string): string[] {
-        return workingDirectory === undefined ? [...this.baseRoots] : [...this.baseRoots, workingDirectory];
+    private roots(workingDirectory?: string, context?: ToolExecutionContext): string[] {
+        const roots = workingDirectory === undefined ? [...this.baseRoots] : [...this.baseRoots, workingDirectory];
+        for (const root of this.toolRoots(context)) {
+            if (!roots.includes(root)) roots.push(root);
+        }
+        return roots;
+    }
+
+    private normalizePath(path: string): string | undefined {
+        if (!existsSync(path)) return resolve(path);
+        try {
+            return realpathSync(path);
+        } catch {
+            return undefined;
+        }
     }
 }
 

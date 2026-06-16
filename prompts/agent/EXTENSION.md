@@ -6,4 +6,4 @@
   - `confirm`: a yes/no signal with one recommended default.
   - `ask`: an open question with one or more concrete solution options; exactly one option is recommended, and the client supplies a free-form Other entry.
 - `ask` and `confirm` interrupt the current turn and wait for the next user message before resuming the pending research task.
-- Research v1 can use read-only local evidence tools for Flyflor and `/Users/yihuaqing/Desktop/yihuaqing/flyflors/reference/pi`; write/edit/remove tools are not available during research.
+- Research v1 can use read-only local evidence tools for Flyflor, the configured reference directory, the active turn working directory, and absolute paths explicitly provided by the user for that turn; write/edit/remove tools are not available during research.

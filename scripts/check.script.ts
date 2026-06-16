@@ -65,6 +65,22 @@ const DOCUMENTATION_MIRROR_DIRS = ['docs', 'prompts'] as const;
 /** Pattern that flags any code reference to a Chinese prompt mirror. */
 const ZH_MIRROR_REFERENCE_PATTERN = /\.zh\.cn\.md/g;
 
+/** Runtime source files that may still contain protocol strings but not prompt/tool copy. */
+const ZERO_RUNTIME_TEXT_EXCLUDED_PATTERN = /\.test\.ts$/;
+
+/** Prompt/tool copy that must live in prompt resources, not runtime source. */
+const RUNTIME_TEXT_HARDCODE_PATTERNS = [
+    /Runtime has already verified these user-provided absolute paths/,
+    /Relative tool paths resolve against this client working directory/,
+    /Use user-provided absolute paths directly/,
+    /Absolute paths explicitly mentioned by the user/,
+    /The clarification question shown to the user/,
+    /One or more concrete solution options/,
+    /The yes\/no confirmation question shown to the user/,
+    /Maximum matches to return/,
+    /Maximum bytes to return/,
+] as const;
+
 /** Project file names follow Angular/Nest-style dotted roles, with barrel `index.ts` as the default bare name. */
 const DOTTED_TYPESCRIPT_FILENAME_PATTERN = /^(index|[a-z0-9-]+(?:\.[a-z0-9-]+)+)\.ts$/;
 
@@ -106,6 +122,7 @@ const COMPACT_TYPESCRIPT_SOURCE_FILES = new Set([
     join('src', 'plugins', 'tools', 'scraping.ts'),
     join('src', 'plugins', 'tools', 'task.ts'),
     join('src', 'plugins', 'tools', 'todo.ts'),
+    join('src', 'core', 'prompt', 'runtime.ts'),
 ]);
 
 /** Existing non-dotted source files are preserved until a dedicated naming migration happens. */
@@ -227,6 +244,16 @@ function scanFile(path: string): void {
                 line: index + 1,
                 message: 'exported function APIs are reserved for composition/decorator/bootstrap/check files; use OOP class boundaries for business code',
             });
+        }
+        if (relativePath !== SELF_CHECK_FILE && !ZERO_RUNTIME_TEXT_EXCLUDED_PATTERN.test(relativePath)) {
+            for (const pattern of RUNTIME_TEXT_HARDCODE_PATTERNS) {
+                if (!pattern.test(line)) continue;
+                violations.push({
+                    file: relativePath,
+                    line: index + 1,
+                    message: 'runtime prompt/tool copy must live in prompt resources, not source code',
+                });
+            }
         }
     });
 }
