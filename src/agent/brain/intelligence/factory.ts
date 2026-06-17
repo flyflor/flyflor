@@ -1,4 +1,4 @@
-import { type FModelConfiguration, FModelProtocolName } from '@/config';
+import { type FModelConfiguration, FModelProtocolName } from '@/configuration';
 import { anthropicMessagesAdapter, awsBedrockConverseAdapter, cohereChatAdapter, googleGeminiGenerateContentAdapter, huggingFaceAdapter, lmStudioAdapter, ollamaAdapter, openAIChatCompletionsAdapter, openAIResponsesAdapter, vllmAdapter } from './protocols';
 import type { AgentMemory } from '@/agent/memory';
 import type { IntelligenceEvent, IntelligenceToolDefinition, LlmByteStreamReader, ProtocolAdapter, ProtocolBuildContext, ProtocolStreamState } from './types';

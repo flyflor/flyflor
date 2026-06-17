@@ -1,4 +1,4 @@
-import { FModelProtocolName } from '@/config';
+import { FModelProtocolName } from '@/configuration';
 import type { ProtocolAdapter, ProtocolBuildContext } from '../types';
 import { AgentChatRole, type AgentMemory } from '@/agent/memory';
 

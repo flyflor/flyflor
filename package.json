@@ -4,6 +4,7 @@
     "type": "module",
     "scripts": {
         "dev": "bun run --watch src/bootstrap.ts",
+        "client": "bun run --watch web/client.ts",
         "check": "bunx tsc --noEmit && bun run scripts/check.script.ts",
         "build:binary": "bun build --compile --outfile dist/flyflor src/bootstrap.ts"
     },

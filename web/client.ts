@@ -45,14 +45,14 @@ interface BrowserSocketData {
 /** Default local host used by the browser test bridge. */
 export const DEFAULT_HOST = '127.0.0.1';
 
-/** Default WebSocket/HTTP port expected by `web/ipc-test.html`. */
+/** Default WebSocket/HTTP port expected by `web/client.html`. */
 export const DEFAULT_PORT = 17878;
 
 /** Public Flyflor kernel socket endpoint used by the test bridge. */
 export const IPC_SOCKET_ENDPOINT = './flyflor.sock';
 
 /** Relative path to the browser test page. */
-export const TEST_PAGE_PATH = 'web/ipc-test.html';
+export const TEST_PAGE_PATH = 'web/client.html';
 
 /** Number of bytes used by the kernel IPC unsigned big-endian packet body length header. */
 export const PACKET_LENGTH_HEADER_BYTES = 8;

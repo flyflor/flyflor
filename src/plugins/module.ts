@@ -1,5 +1,5 @@
 import { FModule, Module } from '@/core';
-import { AskTool, CodeGraphTool, ConfirmTool, EditFileTool, ReadFileTool, RemoveFileTool, RtkTool, ScrapingTool, WriteFileTool } from './tools';
+import { AskTool, ConfirmTool, EditFileTool, ReadFileTool, RemoveFileTool, RtkTool, ScrapingTool, WriteFileTool } from './tools';
 
 /**
  * The plugins module: external capability boundaries kept isolated from the kernel.
@@ -8,7 +8,6 @@ import { AskTool, CodeGraphTool, ConfirmTool, EditFileTool, ReadFileTool, Remove
 @Module({
     imports: [
         AskTool,
-        CodeGraphTool,
         ConfirmTool,
         EditFileTool,
         ReadFileTool,

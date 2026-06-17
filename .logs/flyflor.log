@@ -21692,3 +21692,489 @@
 [DEBUG]  2026-06-16T16:15:45.107Z  Research
   | research.turn
   | 19
+[INFO ]  2026-06-17T15:26:58.492Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T15:27:00.889Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T15:27:01.395Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T15:31:43.709Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T16:32:38.800Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T16:39:09.450Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T16:39:37.014Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T16:39:51.714Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T16:42:37.930Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T16:44:37.881Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T16:44:49.468Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T16:44:58.895Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T16:48:49.090Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T16:48:53.978Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T16:48:59.111Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T16:50:28.224Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T16:51:16.634Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T16:51:45.482Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T17:24:11.621Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T17:24:40.196Z  Synapse
+  | listening
+  | {
+  |   endpoint: './flyflor.sock'
+  | }
+[INFO ]  2026-06-17T17:25:01.004Z  FSocket
+  | open
+[INFO ]  2026-06-17T17:25:05.792Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 70 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 7b 22 74 65 78 74 22 3a 22 31 31 31 22 2c 22 77 6f 72 ... 70 more bytes>
+[INFO ]  2026-06-17T17:26:15.674Z  FSocket
+  | open
+[INFO ]  2026-06-17T17:26:17.716Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 6e 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 7b 22 74 65 78 74 22 3a 22 31 22 2c 22 77 6f 72 6b 69 ... 68 more bytes>
+  | FSocket {
+  |   close: [AsyncFunction: close],
+  |   data: [AsyncFunction: data],
+  |   error: [AsyncFunction: error],
+  |   open: [AsyncFunction: open],
+  |   packet: {},
+  |   synapse: Synapse {
+  |     Symbol(config): ConfigService {
+  |       agent: 'flyflor',
+  |       agents: {
+  |         flyflor: {
+  |           contextLength: 131072,
+  |           maxTokens: 8192,
+  |           model: 'deepseek-v4-flash',
+  |           name: 'flyflor',
+  |           provider: 'deepseek'
+  |         }
+  |       },
+  |       mcp: {},
+  |       memory: {
+  |         flushMinTurns: 6,
+  |         memoryCharLimit: 2200,
+  |         memoryEnabled: true,
+  |         nudgeInterval: 10,
+  |         userCharLimit: 1375,
+  |         userProfileEnabled: true
+  |       },
+  |       model: {
+  |         apiKeyEnv: 'DEEPSEEK_API_KEY',
+  |         baseUrl: 'https://api.deepseek.com',
+  |         contextLength: 131072,
+  |         default: 'deepseek-v4-flash',
+  |         entra: {},
+  |         maxTokens: 8192,
+  |         model: 'deepseek-v4-flash',
+  |         protocols: [
+  |           {
+  |             auth: 'bearer',
+  |             missingTerminalMessage: 'LLM provider stream ended without a structured finish_reason',
+  |             name: 'openaiChatCompletions',
+  |             path: '/chat/completions',
+  |             usesV1Fallback: true
+  |           },
+  |           {
+  |             acceptsJsonResponse: true,
+  |             auth: 'bearer',
+  |             missingTerminalMessage: 'LLM provider stream ended without a structured response terminal event',
+  |             name: 'openaiResponses',
+  |             path: '/responses',
+  |             usesV1Fallback: true
+  |           }
+  |         ],
+  |         provider: 'deepseek'
+  |       },
+  |       promptsDir: './prompts',
+  |       providers: {
+  |         deepseek: {
+  |           models: {
+  |             'deepseek-v4-flash': {
+  |               staleTimeoutSeconds: 30,
+  |               timeoutSeconds: 60
+  |             }
+  |           },
+  |           requestTimeoutSeconds: 60,
+  |           staleTimeoutSeconds: 30
+  |         }
+  |       },
+  |       skills: {
+  |         creationNudgeInterval: 15,
+  |         directory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/.config/skills',
+  |         externalDirs: []
+  |       },
+  |       socket: './flyflor.sock',
+  |       sqlDir: './sql'
+  |     },
+  |     Symbol(kCapture): false,
+  |     _events: [Object: null prototype] {},
+  |     _eventsCount: 0,
+  |     _maxListeners: undefined,
+  |     agentPool: {
+  |       active: 'flyflor',
+  |       agents: {
+  |         flyflor: Agent {
+  |           agentConfig: {
+  |             contextLength: 131072,
+  |             maxTokens: 8192,
+  |             model: 'deepseek-v4-flash',
+  |             name: 'flyflor',
+  |             provider: 'deepseek'
+  |           },
+  |           brain: Brain {
+  |             Symbol(prompt): PromptService {
+  |               'RESEARCH.zh.cn': [PromptService],
+  |               'ROUTE.zh.cn': [PromptService],
+  |               'SOUL.zh.cn': [PromptService],
+  |               RESEARCH: [PromptService],
+  |               ROUTE: [PromptService],
+  |               SOUL: [PromptService],
+  |               config: undefined,
+  |               data: [Object],
+  |               path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/prompts/callosum',
+  |               writable: true
+  |             },
+  |             callosum: Callosum {
+  |               Symbol(prompt): [PromptService],
+  |               agentConfig: [Object],
+  |               closed: false,
+  |               currentObservers: null,
+  |               hasError: false,
+  |               isStopped: false,
+  |               observers: [],
+  |               thrownError: null
+  |             },
+  |             closed: false,
+  |             config: {
+  |               contextLength: 131072,
+  |               maxTokens: 8192,
+  |               model: 'deepseek-v4-flash',
+  |               name: 'flyflor',
+  |               provider: 'deepseek'
+  |             },
+  |             currentObservers: null,
+  |             hasError: false,
+  |             intelligence: Intelligence {
+  |               Symbol(config): [ConfigService],
+  |               abortController: undefined,
+  |               closed: false,
+  |               currentObservers: null,
+  |               hasError: false,
+  |               isStopped: false,
+  |               observers: [],
+  |               thrownError: null
+  |             },
+  |             isStopped: false,
+  |             memory: Memory {
+  |               Symbol(prompt): [PromptService],
+  |               agentConfig: [Object],
+  |               closed: false,
+  |               completed: [],
+  |               context: [Context],
+  |               current: undefined,
+  |               currentObservers: null,
+  |               hasError: false,
+  |               isStopped: false,
+  |               observers: [],
+  |               pendingResearch: undefined,
+  |               thrownError: null,
+  |               working: []
+  |             },
+  |             observers: [],
+  |             researcher: Research {
+  |               closed: false,
+  |               currentObservers: null,
+  |               hasError: false,
+  |               intelligence: [Intelligence],
+  |               isStopped: false,
+  |               observers: [],
+  |               registry: [ToolRegistry],
+  |               runtimeText: [RuntimeText],
+  |               thrownError: null
+  |             },
+  |             runtimeText: RuntimeText {
+  |               Symbol(source): [PromptService]
+  |             },
+  |             thrownError: null
+  |           },
+  |           closed: false,
+  |           currentObservers: null,
+  |           hasError: false,
+  |           isStopped: false,
+  |           memory: Memory {
+  |             Symbol(prompt): PromptService {
+  |               AGENTS: [PromptService],
+  |               EXTENSION: [PromptService],
+  |               SOUL: [PromptService],
+  |               USER: [PromptService],
+  |               config: [Object],
+  |               data: [Object],
+  |               path: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/.config/agents/flyflor',
+  |               writable: true
+  |             },
+  |             agentConfig: {
+  |               contextLength: 131072,
+  |               maxTokens: 8192,
+  |               model: 'deepseek-v4-flash',
+  |               name: 'flyflor',
+  |               provider: 'deepseek'
+  |             },
+  |             closed: false,
+  |             completed: [],
+  |             context: Context {
+  |               intelligence: [Intelligence]
+  |             },
+  |             current: undefined,
+  |             currentObservers: null,
+  |             hasError: false,
+  |             isStopped: false,
+  |             observers: [],
+  |             pendingResearch: undefined,
+  |             thrownError: null,
+  |             working: []
+  |           },
+  |           observers: [],
+  |           thrownError: null
+  |         }
+  |       }
+  |     },
+  |     ipc: IPCService {
+  |       Symbol(path): ConfigService {
+  |         agent: 'flyflor',
+  |         agents: {
+  |           flyflor: {
+  |             contextLength: 131072,
+  |             maxTokens: 8192,
+  |             model: 'deepseek-v4-flash',
+  |             name: 'flyflor',
+  |             provider: 'deepseek'
+  |           }
+  |         },
+  |         mcp: {},
+  |         memory: {
+  |           flushMinTurns: 6,
+  |           memoryCharLimit: 2200,
+  |           memoryEnabled: true,
+  |           nudgeInterval: 10,
+  |           userCharLimit: 1375,
+  |           userProfileEnabled: true
+  |         },
+  |         model: {
+  |           apiKeyEnv: 'DEEPSEEK_API_KEY',
+  |           baseUrl: 'https://api.deepseek.com',
+  |           contextLength: 131072,
+  |           default: 'deepseek-v4-flash',
+  |           entra: {},
+  |           maxTokens: 8192,
+  |           model: 'deepseek-v4-flash',
+  |           protocols: [
+  |             {
+  |               auth: 'bearer',
+  |               missingTerminalMessage: 'LLM provider stream ended without a structured finish_reason',
+  |               name: 'openaiChatCompletions',
+  |               path: '/chat/completions',
+  |               usesV1Fallback: true
+  |             },
+  |             {
+  |               acceptsJsonResponse: true,
+  |               auth: 'bearer',
+  |               missingTerminalMessage: 'LLM provider stream ended without a structured response terminal event',
+  |               name: 'openaiResponses',
+  |               path: '/responses',
+  |               usesV1Fallback: true
+  |             }
+  |           ],
+  |           provider: 'deepseek'
+  |         },
+  |         promptsDir: './prompts',
+  |         providers: {
+  |           deepseek: {
+  |             models: {
+  |               'deepseek-v4-flash': [Object]
+  |             },
+  |             requestTimeoutSeconds: 60,
+  |             staleTimeoutSeconds: 30
+  |           }
+  |         },
+  |         skills: {
+  |           creationNudgeInterval: 15,
+  |           directory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor/.config/skills',
+  |           externalDirs: []
+  |         },
+  |         socket: './flyflor.sock',
+  |         sqlDir: './sql'
+  |       },
+  |       service: Object [Listener] {}
+  |     }
+  |   }
+  | }
+[INFO ]  2026-06-17T17:27:06.299Z  FSocket
+  | open
+[INFO ]  2026-06-17T17:27:09.196Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 70 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 7b 22 74 65 78 74 22 3a 22 31 31 31 22 2c 22 77 6f 72 ... 70 more bytes>
+[INFO ]  2026-06-17T17:28:09.524Z  FSocket
+  | open
+[INFO ]  2026-06-17T17:28:12.839Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 70 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 7b 22 74 65 78 74 22 3a 22 31 31 31 22 2c 22 77 6f 72 ... 70 more bytes>
+[INFO ]  2026-06-17T17:28:12.841Z  FSocket
+  | {
+  |   action: 'user',
+  |   data: {
+  |     text: '111',
+  |     workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  |   }
+  | }
+[INFO ]  2026-06-17T17:28:19.914Z  FSocket
+  | close
+  | {
+  |   error: undefined
+  | }
+[INFO ]  2026-06-17T17:28:22.799Z  FSocket
+  | open
+[INFO ]  2026-06-17T17:50:19.137Z  FSocket
+  | open
+[INFO ]  2026-06-17T17:50:21.717Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 6e 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 7b 22 74 65 78 74 22 3a 22 31 22 2c 22 77 6f 72 6b 69 ... 68 more bytes>
+[INFO ]  2026-06-17T17:50:39.248Z  FSocket
+  | close
+  | {
+  |   error: undefined
+  | }
+[INFO ]  2026-06-17T17:51:00.462Z  FSocket
+  | open
+[INFO ]  2026-06-17T17:51:08.831Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 6e 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 7b 22 74 65 78 74 22 3a 22 31 22 2c 22 77 6f 72 6b 69 ... 68 more bytes>
+[INFO ]  2026-06-17T17:53:10.388Z  FSocket
+  | open
+[INFO ]  2026-06-17T17:53:13.404Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 6e 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 7b 22 74 65 78 74 22 3a 22 31 22 2c 22 77 6f 72 6b 69 ... 68 more bytes>
+[INFO ]  2026-06-17T17:53:19.695Z  FSocket
+  | close
+  | {
+  |   error: undefined
+  | }
+[INFO ]  2026-06-17T17:53:30.834Z  FSocket
+  | open
+[INFO ]  2026-06-17T17:53:32.722Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 56 7b 22 61 63 74 69 6f 6e 22 3a 22 63 77 64 22 2c 22 64 61 74 61 22 3a 7b 22 70 61 74 68 22 3a 22 2f 55 73 65 72 73 2f 79 69 68 ... 44 more bytes>
+[DEBUG]  2026-06-17T17:53:32.723Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-17T17:54:47.169Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 71 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 7b 22 74 65 78 74 22 3a 22 31 31 31 31 22 2c 22 77 6f ... 71 more bytes>
+[INFO ]  2026-06-17T17:55:15.400Z  FSocket
+  | open
+[INFO ]  2026-06-17T17:55:17.257Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 56 7b 22 61 63 74 69 6f 6e 22 3a 22 63 77 64 22 2c 22 64 61 74 61 22 3a 7b 22 70 61 74 68 22 3a 22 2f 55 73 65 72 73 2f 79 69 68 ... 44 more bytes>
+[DEBUG]  2026-06-17T17:55:17.258Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-17T17:55:20.348Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 6e 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 7b 22 74 65 78 74 22 3a 22 31 22 2c 22 77 6f 72 6b 69 ... 68 more bytes>
+[INFO ]  2026-06-17T18:08:30.625Z  FSocket
+  | open
+[INFO ]  2026-06-17T18:08:31.945Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 56 7b 22 61 63 74 69 6f 6e 22 3a 22 63 77 64 22 2c 22 64 61 74 61 22 3a 7b 22 70 61 74 68 22 3a 22 2f 55 73 65 72 73 2f 79 69 68 ... 44 more bytes>
+[DEBUG]  2026-06-17T18:08:31.947Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-17T18:08:34.903Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 6e 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 7b 22 74 65 78 74 22 3a 22 31 22 2c 22 77 6f 72 6b 69 ... 68 more bytes>
+[INFO ]  2026-06-17T18:10:32.248Z  FSocket
+  | open
+[INFO ]  2026-06-17T18:10:33.011Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 56 7b 22 61 63 74 69 6f 6e 22 3a 22 63 77 64 22 2c 22 64 61 74 61 22 3a 7b 22 70 61 74 68 22 3a 22 2f 55 73 65 72 73 2f 79 69 68 ... 44 more bytes>
+[DEBUG]  2026-06-17T18:10:33.012Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-17T18:10:35.849Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 6e 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 7b 22 74 65 78 74 22 3a 22 31 22 2c 22 77 6f 72 6b 69 ... 68 more bytes>
+[DEBUG]  2026-06-17T18:10:35.850Z  Synapse
+  | {
+  |   text: '1',
+  |   workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
+  | }

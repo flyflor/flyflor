@@ -1,5 +1,5 @@
 import { FService, Inject, RuntimeText, Service, type FTool, type ToolExecutionContext } from '@/core';
-import { AskTool, CodeGraphTool, ConfirmTool, ReadFileTool } from '@/plugins/tools';
+import { AskTool, ConfirmTool, ReadFileTool } from '@/plugins/tools';
 import type { IntelligenceToolDefinition } from '../intelligence/types';
 import type { ResearchToolDispatch, ResearchToolPreview } from './types';
 
@@ -23,9 +23,6 @@ export class ToolRegistry extends FService {
     public readFile!: ReadFileTool;
 
     @Inject()
-    public codegraph!: CodeGraphTool;
-
-    @Inject()
     public ask!: AskTool;
 
     @Inject()
@@ -45,7 +42,7 @@ export class ToolRegistry extends FService {
     private tools(): FTool<Record<string, unknown>, unknown>[] {
         // Tool subclasses narrow `TInput`, which is contravariant in `execute`; the loop always dispatches
         // with a generic argument object, so we view them through the base input shape.
-        const tools = [this.readFile, this.codegraph, this.ask, this.confirm] as unknown as FTool<Record<string, unknown>, unknown>[];
+        const tools = [this.readFile, this.ask, this.confirm] as unknown as FTool<Record<string, unknown>, unknown>[];
         return tools.filter((tool) => tool.research === true);
     }
 
@@ -62,7 +59,7 @@ export class ToolRegistry extends FService {
      * investigation runs with.
      */
     public readOnlyDefinitions(): IntelligenceToolDefinition[] {
-        const readOnly = this.tools().filter((tool) => tool.name === this.readFile.name || tool.name === this.codegraph.name);
+        const readOnly = this.tools().filter((tool) => tool.name === this.readFile.name);
         return this.project(readOnly);
     }
 

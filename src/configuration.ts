@@ -1,8 +1,15 @@
 import { join } from 'path';
-import { FComponent, Singleton } from '@/core';
-import { ROOT_PATH } from '@/config';
+import { FService, Singleton } from '@/core';
 import { readFileSync } from 'fs';
 import { JSON5 } from 'bun';
+
+export interface FSystemPathInfo {
+    root: string;
+    runtime: string;
+    config: string;
+    cwd: string;
+    socket: string;
+}
 
 export type FModelProtocolAuthMode = 'bearer' | 'optionalBearer' | 'anthropic' | 'google' | 'none';
 
@@ -110,7 +117,6 @@ export interface FConfiguration {
     agent: string;
     agents: Record<string, FAgentProfileConfiguration>;
     socket: string;
-    socketEndpoint: string;
     skills: SkillsConfig;
     mcp: MCPServerConfig;
 }
@@ -144,9 +150,23 @@ export interface ActiveLlmProviderConfig {
 }
 
 @Singleton()
-export class ConfigComponent extends FComponent implements FConfiguration {
-    public path: string;
-    public configPath: string;
+export class ConfigService extends FService implements FConfiguration {
+    public static path: FSystemPathInfo = {
+        root: join(__dirname, '..'),
+        runtime: __dirname,
+        config: join(__dirname, '../.config'),
+        cwd: process.cwd(),
+        socket: '',
+    };
+
+    public get path() {
+        return ConfigService.path;
+    }
+
+    public set path(value) {
+        ConfigService.path = value;
+    }
+
     public model: FModelConfiguration;
     public providers: Record<string, FProviderConfiguration>;
     public memory: FMemoryConfiguration;
@@ -188,33 +208,27 @@ export class ConfigComponent extends FComponent implements FConfiguration {
                 maxTokens: 0,
             },
         };
-        this.socket = './flyflor.sock';
-        this.path = join(ROOT_PATH, './.config');
-        this.configPath = join(ROOT_PATH, './.config/config.jsonc');
+        if (process.platform !== 'win32') this.socket = './flyflor.sock';
+        else this.socket = `\\\\.\\pipe\\flyflor.sock`;
         this.skills = {
-            directory: join(ROOT_PATH, './.config/skills'),
+            directory: join(this.path.config, 'skills'),
             creationNudgeInterval: 15,
             externalDirs: [],
         };
         this.mcp = {};
-        Object.assign(this, JSON5.parse(readFileSync(this.configPath, 'utf-8')));
+        Object.assign(this, JSON5.parse(readFileSync(join(this.path.config, 'config.jsonc'), 'utf-8')));
+        this.path.socket = this.socket;
         this.model.protocols = this.resolveModelProtocols();
-    }
-
-    /**
-     * Public IPC socket endpoint consumed by transports and diagnostics.
-     * @returns Repo-relative socket path from the active configuration.
-     */
-    public get socketEndpoint(): string {
-        return this.socket;
     }
 
     private resolveModelProtocols(): FModelProtocolConfiguration[] {
         const providerProtocols = this.providers[this.model.provider]?.protocols;
-        const protocols = providerProtocols && providerProtocols.length > 0
-            ? providerProtocols
-            : this.model.protocols;
+        const protocols = providerProtocols && providerProtocols.length > 0 ? providerProtocols : this.model.protocols;
         if (protocols === undefined || protocols.length === 0) throw Error('LLM provider protocols are missing');
         return protocols;
     }
+}
+
+export function useRootPath() {
+    return ConfigService.path.root;
 }

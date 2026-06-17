@@ -1,23 +1,26 @@
 import { Agent } from '@/agent';
-import { Config, Init, Inject, Logger, Singleton, useContainer, type FLogger } from '@/core';
-import { ConfigComponent } from '@/config';
-import { existsSync, realpathSync, statSync } from 'node:fs';
-import { Subject, concatMap, defaultIfEmpty, filter, firstValueFrom, map, of, tap } from 'rxjs';
-import { SocketEvent, type SocketPacket, type SocketUserPayload } from './packet';
-import type { AgentTurnInput } from '@/agent/memory';
+import type { ConfigService } from '@/configuration';
+import { Config, Init, Inject, Logger, Module, useContainer, type FLogger } from '@/core';
+import EventEmitter from 'events';
+import { FSocket } from './ipc';
 
 export interface AgentPool {
     active: string;
     agents: { [name: string]: Agent };
 }
 
-@Singleton()
-export class Synapse<T extends SocketPacket = SocketPacket> extends Subject<T> {
+@Module()
+export class Synapse extends EventEmitter {
     @Config()
-    public readonly config!: ConfigComponent;
+    public readonly config!: ConfigService;
 
     @Logger(Synapse.name)
     public readonly log!: FLogger;
+
+    @Inject(function (this: Synapse) {
+        return this;
+    })
+    public socket!: FSocket;
 
     public agentPool: AgentPool;
 
@@ -36,7 +39,7 @@ export class Synapse<T extends SocketPacket = SocketPacket> extends Subject<T> {
      * returns, so a missing soul file is fatal at boot.
      */
     @Init()
-    public async init(): Promise<void> {
+    public async init() {
         const active = this.config.agent;
         this.agentPool.active = active;
         const agentConfig = this.config.agents[active];
@@ -50,89 +53,9 @@ export class Synapse<T extends SocketPacket = SocketPacket> extends Subject<T> {
         agentConfig.contextLength = agentConfig.contextLength || this.config.model.contextLength;
         agentConfig.maxTokens = agentConfig.maxTokens || this.config.model.maxTokens;
         // Agent owns its private Memory through IOC injection; Synapse only selects and drives the active person.
-        this.agentPool.agents[active] = await useContainer().getAsync(Agent, agentConfig);
-    }
-
-    public override async next(packet: SocketPacket): Promise<void> {
-        await firstValueFrom(
-            of(packet).pipe(
-                tap((value) => {
-                    this.log.debug(value);
-                    super.next(value as T);
-                }),
-                filter((value): value is SocketPacket => value.action === SocketEvent.User),
-                map((value) => this.turnInput(value.data)),
-                concatMap((input) => this.runTurn(input)),
-                defaultIfEmpty(undefined),
-            ),
-        );
-    }
-
-    private async runTurn(input: AgentTurnInput): Promise<void> {
-        await this.agent.memory.ingest(input);
-        const result = await this.agent.run(input);
-        await this.agent.memory.settle(result);
-    }
-
-    private turnInput(data: unknown): AgentTurnInput {
-        if (typeof data === 'string') {
-            return this.turnInputFromContent(data);
-        }
-        if (this.isSocketUserPayload(data)) {
-            const input = this.turnInputFromContent(data.text);
-            if (typeof data.workingDirectory === 'string' && data.workingDirectory.trim().length > 0) input.workingDirectory = data.workingDirectory;
-            return input;
-        }
-        throw Object.assign(Error('Invalid user payload'), { detail: { data } });
-    }
-
-    private isSocketUserPayload(data: unknown): data is SocketUserPayload {
-        return typeof data === 'object' && data !== null && typeof (data as SocketUserPayload).text === 'string';
-    }
-
-    private turnInputFromContent(content: string): AgentTurnInput {
-        const parsed = this.parseContentMetadata(content);
-        const toolRoots = this.existingAbsoluteRoots(parsed.content);
-        return {
-            content: parsed.content,
-            ...(parsed.workingDirectory !== undefined ? { workingDirectory: parsed.workingDirectory } : {}),
-            ...(toolRoots.length > 0 ? { toolRoots } : {}),
-        };
-    }
-
-    private parseContentMetadata(content: string): { content: string; workingDirectory?: string } {
-        const lines = content.split(/\r?\n/);
-        const kept: string[] = [];
-        let workingDirectory: string | undefined;
-        for (const line of lines) {
-            const match = line.match(/^\s*(?:执行目录|working\s*directory|cwd)\s*[:：]\s*(.+?)\s*$/i);
-            if (match?.[1] !== undefined) {
-                const value = this.trimPathToken(match[1].trim());
-                if (value.length > 0) workingDirectory = value;
-                continue;
-            }
-            kept.push(line);
-        }
-        const normalized = kept.join('\n').trim();
-        return {
-            content: normalized.length > 0 ? normalized : content.trim(),
-            ...(workingDirectory !== undefined ? { workingDirectory } : {}),
-        };
-    }
-
-    private existingAbsoluteRoots(content: string): string[] {
-        const roots: string[] = [];
-        for (const match of content.matchAll(/\/[^\s"'<>`]+/g)) {
-            const candidate = this.trimPathToken(match[0]);
-            if (!existsSync(candidate)) continue;
-            const real = realpathSync(candidate);
-            statSync(real);
-            if (!roots.includes(real)) roots.push(real);
-        }
-        return roots;
-    }
-
-    private trimPathToken(value: string): string {
-        return value.replace(/[),，。；;：:!?！？]+$/g, '');
+        this.agentPool.agents[active] = await useContainer().getAsync(Agent, agentConfig, this);
+        // this.log.info('listening', { endpoint: this.config.path.socket });
+        this.on('data', this.agent.run.bind(this.agent));
+        return true;
     }
 }

@@ -1,6 +1,6 @@
-import { FModelProtocolName } from '@/config';
 import { AgentChatRole, type AgentMemory, type AgentToolCall } from '@/agent/memory';
 import type { IntelligenceEvent, ProtocolAdapter, ProtocolBuildContext, ProtocolStreamState, ProviderErrorShape, StreamingToolCall } from '../types';
+import { FModelProtocolName } from '@/configuration';
 
 interface ToolCallDelta {
     index?: number;

@@ -1,4 +1,4 @@
-import { FModelProtocolName } from '@/config';
+import { FModelProtocolName } from '@/configuration';
 import type { ProtocolAdapter, ProtocolBuildContext, ProviderErrorShape } from '../types';
 
 interface ResponsesEvent {

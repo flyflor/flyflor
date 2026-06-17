@@ -1,8 +1,8 @@
 import { Inject, Provide, Logger, FAgent } from '@/core';
 import { Brain, CallosumSignalType, type CallosumSignal } from './brain';
 import { Memory, type AgentTurnInput } from './memory';
-import { type FAgentProfileConfiguration } from '@/config';
 import type { FLogger } from '@/core/logger';
+import type { FAgentProfileConfiguration } from '@/configuration';
 
 export interface AgentTurnResult {
     user: string;
@@ -19,50 +19,19 @@ export interface AgentTurnResult {
 @Provide()
 export class Agent extends FAgent<CallosumSignal> {
     @Inject(function (this: Agent) {
-        return [this.agentConfig];
+        return [this.agentConfig, this.synapse];
     })
     public memory!: Memory;
 
     @Inject(function (this: Agent) {
-        return [this.agentConfig, this.memory];
+        return [this.agentConfig, this.synapse, this.memory];
     })
     public brain!: Brain;
 
     @Logger(Agent.name)
     public readonly log!: FLogger;
 
-    constructor(public readonly agentConfig: FAgentProfileConfiguration) {
-        super();
-    }
-
-    public async run(input: AgentTurnInput): Promise<AgentTurnResult> {
+    public async run(input: AgentTurnInput) {
         this.log.debug('turn.start', input);
-        return new Promise<AgentTurnResult>((resolve, reject) => {
-            let assistant = '';
-            const subscription = this.brain.subscribe({
-                next: (signal) => {
-                    if (signal.type === CallosumSignalType.Reply) assistant += signal.chunk;
-                    if (signal.type === CallosumSignalType.Done) {
-                        this.emit(signal);
-                        subscription.unsubscribe();
-                        resolve({
-                            user: input.content,
-                            assistant,
-                            completed: assistant.trim().length > 0,
-                        });
-                        return;
-                    }
-                    this.emit(signal);
-                },
-                error: (error) => {
-                    subscription.unsubscribe();
-                    reject(error);
-                },
-            });
-            void this.brain.run(input).catch((error) => {
-                subscription.unsubscribe();
-                reject(error);
-            });
-        });
     }
 }

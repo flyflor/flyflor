@@ -1,8 +1,8 @@
 # AGENTS.md - Flyflor 项目规则
 
-Flyflor 默认使用共享的 `oop-code-redlines` skill 作为工程纪律。在本仓库写代码、审查、重构、修 bug、加测试或写文档前，都要加载并遵守该 skill。
+Flyflor 默认使用项目内 `.agents/skills/oop-code-redlines/SKILL.md` skill 作为工程纪律。在本仓库写代码、审查、重构、修 bug、加测试或写文档前，都要加载并遵守项目内这份 skill。不要只依赖全局副本。
 
-本文件只保留 Flyflor 的项目级补充。如果共享规则和项目规则冲突，本仓库以项目规则为准。
+本文件只保留 Flyflor 的项目级补充。如果项目内 skill 和项目规则冲突，本仓库以项目规则为准。
 
 ## Flyflor 代码规则
 
@@ -28,7 +28,7 @@ Flyflor 默认使用共享的 `oop-code-redlines` skill 作为工程纪律。在
 
 1. 仓库内每个文档 `.md` 都必须有 `.zh.cn.md` 人类镜像，包括根目录 `*.md`、`docs/**/*.md` 和 `prompts/**/*.md`。
 2. runtime prompt source 是 canonical English `.md`。`.zh.cn.md` 只是人类参考，运行时代码绝不能读取。
-3. 不要让 README、docs 或 prompts 变成第二套规则系统。共享工程风格在 `oop-code-redlines`；Flyflor 特有规则在本文件。
+3. 不要让 README、docs 或 prompts 变成第二套规则系统。共享工程风格在 `.agents/skills/oop-code-redlines/SKILL.md`；Flyflor 特有规则在本文件。
 
 ## 健康门槛
 

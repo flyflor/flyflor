@@ -11,6 +11,7 @@ import {
 import { defineMetadata, getMetadata, useContainer } from './ioc/container';
 import type { FModule } from './ioc/abstracts';
 import { get } from 'lodash-es';
+import { ConfigService } from '@/configuration';
 
 export type Ctor<T = unknown> = new (...args: never[]) => T;
 
@@ -152,8 +153,7 @@ export function Config(key?: string): PropertyDecorator {
         data.push({
             propertyKey,
             instance: async () => {
-                const { ConfigComponent } = await import('@/config');
-                return useContainer().getAsync(ConfigComponent);
+                return useContainer().getAsync(ConfigService);
             },
         });
         defineMetadata(INJECT_METADATA_INSTANCE_KEY, data, target.constructor);

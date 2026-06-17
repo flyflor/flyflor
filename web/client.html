@@ -445,6 +445,12 @@
                 gap: 0.55rem;
             }
 
+            .directory-row {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 0.55rem;
+            }
+
             .primary {
                 border-color: rgba(184, 217, 135, 0.52);
                 color: #10110f;
@@ -664,7 +670,7 @@
                 </div>
                 <div class="endpoint" aria-label="连接端点">
                     <span>WebSocket bridge</span>
-                    <code>ws://127.0.0.1:17878</code>
+                    <code id="bridgeUrlText">ws://127.0.0.1:17878</code>
                     <small id="protocolText">send: JSON packet</small>
                 </div>
             </header>
@@ -705,7 +711,10 @@
 
                     <section class="side-section actions">
                         <h2 class="panel-title">执行目录</h2>
-                        <input id="workingDirectoryInput" type="text" value="/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor" placeholder="例如：/Users/.../flyflor-cli 或 ./reference/pi" />
+                        <div class="directory-row">
+                            <input id="workingDirectoryInput" type="text" value="/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor" placeholder="例如：/Users/.../flyflor-cli 或 ./reference/pi" />
+                            <button id="cwdConfirmBtn" type="button" disabled>确认</button>
+                        </div>
                         <small class="hint">相对路径会按这里的目录解析；绝对路径仍必须位于允许根内。</small>
                     </section>
 
@@ -753,7 +762,7 @@
         </div>
 
         <script>
-            const BRIDGE_URL = 'ws://127.0.0.1:17878';
+            const BRIDGE_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`;
             const IPC_DEBUG = true;
 
             let ws = null;
@@ -776,14 +785,17 @@
             const sendBtn = document.getElementById('sendBtn');
             const messageInput = document.getElementById('messageInput');
             const workingDirectoryInput = document.getElementById('workingDirectoryInput');
+            const cwdConfirmBtn = document.getElementById('cwdConfirmBtn');
             const quickActions = document.getElementById('quickActions');
             const composer = document.getElementById('composer');
+            const bridgeUrlText = document.getElementById('bridgeUrlText');
             const messageCount = document.getElementById('messageCount');
             const chunkCount = document.getElementById('chunkCount');
             const packetCount = document.getElementById('packetCount');
             const errorCount = document.getElementById('errorCount');
             const debugLog = document.getElementById('debugLog');
 
+            bridgeUrlText.textContent = BRIDGE_URL;
             renderEmptyState();
             setStreamState(false);
 
@@ -928,6 +940,7 @@
                 sendBtn.disabled = !enabled;
                 messageInput.disabled = !enabled;
                 workingDirectoryInput.disabled = !enabled;
+                cwdConfirmBtn.disabled = !enabled;
                 document.querySelectorAll('.quick-btn').forEach((button) => {
                     button.disabled = !enabled;
                 });
@@ -1055,17 +1068,27 @@
                 if (!text || !ws || pending || ws.readyState !== WebSocket.OPEN) return;
                 pending = true;
                 setInputEnabled(false);
-                const workingDirectory = workingDirectoryInput.value.trim() || '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor';
-                const packet = { action: 'user', data: { text, workingDirectory } };
+                const packet = { action: 'user', data: { text } };
                 debugIpc('ws.out', {
                     action: packet.action,
                     textLength: text.length,
-                    workingDirectory,
                 });
                 ws.send(JSON.stringify(packet));
                 addMessage(text, 'user');
-                addMessage(`执行目录: ${workingDirectory}`, 'system');
                 createPendingAgentMessage();
+            }
+
+            function sendWorkingDirectory() {
+                if (!ws || ws.readyState !== WebSocket.OPEN) return;
+                const path = workingDirectoryInput.value.trim();
+                if (!path) {
+                    addMessage('执行目录为空，未提交', 'error');
+                    return;
+                }
+                const packet = { action: 'cwd', data: { path } };
+                debugIpc('ws.out', packet);
+                ws.send(JSON.stringify(packet));
+                addMessage(`执行目录已提交: ${path}`, 'system');
             }
 
             function connect() {
@@ -1111,6 +1134,7 @@
             }
 
             connectBtn.addEventListener('click', connect);
+            cwdConfirmBtn.addEventListener('click', sendWorkingDirectory);
 
             disconnectBtn.addEventListener('click', () => {
                 if (ws) ws.close();

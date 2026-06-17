@@ -1,8 +1,8 @@
 # AGENTS.md - Flyflor Project Rules
 
-Flyflor uses the shared `oop-code-redlines` skill as its default engineering discipline. Load and follow that skill before writing, reviewing, refactoring, debugging, testing, or documenting code in this repository.
+Flyflor uses the project-local `.agents/skills/oop-code-redlines/SKILL.md` skill as its default engineering discipline. Load and follow the project-local skill before writing, reviewing, refactoring, debugging, testing, or documenting code in this repository. Do not rely on a global-only copy.
 
-This file contains only Flyflor-specific additions. If a shared rule and a project rule conflict, the project rule wins for this repository.
+This file contains only Flyflor-specific additions. If the project-local skill and a project rule conflict, the project rule wins for this repository.
 
 ## Flyflor Code Rules
 
@@ -28,7 +28,7 @@ This file contains only Flyflor-specific additions. If a shared rule and a proje
 
 1. Every repository documentation `.md` file must have a `.zh.cn.md` human mirror. This includes root-level `*.md`, `docs/**/*.md`, and `prompts/**/*.md`.
 2. Runtime prompt sources are canonical English `.md` files. `.zh.cn.md` mirrors are human references and must never be read by runtime code.
-3. Do not let README, docs, or prompts become second rule systems. Shared engineering style lives in `oop-code-redlines`; Flyflor-specific rules live here.
+3. Do not let README, docs, or prompts become second rule systems. Shared engineering style lives in `.agents/skills/oop-code-redlines/SKILL.md`; Flyflor-specific rules live here.
 
 ## Health Gate
 

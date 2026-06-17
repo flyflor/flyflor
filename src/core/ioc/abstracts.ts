@@ -1,3 +1,5 @@
+import type { FAgentProfileConfiguration } from '@/configuration';
+import type { Synapse } from '@/neural';
 import { Observable, Subject } from 'rxjs';
 
 export abstract class FlyFlor {}
@@ -71,19 +73,6 @@ export abstract class FTool<
 }
 
 /**
- * Base class for permission/policy subscribers (classes decorated with `@Guard()`).
- * Discovered as a group via `container.listModule(FGuard)` so each guard can subscribe to the capillary layer —
- * discovery is structural (by base class), never by a metadata flag.
- */
-export abstract class FGuard extends FService {}
-
-/**
- * Base class for sandbox policy subscribers (classes decorated with `@SandBox()`), a specialization of `FGuard`.
- * Appears in both `listModule(FGuard)` and `listModule(FSandBox)`.
- */
-export abstract class FSandBox extends FGuard {}
-
-/**
  * Base class for autonomous intelligent agents ("person" semantic).
  *
  * Parallel to `FService`: an agent is NOT a stateless service — it has its own mind (soul), its own
@@ -91,9 +80,9 @@ export abstract class FSandBox extends FGuard {}
  * via `listModule(FAgent)` and to manage their lifecycles. An agent's `chat` is the canonical
  * entry point: the runtime never inspects or rewrites the agent's system prompt.
  */
-export abstract class FAgentAtom<T = object | number | string | boolean | undefined> extends Subject<T> {
-    protected emit(value: T): void {
-        super.next(value);
+export abstract class FAgentAtom<T = object | number | string | boolean | undefined> extends FService {
+    constructor(public agentConfig: FAgentProfileConfiguration, public synapse: Synapse) {
+        super();
     }
 }
 export abstract class FAgent<T> extends FAgentAtom<T> {}

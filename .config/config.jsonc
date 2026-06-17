@@ -248,12 +248,10 @@
     // Canonical repo-relative locations Flyflor reads/writes at runtime.
     // All paths are relative (rule 7) and resolved against `rootPath` via `resolveFromRoot()` in `paths.ts`.
     // - `configFile`: the single JSONC config file, needed to bootstrap config loading before config is known.
-    // - `socketFile`: public socket endpoint for IPC on every supported platform.
     // - `promptsDir`: directory holding canonical `<name>.md` prompt sources.
     // - `sqlDir`: directory holding `NNN-*.sql` schema-init scripts.
     "promptsDir": "./prompts",
     "sqlDir": "./sql",
-    "socketFile": "./flyflor.sock",
     // 记忆系统配置。
     // 这些值在 ConfigComponent 中已有默认值，通常不需要配置；需要覆盖时取消注释。
     // memoryEnabled: 是否启用长期记忆。
@@ -288,7 +286,7 @@
     // IPC socket 路径。
     // 默认值为 ./flyflor.sock；通常不需要配置。
     // Windows 运行时内部会转换为命名管道。
-    // "socket": "./flyflor.sock",
+    "socket": "./flyflor.sock",
     // Skill 插件目录配置。
     // directory: skill 根目录。
     // creationNudgeInterval: skill 创建提示间隔。

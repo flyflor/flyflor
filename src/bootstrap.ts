@@ -6,4 +6,4 @@ import { Factory } from '@/core';
 import { AppModule } from './app.module';
 
 const app = await Factory.create(AppModule);
-console.log(`Flyflor socket listening at ${app.ipc.config.socketEndpoint}`);
+await app.synapse();

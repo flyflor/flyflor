@@ -1,7 +1,7 @@
 import { join } from 'path';
 import { defineMetadata, getMetadata, INJECT_METADATA_INSTANCE_KEY, useContainer, type InjectInstanceMetadata } from '@/core/ioc';
-import { ROOT_PATH } from '@/config';
 import { PromptService } from './service';
+import { useRootPath } from '@/configuration';
 
 export function Prompt<TThis = object>(path: string | ((this: TThis) => string)): PropertyDecorator {
     return (target, propertyKey) => {
@@ -10,7 +10,7 @@ export function Prompt<TThis = object>(path: string | ((this: TThis) => string))
         data.push({
             propertyKey,
             instance: function (this: TThis) {
-                const promptPath = join(ROOT_PATH, typeof path === 'function' ? path.call(this) : path || '');
+                const promptPath = join(useRootPath(), typeof path === 'function' ? path.call(this) : path || '');
                 return useContainer().getAsync(PromptService, promptPath);
             },
         });
