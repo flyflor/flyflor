@@ -106,10 +106,10 @@ function registerInject(
     propertyKey: string | symbol,
     classType: ClassType,
     factoryArgs?: InjectMetadata['factoryArgs'],
-    inheritProps?: boolean,
+    scoped?: boolean,
 ): void {
     const data: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, target.constructor) || [];
-    data.push({ propertyKey, classType, factoryArgs, inheritProps });
+    data.push({ propertyKey, classType, factoryArgs, scoped });
     defineMetadata(INJECT_METADATA_KEY, data, target.constructor);
 }
 

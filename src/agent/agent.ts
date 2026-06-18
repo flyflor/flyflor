@@ -1,8 +1,9 @@
-import { Inject, Provide, Logger, FAgent } from '@/core';
-import { Brain, CallosumSignalType, type CallosumSignal } from './brain';
-import { Memory, type AgentTurnInput } from './memory';
+import { Scope, Provide, Logger, FAgent } from '@/core';
+import { Brain, type CallosumSignal } from './brain';
+import { Memory } from './memory';
 import type { FLogger } from '@/core/logger';
 import type { FAgentProfileConfiguration } from '@/configuration';
+import type { Synapse } from '@/neural';
 
 export interface AgentTurnResult {
     user: string;
@@ -17,21 +18,18 @@ export interface AgentTurnResult {
  * `next()` is only the outward reaction: the brain owns routing, memory use, thinking, and commit.
  */
 @Provide()
-export class Agent extends FAgent<CallosumSignal> {
-    @Inject(function (this: Agent) {
-        return [this.agentConfig, this.synapse];
-    })
+export class Agent extends FAgent<string> {
+    @Scope()
     public memory!: Memory;
 
-    @Inject(function (this: Agent) {
-        return [this.agentConfig, this.synapse, this.memory];
-    })
+    @Scope()
     public brain!: Brain;
 
     @Logger(Agent.name)
     public readonly log!: FLogger;
 
-    public async run(input: AgentTurnInput) {
-        this.log.debug('turn.start', input);
+    constructor(public override agentConfig: FAgentProfileConfiguration, public override synapse: Synapse) {
+        super(agentConfig, synapse);
+        // this.pipe(this.brain.next.bind(this.brain));
     }
 }

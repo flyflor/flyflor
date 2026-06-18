@@ -22178,3 +22178,19 @@
   |   text: '1',
   |   workingDirectory: '/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor'
   | }
+[INFO ]  2026-06-18T04:46:45.451Z  FSocket
+  | open
+[INFO ]  2026-06-18T04:46:46.488Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 56 7b 22 61 63 74 69 6f 6e 22 3a 22 63 77 64 22 2c 22 64 61 74 61 22 3a 7b 22 70 61 74 68 22 3a 22 2f 55 73 65 72 73 2f 79 69 68 ... 44 more bytes>
+[DEBUG]  2026-06-18T04:46:46.489Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-18T04:46:49.050Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 27 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 7b 22 74 65 78 74 22 3a 22 31 31 31 22 7d 7d>
+[INFO ]  2026-06-18T04:46:49.051Z  Agent
+  | input
+  | {
+  |   text: '111'
+  | }

@@ -1,8 +1,8 @@
-import { type FAgentProfileConfiguration } from '@/config';
 import { FAgentAtom, Inject, Logger, Prompt, PromptService, Provide, type FLogger, type PromptPackageData } from '@/core';
 import { includes } from 'lodash-es';
 import { Context } from '@/neural/context';
 import type { CompletedSummary, TurnUnderstanding } from '@/neural/context/types';
+import type { FAgentProfileConfiguration } from '@/configuration';
 
 export enum SoulSection {
     /** Agent identity / constitution layer. Loaded from `SOUL.md`. */
@@ -93,16 +93,6 @@ export interface PendingResearch {
     summary?: string;
 }
 
-/**
- * Per-turn input accepted by the agent runtime.
- * `content` is the only text sent to LLM providers; `workingDirectory` is operational context for tools.
- */
-export interface AgentTurnInput {
-    content: string;
-    workingDirectory?: string;
-    toolRoots?: string[];
-}
-
 @Provide()
 export class Memory extends FAgentAtom {
     @Prompt(function (this: Memory) {
@@ -115,81 +105,4 @@ export class Memory extends FAgentAtom {
 
     @Inject()
     public context!: Context;
-
-    public current?: TurnUnderstanding;
-
-    public working: AgentMemory[] = [];
-
-    public completed: CompletedSummary[] = [];
-
-    public pendingResearch?: PendingResearch;
-
-    constructor(public readonly agentConfig: FAgentProfileConfiguration) {
-        super();
-    }
-
-    public load(understanding: TurnUnderstanding): void {
-        this.current = understanding;
-    }
-
-    public async ingest(input: AgentTurnInput): Promise<TurnUnderstanding> {
-        return this.context.ingest(this, input);
-    }
-
-    public recordWork(exchange: AgentMemory[]): void {
-        this.working = this.compactWork(exchange);
-    }
-
-    public async settle(result: { user: string; assistant: string; completed: boolean }): Promise<CompletedSummary | undefined> {
-        return this.context.settle(this, { ...result, working: this.working });
-    }
-
-    public rememberCompletion(summary: CompletedSummary): void {
-        this.completed.push(summary);
-        this.completed = this.completed.slice(-12);
-        this.working = [];
-    }
-
-    public buildMessage(content?: string): AgentMemory[] {
-        const rendered: string[] = [];
-        const sections = this.prompt.config?.prompt?.sections ?? [];
-        for (const section of sections) {
-            if (!includes(Object.values(SoulSection), section)) continue;
-            const content = this.prompt.data[section]?.data;
-            if (typeof content !== 'string' || content.trim().length === 0) continue;
-            rendered.push(`<${section}>\n${content.trim()}\n</${section}>`);
-        }
-        const state = this.renderState();
-        if (state.length > 0) rendered.push(state);
-        const system = rendered.join('\n\n');
-        const messages: AgentMemory[] = system.length > 0 ? [{ role: AgentChatRole.System, content: system }] : [];
-        const user = this.current === undefined
-            ? content?.trim() ?? ''
-            : JSON.stringify({
-                  goal: this.current.goal,
-                  user: this.truncate(content ?? this.current.userText, 4000),
-              });
-        if (user.length > 0) messages.push({ role: AgentChatRole.User, content: user });
-        return messages;
-    }
-
-    private renderState(): string {
-        if (this.current === undefined && this.completed.length === 0 && this.working.length === 0) return '';
-        return `<agent_memory>\n${JSON.stringify({
-            current: this.current,
-            completed: this.completed.slice(-8),
-            working: this.working.slice(-8).map((item) => ({ role: item.role, content: this.truncate(item.content, 1000) })),
-        }, null, 2)}\n</agent_memory>`;
-    }
-
-    private compactWork(exchange: AgentMemory[]): AgentMemory[] {
-        return exchange.slice(-24).map((message) => ({
-            ...message,
-            content: this.truncate(message.content, 2000),
-        }));
-    }
-
-    private truncate(content: string, max: number): string {
-        return content.length <= max ? content : `${content.slice(0, max)}...`;
-    }
 }

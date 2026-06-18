@@ -38,11 +38,11 @@ Business code must not construct project classes directly.
 5. Construct the class inside the container.
 6. Cache the instance early when it is a singleton, so dependency cycles can see the same object.
 7. Inject registered instance providers such as `@Config()` before ordinary property dependencies.
-8. Resolve `@Inject()` properties, including callback-produced constructor args for the injected class.
+8. Resolve `@Inject()` and `@Scope()` properties, including callback-produced or scope-derived constructor args for the injected class.
 9. Run the one method marked by `@Init()`.
 10. Remove a failed singleton from the cache before rethrowing.
 
-Constructor injection is import-graph based: a constructor parameter is resolved only when an initialized imported module instance exactly matches the reflected parameter type. Property injection is metadata based: decorators record property keys and class types, then the container resolves each property through `getAsync()`.
+Constructor injection is import-graph based: a constructor parameter is resolved only when an initialized imported module instance exactly matches the reflected parameter type. Property injection is metadata based: decorators record property keys and class types, then the container resolves each property through `getAsync()`. Scoped property injection depends on declaration order: a later `@Scope()` property can use earlier injected properties from the same host instance.
 
 `get(Module, ...props)` mirrors the same graph rules for synchronous construction, but throws if it would need to run `@Init()` or await an async injection callback.
 
@@ -54,6 +54,7 @@ General decorators live in `src/core/decorator.ts`:
 - `@Inject()`: injects a property by reflected `design:type`.
 - `@Inject(ClassType)`: injects a property using an explicit class type.
 - `@Inject(callback)`: calls the callback on the host instance and passes its result as constructor args to the injected class.
+- `@Scope()`: reads the injected class constructor metadata and resolves constructor args from the current host scope.
 - `@Init()`: marks one lifecycle method to run after injection.
 - `@Config(key?)`: injects `ConfigComponent` early and optionally exposes a nested config value.
 - `@Singleton()`: marks a class as cached in the container singleton map.

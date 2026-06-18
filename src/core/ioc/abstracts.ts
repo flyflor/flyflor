@@ -1,6 +1,6 @@
+import type { Memory } from '@/agent';
 import type { FAgentProfileConfiguration } from '@/configuration';
 import type { Synapse } from '@/neural';
-import { Observable, Subject } from 'rxjs';
 
 export abstract class FlyFlor {}
 
@@ -21,55 +21,81 @@ export abstract class FModule extends FComponent {}
  */
 export abstract class FRepo extends FService {}
 
-/**
- * Base class for external plugin boundaries (classes decorated with `@Plugin()`).
- * Plugins are active observation objects: they can expose methods and emit turn-local signals.
- */
-export interface ToolParameterProperty {
-    type: 'string' | 'number' | 'boolean' | 'array' | 'object';
-    description: string;
-    required?: boolean;
+export type ObservableCallback<T> = (value: T) => T | void;
+export type ObservableFilter<T> = (value: T) => boolean;
+export type ObservableSubscriber<T> = (value: T) => void;
+export type ObservablePipe<T> = Observable<T> | ObservableCallback<T>;
+
+export class Observable<T = unknown> extends FlyFlor {
+    public readonly filters: Set<ObservableFilter<T>>;
+    public readonly pipes: Set<ObservablePipe<T>>;
+    public readonly subscribers: Set<ObservableSubscriber<T>>;
+    private readonly values: T[];
+
+    constructor(...values: T[]) {
+        super();
+        this.filters = new Set<ObservableFilter<T>>();
+        this.pipes = new Set<ObservablePipe<T>>();
+        this.subscribers = new Set<ObservableSubscriber<T>>();
+        this.values = values;
+    }
+
+    public next(value: T): void {
+        this.emit(value, this.subscribers);
+    }
+
+    public pipe(pipe: ObservablePipe<T>): this {
+        this.pipes.add(pipe);
+        return this;
+    }
+
+    public filter<C>(filter: ObservableFilter<C>): this;
+    public filter(filter: ObservableFilter<T>): this {
+        this.filters.add(filter);
+        return this;
+    }
+
+    public subscribe<C>(subscriber: ObservableSubscriber<C>): this;
+    public subscribe(subscriber: ObservableSubscriber<T>): this {
+        this.subscribers.add(subscriber);
+        for (const value of this.values) this.emit(value, new Set([subscriber]));
+        return this;
+    }
+
+    public unsubscribe(subscriber?: ObservableSubscriber<T>): this {
+        if (subscriber === undefined) {
+            this.filters.clear();
+            this.pipes.clear();
+            this.subscribers.clear();
+        } else {
+            this.subscribers.delete(subscriber);
+        }
+        return this;
+    }
+
+    private emit(value: T, subscribers: Set<ObservableSubscriber<T>>): void {
+        let current = value;
+        for (const pipe of this.pipes) {
+            if (pipe instanceof Observable) {
+                pipe.next(current);
+                continue;
+            }
+
+            const next = pipe(current);
+            if (next === undefined) return;
+            current = next;
+        }
+
+        for (const filter of this.filters) {
+            if (!filter(current)) return;
+        }
+
+        for (const subscriber of subscribers) subscriber(current);
+    }
 }
 
-export interface ToolParameterSchema {
-    type: 'object';
-    properties: Record<string, ToolParameterProperty>;
-}
-
-export interface ToolExecutionContext {
-    callId: string;
-    intent: string;
-    evidenceCount: number;
-    workingDirectory?: string;
-    toolRoots?: string[];
-    /** Cancels the tool when the surrounding turn is aborted. Tools should honor it for long work. */
-    signal?: AbortSignal;
-}
-
-export type ToolResult<TData = unknown> =
-    | {
-          ok: true;
-          data: TData;
-      }
-    | {
-          ok: false;
-          error: string;
-      };
-
-export abstract class FTool<
-    TInput = Record<string, unknown>,
-    TData = unknown,
-    TSignal = object | number | string | boolean | undefined,
-> extends Subject<TSignal> {
-    public abstract readonly name: string;
-
-    public abstract readonly description: string;
-
-    public abstract readonly parameters: ToolParameterSchema;
-
-    public readonly research: boolean = false;
-
-    public abstract execute(input: TInput, context: ToolExecutionContext): Promise<ToolResult<TData>>;
+export function of<T>(...values: T[]) {
+    return new Observable(...values);
 }
 
 /**
@@ -80,16 +106,11 @@ export abstract class FTool<
  * via `listModule(FAgent)` and to manage their lifecycles. An agent's `chat` is the canonical
  * entry point: the runtime never inspects or rewrites the agent's system prompt.
  */
-export abstract class FAgentAtom<T = object | number | string | boolean | undefined> extends FService {
+export abstract class FAgentAtom<T = object | number | string | boolean | undefined> extends Observable<T> {
     constructor(public agentConfig: FAgentProfileConfiguration, public synapse: Synapse) {
         super();
     }
 }
 export abstract class FAgent<T> extends FAgentAtom<T> {}
 
-/**
- * One structured signal emitted by a cortex stream (e.g. `Brain`).
- * `delta` carries an incremental text fragment; `done` marks the end of a reflex. Isomorphic to
- * `PluginSignal` so reflection/tool signals can extend this union later without changing the seam.
- */
-export type AgentSignal = { type: 'delta'; text: string } | { type: 'done' };
+export abstract class FTool extends FService {}

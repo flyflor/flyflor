@@ -1,4 +1,3 @@
-export type ObjectIdentifier = string | Symbol;
 export type ClassType<T = any> = new (...args: any[]) => T;
 
 // 依赖注入元数据键
@@ -9,7 +8,7 @@ export interface InjectMetadata {
     propertyKey: string | symbol;
     classType: ClassType;
     factoryArgs?: (this: any) => unknown | unknown[] | Promise<unknown | unknown[]>;
-    inheritProps?: boolean;
+    scoped?: boolean;
 }
 export interface InjectInstanceMetadata {
     propertyKey: string | symbol;
@@ -21,6 +20,3 @@ export const PROVIDER_SINGLETON_KEY = Symbol('PROVIDER_SINGLETON_KEY');
 
 // 初始化装饰器，用于注册初始化方法
 export const INIT_METADATA_KEY = Symbol('INIT_METADATA_KEY');
-export interface OnInitCycle {
-    onInit(): Promise<any>;
-}

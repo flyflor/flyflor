@@ -52,7 +52,6 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
 
     constructor(public readonly path: string) {
         super();
-        // console.log(11111111, this.path);
         if (statSync(path).isDirectory()) {
             this.data = {} as TData;
             const entries = readdirSync(path);

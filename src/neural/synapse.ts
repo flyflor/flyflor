@@ -55,7 +55,12 @@ export class Synapse extends EventEmitter {
         // Agent owns its private Memory through IOC injection; Synapse only selects and drives the active person.
         this.agentPool.agents[active] = await useContainer().getAsync(Agent, agentConfig, this);
         // this.log.info('listening', { endpoint: this.config.path.socket });
-        this.on('data', this.agent.run.bind(this.agent));
+        this.agent.subscribe(this.output.bind(this));
+        this.on('data', this.agent.next.bind(this.agent));
         return true;
+    }
+
+    public async output(data: string) {
+        this.log.info('output', data);
     }
 }

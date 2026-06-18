@@ -1,19 +1,5 @@
 import { INIT_METADATA_KEY, INJECT_METADATA_INSTANCE_KEY, INJECT_METADATA_KEY, MODULE_METADATA_KEY, PROVIDER_SINGLETON_KEY, type ClassType, type InjectInstanceMetadata, type InjectMetadata } from './types';
 
-export interface InjectConfig {
-    key?: string;
-    propertyName: string;
-    ClassType: ClassType;
-}
-
-export interface MetadataQueue {
-    metadataKey: any;
-    metadataValue: any;
-    target: any;
-    propertyKey?: string | symbol;
-}
-
-export const CONST_METADATA_KEY = 'CONST_METADATA_KEY';
 const CONSTRUCTOR_PARAM_METADATA_KEY = 'design:paramtypes';
 
 /**
@@ -56,14 +42,14 @@ export class Container {
                 await this.getAsync(importModule);
             }
         }
-        const constructorProps = this.getConstructorProps(Module, this.getModuleImportInstances(Module), props);
+        const constructorProps = this.getConstructorProps(Module, this.getModuleImportInstances(config?.imports || []), props);
         const clz = new Module(...constructorProps);
         if (isSingleton) this.singletons.set(Module, clz);
         try {
             /**
              * 提前注入 register 实例
              */
-            const injectInstances: InjectInstanceMetadata[] = getMetadata(INJECT_METADATA_INSTANCE_KEY, Module) || getMetadata(INJECT_METADATA_INSTANCE_KEY, Module.prototype) || [];
+            const injectInstances: InjectInstanceMetadata[] = getMetadata(INJECT_METADATA_INSTANCE_KEY, Module) || [];
             for (const inject of injectInstances) {
                 const instance = await inject.instance?.call(clz);
                 clz[inject.propertyKey] = instance;
@@ -72,12 +58,11 @@ export class Container {
              * 通过 INJECT_METADATA_KEY 注入依赖
              * 为实例化 new Module
              */
-            const injects: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, Module) || getMetadata(INJECT_METADATA_KEY, Module.prototype) || [];
+            const injects: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, Module) || [];
             for (const inject of injects) {
-                const resolvedProps = inject.factoryArgs ? await inject.factoryArgs.call(clz) : undefined;
-                const isInjectSingleton = getMetadata(PROVIDER_SINGLETON_KEY, inject.classType) === true;
-                const injectProps = inject.inheritProps && !isInjectSingleton
-                    ? props
+                const resolvedProps = inject.scoped || !inject.factoryArgs ? undefined : await inject.factoryArgs.call(clz);
+                const injectProps = inject.scoped
+                    ? this.getScopedConstructorProps(inject.classType, clz, props)
                     : resolvedProps === undefined
                         ? []
                         : Array.isArray(resolvedProps)
@@ -90,7 +75,7 @@ export class Container {
              * 判断是否有 @Init
              * 如果有 执行 @Init 方法
              */
-            const actionPropertyKey = getMetadata(INIT_METADATA_KEY, Module.prototype) || getMetadata(INIT_METADATA_KEY, clz);
+            const actionPropertyKey = getMetadata(INIT_METADATA_KEY, Module.prototype);
             if (actionPropertyKey) await clz[actionPropertyKey]?.apply(clz, props);
             return clz;
         } catch (error) {
@@ -104,9 +89,7 @@ export class Container {
         return new Module(...props);
     }
 
-    public getModuleImportInstances(Module: ClassType): Array<{ classType: ClassType; instance: InstanceType<ClassType> }> {
-        const config = getMetadata(MODULE_METADATA_KEY, Module);
-        const imports: ClassType[] = config?.imports || [];
+    public getModuleImportInstances(imports: ClassType[]): Array<{ classType: ClassType; instance: InstanceType<ClassType> }> {
         return imports.filter((classType) => this.singletons.has(classType)).map((classType) => ({ classType, instance: this.singletons.get(classType) as InstanceType<ClassType> }));
     }
 
@@ -121,34 +104,50 @@ export class Container {
         });
     }
 
-    /**
-     * 获取依赖注入容器元数据
-     *
-     * @param metadataKey 元数据键名
-     * @param target 元数据目标对象
-     * @param propertyKey 元数据属性键名（可选）
-     * @returns 元数据值
-     */
-    public getMetadata(metadataKey: any, target: Object): any;
-    public getMetadata(metadataKey: any, target: Object, propertyKey: string | symbol): any;
-    public getMetadata(): any {
-        const [metadataKey, target, propertyKey] = arguments;
-        return getMetadata(metadataKey, target, propertyKey);
+    private getScopedConstructorProps<P extends unknown[]>(Module: ClassType, host: object, props: P): unknown[] {
+        const paramTypes: ClassType[] = getMetadata(CONSTRUCTOR_PARAM_METADATA_KEY, Module) || [];
+        if (paramTypes.length === 0) return props;
+        const scopedValues = this.getScopedValues(host, props);
+        const used = new Set<number>();
+        return paramTypes.map((paramType, index) => {
+            const matchedIndex = this.getScopedValueIndex(scopedValues, paramType, used);
+            if (matchedIndex >= 0) {
+                used.add(matchedIndex);
+                return scopedValues[matchedIndex];
+            }
+            const nextIndex = scopedValues.findIndex((_, valueIndex) => !used.has(valueIndex));
+            if (nextIndex >= 0) {
+                used.add(nextIndex);
+                return scopedValues[nextIndex];
+            }
+            if (index < props.length) return props[index];
+            throw Error(`Scoped constructor dependency not found: ${Module.name}[${index}]`);
+        });
     }
 
-    /**
-     * 定义依赖注入容器元数据
-     *
-     * @param metadataKey 元数据键名
-     * @param metadataValue 元数据值
-     * @param target 元数据目标对象
-     * @param propertyKey 元数据属性键名（可选）
-     */
-    public defineMetadata(metadataKey: any, metadataValue: any, target: Object): void;
-    public defineMetadata(metadataKey: any, metadataValue: any, target: Object, propertyKey: string | symbol): void;
-    public defineMetadata(): void {
-        const [metadataKey, metadataValue, target, propertyKey] = arguments;
-        return defineMetadata(metadataKey, metadataValue, target, propertyKey);
+    private getScopedValues<P extends unknown[]>(host: object, props: P): unknown[] {
+        const values = [...props];
+        const injects: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, host.constructor) || [];
+        for (const inject of injects) {
+            const value = Reflect.get(host, inject.propertyKey);
+            if (value !== undefined && !values.includes(value)) values.push(value);
+        }
+        return values;
+    }
+
+    private getScopedValueIndex(values: unknown[], paramType: ClassType, used: Set<number>): number {
+        if (!this.isScopedClassType(paramType)) return -1;
+        return values.findIndex((value, index) => !used.has(index) && value instanceof paramType);
+    }
+
+    private isScopedClassType(paramType: ClassType): boolean {
+        return paramType !== Object
+            && paramType !== String
+            && paramType !== Number
+            && paramType !== Boolean
+            && paramType !== Array
+            && paramType !== Function
+            && paramType !== Promise;
     }
 
     public registerObject(key: ClassType | symbol, instance: any) {
@@ -174,10 +173,4 @@ export function getMetadata(metadataKey: any, target: Object): any;
 export function getMetadata(metadataKey: any, target: Object, propertyKey: string | symbol): any;
 export function getMetadata(...props: any): any {
     return Reflect.getMetadata.apply(undefined, props);
-}
-
-export function getOwnMetadata(metadataKey: any, target: Object): any;
-export function getOwnMetadata(metadataKey: any, target: Object, propertyKey: string | symbol): any;
-export function getOwnMetadata(...props: any): any {
-    return Reflect.getOwnMetadata.apply(undefined, props);
 }

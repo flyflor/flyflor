@@ -38,11 +38,11 @@
 5. 在 container 内构造 class。
 6. 如果是 singleton，提前缓存 instance，使 dependency cycle 能看到同一个对象。
 7. 先注入 `@Config()` 这类 registered instance provider。
-8. 再解析 `@Inject()` properties，包括 callback 生成的被注入 class constructor args。
+8. 再解析 `@Inject()` 和 `@Scope()` properties，包括 callback 生成或 scope 推导出的被注入 class constructor args。
 9. 执行一个被 `@Init()` 标记的方法。
 10. 如果初始化失败，从 cache 移除失败 singleton 并重新抛错。
 
-constructor injection 基于 import graph：只有当某个 initialized imported module instance 与 reflected parameter type 精确匹配时才会注入。property injection 基于 metadata：decorator 记录 property key 和 class type，container 再用 `getAsync()` 解析每个 property。
+constructor injection 基于 import graph：只有当某个 initialized imported module instance 与 reflected parameter type 精确匹配时才会注入。property injection 基于 metadata：decorator 记录 property key 和 class type，container 再用 `getAsync()` 解析每个 property。scoped property injection 依赖声明顺序：后声明的 `@Scope()` property 可以使用同一个 host instance 上先注入完成的 property。
 
 `get(Module, ...props)` 使用相同的图规则做同步构造，但如果需要执行 `@Init()` 或等待 async injection callback，会直接抛错。
 
@@ -54,6 +54,7 @@ constructor injection 基于 import graph：只有当某个 initialized imported
 - `@Inject()`：按 reflected `design:type` 注入 property。
 - `@Inject(ClassType)`：使用显式 class type 注入 property。
 - `@Inject(callback)`：在 host instance 上调用 callback，并把返回值作为被注入 class 的 constructor args。
+- `@Scope()`：读取被注入 class 的 constructor metadata，并从当前 host scope 解析 constructor args。
 - `@Init()`：标记一个 injection 之后运行的 lifecycle method。
 - `@Config(key?)`：提前注入 `ConfigComponent`，并可暴露 nested config value。
 - `@Singleton()`：标记 class 会缓存到 container singleton map。
