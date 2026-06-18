@@ -22515,3 +22515,25 @@
   | {
   |   error: undefined
   | }
+[INFO ]  2026-06-18T10:16:10.996Z  FSocket
+  | open
+[DEBUG]  2026-06-18T10:16:13.424Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-18T10:16:16.590Z  Synapse
+  | input
+  | {
+  |   text: '111'
+  | }
+[INFO ]  2026-06-18T10:16:16.593Z  Agent
+  | agent received
+  | {
+  |   data: {
+  |     text: '111'
+  |   }
+  | }
+[INFO ]  2026-06-18T10:16:16.593Z  Synapse
+  | output
+  | {
+  |   text: '111'
+  | }

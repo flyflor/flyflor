@@ -34,15 +34,16 @@ export class Brain extends FAgentAtom<string> {
 
     @Init()
     public async init() {
-        return new Promise(r => {
-            this.pipe((data) => {
-                this.log.info('brain received', { data });
-                // return this.callosum.pipe(data, this.prompt).then(({ type, payload }) => {
-                //     this.log.info('callosum routed', { type, payload });
-                //     return data;
-                // });
-                return data;
-            });
-        });
+        // return new Promise(r => {
+        //     this.pipe((data) => {
+        //         this.log.info('brain received', { data });
+        //         // return this.callosum.pipe(data, this.prompt).then(({ type, payload }) => {
+        //         //     this.log.info('callosum routed', { type, payload });
+        //         //     return data;
+        //         // });
+        //         return data;
+        //     });
+        // });
+        return true;
     }
 }
