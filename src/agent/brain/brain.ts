@@ -1,10 +1,7 @@
-import { FAgentAtom, Init, Inject, Prompt, PromptService, Provide, Scope, type IObservable, type ObservablePipeResult } from '@/core';
+import { FAgentAtom, Inject, Prompt, PromptService, Provide, Scope, type IObservable, type ObservablePipeResult } from '@/core';
 import { Callosum } from './callosum';
 import { Intelligence } from './intelligence/service';
-import { Research } from './research';
-import type { Synapse } from '@/neural';
-import type { FAgentProfileConfiguration } from '@/configuration';
-import type { Memory } from '../memory';
+import { Investigation } from './investigation';
 
 export enum BrainPrompt {
     Soul = 'SOUL',
@@ -27,7 +24,7 @@ export class Brain extends FAgentAtom<string> implements IObservable<string, str
     public intelligence!: Intelligence;
 
     @Inject()
-    public researcher!: Research;
+    public investigation!: Investigation;
 
     public override async onPipe(data: string) {
         this.callosum.next(data);
