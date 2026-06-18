@@ -1,4 +1,3 @@
-import { type FAgentProfileConfiguration } from '@/config';
 import { FAgentAtom, Logger, Prompt, PromptService, Provide, type FLogger } from '@/core';
 import { AgentChatRole, type AgentMemory } from '@/agent/memory';
 
@@ -42,10 +41,6 @@ export class Callosum extends FAgentAtom<CallosumSignal> {
     @Logger(Callosum.name)
     public readonly log!: FLogger;
 
-    constructor(public readonly agentConfig: FAgentProfileConfiguration) {
-        super();
-    }
-
     /**
      * 根据 ROUTE 先判断本轮路径。
      * Callosum 只负责 route，不执行 reply、research 或 soul action。
@@ -72,7 +67,7 @@ export class Callosum extends FAgentAtom<CallosumSignal> {
         const type = route.type as CallosumRouteType;
         this.log.debug('callosum.route', type);
 
-        this.emit({ type, chunk: latestUserContent });
-        this.emit({ type: CallosumSignalType.Done, chunk: '' });
+        // this.emit({ type, chunk: latestUserContent });
+        // this.emit({ type: CallosumSignalType.Done, chunk: '' });
     }
 }

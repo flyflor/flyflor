@@ -1,6 +1,6 @@
 import { Agent } from '@/agent';
 import type { ConfigService } from '@/configuration';
-import { Config, Init, Inject, Logger, Module, useContainer, type FLogger } from '@/core';
+import { Config, Init, Inject, Logger, Module, Scope, useContainer, type FLogger } from '@/core';
 import EventEmitter from 'events';
 import { FSocket } from './ipc';
 
@@ -17,9 +17,7 @@ export class Synapse extends EventEmitter {
     @Logger(Synapse.name)
     public readonly log!: FLogger;
 
-    @Inject(function (this: Synapse) {
-        return this;
-    })
+    @Scope()
     public socket!: FSocket;
 
     public agentPool: AgentPool;
@@ -54,10 +52,14 @@ export class Synapse extends EventEmitter {
         agentConfig.maxTokens = agentConfig.maxTokens || this.config.model.maxTokens;
         // Agent owns its private Memory through IOC injection; Synapse only selects and drives the active person.
         this.agentPool.agents[active] = await useContainer().getAsync(Agent, agentConfig, this);
-        // this.log.info('listening', { endpoint: this.config.path.socket });
         this.agent.subscribe(this.output.bind(this));
-        this.on('data', this.agent.next.bind(this.agent));
+        this.on('data', this.input.bind(this));
         return true;
+    }
+
+    public async input(data: any) {
+        this.log.info('input', data);
+        this.agent.next(data);
     }
 
     public async output(data: string) {

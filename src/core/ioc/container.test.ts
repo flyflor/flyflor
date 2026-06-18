@@ -73,6 +73,17 @@ class ObjectMetadataHost extends ScopedAtom {
     public brain!: ObjectMetadataBrain;
 }
 
+@Provide()
+class ScopedHostChild {
+    constructor(public host: object) {}
+}
+
+@Provide()
+class ScopedHostWithChild {
+    @Scope()
+    public child!: ScopedHostChild;
+}
+
 describe('@Scope', () => {
     test('resolves constructor args from the host scope', async () => {
         const config = { name: 'flyflor' };
@@ -94,5 +105,11 @@ describe('@Scope', () => {
         expect(host.brain.config).toBe(config);
         expect(host.brain.synapse).toBe(synapse);
         expect(host.brain.memory).toBe(host.memory);
+    });
+
+    test('passes the host instance to scoped child constructors', async () => {
+        const host = await useContainer().getAsync(ScopedHostWithChild);
+
+        expect(host.child.host).toBe(host);
     });
 });

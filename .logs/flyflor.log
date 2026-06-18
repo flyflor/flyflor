@@ -22194,3 +22194,324 @@
   | {
   |   text: '111'
   | }
+[INFO ]  2026-06-18T07:11:22.300Z  FSocket
+  | open
+[INFO ]  2026-06-18T07:11:24.612Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 56 7b 22 61 63 74 69 6f 6e 22 3a 22 63 77 64 22 2c 22 64 61 74 61 22 3a 7b 22 70 61 74 68 22 3a 22 2f 55 73 65 72 73 2f 79 69 68 ... 44 more bytes>
+[DEBUG]  2026-06-18T07:11:24.613Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-18T07:11:27.380Z  FSocket
+  | data
+  | <Buffer 00 00 00 00 00 00 00 27 7b 22 61 63 74 69 6f 6e 22 3a 22 75 73 65 72 22 2c 22 64 61 74 61 22 3a 7b 22 74 65 78 74 22 3a 22 31 31 31 22 7d 7d>
+[INFO ]  2026-06-18T07:30:34.384Z  FSocket
+  | open
+[DEBUG]  2026-06-18T07:30:35.864Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-18T08:13:36.459Z  FSocket
+  | open
+[DEBUG]  2026-06-18T08:13:37.410Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-18T08:15:04.232Z  FSocket
+  | open
+[DEBUG]  2026-06-18T08:15:04.937Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-18T08:26:58.981Z  FSocket
+  | open
+[DEBUG]  2026-06-18T08:26:59.998Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-18T08:27:24.110Z  FSocket
+  | received
+  | {
+  |   action: 'user',
+  |   data: {
+  |     text: '1'
+  |   }
+  | }
+[INFO ]  2026-06-18T08:28:52.876Z  FSocket
+  | open
+[DEBUG]  2026-06-18T08:28:53.741Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-18T08:28:58.029Z  Synapse
+  | received
+  | {
+  |   data: {
+  |     text: '1'
+  |   }
+  | }
+[INFO ]  2026-06-18T08:30:04.673Z  FSocket
+  | open
+[DEBUG]  2026-06-18T08:30:07.268Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-18T08:30:10.094Z  Synapse
+  | received
+  | {
+  |   data: {
+  |     text: '1'
+  |   }
+  | }
+  | <ref *1> Synapse {
+  |   Symbol(config): ConfigService {
+  |     agent: 'flyflor',
+  |     agents: {
+  |       flyflor: {
+  |         contextLength: 131072,
+  |         maxTokens: 8192,
+  |         model: 'deepseek-v4-flash',
+  |         name: 'flyflor',
+  |         provider: 'deepseek'
+  |       }
+  |     },
+  |     mcp: {},
+  |     memory: {
+  |       flushMinTurns: 6,
+  |       memoryCharLimit: 2200,
+  |       memoryEnabled: true,
+  |       nudgeInterval: 10,
+  |       userCharLimit: 1375,
+  |       userProfileEnabled: true
+  |     },
+  |     model: {
+  |       apiKeyEnv: 'DEEPSEEK_API_KEY',
+  |       baseUrl: 'https://api.deepseek.com',
+  |       contextLength: 131072,
+  |       default: 'deepseek-v4-flash',
+  |       entra: {},
+  |       maxTokens: 8192,
+  |       model: 'deepseek-v4-flash',
+  |       protocols: [
+  |         {
+  |           auth: 'bearer',
+  |           missingTerminalMessage: 'LLM provider stream ended without a structured finish_reason',
+  |           name: 'openaiChatCompletions',
+  |           path: '/chat/completions',
+  |           usesV1Fallback: true
+  |         },
+  |         {
+  |           acceptsJsonResponse: true,
+  |           auth: 'bearer',
+  |           missingTerminalMessage: 'LLM provider stream ended without a structured response terminal event',
+  |           name: 'openaiResponses',
+  |           path: '/responses',
+  |           usesV1Fallback: true
+  |         }
+  |       ],
+  |       provider: 'deepseek'
+  |     },
+  |     promptsDir: './prompts',
+  |     providers: {
+  |       deepseek: {
+  |         models: {
+  |           'deepseek-v4-flash': {
+  |             staleTimeoutSeconds: 30,
+  |             timeoutSeconds: 60
+  |           }
+  |         },
+  |         requestTimeoutSeconds: 60,
+  |         staleTimeoutSeconds: 30
+  |       }
+  |     },
+  |     skills: {
+  |       creationNudgeInterval: 15,
+  |       directory: '/Users/yi./Desktop/yi/flyflors/flyflor/.config/skills',
+  |       externalDirs: []
+  |     },
+  |     socket: './flyflor.sock',
+  |     sqlDir: './sql'
+  |   },
+  |   Symbol(kCapture): false,
+  |   _events: [Object: null prototype] {
+  |     data: [
+  |       [AsyncFunction (anonymous)]
+  |     ]
+  |   },
+  |   _eventsCount: 1,
+  |   _maxListeners: undefined,
+  |   agentPool: {
+  |     active: 'flyflor',
+  |     agents: {}
+  |   },
+  |   socket: FSocket {
+  |     Symbol(path): ConfigService {
+  |       agent: 'flyflor',
+  |       agents: {
+  |         flyflor: {
+  |           contextLength: 131072,
+  |           maxTokens: 8192,
+  |           model: 'deepseek-v4-flash',
+  |           name: 'flyflor',
+  |           provider: 'deepseek'
+  |         }
+  |       },
+  |       mcp: {},
+  |       memory: {
+  |         flushMinTurns: 6,
+  |         memoryCharLimit: 2200,
+  |         memoryEnabled: true,
+  |         nudgeInterval: 10,
+  |         userCharLimit: 1375,
+  |         userProfileEnabled: true
+  |       },
+  |       model: {
+  |         apiKeyEnv: 'DEEPSEEK_API_KEY',
+  |         baseUrl: 'https://api.deepseek.com',
+  |         contextLength: 131072,
+  |         default: 'deepseek-v4-flash',
+  |         entra: {},
+  |         maxTokens: 8192,
+  |         model: 'deepseek-v4-flash',
+  |         protocols: [
+  |           {
+  |             auth: 'bearer',
+  |             missingTerminalMessage: 'LLM provider stream ended without a structured finish_reason',
+  |             name: 'openaiChatCompletions',
+  |             path: '/chat/completions',
+  |             usesV1Fallback: true
+  |           },
+  |           {
+  |             acceptsJsonResponse: true,
+  |             auth: 'bearer',
+  |             missingTerminalMessage: 'LLM provider stream ended without a structured response terminal event',
+  |             name: 'openaiResponses',
+  |             path: '/responses',
+  |             usesV1Fallback: true
+  |           }
+  |         ],
+  |         provider: 'deepseek'
+  |       },
+  |       promptsDir: './prompts',
+  |       providers: {
+  |         deepseek: {
+  |           models: {
+  |             'deepseek-v4-flash': {
+  |               staleTimeoutSeconds: 30,
+  |               timeoutSeconds: 60
+  |             }
+  |           },
+  |           requestTimeoutSeconds: 60,
+  |           staleTimeoutSeconds: 30
+  |         }
+  |       },
+  |       skills: {
+  |         creationNudgeInterval: 15,
+  |         directory: '/Users/yi./Desktop/yi/flyflors/flyflor/.config/skills',
+  |         externalDirs: []
+  |       },
+  |       socket: './flyflor.sock',
+  |       sqlDir: './sql'
+  |     },
+  |     close: [AsyncFunction: close],
+  |     controller: Controller {
+  |       Symbol(config): ConfigService {
+  |         agent: 'flyflor',
+  |         agents: {
+  |           flyflor: {
+  |             contextLength: 131072,
+  |             maxTokens: 8192,
+  |             model: 'deepseek-v4-flash',
+  |             name: 'flyflor',
+  |             provider: 'deepseek'
+  |           }
+  |         },
+  |         mcp: {},
+  |         memory: {
+  |           flushMinTurns: 6,
+  |           memoryCharLimit: 2200,
+  |           memoryEnabled: true,
+  |           nudgeInterval: 10,
+  |           userCharLimit: 1375,
+  |           userProfileEnabled: true
+  |         },
+  |         model: {
+  |           apiKeyEnv: 'DEEPSEEK_API_KEY',
+  |           baseUrl: 'https://api.deepseek.com',
+  |           contextLength: 131072,
+  |           default: 'deepseek-v4-flash',
+  |           entra: {},
+  |           maxTokens: 8192,
+  |           model: 'deepseek-v4-flash',
+  |           protocols: [
+  |             {
+  |               auth: 'bearer',
+  |               missingTerminalMessage: 'LLM provider stream ended without a structured finish_reason',
+  |               name: 'openaiChatCompletions',
+  |               path: '/chat/completions',
+  |               usesV1Fallback: true
+  |             },
+  |             {
+  |               acceptsJsonResponse: true,
+  |               auth: 'bearer',
+  |               missingTerminalMessage: 'LLM provider stream ended without a structured response terminal event',
+  |               name: 'openaiResponses',
+  |               path: '/responses',
+  |               usesV1Fallback: true
+  |             }
+  |           ],
+  |           provider: 'deepseek'
+  |         },
+  |         promptsDir: './prompts',
+  |         providers: {
+  |           deepseek: {
+  |             models: {
+  |               'deepseek-v4-flash': [Object]
+  |             },
+  |             requestTimeoutSeconds: 60,
+  |             staleTimeoutSeconds: 30
+  |           }
+  |         },
+  |         skills: {
+  |           creationNudgeInterval: 15,
+  |           directory: '/Users/yi./Desktop/yi/flyflors/flyflor/.config/skills',
+  |           externalDirs: []
+  |         },
+  |         socket: './flyflor.sock',
+  |         sqlDir: './sql'
+  |       }
+  |     },
+  |     data: [AsyncFunction: data],
+  |     error: [AsyncFunction: error],
+  |     open: [AsyncFunction: open],
+  |     packet: IPCPacket {
+  |       buffer: <Buffer >
+  |     },
+  |     service: Object [Listener] {},
+  |     synapse: [Circular *1]
+  |   }
+  | }
+[INFO ]  2026-06-18T08:35:09.431Z  FSocket
+  | open
+[DEBUG]  2026-06-18T08:35:10.247Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-18T08:35:14.293Z  Synapse
+  | input
+  | {
+  |   text: '1'
+  | }
+[INFO ]  2026-06-18T08:36:57.885Z  FSocket
+  | open
+[DEBUG]  2026-06-18T08:36:58.708Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-18T08:37:02.970Z  Synapse
+  | input
+  | {
+  |   text: '1'
+  | }
+[INFO ]  2026-06-18T08:48:34.493Z  FSocket
+  | open
+[DEBUG]  2026-06-18T08:48:35.460Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-18T09:43:31.308Z  FSocket
+  | close
+  | {
+  |   error: undefined
+  | }

@@ -132,6 +132,7 @@ export class Container {
             const value = Reflect.get(host, inject.propertyKey);
             if (value !== undefined && !values.includes(value)) values.push(value);
         }
+        if (!values.includes(host)) values.push(host);
         return values;
     }
 

@@ -72,11 +72,18 @@ export class FSocket implements SocketHandler<SocketConnectionData, 'buffer'> {
     };
 
     public data = async (socket: Socket<SocketConnectionData>, data: Uint8Array) => {
-        this.log.info('data', data);
+        // this.log.info('data', data);
         this.packet
             .of(data)
             .pipe((buffer) => this.packet.decode(buffer))
-            .filter<SocketPacket>(({ action, data }) => action === 'user' ? (!this.synapse.emit('data', data)) : true)
+            .filter<SocketPacket>(({ action, data }) => {
+                if(['user'].includes(action)) {
+                    // this.log.info('received', { action, data });
+                    this.synapse.emit('data', data);
+                    return false;
+                }
+                return true;
+            })
             .subscribe<SocketPacket>(({ action, data }) => {
                 // call controller method by action key
                 const key = action as keyof Controller;

@@ -1,9 +1,7 @@
-import { Scope, Provide, Logger, FAgent } from '@/core';
-import { Brain, type CallosumSignal } from './brain';
+import { Scope, Provide, Logger, FAgent, Init, type IObservable } from '@/core';
+import { Brain } from './brain';
 import { Memory } from './memory';
 import type { FLogger } from '@/core/logger';
-import type { FAgentProfileConfiguration } from '@/configuration';
-import type { Synapse } from '@/neural';
 
 export interface AgentTurnResult {
     user: string;
@@ -18,7 +16,7 @@ export interface AgentTurnResult {
  * `next()` is only the outward reaction: the brain owns routing, memory use, thinking, and commit.
  */
 @Provide()
-export class Agent extends FAgent<string> {
+export class Agent extends FAgent<string> implements IObservable<string, string> {
     @Scope()
     public memory!: Memory;
 
@@ -28,8 +26,8 @@ export class Agent extends FAgent<string> {
     @Logger(Agent.name)
     public readonly log!: FLogger;
 
-    constructor(public override agentConfig: FAgentProfileConfiguration, public override synapse: Synapse) {
-        super(agentConfig, synapse);
-        // this.pipe(this.brain.next.bind(this.brain));
+    public override async onPipe(data: string) {
+        this.log.info('agent received', { data });
+        return data;
     }
 }

@@ -21,12 +21,18 @@ export abstract class FModule extends FComponent {}
  */
 export abstract class FRepo extends FService {}
 
-export type ObservableCallback<T> = (value: T) => T | void;
+export type ObservablePipeResult<T> = T | void | Observable<T>;
+export type ObservableCallback<T> = (value: T) => ObservablePipeResult<T> | Promise<ObservablePipeResult<T>>;
 export type ObservableFilter<T> = (value: T) => boolean;
 export type ObservableSubscriber<T> = (value: T) => void;
 export type ObservablePipe<T> = Observable<T> | ObservableCallback<T>;
 
-export class Observable<T = unknown> extends FlyFlor {
+export interface IObservable<T = unknown, R = T> {
+    onPipe?(data: T): ObservablePipeResult<R> | Promise<ObservablePipeResult<R>>;
+}
+
+export class Observable<T = unknown, R = T> extends FlyFlor implements IObservable<T, R> {
+    public onPipe?(data: T): ObservablePipeResult<R> | Promise<ObservablePipeResult<R>>;
     public readonly filters: Set<ObservableFilter<T>>;
     public readonly pipes: Set<ObservablePipe<T>>;
     public readonly subscribers: Set<ObservableSubscriber<T>>;
@@ -38,10 +44,11 @@ export class Observable<T = unknown> extends FlyFlor {
         this.pipes = new Set<ObservablePipe<T>>();
         this.subscribers = new Set<ObservableSubscriber<T>>();
         this.values = values;
+        this?.onPipe && this.pipe(this.onPipe.bind(this) as ObservablePipe<T>);
     }
 
     public next(value: T): void {
-        this.emit(value, this.subscribers);
+        void this.emit(value, this.subscribers);
     }
 
     public pipe(pipe: ObservablePipe<T>): this {
@@ -58,7 +65,7 @@ export class Observable<T = unknown> extends FlyFlor {
     public subscribe<C>(subscriber: ObservableSubscriber<C>): this;
     public subscribe(subscriber: ObservableSubscriber<T>): this {
         this.subscribers.add(subscriber);
-        for (const value of this.values) this.emit(value, new Set([subscriber]));
+        for (const value of this.values) void this.emit(value, new Set([subscriber]));
         return this;
     }
 
@@ -73,7 +80,7 @@ export class Observable<T = unknown> extends FlyFlor {
         return this;
     }
 
-    private emit(value: T, subscribers: Set<ObservableSubscriber<T>>): void {
+    private async emit(value: T, subscribers: Set<ObservableSubscriber<T>>): Promise<void> {
         let current = value;
         for (const pipe of this.pipes) {
             if (pipe instanceof Observable) {
@@ -81,8 +88,12 @@ export class Observable<T = unknown> extends FlyFlor {
                 continue;
             }
 
-            const next = pipe(current);
+            const next = await pipe(current);
             if (next === undefined) return;
+            if (next instanceof Observable) {
+                next.next(current);
+                continue;
+            }
             current = next;
         }
 
