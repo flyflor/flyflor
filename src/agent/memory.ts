@@ -1,4 +1,4 @@
-import { FAgentAtom, Inject, Logger, Prompt, PromptService, Provide, type FLogger, type PromptPackageData } from '@/core';
+import { FAgentAtom, Inject, Prompt, PromptService, Provide, type PromptPackageData } from '@/core';
 import { includes } from 'lodash-es';
 import { Context } from '@/neural/context';
 import type { CompletedSummary, TurnUnderstanding } from '@/neural/context/types';
@@ -99,9 +99,6 @@ export class Memory extends FAgentAtom {
         return `.config/agents/${this.agentConfig.name}`;
     })
     public prompt!: PromptService<SoulSection> & PromptPackageData<SoulSection>;
-
-    @Logger(Memory.name)
-    public readonly log!: FLogger;
 
     @Inject()
     public context!: Context;

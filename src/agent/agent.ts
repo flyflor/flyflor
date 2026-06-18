@@ -1,7 +1,6 @@
-import { Scope, Provide, Logger, FAgent, Init, type IObservable } from '@/core';
+import { Scope, Provide, FAgent, Init, type IObservable } from '@/core';
 import { Brain } from './brain';
 import { Memory } from './memory';
-import type { FLogger } from '@/core/logger';
 
 export interface AgentTurnResult {
     user: string;
@@ -22,9 +21,6 @@ export class Agent extends FAgent<string> implements IObservable<string, string>
 
     @Scope()
     public brain!: Brain;
-
-    @Logger(Agent.name)
-    public readonly log!: FLogger;
 
     public override async onPipe(data: string) {
         this.log.info('agent received', { data });

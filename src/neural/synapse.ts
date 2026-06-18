@@ -3,6 +3,7 @@ import type { ConfigService } from '@/configuration';
 import { Config, Init, Inject, Logger, Module, Scope, useContainer, type FLogger } from '@/core';
 import EventEmitter from 'events';
 import { FSocket } from './ipc';
+import type { Context } from './context';
 
 export interface AgentPool {
     active: string;
@@ -14,8 +15,11 @@ export class Synapse extends EventEmitter {
     @Config()
     public readonly config!: ConfigService;
 
-    @Logger(Synapse.name)
+    @Logger()
     public readonly log!: FLogger;
+
+    @Inject()
+    public context!: Context;
 
     @Scope()
     public socket!: FSocket;

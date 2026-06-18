@@ -1,4 +1,4 @@
-import { FAgentAtom, Inject, Logger, Provide, type FLogger } from '@/core';
+import { FAgentAtom, Inject, Provide } from '@/core';
 import { Research, type ResearchSignal } from '../research';
 import { AgentChatRole, type AgentMemory } from '@/agent/memory';
 import { INVESTIGATION_SYSTEM, type InvestigationOutcome } from './types';
@@ -14,9 +14,6 @@ import type { IntelligenceToolDefinition } from '../intelligence/types';
  */
 @Provide()
 export class Investigation extends FAgentAtom {
-    @Logger(Investigation.name)
-    public readonly log!: FLogger;
-
     @Inject()
     public research!: Research;
 

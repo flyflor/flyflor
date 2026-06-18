@@ -6,7 +6,7 @@ export class Controller {
     @Config()
     public config!: ConfigService;
 
-    @Logger(Controller.name)
+    @Logger()
     public readonly log!: FLogger;
 
     public async cwd({ path }: { path: string }) {

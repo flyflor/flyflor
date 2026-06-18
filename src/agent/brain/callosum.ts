@@ -1,4 +1,4 @@
-import { FAgentAtom, Logger, Prompt, PromptService, Provide, type FLogger, type IObservable, type ObservablePipeResult } from '@/core';
+import { FAgentAtom, Prompt, PromptService, Provide, type IObservable, type ObservablePipeResult } from '@/core';
 import { AgentChatRole, type AgentMemory } from '@/agent/memory';
 
 export enum CallosumPrompt {
@@ -27,9 +27,6 @@ export interface CallosumSignal {
 export class Callosum extends FAgentAtom<string> implements IObservable<string, CallosumSignal> {
     @Prompt('prompts/callosum')
     public prompt!: PromptService<CallosumPrompt>;
-
-    @Logger(Callosum.name)
-    public log!: FLogger;
 
     public override async onPipe(data: string) {
         this.log.debug('callosum.start', data);

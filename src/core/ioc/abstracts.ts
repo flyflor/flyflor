@@ -1,8 +1,14 @@
 import type { Memory } from '@/agent';
 import type { FAgentProfileConfiguration } from '@/configuration';
 import type { Synapse } from '@/neural';
+import { useLogger } from '../logger/service';
+import type { FLogger } from '../logger/types';
 
-export abstract class FlyFlor {}
+export abstract class FlyFlor {
+    public get log(): FLogger {
+        return useLogger(this.constructor.name);
+    }
+}
 
 export abstract class FService extends FlyFlor {}
 

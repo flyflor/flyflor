@@ -1,4 +1,4 @@
-import { FService, Logger, of, Service, type FLogger, type Observable } from '@/core';
+import { FService, of, Service, type Observable } from '@/core';
 
 export const HEADER_BYTES = 8;
 export const TEXT_ENCODING = 'utf-8';
@@ -10,9 +10,6 @@ export interface SocketPacket<T = object> {
 
 @Service()
 export class IPCPacket extends FService {
-    @Logger(IPCPacket.name)
-    public readonly log!: FLogger;
-
     public buffer: Buffer;
 
     constructor() {

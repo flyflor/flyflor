@@ -1,4 +1,4 @@
-import { FAgentAtom, Init, Inject, Logger, Prompt, PromptService, Provide, Scope, type FLogger, type IObservable, type ObservablePipeResult } from '@/core';
+import { FAgentAtom, Init, Inject, Prompt, PromptService, Provide, Scope, type IObservable, type ObservablePipeResult } from '@/core';
 import { Callosum } from './callosum';
 import { Intelligence } from './intelligence/service';
 import { Research } from './research';
@@ -28,9 +28,6 @@ export class Brain extends FAgentAtom<string> implements IObservable<string, str
 
     @Inject()
     public researcher!: Research;
-
-    @Logger(Brain.name)
-    public readonly log!: FLogger;
 
     public override async onPipe(data: string) {
         this.callosum.next(data);

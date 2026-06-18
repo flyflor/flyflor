@@ -1,4 +1,4 @@
-import { FAgentAtom, Inject, Logger, Provide, RuntimeText, type FLogger } from '@/core';
+import { FAgentAtom, Inject, Provide, RuntimeText } from '@/core';
 import { Intelligence } from '../intelligence/service';
 import { ToolRegistry } from './tool.registry';
 import { AgentChatRole, type AgentMemory, type AgentToolCall } from '@/agent/memory';
@@ -46,9 +46,6 @@ export interface ResearchRunOptions {
  */
 @Provide()
 export class Research extends FAgentAtom {
-    @Logger(Research.name)
-    public readonly log!: FLogger;
-
     @Inject()
     public intelligence!: Intelligence;
 

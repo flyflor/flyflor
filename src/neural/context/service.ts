@@ -1,7 +1,4 @@
-import { FService, Logger, Singleton, type FLogger } from '@/core';
+import { FService, Singleton } from '@/core';
 
 @Singleton()
-export class Context extends FService {
-    @Logger(Context.name)
-    public readonly log!: FLogger;
-}
+export class Context extends FService {}

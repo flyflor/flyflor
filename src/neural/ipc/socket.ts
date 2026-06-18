@@ -1,4 +1,4 @@
-import { Config, Init, Inject, Logger, Singleton, type FLogger } from '@/core';
+import { Config, FlyFlor, Init, Inject, Logger, Singleton, type FLogger } from '@/core';
 import { existsSync } from 'fs';
 import { unlink } from 'fs/promises';
 import type { Socket, SocketHandler, UnixSocketListener } from 'bun';
@@ -32,12 +32,9 @@ export interface SocketConnectionData {}
  * them; the instance is passed straight to `Bun.listen({ socket })`.
  */
 @Singleton()
-export class FSocket implements SocketHandler<SocketConnectionData, 'buffer'> {
+export class FSocket extends FlyFlor implements SocketHandler<SocketConnectionData, 'buffer'> {
     @Config('socket')
     public path!: string;
-
-    @Logger(FSocket.name)
-    public readonly log!: FLogger;
 
     @Inject()
     public packet!: IPCPacket;
@@ -47,7 +44,9 @@ export class FSocket implements SocketHandler<SocketConnectionData, 'buffer'> {
 
     public service?: UnixSocketListener<object>;
 
-    constructor(public synapse: Synapse) {}
+    constructor(public synapse: Synapse) {
+        super();
+    }
 
     @Init()
     public async init() {
