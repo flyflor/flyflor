@@ -1,5 +1,14 @@
 import type { AgentMemory } from '@/agent/memory';
 
+export enum ContextPrompt {
+    Ingest = 'INGEST',
+    Settle = 'SETTLE',
+}
+
+export interface ContextIntelligence {
+    completeText(messages: AgentMemory[]): Promise<string>;
+}
+
 export enum ContextIntent {
     Reply = 'reply',
     Research = 'research',
@@ -37,5 +46,4 @@ export interface ContextSettleInput {
     user: string;
     assistant: string;
     completed: boolean;
-    working: AgentMemory[];
 }

@@ -1,12 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 import { useContainer } from '@/core';
 import { Memory } from './memory';
-import { ContextIntent } from '@/neural/context';
+import { Context, ContextIntent } from '@/neural/context';
 
 describe('Memory', () => {
     test('buildMessage renders current understanding and completed work instead of raw infinite history', async () => {
         const memory = await useContainer().getAsync(Memory, { name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 });
-        memory.load({
+        const context = await useContainer().getAsync(Context);
+        context.current = undefined;
+        context.working = [];
+        context.completed = [];
+        context.load({
             userText: '实现计划',
             intent: ContextIntent.Research,
             goal: '实现 synapse.context + agent.memory',
@@ -16,7 +20,7 @@ describe('Memory', () => {
             openQuestions: [],
             shouldInvestigate: true,
         });
-        memory.rememberCompletion({
+        context.done({
             goal: '修复 IPC',
             result: 'socket 背压写队列已完成',
             changedFiles: ['src/neural/ipc/socket.ts'],

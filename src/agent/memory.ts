@@ -1,8 +1,5 @@
 import { FAgentAtom, Inject, Prompt, PromptService, Provide, type PromptPackageData } from '@/core';
-import { includes } from 'lodash-es';
 import { Context } from '@/neural/context';
-import type { CompletedSummary, TurnUnderstanding } from '@/neural/context/types';
-import type { FAgentProfileConfiguration } from '@/configuration';
 
 export enum SoulSection {
     /** Agent identity / constitution layer. Loaded from `SOUL.md`. */
@@ -83,16 +80,6 @@ export interface AgentToolResultMemory {
  */
 export type AgentMemory = AgentTextMemory | AgentToolCallMemory | AgentToolResultMemory;
 
-/**
- * One in-flight research task awaiting user clarification.
- * Stored on `Memory` so a follow-up user message can resume the same investigation instead of routing anew.
- */
-export interface PendingResearch {
-    request: string;
-    clarification?: string;
-    summary?: string;
-}
-
 @Provide()
 export class Memory extends FAgentAtom {
     @Prompt(function (this: Memory) {
@@ -102,4 +89,42 @@ export class Memory extends FAgentAtom {
 
     @Inject()
     public context!: Context;
+
+    public buildMessage(): AgentMemory[] {
+        const system = [
+            ...this.sections(),
+            this.memory(),
+        ].filter((text) => text.trim().length > 0).join('\n\n');
+        const messages: AgentMemory[] = system.trim().length === 0 ? [] : [{ role: AgentChatRole.System, content: system }];
+        if (this.context.current) {
+            messages.push({
+                role: AgentChatRole.User,
+                content: JSON.stringify({
+                    goal: this.context.current.goal,
+                    user: this.context.current.userText,
+                    intent: this.context.current.intent,
+                    constraints: this.context.current.constraints,
+                    references: this.context.current.references,
+                    openQuestions: this.context.current.openQuestions,
+                }),
+            });
+        }
+        return messages;
+    }
+
+    private sections(): string[] {
+        const ignored = new Set(this.prompt.config?.protocolPackage.runtimeIgnored ?? []);
+        return (this.prompt.config?.prompt.sections ?? [])
+            .map((section) => {
+                const block = this.prompt.config?.protocolPackage.context.blocks.find((item) => item.key === section);
+                if (block && ignored.has(block.file)) return '';
+                return String((this.prompt.data as PromptPackageData<string>)[section]?.data ?? '').trim();
+            });
+    }
+
+    private memory(): string {
+        const current = this.context.current ? `<current>${this.context.current.goal}</current>` : '';
+        const completed = this.context.completed.map((summary) => `<completed>${summary.result}</completed>`).join('\n');
+        return `<agent_memory>\n${[current, completed].filter(Boolean).join('\n')}\n</agent_memory>`;
+    }
 }

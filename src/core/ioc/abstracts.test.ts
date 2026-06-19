@@ -8,7 +8,7 @@ describe('Observable', () => {
         const values: number[] = [];
 
         new Observable<number>(1)
-            .pipe((value) => value + 1)
+            .pipe((value: number) => value + 1)
             .subscribe((value: number) => values.push(value));
         await tick();
 
@@ -19,7 +19,7 @@ describe('Observable', () => {
         const values: number[] = [];
 
         new Observable<number>(1)
-            .pipe(async (value) => value + 1)
+            .pipe(async (value: number) => value + 1)
             .subscribe((value: number) => values.push(value));
         await tick();
 
@@ -36,5 +36,31 @@ describe('Observable', () => {
         await tick();
 
         expect(values).toEqual([1]);
+    });
+
+    test('switch pipes matching branch', async () => {
+        const values: number[] = [];
+
+        new Observable<number>(1)
+            .switch((value) => value > 0 ? 'plus' : 'minus', {
+                plus: (value) => value + 1,
+            })
+            .subscribe((value: number) => values.push(value));
+        await tick();
+
+        expect(values).toEqual([2]);
+    });
+
+    test('switch branch can stop subscribers', async () => {
+        const values: number[] = [];
+
+        new Observable<number>(1)
+            .switch(() => 'stop', {
+                stop: () => undefined,
+            })
+            .subscribe((value: number) => values.push(value));
+        await tick();
+
+        expect(values).toEqual([]);
     });
 });

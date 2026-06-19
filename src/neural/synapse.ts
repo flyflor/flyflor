@@ -56,8 +56,11 @@ export class Synapse extends EventEmitter {
         agentConfig.maxTokens = agentConfig.maxTokens || this.config.model.maxTokens;
         // Agent owns its private Memory through IOC injection; Synapse only selects and drives the active person.
         this.agentPool.agents[active] = await useContainer().getAsync(Agent, agentConfig, this);
-        this.agent.subscribe(this.output.bind(this));
+        this.socket.synapse = this;
         this.on('data', this.input.bind(this));
+        this.on('reply', this.output.bind(this));
+        this.on('ask', (data) => this.socket.write({ action: 'ask', data }));
+        this.on('confirm', (data) => this.socket.write({ action: 'confirm', data }));
         return true;
     }
 
@@ -66,7 +69,10 @@ export class Synapse extends EventEmitter {
         this.agent.next(data);
     }
 
-    public async output(data: string) {
+    public async output(data: string | null) {
         this.log.info('output', data);
+        this.socket.write(data === null
+            ? { action: 'streamEnd', data: true }
+            : { action: 'agent', data });
     }
 }

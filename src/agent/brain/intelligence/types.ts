@@ -1,5 +1,5 @@
 import type { AgentMemory, AgentToolCall } from '@/agent/memory';
-import { type FModelConfiguration, type FModelProtocolConfiguration, FModelProtocolName } from '@/config';
+import { type FModelConfiguration, type FModelProtocolConfiguration, FModelProtocolName } from '@/configuration';
 
 export interface ProviderErrorShape {
     message?: string;

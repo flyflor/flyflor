@@ -3,7 +3,7 @@ import { FService, of, Service, type Observable } from '@/core';
 export const HEADER_BYTES = 8;
 export const TEXT_ENCODING = 'utf-8';
 
-export interface SocketPacket<T = object> {
+export interface SocketPacket<T = unknown> {
     action: string;
     data: T;
 }

@@ -1,4 +1,4 @@
-import type { FModelConfiguration } from '@/config';
+import type { FModelConfiguration } from '@/configuration';
 import { Config, FAgentAtom, Provide } from '@/core';
 import { createIntelligenceTurnStream } from './factory';
 import type { AgentMemory, AgentToolCall } from '@/agent/memory';

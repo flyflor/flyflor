@@ -31,14 +31,15 @@
             }
 
             html {
-                min-height: 100%;
+                height: 100%;
                 background: var(--bg);
-                scroll-behavior: smooth;
+                overflow: hidden;
             }
 
             body {
-                min-height: 100dvh;
+                height: 100dvh;
                 margin: 0;
+                overflow: hidden;
                 font-family: var(--sans);
                 color: var(--text);
                 background:
@@ -120,12 +121,13 @@
 
             .shell {
                 width: min(72rem, calc(100% - 2rem));
-                min-height: 100dvh;
+                height: 100dvh;
                 margin: 0 auto;
                 padding: 1.25rem 0 1.5rem;
                 display: grid;
                 grid-template-rows: auto 1fr auto;
                 gap: 1rem;
+                overflow: hidden;
             }
 
             .topbar {
@@ -207,7 +209,7 @@
             }
 
             .conversation {
-                min-height: 34rem;
+                min-height: 0;
                 display: grid;
                 grid-template-rows: auto 1fr;
                 overflow: hidden;
@@ -371,6 +373,7 @@
             .side {
                 align-self: stretch;
                 overflow: hidden;
+                min-height: 0;
             }
 
             .side-section:last-child {
@@ -523,10 +526,9 @@
             .debug-log {
                 display: grid;
                 gap: 0.45rem;
-                max-height: 18rem;
-                overflow-y: auto;
+                max-height: 8rem;
+                overflow: hidden;
                 padding-right: 0.1rem;
-                scrollbar-color: #4a4c41 transparent;
             }
 
             .debug-entry {
@@ -620,7 +622,7 @@
                 }
 
                 .conversation {
-                    min-height: 28rem;
+                    min-height: 0;
                 }
             }
 
@@ -967,7 +969,12 @@
                 }
                 if (msg.action === 'agent') {
                     renderAgentSignal(msg.data);
-                    finishAgentStream();
+                    return;
+                }
+                if (msg.action === 'ask' || msg.action === 'confirm') {
+                    cancelPendingMessage();
+                    signalPill.textContent = msg.action;
+                    addMessage(`${msg.action}: ${formatDebugDetail(msg.data)}`, 'system');
                     return;
                 }
                 if (msg.action === 'open') {

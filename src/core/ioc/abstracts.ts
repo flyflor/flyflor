@@ -27,11 +27,12 @@ export abstract class FModule extends FComponent {}
  */
 export abstract class FRepo extends FService {}
 
-export type ObservablePipeResult<T> = T | void | Observable<T>;
-export type ObservableCallback<T> = (value: T) => ObservablePipeResult<T> | Promise<ObservablePipeResult<T>>;
+export type ObservablePipeResult<T> = T | void | Observable<unknown, T>;
+export type ObservableCallback<T, R = T> = (value: T) => ObservablePipeResult<R> | Promise<ObservablePipeResult<R>>;
 export type ObservableFilter<T> = (value: T) => boolean;
 export type ObservableSubscriber<T> = (value: T) => void;
-export type ObservablePipe<T> = Observable<T> | ObservableCallback<T>;
+export type ObservablePipe<T, R = T> = Observable<unknown, R> | ObservableCallback<T, R>;
+export type ObservableSwitchCases<T, C extends string> = Partial<Record<C, ObservablePipe<T>>>;
 
 export interface IObservable<T = unknown, R = T> {
     onPipe?(data: T): ObservablePipeResult<R> | Promise<ObservablePipeResult<R>>;
@@ -39,43 +40,55 @@ export interface IObservable<T = unknown, R = T> {
 
 export class Observable<T = unknown, R = T> extends FlyFlor implements IObservable<T, R> {
     public onPipe?(data: T): ObservablePipeResult<R> | Promise<ObservablePipeResult<R>>;
-    public readonly filters: Set<ObservableFilter<T>>;
-    public readonly pipes: Set<ObservablePipe<T>>;
-    public readonly subscribers: Set<ObservableSubscriber<T>>;
+    public readonly filters: Set<ObservableFilter<R>>;
+    public readonly pipes: Set<any>;
+    public readonly subscribers: Set<ObservableSubscriber<R>>;
     private readonly values: T[];
 
     constructor(...values: T[]) {
         super();
-        this.filters = new Set<ObservableFilter<T>>();
-        this.pipes = new Set<ObservablePipe<T>>();
-        this.subscribers = new Set<ObservableSubscriber<T>>();
+        this.filters = new Set<ObservableFilter<R>>();
+        this.pipes = new Set<any>();
+        this.subscribers = new Set<ObservableSubscriber<R>>();
         this.values = values;
-        this?.onPipe && this.pipe(this.onPipe.bind(this) as ObservablePipe<T>);
+        this?.onPipe && this.pipe(this.onPipe.bind(this));
     }
 
     public next(value: T): void {
         void this.emit(value, this.subscribers);
     }
 
-    public pipe(pipe: ObservablePipe<T>): this {
+    public pipe(pipe: any): this {
         this.pipes.add(pipe);
         return this;
     }
 
+    public switch<C extends string>(select: (value: R) => C, cases: ObservableSwitchCases<R, C>): this {
+        return this.pipe((value: unknown) => {
+            const pipe = cases[select(value as R)];
+            if (pipe === undefined) return value;
+            if (pipe instanceof Observable) {
+                pipe.next(value);
+                return undefined;
+            }
+            return pipe(value as R);
+        });
+    }
+
     public filter<C>(filter: ObservableFilter<C>): this;
-    public filter(filter: ObservableFilter<T>): this {
-        this.filters.add(filter);
+    public filter(filter: ObservableFilter<R>): this {
+        this.filters.add(filter as ObservableFilter<R>);
         return this;
     }
 
     public subscribe<C>(subscriber: ObservableSubscriber<C>): this;
-    public subscribe(subscriber: ObservableSubscriber<T>): this {
-        this.subscribers.add(subscriber);
+    public subscribe(subscriber: ObservableSubscriber<R>): this {
+        this.subscribers.add(subscriber as ObservableSubscriber<R>);
         for (const value of this.values) void this.emit(value, new Set([subscriber]));
         return this;
     }
 
-    public unsubscribe(subscriber?: ObservableSubscriber<T>): this {
+    public unsubscribe(subscriber?: ObservableSubscriber<R>): this {
         if (subscriber === undefined) {
             this.filters.clear();
             this.pipes.clear();
@@ -86,8 +99,8 @@ export class Observable<T = unknown, R = T> extends FlyFlor implements IObservab
         return this;
     }
 
-    private async emit(value: T, subscribers: Set<ObservableSubscriber<T>>): Promise<void> {
-        let current = value;
+    private async emit(value: T, subscribers: Set<ObservableSubscriber<R>>): Promise<void> {
+        let current: unknown = value;
         for (const pipe of this.pipes) {
             if (pipe instanceof Observable) {
                 pipe.next(current);
@@ -104,10 +117,10 @@ export class Observable<T = unknown, R = T> extends FlyFlor implements IObservab
         }
 
         for (const filter of this.filters) {
-            if (!filter(current)) return;
+            if (!filter(current as R)) return;
         }
 
-        for (const subscriber of subscribers) subscriber(current);
+        for (const subscriber of subscribers) subscriber(current as R);
     }
 }
 
@@ -123,11 +136,11 @@ export function of<T>(...values: T[]) {
  * via `listModule(FAgent)` and to manage their lifecycles. An agent's `chat` is the canonical
  * entry point: the runtime never inspects or rewrites the agent's system prompt.
  */
-export abstract class FAgentAtom<T = object | number | string | boolean | undefined> extends Observable<T> {
+export abstract class FAgentAtom<T = object | number | string | boolean | undefined, R = T> extends Observable<T, R> {
     constructor(public agentConfig: FAgentProfileConfiguration, public synapse: Synapse) {
         super();
     }
 }
-export abstract class FAgent<T> extends FAgentAtom<T> {}
+export abstract class FAgent<T, R = T> extends FAgentAtom<T, R> {}
 
 export abstract class FTool extends FService {}

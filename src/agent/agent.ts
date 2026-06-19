@@ -15,7 +15,7 @@ export interface AgentTurnResult {
  * `next()` is only the outward reaction: the brain owns routing, memory use, thinking, and commit.
  */
 @Provide()
-export class Agent extends FAgent<string> implements IObservable<string, string> {
+export class Agent extends FAgent<string, string> implements IObservable<string, string> {
     @Scope()
     public memory!: Memory;
 
@@ -25,6 +25,5 @@ export class Agent extends FAgent<string> implements IObservable<string, string>
     public override async onPipe(data: string) {
         this.log.info('agent received', { data });
         this.brain.next(data);
-        return this.brain;
     }
 }

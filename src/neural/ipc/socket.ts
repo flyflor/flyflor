@@ -44,7 +44,11 @@ export class FSocket extends FlyFlor implements SocketHandler<SocketConnectionDa
 
     public service?: UnixSocketListener<object>;
 
-    constructor(public synapse: Synapse) {
+    public connection?: Socket<SocketConnectionData>;
+
+    public synapse!: Synapse;
+
+    constructor() {
         super();
     }
 
@@ -56,12 +60,14 @@ export class FSocket extends FlyFlor implements SocketHandler<SocketConnectionDa
     }
 
     public open = async (socket: Socket<SocketConnectionData>) => {
+        this.connection = socket;
         this.log.info(SocketEvent.Open);
         socket.write(this.packet.encode({ action: SocketEvent.Open, data: true }));
     };
 
     public close = async (socket: Socket<SocketConnectionData>, error?: Error) => {
         this.log.info(SocketEvent.Close, { error });
+        if (this.connection === socket) this.connection = undefined;
         socket.write(this.packet.encode({ action: SocketEvent.Close, data: error?.message ?? 'closed' }));
     };
 
@@ -74,11 +80,11 @@ export class FSocket extends FlyFlor implements SocketHandler<SocketConnectionDa
         // this.log.info('data', data);
         this.packet
             .of(data)
-            .pipe((buffer) => this.packet.decode(buffer))
+            .pipe((buffer: Uint8Array) => this.packet.decode(buffer))
             .filter<SocketPacket>(({ action, data }) => {
                 if(['user'].includes(action)) {
                     // this.log.info('received', { action, data });
-                    this.synapse.emit('data', data);
+                    this.synapse.emit('data', typeof data === 'object' && data !== null && 'text' in data ? String((data as { text: unknown }).text) : data);
                     return false;
                 }
                 return true;
@@ -90,4 +96,12 @@ export class FSocket extends FlyFlor implements SocketHandler<SocketConnectionDa
                 if (typeof method === 'function') method.call(this.controller, data);
             });
     };
+
+    public write(packet: SocketPacket): void {
+        if (!this.connection) {
+            this.log.warn('socket.write.no_connection', packet);
+            return;
+        }
+        this.connection.write(this.packet.encode(packet));
+    }
 }

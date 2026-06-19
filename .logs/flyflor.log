@@ -22706,3 +22706,308 @@
   | {
   |   steps: 8
   | }
+[INFO ]  2026-06-19T04:48:01.830Z  FSocket
+  | open
+[INFO ]  2026-06-19T04:48:01.837Z  FSocket
+  | close
+  | {
+  |   error: undefined
+  | }
+[INFO ]  2026-06-19T04:49:08.229Z  FSocket
+  | open
+[INFO ]  2026-06-19T04:49:08.231Z  Synapse
+  | input
+  | 你好
+[INFO ]  2026-06-19T04:49:08.231Z  Agent
+  | agent received
+  | {
+  |   data: '你好'
+  | }
+[DEBUG]  2026-06-19T04:49:09.822Z  Callosum
+  | callosum.start
+  | 你好
+[INFO ]  2026-06-19T04:49:20.228Z  FSocket
+  | close
+  | {
+  |   error: undefined
+  | }
+[INFO ]  2026-06-19T04:50:23.414Z  FSocket
+  | open
+[INFO ]  2026-06-19T04:50:23.417Z  Synapse
+  | input
+  | 你好
+[INFO ]  2026-06-19T04:50:23.417Z  Agent
+  | agent received
+  | {
+  |   data: '你好'
+  | }
+[DEBUG]  2026-06-19T04:50:25.728Z  Callosum
+  | callosum.start
+  | 你好
+[INFO ]  2026-06-19T04:50:29.055Z  Synapse
+  | output
+  | 你好
+[INFO ]  2026-06-19T04:50:29.102Z  Synapse
+  | output
+  | ，
+[INFO ]  2026-06-19T04:50:29.102Z  Synapse
+  | output
+  | 主人
+[INFO ]  2026-06-19T04:50:29.102Z  Synapse
+  | output
+  | 。
+[INFO ]  2026-06-19T04:50:29.103Z  Synapse
+  | output
+  | 我是
+[INFO ]  2026-06-19T04:50:29.103Z  Synapse
+  | output
+  | 飞
+[INFO ]  2026-06-19T04:50:29.132Z  Synapse
+  | output
+  | 花
+[INFO ]  2026-06-19T04:50:29.133Z  Synapse
+  | output
+  | ，
+[INFO ]  2026-06-19T04:50:29.133Z  Synapse
+  | output
+  | 随时
+[INFO ]  2026-06-19T04:50:29.133Z  Synapse
+  | output
+  | 为您
+[INFO ]  2026-06-19T04:50:29.133Z  Synapse
+  | output
+  | 服务
+[INFO ]  2026-06-19T04:50:29.133Z  Synapse
+  | output
+  | 。
+[INFO ]  2026-06-19T04:50:29.154Z  Synapse
+  | output
+  | null
+[INFO ]  2026-06-19T04:50:29.156Z  FSocket
+  | close
+  | {
+  |   error: undefined
+  | }
+[INFO ]  2026-06-19T05:23:16.429Z  FSocket
+  | open
+[DEBUG]  2026-06-19T05:23:17.629Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-19T05:23:23.154Z  Synapse
+  | input
+  | 你好
+[INFO ]  2026-06-19T05:23:23.154Z  Agent
+  | agent received
+  | {
+  |   data: '你好'
+  | }
+[DEBUG]  2026-06-19T05:23:24.617Z  Callosum
+  | callosum.start
+  | 你好
+[INFO ]  2026-06-19T05:23:28.091Z  Synapse
+  | output
+  | 你好
+[INFO ]  2026-06-19T05:23:28.092Z  Synapse
+  | output
+  | 。
+[INFO ]  2026-06-19T05:23:28.132Z  Synapse
+  | output
+  | null
+[INFO ]  2026-06-19T05:24:10.071Z  Synapse
+  | input
+  | 研究下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/reference
+[INFO ]  2026-06-19T05:24:10.071Z  Agent
+  | agent received
+  | {
+  |   data: '研究下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/reference'
+  | }
+[DEBUG]  2026-06-19T05:24:12.474Z  Callosum
+  | callosum.start
+  | 研究下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/reference
+[INFO ]  2026-06-19T05:24:49.886Z  Synapse
+  | output
+  | 研究完成！以下是 `/Users/yihuaqing/Desktop/yihuaqing/flyflors/reference` 目录下所有项目的详细分析报告。
+  | 
+  | ---
+  | 
+  | ## 📁 项目总览
+  | 
+  | 该目录包含 **10 个子项目**，全部为 **AI 编码 Agent / AI 助手** 相关开源项目。
+  | 
+  | ---
+  | 
+  | ### 1️⃣ claude-code — Anthropic 官方终端编码工具
+  | 
+  | | 项目 | 详情 |
+  | |------|------|
+  | | **来源** | Anthropic（官方） |
+  | | **定位** | 终端内的 Agentic 编码工具 |
+  | | **主要功能** | 代码理解、日常任务执行、复杂代码解释、Git 工作流管理，可运行在终端/IDE/GitHub @claude |
+  | | **技术栈** | Node.js 18+, npm |
+  | | **特色** | 官方维护、插件系统（feature-dev, code-review, plugin-dev, learning-output-style）；正式的 Agent 和 Skill 框架 |
+  | | **结构** | AGENTS.md 规则、`.claude-plugin` 插件注册、`commands/`命令、`skills/`技能、`hooks/`钩子 |
+  | 
+  | ---
+  | 
+  | ### 2️⃣ CodeWhale — DeepSeek 优先的本地 Agent 框架
+  | 
+  | | 项目 | 详情 |
+  | |------|------|
+  | | **来源** | [Hmbown/CodeWhale](https://github.com/Hmbown/CodeWhale) |
+  | | **定位** | 本地优先的 Agent 框架，强调"责任归属" |
+  | | **核心理念** | CodeWhale Constitution（优先级：Ego > 证据 > 用户意图 > 本地规则 > 运行时策略） |
+  | | **技术栈** | **Rust**（主）、Cargo、Nix、JavaScript（npm wrapper） |
+  | | **结构** | crates/（Rust crate 结构）、docs/、web/、npm/、extensions/、deploy/、workflows/ |
+  | | **特色** | 审批门控工具、侧 Git 快照回滚、语言服务器诊断、并发子 Agent、DeepSeek V4 一等公民、支持 OpenAI/NVIDIA/小米/多 Provider |
+  | | **关键词** | ego layer, nested authority, evidence loop, 运行时策略 |
+  | 
+  | ---
+  | 
+  | ### 3️⃣ codex — OpenAI Codex CLI
+  | 
+  | | 项目 | 详情 |
+  | |------|------|
+  | | **来源** | [openai/codex](https://github.com/openai/codex) |
+  | | **定位** | OpenAI 官方本地编码 Agent |
+  | | **主要功能** | 终端内编码 Agent，支持本地运行。也有 VS Code/Cursor/Windsurf IDE 插件 |
+  | | **技术栈** | Rust 为主（Bazel 构建）、Nix、TypeScript（SDK） |
+  | | **结构** | codex-cli/、codex-rs/、sdk/、docs/、scripts/ |
+  | | **特色** | 可通过 ChatGPT 订阅使用，也支持 API Key；跨平台支持 macOS/Linux/Windows |
+  | | **关键词** | OpenAI, ChatGPT 集成, 本地运行 |
+  | 
+  | ---
+  | 
+  | ### 4️⃣ hermes-agent — Hermes 智能体系统
+  | 
+  | | 项目 | 详情 |
+  | |------|------|
+  | | **来源** | 第三方开源项目 |
+  | | **定位** | 综合 AI Agent 系统 |
+  | | **结构** | agent/（核心）、acp_adapter/、acp_registry/、gateway/、hermes/、apps/、docker/、docs/、cron/、optional-mcps/、optional-skills/ |
+  | | **技术栈** | Python（核心 + batch_runner）、Node.js、Docker |
+  | | **特色** | 批量运行器、MCP 服务、CLI 工具、丰富的扩展点 |
+  | | **关键词** | ACP 适配器, 批量任务, MCP |
+  | 
+  | ---
+  | 
+  | ### 5️⃣ nanobot — 超轻量级个人 AI Agent
+  | 
+  | | 项目 | 详情 |
+  | |------|------|
+  | | **来源** | [HKUDS/nanobot](https://github.com/HKUDS/nanobot) |
+  | | **定位** | 开源、超轻量级个人 AI Agent，真正的"拥有"自己的 Agent |
+  | | **主要功能** | WebUI、多聊天频道（Telegram/微信/Discord/Feishu/Slack 等）、工具、记忆、MCP、模型路由、自动化、部署 |
+  | | **技术栈** | **Python**（核心）、WebUI（Vite/前端）、Docker |
+  | | **特色** | 持久化工作流（`/goal` 支撑长期目标跨轮持续）、自带 WebUI、图片生成、多 Provider 支持 |
+  | | **结构** | nanobot/（核心代码）、webui/、bridge/、docs/、desktop/、case/ |
+  | | **关键词** | Python Agent, 多频道, 目标驱动, 记忆 |
+  | 
+  | ---
+  | 
+  | ### 6️⃣ nanoGPT — 最小 GPT 实现
+  | 
+  | | 项目 | 详情 |
+  | |------|------|
+  | | **来源** | Andrej Karpathy |
+  | | **定位** | 最小化 GPT 训练/推理实现，用于教育和研究 |
+  | | **主要功能** | 训练和采样字符级语言模型 |
+  | | **技术栈** | **Python**（PyTorch） |
+  | | **结构** | model.py、train.py、sample.py、bench.py、configurator.py、config/、data/、assets/ |
+  | | **特色** | 经典教育项目，简洁实现，scaling_laws.ipynb 笔记本 |
+  | | **关键词** | GPT, Transformer, PyTorch, 教育 |
+  | 
+  | ---
+  | 
+  | ### 7️⃣ openclaw — 个人 AI 助手（多频道）
+  | 
+  | | 项目 | 详情 |
+  | |------|------|
+  | | **来源** | [openclaw/openclaw](https://github.com/openclaw/openclaw) |
+  | | **定位** | 在自己的设备上运行的个人 AI 助手 |
+  | | **主要功能** | 多频道消息（WhatsApp/Telegram/Slack/iMessage/微信/QQ 等 25+ 频道）、语音唤醒、Canvas 可视化工作区、子 Agent 路由、Cron 定时任务 |
+  | | **技术栈** | **TypeScript/Node.js**（pnpm 工作区）、Docker、Nix |
+  | | **结构** | apps/、packages/、extensions/、skills/、config/、ui/、src/、test/ |
+  | | **特色** | 本地优先的 Gateway 架构、多 Agent 路由、安全沙箱隔离、ClawHub 技能市场 |
+  | | **关键词** | 个人助手, 多频道, 语音, Canvas, 沙箱 |
+  | 
+  | ---
+  | 
+  | ### 8️⃣ opencode — 开源 AI 编码 Agent
+  | 
+  | | 项目 | 详情 |
+  | |------|------|
+  | | **来源** | [anomalyco/opencode](https://github.com/anomalyco/opencode) |
+  | | **定位** | 开源 AI 编码 Agent |
+  | | **主要功能** | 终端编码 Agent，内置 `build`（全权限）和 `plan`（只读）两种 Agent 模式 |
+  | | **技术栈** | **TypeScript/Node.js**（Bun）、Nix、Docker |
+  | | **结构** | packages/（多包结构）、infra/、install/、perf/、patches/ |
+  | | **特色** | 开源替代方案、Tab 键切换 Agent、桌面 App Beta、多语言 README |
+  | | **关键词** | 编码 Agent, build/plan 双模式, 开源 |
+  | 
+  | ---
+  | 
+  | ### 9️⃣ openhuman — 个人 AI 超级智能
+  | 
+  | | 项目 | 详情 |
+  | |------|------|
+  | | **来源** | [tinyhumansai/openhuman](https://github.com/tinyhumansai/openhuman) |
+  | | **定位** | 带持久记忆的个人 AI 超级智能 |
+  | | **主要功能** | 桌面应用 + 记忆树 + Obsidian 知识库 + 118+ 第三方集成、语音、Token 压缩、自动抓取 |
+  | | **技术栈** | **TypeScript/Node.js** 为主（pnpm）、Rust、Tauri（桌面壳） |
+  | | **结构** | app/、packages/、src/、docs/、examples/、e2e/ |
+  | | **特色** | Memory Tree（SQLite 本地存储）+ Obsidian 兼容的 Markdown 保险库、TokenJuice 压缩、自动 20 分钟同步、桌面吉祥物、Google Meet 参会能力 |
+  | | **关键词** | 记忆树, 集成平台, 桌面应用, TokenJuice |
+  | 
+  | ---
+  | 
+  | ### 🔟 pi — 编码 Agent Monorepo
+  | 
+  | | 项目 | 详情 |
+  | |------|------|
+  | | **来源** | 第三方（badlogic/pi-mono） |
+  | | **定位** | 编码 Agent monorepo，TUI + AI 核心 + Agent 框架 |
+  | | **主要功能** | 终端编码 Agent、包管理、发布工作流 |
+  | | **技术栈** | **TypeScript/Node.js**（npm workspaces）、Biome |
+  | | **结构** | packages/（tui, ai, agent, coding-agent 等多包）、scripts/ |
+  | | **特色** | 锁步版本管理、完善的发布流程、tmux 测试 |
+  | | **关键词** | monorepo, TUI, 编码 Agent |
+  | 
+  | ---
+  | 
+  | ## 📊 分类总结
+  | 
+  | ### 按技术栈
+  | 
+  | | 技术 | 项目 |
+  | |------|------|
+  | | **TypeScript/Node.js** | claude-code, openclaw, opencode, openhuman, pi |
+  | | **Rust** | CodeWhale, codex |
+  | | **Python** | hermes-agent, nanobot, nanoGPT |
+  | | **多语言混合** | CodeWhale（Rust+JS）, openhuman（TS+Rust+Tauri） |
+  | 
+  | ### 按用途
+  | 
+  | | 类别 | 项目 |
+  | |------|------|
+  | | **终端编码 Agent** | claude-code, codex, opencode, pi |
+  | | **个人 AI 助手（多频道）** | openclaw, nanobot, openhuman |
+  | | **Agent 框架/基础设施** | CodeWhale, hermes-agent |
+  | | **AI 研究/教育** | nanoGPT |
+  | 
+  | ### 按 Agent 体系成熟度（与你飞花项目最相关）
+  | 
+  | 1. **claude-code** — 行业标杆（Agent 定义、Skill、Hook、Plugin 架构最完整）
+  | 2. **CodeWhale** — 最强调"责任归属"和"运行时宪法"的设计哲学
+  | 3. **opencode** — 简洁的双模式 Agent（build/plan）
+  | 4. **pi** — 清晰的 monorepo 包拆分实践
+  | 5. **nanobot** — Python 生态的多频道 Agent 参考
+  | 
+  | 这些项目都是你飞花 Agent 项目的重要参考资源。是否需要我进一步深入分析某个特定项目的架构细节或代码实现？
+[INFO ]  2026-06-19T05:24:49.888Z  Synapse
+  | output
+  | null
+[INFO ]  2026-06-19T05:29:11.168Z  FSocket
+  | close
+  | {
+  |   error: undefined
+  | }

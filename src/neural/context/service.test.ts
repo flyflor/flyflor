@@ -1,12 +1,20 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import { useContainer } from '@/core';
-import { AgentChatRole, Memory } from '@/agent/memory';
+import { AgentChatRole } from '@/agent/memory';
 import { Context, ContextIntent } from '@/neural/context';
 
 describe('Context', () => {
+    let context: Context;
+
+    beforeEach(async () => {
+        context = await useContainer().getAsync(Context);
+        context.current = undefined;
+        context.working = [];
+        context.completed = [];
+        context.pending = undefined;
+    });
+
     test('ingest loads distilled turn understanding into agent memory', async () => {
-        const memory = await useContainer().getAsync(Memory, { name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 });
-        const context = await useContainer().getAsync(Context);
         context.intelligence = {
             completeText: async () => JSON.stringify({
                 intent: 'research',
@@ -19,17 +27,15 @@ describe('Context', () => {
             }),
         } as never;
 
-        const understanding = await context.ingest(memory, { content: '解析错误: Bad control character in string literal' });
+        const understanding = await context.ingest({ content: '解析错误: Bad control character in string literal' });
 
         expect(understanding.intent).toBe(ContextIntent.Research);
-        expect(memory.current?.goal).toBe('修复 IPC JSON 解析错误');
-        expect(memory.current?.references).toContainEqual({ type: 'error', value: 'Bad control character in string literal' });
+        expect(context.current?.goal).toBe('修复 IPC JSON 解析错误');
+        expect(context.current?.references).toContainEqual({ type: 'error', value: 'Bad control character in string literal' });
     });
 
     test('settle writes completed state and clears working log', async () => {
-        const memory = await useContainer().getAsync(Memory, { name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 });
-        const context = await useContainer().getAsync(Context);
-        memory.load({
+        context.load({
             userText: '实现计划',
             intent: ContextIntent.Research,
             goal: '实现 context/memory 重构',
@@ -39,7 +45,7 @@ describe('Context', () => {
             openQuestions: [],
             shouldInvestigate: true,
         });
-        memory.recordWork([{ role: AgentChatRole.Tool, content: 'changed src/neural/context/service.ts', toolCallId: 'tool_1', toolName: 'read_file', isError: false }]);
+        context.work([{ role: AgentChatRole.Tool, content: 'changed src/neural/context/service.ts', toolCallId: 'tool_1', toolName: 'read_file', isError: false }]);
         context.intelligence = {
             completeText: async () => JSON.stringify({
                 goal: '实现 context/memory 重构',
@@ -51,15 +57,27 @@ describe('Context', () => {
             }),
         } as never;
 
-        const summary = await context.settle(memory, {
+        const summary = await context.settle({
             user: '实现计划',
             assistant: '已完成',
             completed: true,
-            working: memory.working,
         });
 
         expect(summary?.result).toContain('synapse.context');
-        expect(memory.completed).toHaveLength(1);
-        expect(memory.working).toEqual([]);
+        expect(context.completed).toHaveLength(1);
+        expect(context.working).toEqual([]);
+    });
+
+    test('settle keeps working log for unfinished turn', async () => {
+        context.work({ role: AgentChatRole.Assistant, content: '需要确认' });
+
+        const summary = await context.settle({
+            user: '实现计划',
+            assistant: '需要确认',
+            completed: false,
+        });
+
+        expect(summary).toBeUndefined();
+        expect(context.working).toHaveLength(1);
     });
 });
