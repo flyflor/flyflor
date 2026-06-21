@@ -1,6 +1,7 @@
 import type { Memory } from '@/agent';
 import type { FAgentProfileConfiguration } from '@/configuration';
 import type { Synapse } from '@/neural';
+import type { ToolResult } from '@/core/tool';
 import { useLogger } from '../logger/service';
 import type { FLogger } from '../logger/types';
 
@@ -34,6 +35,11 @@ export type ObservableSubscriber<T> = (value: T) => void;
 export type ObservablePipe<T, R = T> = Observable<unknown, R> | ObservableCallback<T, R>;
 export type ObservableSwitchCases<T, C extends string> = Partial<Record<C, ObservablePipe<T>>>;
 
+export enum ObservableState {
+    Open = 'open',
+    Closed = 'closed',
+}
+
 export interface IObservable<T = unknown, R = T> {
     onPipe?(data: T): ObservablePipeResult<R> | Promise<ObservablePipeResult<R>>;
 }
@@ -44,6 +50,9 @@ export class Observable<T = unknown, R = T> extends FlyFlor implements IObservab
     public readonly pipes: Set<any>;
     public readonly subscribers: Set<ObservableSubscriber<R>>;
     private readonly values: T[];
+    private state = ObservableState.Open;
+    private last?: R;
+    private waiters: Array<(value: R | undefined) => void> = [];
 
     constructor(...values: T[]) {
         super();
@@ -55,10 +64,32 @@ export class Observable<T = unknown, R = T> extends FlyFlor implements IObservab
     }
 
     public next(value: T): void {
+        if (this.state === ObservableState.Closed) return;
         void this.emit(value, this.subscribers);
     }
 
-    public pipe(pipe: any): this {
+    public done(value?: R): void {
+        if (this.state === ObservableState.Closed) return;
+        this.state = ObservableState.Closed;
+        this.last = value;
+        for (const waiter of this.waiters) waiter(value);
+        this.waiters = [];
+    }
+
+    public toPromise(): Promise<R | undefined> {
+        if (this.state === ObservableState.Closed) return Promise.resolve(this.last);
+        return new Promise((resolve) => this.waiters.push(resolve));
+    }
+
+    public substream(stream: AsyncIterable<T>): this {
+        void (async () => {
+            for await (const value of stream) this.next(value);
+            this.done();
+        })();
+        return this;
+    }
+
+    public pipe<T = R>(pipe: any): this {
         this.pipes.add(pipe);
         return this;
     }
@@ -128,6 +159,70 @@ export function of<T>(...values: T[]) {
     return new Observable(...values);
 }
 
+export enum CortexSignalType {
+    Input = 'input',
+    Reply = 'reply',
+    Event = 'event',
+    Ask = 'ask',
+    Confirm = 'confirm',
+}
+
+export interface CortexSignal<T extends string = string, D = unknown> {
+    type: T;
+    data: D;
+}
+
+export abstract class FCortex<T extends CortexSignal = CortexSignal> extends FModule {
+    private readonly signals = new Map<T['type'], Set<(signal: T) => void | Promise<void>>>();
+
+    public on(type: T['type'], fn: (signal: T) => void | Promise<void>): this {
+        const set = this.signals.get(type) ?? new Set();
+        set.add(fn);
+        this.signals.set(type, set);
+        return this;
+    }
+
+    public emit(type: T['type'], data: unknown): Observable<T> {
+        if (data instanceof Observable) return this.stream(type, data);
+        if (this.iterable(data)) return this.stream(type, new Observable<unknown>().substream(data));
+        const stream = new Observable<T>();
+        const signal = { type, data } as T;
+        this.fire(signal);
+        stream.done(signal);
+        return stream;
+    }
+
+    public off(type: T['type'], fn?: (signal: T) => void | Promise<void>): this {
+        if (fn === undefined) this.signals.delete(type);
+        else this.signals.get(type)?.delete(fn);
+        return this;
+    }
+
+    public clear(): void {
+        this.signals.clear();
+    }
+
+    private stream(type: T['type'], data: Observable<unknown>): Observable<T> {
+        const stream = new Observable<T>();
+        let last: T | undefined;
+        data.subscribe((value) => {
+            last = { type, data: value } as T;
+            this.fire(last);
+            stream.next(last);
+        });
+        void data.toPromise().then(() => stream.done(last));
+        return stream;
+    }
+
+    private fire(signal: T): void {
+        for (const fn of this.signals.get(signal.type) ?? []) void fn(signal);
+    }
+
+    private iterable(data: unknown): data is AsyncIterable<unknown> {
+        return typeof data === 'object' && data !== null && Symbol.asyncIterator in data;
+    }
+}
+
 /**
  * Base class for autonomous intelligent agents ("person" semantic).
  *
@@ -143,4 +238,10 @@ export abstract class FAgentAtom<T = object | number | string | boolean | undefi
 }
 export abstract class FAgent<T, R = T> extends FAgentAtom<T, R> {}
 
-export abstract class FTool extends FService {}
+export abstract class FTool<TInput = unknown, TOutput = unknown> extends Observable<TInput, ToolResult<TOutput>> {
+    public abstract override onPipe(data: TInput): ToolResult<TOutput> | Promise<ToolResult<TOutput>>;
+
+    public async execute(input: TInput): Promise<ToolResult<TOutput>> {
+        return await this.onPipe(input);
+    }
+}

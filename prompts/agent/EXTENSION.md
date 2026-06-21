@@ -6,4 +6,6 @@
   - `confirm`: a yes/no signal with one recommended default.
   - `ask`: an open question with one or more concrete solution options; exactly one option is recommended, and the client supplies a free-form Other entry.
 - `ask` and `confirm` interrupt the current turn and wait for the next user message before resuming the pending research task.
-- Research v1 can use read-only local evidence tools for Flyflor, the configured reference directory, the active turn working directory, and absolute paths explicitly provided by the user for that turn; write/edit/remove tools are not available during research.
+- Research can use the `filesystem` tool for directory listing, text reads, full writes, and guarded text edits on real filesystem paths.
+- Filesystem capability is exposed through the single `filesystem` tool instead of separate read/write/edit/remove/shell tools.
+- Shell execution and destructive remove are not available in the first `FTool` filesystem surface.

@@ -1,7 +1,8 @@
-import { Config, FlyFlor, Init, Inject, Logger, Singleton, type FLogger } from '@/core';
+import { Config, Init, Inject, Singleton } from '@/core/decorator';
+import { FlyFlor } from '@/core/ioc';
 import { existsSync } from 'fs';
 import { unlink } from 'fs/promises';
-import type { Socket, SocketHandler, UnixSocketListener } from 'bun';
+import type { Socket, UnixSocketListener } from 'bun';
 import { IPCPacket, type SocketPacket } from './packet';
 import { Controller } from './controller';
 import type { Synapse } from '../synapse';
@@ -24,15 +25,17 @@ export enum SocketEvent {
 
 export interface SocketConnectionData {}
 
+const SYNAPSE_INPUT = 'input' as Parameters<Synapse['emit']>[0];
+
 /**
  * Bun socket handler used by IPCService.
  *
  * The class owns socket lifecycle callbacks only: connection open/close, inbound data, and transport
- * errors. Handlers are arrow-function fields so `this` is the FSocket instance however Bun invokes
- * them; the instance is passed straight to `Bun.listen({ socket })`.
+ * errors. Callback methods are bound in the constructor so `this` is the FSocket instance however
+ * Bun invokes them; the instance is passed straight to `Bun.listen({ socket })`.
  */
 @Singleton()
-export class FSocket extends FlyFlor implements SocketHandler<SocketConnectionData, 'buffer'> {
+export class FSocket extends FlyFlor {
     @Config('socket')
     public path!: string;
 
@@ -48,60 +51,92 @@ export class FSocket extends FlyFlor implements SocketHandler<SocketConnectionDa
 
     public synapse!: Synapse;
 
+    private pending: Buffer[];
+
     constructor() {
         super();
+        this.pending = [];
     }
 
     @Init()
     public async init() {
         if (existsSync(this.path)) await unlink(this.path);
-        this.service = Bun.listen({ unix: this.path, socket: this });
+        // this.service = Bun.listen({ unix: this.path, socket: this });
+        this.service = Bun.listen({
+            unix: this.path,
+            socket: {
+                open: this.open.bind(this),
+                close: this.close.bind(this),
+                error: this.error.bind(this),
+                drain: this.drain.bind(this),
+                data: this.data.bind(this),
+            },
+        });
         console.log(`[IPC] Socket listening at ${this.path}`);
     }
 
-    public open = async (socket: Socket<SocketConnectionData>) => {
+    public async open(socket: Socket<SocketConnectionData>) {
         this.connection = socket;
         this.log.info(SocketEvent.Open);
-        socket.write(this.packet.encode({ action: SocketEvent.Open, data: true }));
-    };
+        this.write({ action: SocketEvent.Open, data: true });
+    }
 
-    public close = async (socket: Socket<SocketConnectionData>, error?: Error) => {
+    public async close(socket: Socket<SocketConnectionData>, error?: Error) {
         this.log.info(SocketEvent.Close, { error });
-        if (this.connection === socket) this.connection = undefined;
-        socket.write(this.packet.encode({ action: SocketEvent.Close, data: error?.message ?? 'closed' }));
-    };
+        if (this.connection === socket) {
+            this.connection = undefined;
+            this.pending = [];
+        }
+    }
 
-    public error = async (socket: Socket<SocketConnectionData>, error: Error) => {
+    public async error(socket: Socket<SocketConnectionData>, error: Error) {
         this.log.error(SocketEvent.Error, error);
-        socket.write(this.packet.encode({ action: SocketEvent.Error, data: error.message }));
-    };
+        this.write({ action: SocketEvent.Error, data: error.message });
+    }
 
-    public data = async (socket: Socket<SocketConnectionData>, data: Uint8Array) => {
+    public async drain() {
+        this.flush();
+    }
+
+    public async data(socket: Socket<SocketConnectionData>, data: Uint8Array) {
         // this.log.info('data', data);
         this.packet
             .of(data)
-            .pipe((buffer: Uint8Array) => this.packet.decode(buffer))
-            .filter<SocketPacket>(({ action, data }) => {
-                if(['user'].includes(action)) {
-                    // this.log.info('received', { action, data });
-                    this.synapse.emit('data', typeof data === 'object' && data !== null && 'text' in data ? String((data as { text: unknown }).text) : data);
-                    return false;
-                }
-                return true;
+            .pipe((buffer: Uint8Array) => this.packet.decode<SocketPacket>(buffer))
+            .switch((packet) => (packet as unknown as SocketPacket).action, {
+                [SocketEvent.User]: (packet) => {
+                    this.synapse.emit(SYNAPSE_INPUT, this.readUserText((packet as unknown as SocketPacket).data));
+                    return undefined;
+                },
             })
-            .subscribe<SocketPacket>(({ action, data }) => {
-                // call controller method by action key
-                const key = action as keyof Controller;
-                const method = this.controller[key] as unknown as ((arg: any) => any) | undefined;
-                if (typeof method === 'function') method.call(this.controller, data);
-            });
-    };
+            .subscribe<SocketPacket>((packet) => Reflect.get(this.controller, packet.action)?.call(this.controller, packet.data));
+    }
 
     public write(packet: SocketPacket): void {
         if (!this.connection) {
             this.log.warn('socket.write.no_connection', packet);
             return;
         }
-        this.connection.write(this.packet.encode(packet));
+        this.pending.push(this.packet.encode(packet));
+        this.flush();
+    }
+
+    private flush(): void {
+        while (this.connection && this.pending.length > 0) {
+            const current = this.pending[0]!;
+            const written = this.connection.write(current);
+            if (written < 0) break;
+            if (written === current.byteLength) {
+                this.pending.shift();
+                continue;
+            }
+            if (written > 0) this.pending[0] = current.subarray(written);
+            break;
+        }
+    }
+
+    private readUserText(data: unknown): string {
+        if (typeof data !== 'object' || data === null || !('text' in data)) throw Error('Invalid user IPC packet');
+        return String((data as { text: unknown }).text);
     }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { Observable } from './abstracts';
+import { CortexSignalType, FCortex, FTool, Observable } from './abstracts';
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -60,6 +60,99 @@ describe('Observable', () => {
             })
             .subscribe((value: number) => values.push(value));
         await tick();
+
+        expect(values).toEqual([]);
+    });
+
+    test('toPromise waits for done', async () => {
+        const stream = new Observable<number>();
+        const promise = stream.toPromise();
+
+        stream.done(3);
+
+        expect(await promise).toBe(3);
+    });
+
+    test('substream emits async iterable values', async () => {
+        const values: number[] = [];
+
+        new Observable<number>()
+            .substream((async function* () {
+                yield 1;
+                yield 2;
+            })())
+            .subscribe((value: number) => values.push(value));
+        await tick();
+
+        expect(values).toEqual([1, 2]);
+    });
+});
+
+class TestTool extends FTool<{ value: number }, { value: number }> {
+    public override onPipe(input: { value: number }) {
+        return { ok: true, data: { value: input.value + 1 } } as const;
+    }
+}
+
+describe('FTool', () => {
+    test('execute returns onPipe result', async () => {
+        const tool = new TestTool();
+
+        const result = await tool.execute({ value: 1 });
+
+        expect(result).toEqual({ ok: true, data: { value: 2 } });
+    });
+});
+
+class TestCortex extends FCortex {}
+
+describe('FCortex', () => {
+    test('emits plain signal', () => {
+        const values: unknown[] = [];
+        const cortex = new TestCortex();
+
+        cortex.on(CortexSignalType.Reply, (signal) => { values.push(signal.data); });
+        cortex.emit(CortexSignalType.Reply, 'ok');
+
+        expect(values).toEqual(['ok']);
+    });
+
+    test('emits observable substream', async () => {
+        const values: unknown[] = [];
+        const cortex = new TestCortex();
+        const stream = new Observable<string>();
+
+        cortex.on(CortexSignalType.Reply, (signal) => { values.push(signal.data); });
+        const done = cortex.emit(CortexSignalType.Reply, stream).toPromise();
+        stream.next('a');
+        stream.next('b');
+        stream.done();
+        await done;
+
+        expect(values).toEqual(['a', 'b']);
+    });
+
+    test('emits async iterable substream', async () => {
+        const values: unknown[] = [];
+        const cortex = new TestCortex();
+
+        cortex.on(CortexSignalType.Reply, (signal) => { values.push(signal.data); });
+        await cortex.emit(CortexSignalType.Reply, (async function* () {
+            yield 'a';
+            yield 'b';
+        })()).toPromise();
+
+        expect(values).toEqual(['a', 'b']);
+    });
+
+    test('off removes listener', () => {
+        const values: unknown[] = [];
+        const cortex = new TestCortex();
+        const fn = (signal: { data: unknown }) => { values.push(signal.data); };
+
+        cortex.on(CortexSignalType.Reply, fn);
+        cortex.off(CortexSignalType.Reply, fn);
+        cortex.emit(CortexSignalType.Reply, 'skip');
 
         expect(values).toEqual([]);
     });

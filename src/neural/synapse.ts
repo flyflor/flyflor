@@ -1,7 +1,6 @@
 import { Agent } from '@/agent';
 import type { ConfigService } from '@/configuration';
-import { Config, Init, Inject, Logger, Module, Scope, useContainer, type FLogger } from '@/core';
-import EventEmitter from 'events';
+import { Config, FCortex, Init, Inject, Module, Scope, useContainer, type CortexSignal } from '@/core';
 import { FSocket } from './ipc';
 import type { Context } from './context';
 
@@ -10,13 +9,22 @@ export interface AgentPool {
     agents: { [name: string]: Agent };
 }
 
+export enum SynapseSignalType {
+    Input = 'input',
+    Reply = 'reply',
+    Event = 'event',
+    Ask = 'ask',
+    Confirm = 'confirm',
+}
+
+export interface SynapseSignal extends CortexSignal {
+    type: SynapseSignalType;
+}
+
 @Module()
-export class Synapse extends EventEmitter {
+export class Synapse extends FCortex<SynapseSignal> {
     @Config()
     public readonly config!: ConfigService;
-
-    @Logger()
-    public readonly log!: FLogger;
 
     @Inject()
     public context!: Context;
@@ -57,10 +65,11 @@ export class Synapse extends EventEmitter {
         // Agent owns its private Memory through IOC injection; Synapse only selects and drives the active person.
         this.agentPool.agents[active] = await useContainer().getAsync(Agent, agentConfig, this);
         this.socket.synapse = this;
-        this.on('data', this.input.bind(this));
-        this.on('reply', this.output.bind(this));
-        this.on('ask', (data) => this.socket.write({ action: 'ask', data }));
-        this.on('confirm', (data) => this.socket.write({ action: 'confirm', data }));
+        this.on(SynapseSignalType.Input, (signal) => this.input(String(signal.data)));
+        this.on(SynapseSignalType.Reply, (signal) => this.output(signal.data));
+        this.on(SynapseSignalType.Event, (signal) => this.socket.write({ action: 'data', data: signal.data }));
+        this.on(SynapseSignalType.Ask, (signal) => this.socket.write({ action: 'ask', data: signal.data }));
+        this.on(SynapseSignalType.Confirm, (signal) => this.socket.write({ action: 'confirm', data: signal.data }));
         return true;
     }
 
@@ -69,10 +78,9 @@ export class Synapse extends EventEmitter {
         this.agent.next(data);
     }
 
-    public async output(data: string | null) {
-        this.log.info('output', data);
+    public async output(data: unknown) {
         this.socket.write(data === null
             ? { action: 'streamEnd', data: true }
-            : { action: 'agent', data });
+            : { action: 'agent', data: String(data) });
     }
 }

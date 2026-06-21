@@ -882,15 +882,15 @@
                     return;
                 }
                 if (signal.type === 'tool_start') {
-                    addMessage(`工具开始: ${signal.chunk || 'unknown'}\n${signalDetail(signal)}`.trim(), 'system');
+                    addMessage(`工具开始: ${signal.chunk || 'unknown'}\n${formatDebugDetail(signal.data)}`.trim(), 'system');
                     return;
                 }
                 if (signal.type === 'tool_result') {
-                    addMessage(`工具结果: ${signal.chunk || 'unknown'}\n${signalDetail(signal)}`.trim(), 'system');
+                    addMessage(`工具结果: ${signal.chunk || 'unknown'}\n${toolResult(signal.data)}`.trim(), 'system');
                     return;
                 }
                 if (signal.type === 'llm_turn') {
-                    addMessage(`LLM 返回: ${signal.data?.stopReason ?? 'unknown'}\n${signalDetail(signal)}`.trim(), 'system');
+                    addMessage(`调查轮次: ${signal.chunk || signal.data?.step || 'unknown'}\n${signalDetail(signal)}`.trim(), 'system');
                     return;
                 }
                 if (signal.chunk.length > 0 || signal.data !== undefined) {
@@ -1044,6 +1044,23 @@
                 if (signal.data !== undefined) lines.push(formatDebugDetail(signal.data));
                 if (signal.chunk.length > 0 && signal.type !== 'reply') lines.unshift(signal.chunk);
                 return lines.filter(Boolean).join('\n');
+            }
+
+            function toolResult(data) {
+                if (!data || typeof data !== 'object') return formatDebugDetail(data);
+                const lines = [`status: ${data.ok ? 'ok' : 'error'}`];
+                if (data.error) lines.push(`error: ${data.error}`);
+                const result = data.data;
+                if (result && typeof result === 'object') {
+                    if ('path' in result) lines.push(`path: ${result.path}`);
+                    if ('bytes' in result) lines.push(`bytes: ${result.bytes}`);
+                    if ('code' in result) lines.push(`code: ${result.code}`);
+                    if (result.stdout) lines.push(`stdout:\n${result.stdout}`);
+                    if (result.stderr) lines.push(`stderr:\n${result.stderr}`);
+                } else if (result !== undefined) {
+                    lines.push(formatDebugDetail(result));
+                }
+                return lines.join('\n');
             }
 
             async function readSocketMessage(eventData) {

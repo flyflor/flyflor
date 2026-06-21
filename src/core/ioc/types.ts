@@ -4,6 +4,7 @@ export type ClassType<T = any> = new (...args: any[]) => T;
 export const MODULE_METADATA_KEY = Symbol('MODULE_METADATA_KEY');
 export const INJECT_METADATA_KEY = Symbol('INJECT_METADATA_KEY');
 export const INJECT_METADATA_INSTANCE_KEY = Symbol('INJECT_METADATA_INSTANCE_KEY');
+export const TOOL_METADATA_KEY = Symbol('TOOL_METADATA_KEY');
 export interface InjectMetadata {
     propertyKey: string | symbol;
     classType: ClassType;

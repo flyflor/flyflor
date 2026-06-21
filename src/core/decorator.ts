@@ -4,14 +4,15 @@ import {
     INJECT_METADATA_KEY,
     MODULE_METADATA_KEY,
     PROVIDER_SINGLETON_KEY,
+    TOOL_METADATA_KEY,
     type ClassType,
     type InjectInstanceMetadata,
     type InjectMetadata,
 } from './ioc/types';
 import { defineMetadata, getMetadata, useContainer } from './ioc/container';
 import type { FModule } from './ioc/abstracts';
+import type { ToolMetadata } from './tool';
 import { get } from 'lodash-es';
-import { ConfigService } from '@/configuration';
 
 export type Ctor<T = unknown> = new (...args: never[]) => T;
 
@@ -45,8 +46,11 @@ export function Component(): ClassDecorator {
     return (target) => Provide()(target);
 }
 
-export function Tool(): ClassDecorator {
-    return (target) => Provide()(target);
+export function Tool(metadata: ToolMetadata): ClassDecorator {
+    return (target) => {
+        Provide()(target);
+        defineMetadata(TOOL_METADATA_KEY, metadata, target);
+    };
 }
 
 export function Repo(): ClassDecorator {
@@ -153,6 +157,7 @@ export function Config(key?: string): PropertyDecorator {
         data.push({
             propertyKey,
             instance: async () => {
+                const { ConfigService } = await import('@/configuration');
                 return useContainer().getAsync(ConfigService);
             },
         });

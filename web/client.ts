@@ -69,6 +69,9 @@ export const PACKET_PROTOCOL_MISMATCH_MESSAGE = 'Invalid IPC packet: expected 8-
 /** Error text used when a declared packet body length is not usable by the bridge. */
 export const PACKET_LENGTH_INVALID_MESSAGE = 'IPC packet body length is invalid';
 
+/** Error text used when a decoded packet body is not valid JSON. */
+export const PACKET_JSON_INVALID_MESSAGE = 'Invalid IPC packet: JSON body is malformed';
+
 /** Enables local IPC bridge diagnostics unless explicitly disabled. */
 const IPC_DEBUG = process.env.NODE_ENV !== 'test' && process.env.FLYFLOR_IPC_DEBUG !== '0';
 
@@ -229,7 +232,13 @@ function decodePacketTexts(pending: Buffer<ArrayBufferLike>, data: Uint8Array): 
             break;
         }
         const body = buffer.subarray(PACKET_LENGTH_HEADER_BYTES, packetLength);
-        packets.push(body.toString(PACKET_TEXT_ENCODING));
+        const text = body.toString(PACKET_TEXT_ENCODING);
+        try {
+            JSON.parse(text);
+            packets.push(text);
+        } catch (error) {
+            errors.push(`${PACKET_JSON_INVALID_MESSAGE}: ${messageFromError(error)}; bytes=${body.byteLength}; preview=${previewText(text)}`);
+        }
         buffer = Buffer.from(buffer.subarray(packetLength));
     }
 

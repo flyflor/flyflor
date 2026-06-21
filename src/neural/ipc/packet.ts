@@ -1,4 +1,5 @@
-import { FService, of, Service, type Observable } from '@/core';
+import { Service } from '@/core/decorator';
+import { FService, of, type Observable } from '@/core/ioc';
 
 export const HEADER_BYTES = 8;
 export const TEXT_ENCODING = 'utf-8';
@@ -18,6 +19,10 @@ export class IPCPacket extends FService {
     }
 
     public of(data: Uint8Array): Observable<Uint8Array> {
+        return of(...this.read(data));
+    }
+
+    public read(data: Uint8Array): Uint8Array[] {
         this.buffer = Buffer.concat([this.buffer, Buffer.from(data)]);
         const packets: Uint8Array[] = [];
 
@@ -31,7 +36,7 @@ export class IPCPacket extends FService {
             packets.push(packet);
         }
 
-        return of(...packets);
+        return packets;
     }
 
     public decode<T = unknown>(data: Uint8Array): T {
