@@ -17,4 +17,7 @@ export const INVESTIGATION_SYSTEM = [
 export interface InvestigationOutcome {
     answer: string;
     steps: number;
+    completed: boolean;
+    paused: boolean;
+    pause?: unknown;
 }

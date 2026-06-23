@@ -99,14 +99,7 @@ export class Memory extends FAgentAtom {
         if (this.context.current) {
             messages.push({
                 role: AgentChatRole.User,
-                content: JSON.stringify({
-                    goal: this.context.current.goal,
-                    user: this.context.current.userText,
-                    intent: this.context.current.intent,
-                    constraints: this.context.current.constraints,
-                    references: this.context.current.references,
-                    openQuestions: this.context.current.openQuestions,
-                }),
+                content: JSON.stringify(this.contextBlock()),
             });
         }
         return messages;
@@ -124,7 +117,42 @@ export class Memory extends FAgentAtom {
 
     private memory(): string {
         const current = this.context.current ? `<current>${this.context.current.goal}</current>` : '';
-        const completed = this.context.completed.map((summary) => `<completed>${summary.result}</completed>`).join('\n');
+        const completed = this.context.completed.map((summary) => `<completed>${JSON.stringify({
+            goal: summary.goal,
+            result: summary.result,
+            decisions: summary.decisions,
+            evidence: summary.evidence,
+            remaining: summary.remaining,
+        })}</completed>`).join('\n');
         return `<agent_memory>\n${[current, completed].filter(Boolean).join('\n')}\n</agent_memory>`;
+    }
+
+    private contextBlock(): object {
+        return {
+            current: this.context.current ? {
+                goal: this.context.current.goal,
+                user: this.context.current.userText,
+                intent: this.context.current.intent,
+                constraints: this.context.current.constraints,
+                references: this.context.current.references,
+                knownDone: this.context.current.knownDone,
+                openQuestions: this.context.current.openQuestions,
+                shouldInvestigate: this.context.current.shouldInvestigate,
+            } : undefined,
+            recentTurns: this.context.recent().map((turn) => ({
+                status: turn.status,
+                goal: turn.understanding.goal,
+                user: turn.understanding.userText,
+                transcript: turn.transcript,
+                pending: turn.pending ? { kind: turn.pending.kind, data: turn.pending.data } : undefined,
+            })),
+            completed: this.context.completed.map((summary) => ({
+                goal: summary.goal,
+                result: summary.result,
+                decisions: summary.decisions,
+                evidence: summary.evidence,
+                remaining: summary.remaining,
+            })),
+        };
     }
 }

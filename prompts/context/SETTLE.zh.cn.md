@@ -1,8 +1,8 @@
 # Context Settle Prompt
 
-把已完成 turn 摘要成长期 completed memory。只返回紧凑 JSON。
+为已完成 turn 创建紧凑的 completed-work 索引。只返回紧凑 JSON。
 
-输入包含 `user`、`assistant`、`completed` 和 `working`。
+输入包含 `user`、`assistant`、`completed`、`working` 和 `turn`。运行时代码会单独保留原始 turn transcript；这个提示词不能成为唯一事实来源。
 
 Schema:
 
@@ -12,5 +12,5 @@ Schema:
 
 - 不要包含 `createdAt`，运行时代码会补。
 - 保持简短。
-- 摘要长期结果，不要复述原始对话。
+- 索引长期结果、决策、证据和剩余工作。不要重写原始 transcript。
 - 只返回合法 JSON。

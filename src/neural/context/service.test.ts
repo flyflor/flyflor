@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { useContainer } from '@/core';
 import { AgentChatRole } from '@/agent/memory';
-import { Context, ContextIntent } from '@/neural/context';
+import { Context, ContextIntent, ContextTurnStatus } from '@/neural/context';
+import { CallosumSignalType } from '@/agent/brain';
 
 describe('Context', () => {
     let context: Context;
@@ -10,6 +11,7 @@ describe('Context', () => {
         context = await useContainer().getAsync(Context);
         context.current = undefined;
         context.working = [];
+        context.turns = [];
         context.completed = [];
         context.pending = undefined;
     });
@@ -32,9 +34,11 @@ describe('Context', () => {
         expect(understanding.intent).toBe(ContextIntent.Research);
         expect(context.current?.goal).toBe('修复 IPC JSON 解析错误');
         expect(context.current?.references).toContainEqual({ type: 'error', value: 'Bad control character in string literal' });
+        expect(context.turns).toHaveLength(1);
+        expect(context.turns[0]?.transcript).toContainEqual({ role: AgentChatRole.User, content: '解析错误: Bad control character in string literal' });
     });
 
-    test('settle writes completed state and clears working log', async () => {
+    test('work keeps original transcript while settle writes completed index', async () => {
         context.load({
             userText: '实现计划',
             intent: ContextIntent.Research,
@@ -57,6 +61,7 @@ describe('Context', () => {
             }),
         } as never;
 
+        context.work({ role: AgentChatRole.Assistant, content: '已完成' });
         const summary = await context.settle({
             user: '实现计划',
             assistant: '已完成',
@@ -66,6 +71,8 @@ describe('Context', () => {
         expect(summary?.result).toContain('synapse.context');
         expect(context.completed).toHaveLength(1);
         expect(context.working).toEqual([]);
+        expect(context.turns[0]?.status).toBe(ContextTurnStatus.Completed);
+        expect(context.turns[0]?.transcript).toContainEqual({ role: AgentChatRole.Assistant, content: '已完成' });
     });
 
     test('settle keeps working log for unfinished turn', async () => {
@@ -79,5 +86,45 @@ describe('Context', () => {
 
         expect(summary).toBeUndefined();
         expect(context.working).toHaveLength(1);
+    });
+
+    test('pause stores typed pending state and resumes into the same turn', async () => {
+        context.load({
+            userText: '继续调查',
+            intent: ContextIntent.Research,
+            goal: '确认实现方式',
+            constraints: [],
+            references: [],
+            knownDone: [],
+            openQuestions: [],
+            shouldInvestigate: true,
+        });
+        context.pause({
+            kind: 'ask',
+            signal: { type: CallosumSignalType.Research, chunk: '继续调查' },
+            data: { kind: 'ask', question: '选哪个?', options: ['a'] },
+            messages: [{ role: AgentChatRole.User, content: '继续调查' }],
+        });
+        context.intelligence = {
+            completeText: async () => JSON.stringify({
+                intent: 'research',
+                goal: '确认实现方式',
+                constraints: [],
+                references: [],
+                knownDone: [],
+                openQuestions: [],
+                shouldInvestigate: true,
+            }),
+        } as never;
+
+        await context.ingest({ content: '选 a' });
+        const pending = context.consumePending();
+
+        expect(pending?.kind).toBe('ask');
+        expect(context.pending).toBeUndefined();
+        expect(context.turns).toHaveLength(1);
+        expect(context.turns[0]?.status).toBe(ContextTurnStatus.Working);
+        expect(context.turns[0]?.transcript.at(-1)?.content).toContain('选 a');
+        expect(pending?.messages.at(-1)?.content).toContain('选 a');
     });
 });

@@ -1,13 +1,12 @@
-import { AgentChatRole, type AgentMemory, type AgentToolCallMemory } from '@/agent/memory';
+import { AgentChatRole, type AgentMemory } from '@/agent/memory';
 import { Context } from '@/neural/context';
 import { SynapseSignalType } from '@/neural/synapse';
 import { FAgentAtom, Init, Inject, Prompt, PromptService, Provide, Scope, type IObservable } from '@/core';
-import { Tools } from '@/plugins/tools';
 import { Memory } from '../memory';
 import { Callosum } from './callosum';
 import { CallosumSignalType, type CallosumSignal } from './callosum';
 import { Intelligence } from './intelligence/service';
-import type { IntelligenceTurn } from './intelligence/service';
+import { Investigation } from './investigation';
 
 export enum BrainPrompt {
     Soul = 'SOUL',
@@ -35,8 +34,8 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
     @Scope()
     public memory!: Memory;
 
-    @Inject()
-    public tools!: Tools;
+    @Scope()
+    public investigation!: Investigation;
 
     @Init()
     public init() {
@@ -49,7 +48,12 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
     }
 
     public override async onPipe(data: string) {
+        const pending = this.context.pending;
         await this.context.ingest({ content: data });
+        if (pending) {
+            await this.research({ type: CallosumSignalType.Research, chunk: data });
+            return;
+        }
         this.callosum.next(data);
     }
 
@@ -66,34 +70,11 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
 
     private async research(signal: CallosumSignal): Promise<void> {
         const messages = this.memory.buildMessage();
-        let step = 0;
-        while (true) {
-            step += 1;
-            this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.LlmTurn, chunk: String(step), data: { step } });
-            const turn = await this.intelligence.streamTurn(messages, this.tools.list(), (chunk) => {
-                this.synapse.emit(SynapseSignalType.Reply, chunk);
-            });
-            if (turn.toolCalls.length === 0) {
-                this.synapse.emit(SynapseSignalType.Reply, null);
-                this.context.work({ role: AgentChatRole.Assistant, content: turn.text });
-                await this.context.settle({ user: signal.chunk, assistant: turn.text, completed: true });
-                return;
-            }
-            messages.push(this.turn(turn));
-            for (const call of turn.toolCalls) {
-                this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.ToolStart, chunk: call.name, data: call.arguments });
-                const result = await this.tools.run(call);
-                this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.ToolResult, chunk: call.name, data: result });
-                const content = JSON.stringify(result);
-                messages.push({ role: AgentChatRole.Tool, content, toolCallId: call.id, toolName: call.name, isError: !result.ok });
-                this.context.work({ role: AgentChatRole.Tool, content, toolCallId: call.id, toolName: call.name, isError: !result.ok });
-                if (result.ok && this.pause(result.data)) {
-                    this.context.pending = signal;
-                    this.synapse.emit((result.data as { kind: string }).kind === 'ask' ? SynapseSignalType.Ask : SynapseSignalType.Confirm, result.data);
-                    return;
-                }
-            }
-        }
+        const outcome = await this.investigation.run(signal, messages);
+        if (outcome.paused) return;
+        this.synapse.emit(SynapseSignalType.Reply, null);
+        this.context.work({ role: AgentChatRole.Assistant, content: outcome.answer });
+        await this.context.settle({ user: signal.chunk, assistant: outcome.answer, completed: true });
     }
 
     private async soul(signal: CallosumSignal): Promise<void> {
@@ -124,14 +105,6 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
         this.synapse.emit(SynapseSignalType.Reply, null);
         this.context.work({ role: AgentChatRole.Assistant, content: assistant });
         await this.context.settle({ user: signal.chunk, assistant, completed: true });
-    }
-
-    private turn(turn: IntelligenceTurn): AgentToolCallMemory {
-        return { role: AgentChatRole.Assistant, content: turn.text, toolCalls: turn.toolCalls, reasoning: turn.reasoning };
-    }
-
-    private pause(data: unknown): data is { kind: 'ask' | 'confirm' } {
-        return typeof data === 'object' && data !== null && ((data as { kind?: unknown }).kind === 'ask' || (data as { kind?: unknown }).kind === 'confirm');
     }
 
     private json<T>(raw: string): T {

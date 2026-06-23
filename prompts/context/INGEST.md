@@ -1,6 +1,6 @@
 # Context Ingest Prompt
 
-Read the latest user message and return only compact JSON.
+Read the latest user message, understand the user's active intent, and return only compact JSON.
 
 Schema:
 
@@ -9,6 +9,7 @@ Schema:
 Rules:
 
 - Do not include `userText`; runtime adds it.
+- Do not summarize or replace conversation history. Runtime stores the raw transcript separately.
 - Use `research` when code, files, external evidence, or clarification is needed.
 - Use `soul` only for durable agent/user/profile/capability memory changes.
 - Use `reply` only when a direct answer is enough.
