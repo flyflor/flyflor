@@ -13,11 +13,22 @@ export enum FilesystemAction {
     Edit = 'edit',
 }
 
+export interface ActionRequest {
+    id: string;
+    name: string;
+    arguments: Record<string, unknown>;
+}
+
 export interface ToolRunResult {
     ok: boolean;
     name: string;
     data?: unknown;
     error?: ToolError;
+}
+
+export interface ActionRecord {
+    request: ActionRequest;
+    result: ToolRunResult;
 }
 
 export interface AskToolInput {

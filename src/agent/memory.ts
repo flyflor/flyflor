@@ -23,62 +23,18 @@ export enum AgentChatRole {
     System = 'system',
     User = 'user',
     Assistant = 'assistant',
-    Tool = 'tool',
 }
 
 /**
- * One plain text message sent to the configured LLM provider.
- * `role` is the provider protocol role; `content` is the text payload for that message.
+ * One pure short-term memory message for an Agent.
+ *
+ * AgentMemory is the reusable agent-facing cache surface. It must not carry tool/action requests,
+ * provider replay messages, turn transcripts, or pending state.
  */
-export interface AgentTextMemory {
+export interface AgentMemory {
     role: AgentChatRole.System | AgentChatRole.User | AgentChatRole.Assistant;
     content: string;
 }
-
-/**
- * One tool call requested by the model inside an assistant turn.
- * `arguments` is the parsed object form; the raw streamed JSON string lives only inside the protocol
- * adapter during accumulation and never reaches working memory.
- */
-export interface AgentToolCall {
-    id: string;
-    name: string;
-    arguments: Record<string, unknown>;
-}
-
-/**
- * One assembled mental input that also carries the model's tool requests for a turn.
- * It is the assistant-role member of `AgentMemory`; `content` keeps the visible text so the text-only
- * protocol adapters can project it unchanged. `reasoning` carries provider thinking text that some models
- * (e.g. DeepSeek thinking mode) require replayed alongside the tool calls on the next request.
- */
-export interface AgentToolCallMemory {
-    role: AgentChatRole.Assistant;
-    content: string;
-    toolCalls: AgentToolCall[];
-    reasoning?: string;
-}
-
-/**
- * One tool result fed back to the model after a tool runs.
- * `content` is the model-visible rendering; `isError` marks a failed call so the model can recover.
- */
-export interface AgentToolResultMemory {
-    role: AgentChatRole.Tool;
-    content: string;
-    toolCallId: string;
-    toolName: string;
-    isError: boolean;
-}
-
-/**
- * One message in working memory.
- *
- * Most messages are plain text (`AgentTextMemory`). An assistant turn that requested tools is an
- * `AgentToolCallMemory`; a fed-back tool result is an `AgentToolResultMemory`. Every member keeps a
- * string `content`, so the text-only protocol adapters can render any message without knowing about tools.
- */
-export type AgentMemory = AgentTextMemory | AgentToolCallMemory | AgentToolResultMemory;
 
 @Provide()
 export class Memory extends FAgentAtom {
@@ -143,8 +99,12 @@ export class Memory extends FAgentAtom {
                 status: turn.status,
                 goal: turn.understanding.goal,
                 user: turn.understanding.userText,
-                transcript: turn.transcript,
-                pending: turn.pending ? { kind: turn.pending.kind, data: turn.pending.data } : undefined,
+                summary: turn.summary ? {
+                    result: turn.summary.result,
+                    decisions: turn.summary.decisions,
+                    evidence: turn.summary.evidence,
+                    remaining: turn.summary.remaining,
+                } : undefined,
             })),
             completed: this.context.completed.map((summary) => ({
                 goal: summary.goal,

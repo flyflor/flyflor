@@ -5,7 +5,7 @@ export const cohereChatAdapter: ProtocolAdapter = {
     name: FModelProtocolName.CohereChat,
     body: (context: ProtocolBuildContext) => ({
         model: context.model,
-        messages: context.messages.map((message) => ({ role: message.role, content: message.content })),
+        messages: context.messages.filter((message) => message.role !== 'action').map((message) => ({ role: message.role, content: message.content })),
         stream: true,
         max_tokens: context.maxTokens,
     }),

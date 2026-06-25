@@ -48,12 +48,7 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
     }
 
     public override async onPipe(data: string) {
-        const pending = this.context.pending;
         await this.context.ingest({ content: data });
-        if (pending) {
-            await this.research({ type: CallosumSignalType.Research, chunk: data });
-            return;
-        }
         this.callosum.next(data);
     }
 
@@ -64,7 +59,6 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
             this.synapse.emit(SynapseSignalType.Reply, chunk);
         });
         this.synapse.emit(SynapseSignalType.Reply, null);
-        this.context.work({ role: AgentChatRole.Assistant, content: assistant });
         await this.context.settle({ user: signal.chunk, assistant, completed: true });
     }
 
@@ -73,8 +67,12 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
         const outcome = await this.investigation.run(signal, messages);
         if (outcome.paused) return;
         this.synapse.emit(SynapseSignalType.Reply, null);
-        this.context.work({ role: AgentChatRole.Assistant, content: outcome.answer });
-        await this.context.settle({ user: signal.chunk, assistant: outcome.answer, completed: true });
+        await this.context.settle({
+            user: signal.chunk,
+            assistant: outcome.answer,
+            completed: true,
+            evidence: outcome.evidence,
+        });
     }
 
     private async soul(signal: CallosumSignal): Promise<void> {
@@ -103,7 +101,6 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
         const assistant = `协议包已更新: ${written.join(', ') || '无'}${rejected.length ? `；已拒绝: ${rejected.join(', ')}` : ''}`;
         this.synapse.emit(SynapseSignalType.Reply, assistant);
         this.synapse.emit(SynapseSignalType.Reply, null);
-        this.context.work({ role: AgentChatRole.Assistant, content: assistant });
         await this.context.settle({ user: signal.chunk, assistant, completed: true });
     }
 

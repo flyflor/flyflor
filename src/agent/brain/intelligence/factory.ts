@@ -1,7 +1,6 @@
 import { type FModelConfiguration, FModelProtocolName } from '@/configuration';
 import { anthropicMessagesAdapter, awsBedrockConverseAdapter, cohereChatAdapter, googleGeminiGenerateContentAdapter, huggingFaceAdapter, lmStudioAdapter, ollamaAdapter, openAIChatCompletionsAdapter, openAIResponsesAdapter, vllmAdapter } from './protocols';
-import type { AgentMemory } from '@/agent/memory';
-import type { IntelligenceEvent, IntelligenceToolDefinition, LlmByteStreamReader, ProtocolAdapter, ProtocolBuildContext, ProtocolStreamState } from './types';
+import type { IntelligenceEvent, IntelligenceToolDefinition, LlmByteStreamReader, ProtocolAdapter, ProtocolBuildContext, ProtocolStreamState, ProviderMessage } from './types';
 
 /**
  * Protocol adapters are plain composition objects. The factory owns transport, adapters own wire shapes.
@@ -21,24 +20,23 @@ const PROTOCOLS = new Map<FModelProtocolName, ProtocolAdapter>([
 
 /**
  * Creates a fresh per-request streaming-accumulation state.
- * The two maps route interleaved provider `tool_calls[]` deltas to the right call across lines.
+ * The two maps route interleaved provider wire tool-call deltas to the right internal action request.
  */
 export const createProtocolStreamState = (): ProtocolStreamState => ({
     buffer: '',
     finished: false,
-    toolCallsByIndex: new Map(),
-    toolCallsById: new Map(),
-    nextToolIndex: 0,
+    actionRequestsByIndex: new Map(),
+    actionRequestsById: new Map(),
+    nextActionIndex: 0,
 });
 
 /**
  * Creates a cancellable structured event stream for one provider-facing LLM request.
- * Text turns yield `text_delta` events; tool turns also yield `toolcall_*` events. A terminal `done`
- * event is always emitted before the stream closes on success.
+ * Provider wire tool calls are normalized into action events before callers see the stream.
  */
 export const createIntelligenceTurnStream = (
     config: FModelConfiguration,
-    messages: AgentMemory[],
+    messages: ProviderMessage[],
     signal: AbortSignal,
     tools?: IntelligenceToolDefinition[],
 ): ReadableStream<IntelligenceEvent> => {
@@ -50,7 +48,7 @@ export const createIntelligenceTurnStream = (
     });
 };
 
-async function start(controller: ReadableStreamDefaultController<IntelligenceEvent>, config: FModelConfiguration, messages: AgentMemory[], signal: AbortSignal, tools?: IntelligenceToolDefinition[]): Promise<void> {
+async function start(controller: ReadableStreamDefaultController<IntelligenceEvent>, config: FModelConfiguration, messages: ProviderMessage[], signal: AbortSignal, tools?: IntelligenceToolDefinition[]): Promise<void> {
     try {
         await requestLlm(controller, config, messages, signal, tools);
     } catch (error) {
@@ -58,7 +56,7 @@ async function start(controller: ReadableStreamDefaultController<IntelligenceEve
     }
 }
 
-async function requestLlm(controller: ReadableStreamDefaultController<IntelligenceEvent>, config: FModelConfiguration, messages: AgentMemory[], signal: AbortSignal, tools?: IntelligenceToolDefinition[]): Promise<void> {
+async function requestLlm(controller: ReadableStreamDefaultController<IntelligenceEvent>, config: FModelConfiguration, messages: ProviderMessage[], signal: AbortSignal, tools?: IntelligenceToolDefinition[]): Promise<void> {
     const errors: Array<Record<string, unknown>> = [];
     for (const protocol of protocols(config)) {
         if (protocol.enabled === false) continue;

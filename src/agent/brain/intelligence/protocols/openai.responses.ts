@@ -16,7 +16,7 @@ export const openAIResponsesAdapter: ProtocolAdapter = {
     name: FModelProtocolName.OpenAIResponses,
     body: (context: ProtocolBuildContext) => ({
         model: context.model,
-        input: context.messages.map((message) => ({ role: message.role, content: message.content })),
+        input: context.messages.filter((message) => message.role !== 'action').map((message) => ({ role: message.role, content: message.content })),
         stream: true,
         max_output_tokens: context.maxTokens,
     }),

@@ -1,8 +1,9 @@
-import { AgentChatRole, type AgentMemory, type AgentToolCall } from '@/agent/memory';
-import type { IntelligenceEvent, ProtocolAdapter, ProtocolBuildContext, ProtocolStreamState, ProviderErrorShape, StreamingToolCall } from '../types';
+import { AgentChatRole } from '@/agent/memory';
+import type { ActionRequest } from '@/plugins/tools';
+import type { IntelligenceEvent, ProtocolAdapter, ProtocolBuildContext, ProtocolStreamState, ProviderErrorShape, ProviderMessage, StreamingActionRequest } from '../types';
 import { FModelProtocolName } from '@/configuration';
 
-interface ToolCallDelta {
+interface WireActionDelta {
     index?: number;
     id?: string;
     function?: { name?: string; arguments?: string };
@@ -14,7 +15,7 @@ interface ChatCompletionChunk {
         delta?: {
             content?: string;
             reasoning_content?: string;
-            tool_calls?: ToolCallDelta[];
+            tool_calls?: WireActionDelta[];
         };
         finish_reason?: string | null;
     }>;
@@ -34,8 +35,8 @@ export const openAIChatCompletionsAdapter: ProtocolAdapter = {
                 type: 'function',
                 function: { name: tool.name, description: tool.description, parameters: tool.parameters },
             }));
-        } else if (hasToolHistory(context.messages)) {
-            // OpenAI-compatible proxies require a tools param once the conversation carries tool calls/results.
+        } else if (hasActionHistory(context.messages)) {
+            // OpenAI-compatible proxies require a tools param once the local provider replay carries actions.
             body.tools = [];
         }
         return body;
@@ -44,8 +45,8 @@ export const openAIChatCompletionsAdapter: ProtocolAdapter = {
         const data = sseData(line);
         if (data === undefined) return false;
         if (data === '[DONE]') {
-            finalizeToolCalls(controller, state);
-            controller.enqueue({ type: 'done', stopReason: state.toolCallsByIndex.size > 0 ? 'toolUse' : 'stop' });
+            finalizeActionRequests(controller, state);
+            controller.enqueue({ type: 'done', stopReason: state.actionRequestsByIndex.size > 0 ? 'toolUse' : 'stop' });
             return true;
         }
         const parsed = JSON.parse(data) as ChatCompletionChunk;
@@ -55,12 +56,12 @@ export const openAIChatCompletionsAdapter: ProtocolAdapter = {
         if (typeof delta === 'string' && delta.length > 0) controller.enqueue({ type: 'text_delta', text: delta });
         const reasoning = choice?.delta?.reasoning_content;
         if (typeof reasoning === 'string' && reasoning.length > 0) controller.enqueue({ type: 'reasoning_delta', text: reasoning });
-        for (const toolCallDelta of choice?.delta?.tool_calls ?? []) {
-            accumulateToolCall(controller, state, toolCallDelta);
+        for (const actionDelta of choice?.delta?.tool_calls ?? []) {
+            accumulateActionRequest(controller, state, actionDelta);
         }
         const finishReason = choice?.finish_reason;
         if (typeof finishReason === 'string' && finishReason.length > 0) {
-            finalizeToolCalls(controller, state);
+            finalizeActionRequests(controller, state);
             controller.enqueue({ type: 'done', stopReason: finishReason === 'tool_calls' || finishReason === 'function_call' ? 'toolUse' : finishReason === 'length' ? 'length' : 'stop' });
             return true;
         }
@@ -69,59 +70,59 @@ export const openAIChatCompletionsAdapter: ProtocolAdapter = {
 };
 
 /**
- * Routes one streamed `tool_calls[]` delta to its accumulating call, creating it on first sight.
+ * Routes one streamed OpenAI `tool_calls[]` delta to its internal action request, creating it on first sight.
  * Resolution is by provider `index` first, then `id`, because compatible providers disagree on which
  * they send on continuation deltas. Arguments are appended raw; the authoritative parse happens at finalize.
  */
-function accumulateToolCall(controller: ReadableStreamDefaultController<IntelligenceEvent>, state: ProtocolStreamState, delta: ToolCallDelta): void {
-    const call = resolveToolCall(state, delta);
-    if (!call.started) {
-        call.started = true;
-        controller.enqueue({ type: 'toolcall_start', index: call.index, id: call.id || undefined, name: call.name || undefined });
+function accumulateActionRequest(controller: ReadableStreamDefaultController<IntelligenceEvent>, state: ProtocolStreamState, delta: WireActionDelta): void {
+    const request = resolveActionRequest(state, delta);
+    if (!request.started) {
+        request.started = true;
+        controller.enqueue({ type: 'action_start', index: request.index, id: request.id || undefined, name: request.name || undefined });
     }
-    if (delta.id && !call.id) {
-        call.id = delta.id;
-        state.toolCallsById.set(delta.id, call);
+    if (delta.id && !request.id) {
+        request.id = delta.id;
+        state.actionRequestsById.set(delta.id, request);
     }
-    if (delta.function?.name && !call.name) call.name = delta.function.name;
+    if (delta.function?.name && !request.name) request.name = delta.function.name;
     const fragment = delta.function?.arguments;
     if (typeof fragment === 'string' && fragment.length > 0) {
-        call.partialArgs += fragment;
-        controller.enqueue({ type: 'toolcall_delta', index: call.index, delta: fragment });
+        request.partialArgs += fragment;
+        controller.enqueue({ type: 'action_delta', index: request.index, delta: fragment });
     }
 }
 
-function resolveToolCall(state: ProtocolStreamState, delta: ToolCallDelta): StreamingToolCall {
+function resolveActionRequest(state: ProtocolStreamState, delta: WireActionDelta): StreamingActionRequest {
     const providerIndex = typeof delta.index === 'number' ? delta.index : undefined;
-    let call = providerIndex !== undefined ? state.toolCallsByIndex.get(providerIndex) : undefined;
-    if (!call && delta.id) call = state.toolCallsById.get(delta.id);
-    if (call) return call;
-    const index = providerIndex ?? state.nextToolIndex;
-    call = { index, id: delta.id ?? '', name: delta.function?.name ?? '', partialArgs: '', started: false };
-    state.toolCallsByIndex.set(index, call);
-    if (delta.id) state.toolCallsById.set(delta.id, call);
-    state.nextToolIndex = Math.max(state.nextToolIndex, index + 1);
-    return call;
+    let request = providerIndex !== undefined ? state.actionRequestsByIndex.get(providerIndex) : undefined;
+    if (!request && delta.id) request = state.actionRequestsById.get(delta.id);
+    if (request) return request;
+    const index = providerIndex ?? state.nextActionIndex;
+    request = { index, id: delta.id ?? '', name: delta.function?.name ?? '', partialArgs: '', started: false };
+    state.actionRequestsByIndex.set(index, request);
+    if (delta.id) state.actionRequestsById.set(delta.id, request);
+    state.nextActionIndex = Math.max(state.nextActionIndex, index + 1);
+    return request;
 }
 
 /**
- * Emits a `toolcall_end` for every accumulated call with its arguments parsed into an object.
+ * Emits an `action_end` for every accumulated action request with its arguments parsed into an object.
  * Idempotent: a finished call is removed from the index so a later `[DONE]` does not re-emit it.
  */
-function finalizeToolCalls(controller: ReadableStreamDefaultController<IntelligenceEvent>, state: ProtocolStreamState): void {
-    const calls = [...state.toolCallsByIndex.values()].sort((left, right) => left.index - right.index);
-    for (const call of calls) {
-        const toolCall: AgentToolCall = { id: call.id, name: call.name, arguments: parseToolArguments(call.partialArgs) };
-        controller.enqueue({ type: 'toolcall_end', index: call.index, toolCall });
+function finalizeActionRequests(controller: ReadableStreamDefaultController<IntelligenceEvent>, state: ProtocolStreamState): void {
+    const requests = [...state.actionRequestsByIndex.values()].sort((left, right) => left.index - right.index);
+    for (const request of requests) {
+        const actionRequest: ActionRequest = { id: request.id, name: request.name, arguments: parseActionArguments(request.partialArgs) };
+        controller.enqueue({ type: 'action_end', index: request.index, request: actionRequest });
     }
 }
 
 /**
- * Best-effort parse of a streamed tool-argument buffer.
+ * Best-effort parse of a streamed action-argument buffer.
  * The model usually emits valid JSON, but an early stop can truncate it; an empty object is a safe fallback
  * so the loop can surface a tool error instead of throwing inside the stream.
  */
-function parseToolArguments(partialArgs: string): Record<string, unknown> {
+function parseActionArguments(partialArgs: string): Record<string, unknown> {
     const trimmed = partialArgs.trim();
     if (trimmed.length === 0) return {};
     try {
@@ -133,26 +134,25 @@ function parseToolArguments(partialArgs: string): Record<string, unknown> {
 }
 
 /**
- * Projects working memory to OpenAI chat messages, mapping tool calls and tool results back to the wire.
- * Assistant tool calls become `tool_calls[]` with stringified arguments; tool results become `role:"tool"`
- * messages keyed by `tool_call_id`.
+ * Projects provider-local messages to OpenAI chat messages. AgentMemory stays pure; action request/result
+ * replay exists only in the research call stack and is mapped back to OpenAI wire fields here.
  */
-function chatMessages(messages: AgentMemory[]): Array<Record<string, unknown>> {
+function chatMessages(messages: ProviderMessage[]): Array<Record<string, unknown>> {
     return messages.map((message) => {
-        if (message.role === AgentChatRole.Tool) {
-            return { role: 'tool', tool_call_id: message.toolCallId, content: message.content };
+        if (message.role === 'action') {
+            return { role: 'tool', tool_call_id: message.actionRequestId, content: message.content };
         }
-        if (message.role === AgentChatRole.Assistant && 'toolCalls' in message) {
+        if (message.role === AgentChatRole.Assistant && 'actionRequests' in message) {
             return {
                 role: 'assistant',
                 // DeepSeek rejects replayed assistant tool-call messages when `content` is null.
                 content: message.content,
                 // DeepSeek thinking mode rejects a replayed tool-call turn unless its reasoning is passed back.
                 ...(message.reasoning ? { reasoning_content: message.reasoning } : {}),
-                tool_calls: message.toolCalls.map((toolCall) => ({
-                    id: toolCall.id,
+                tool_calls: message.actionRequests.map((request) => ({
+                    id: request.id,
                     type: 'function',
-                    function: { name: toolCall.name, arguments: JSON.stringify(toolCall.arguments) },
+                    function: { name: request.name, arguments: JSON.stringify(request.arguments) },
                 })),
             };
         }
@@ -160,8 +160,8 @@ function chatMessages(messages: AgentMemory[]): Array<Record<string, unknown>> {
     });
 }
 
-function hasToolHistory(messages: AgentMemory[]): boolean {
-    return messages.some((message) => message.role === AgentChatRole.Tool || (message.role === AgentChatRole.Assistant && 'toolCalls' in message));
+function hasActionHistory(messages: ProviderMessage[]): boolean {
+    return messages.some((message) => message.role === 'action' || (message.role === AgentChatRole.Assistant && 'actionRequests' in message));
 }
 
 function sseData(line: string): string | undefined {

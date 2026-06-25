@@ -1,5 +1,6 @@
-import type { AgentMemory, AgentToolCall } from '@/agent/memory';
+import { AgentChatRole, type AgentMemory } from '@/agent/memory';
 import { type FModelConfiguration, type FModelProtocolConfiguration, FModelProtocolName } from '@/configuration';
+import type { ActionRequest } from '@/plugins/tools';
 
 export interface ProviderErrorShape {
     message?: string;
@@ -17,33 +18,49 @@ export interface IntelligenceToolDefinition {
     parameters: Record<string, unknown>;
 }
 
+export interface ProviderActionRequestMessage {
+    role: AgentChatRole.Assistant;
+    content: string;
+    actionRequests: ActionRequest[];
+    reasoning?: string;
+}
+
+export interface ProviderActionResultMessage {
+    role: 'action';
+    content: string;
+    actionRequestId: string;
+    actionName: string;
+    isError: boolean;
+}
+
+export type ProviderMessage = AgentMemory | ProviderActionRequestMessage | ProviderActionResultMessage;
+
 /**
  * Reason a provider turn ended.
- * `stop`/`length` finish a plain text answer; `toolUse` means the model emitted tool calls and expects results.
+ * `stop`/`length` finish a plain text answer; `toolUse` means the model emitted action requests and expects results.
  */
 export type IntelligenceStopReason = 'stop' | 'length' | 'toolUse';
 
 /**
  * One structured event from a provider turn.
  *
- * Text turns emit only `text_delta` then `done`. Tool turns also emit `toolcall_start`/`toolcall_delta`
- * per streamed function call and `toolcall_end` with the finalized call. This replaces the old text-only
- * `ReadableStream<string>` contract so the research loop can read tool calls natively.
+ * Text turns emit only `text_delta` then `done`. Provider wire tool calls are normalized into action
+ * events so only protocol adapters know wire names such as OpenAI `tool_calls`.
  */
 export type IntelligenceEvent =
     | { type: 'text_delta'; text: string }
     | { type: 'reasoning_delta'; text: string }
-    | { type: 'toolcall_start'; index: number; id?: string; name?: string }
-    | { type: 'toolcall_delta'; index: number; delta: string }
-    | { type: 'toolcall_end'; index: number; toolCall: AgentToolCall }
+    | { type: 'action_start'; index: number; id?: string; name?: string }
+    | { type: 'action_delta'; index: number; delta: string }
+    | { type: 'action_end'; index: number; request: ActionRequest }
     | { type: 'done'; stopReason: IntelligenceStopReason };
 
 /**
- * One streaming tool call being assembled across provider deltas.
+ * One streaming action request being assembled across provider deltas.
  * `partialArgs` is the raw concatenated JSON-arguments buffer; it is re-parsed each delta and dropped at
  * finalize so only the parsed `arguments` object survives.
  */
-export interface StreamingToolCall {
+export interface StreamingActionRequest {
     index: number;
     id: string;
     name: string;
@@ -54,16 +71,16 @@ export interface StreamingToolCall {
 /**
  * Per-request mutable state threaded through `parseLine`.
  *
- * Text adapters only touch `finished`. Tool-capable adapters use the two maps to route interleaved
- * `tool_calls[]` deltas to the right call: resolve by provider `index` first, fall back to `id`. The
+ * Text adapters only touch `finished`. Action-capable adapters use the two maps to route interleaved
+ * provider wire tool-call deltas to the right request: resolve by provider `index` first, fall back to `id`. The
  * factory creates one `ProtocolStreamState` per request, so accumulation survives across lines.
  */
 export interface ProtocolStreamState {
     buffer: string;
     finished: boolean;
-    toolCallsByIndex: Map<number, StreamingToolCall>;
-    toolCallsById: Map<string, StreamingToolCall>;
-    nextToolIndex: number;
+    actionRequestsByIndex: Map<number, StreamingActionRequest>;
+    actionRequestsById: Map<string, StreamingActionRequest>;
+    nextActionIndex: number;
 }
 
 export interface ProtocolAdapter {
@@ -74,7 +91,7 @@ export interface ProtocolAdapter {
 
 export interface ProtocolBuildContext {
     config: FModelConfiguration;
-    messages: AgentMemory[];
+    messages: ProviderMessage[];
     protocol: FModelProtocolConfiguration;
     adapter: ProtocolAdapter;
     model: string;

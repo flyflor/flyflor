@@ -1,6 +1,6 @@
 import { FModelProtocolName } from '@/configuration';
-import type { ProtocolAdapter, ProtocolBuildContext } from '../types';
-import { AgentChatRole, type AgentMemory } from '@/agent/memory';
+import type { ProtocolAdapter, ProtocolBuildContext, ProviderMessage } from '../types';
+import { AgentChatRole } from '@/agent/memory';
 
 export const googleGeminiGenerateContentAdapter: ProtocolAdapter = {
     name: FModelProtocolName.GoogleGeminiGenerateContent,
@@ -29,13 +29,14 @@ export const googleGeminiGenerateContentAdapter: ProtocolAdapter = {
     },
 };
 
-function geminiRequest(messages: AgentMemory[]): {
+function geminiRequest(messages: ProviderMessage[]): {
     contents: Array<{ role: string; parts: Array<{ text: string }> }>;
     systemInstruction?: { parts: Array<{ text: string }> };
 } {
     const system: string[] = [];
     const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
     for (const message of messages) {
+        if (message.role === 'action') continue;
         if (message.role === AgentChatRole.System) {
             system.push(message.content);
             continue;

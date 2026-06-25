@@ -19,5 +19,5 @@ export interface InvestigationOutcome {
     steps: number;
     completed: boolean;
     paused: boolean;
-    pause?: unknown;
+    evidence: string[];
 }

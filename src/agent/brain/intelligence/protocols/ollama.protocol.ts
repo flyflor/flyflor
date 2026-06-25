@@ -5,7 +5,7 @@ export const ollamaAdapter: ProtocolAdapter = {
     name: FModelProtocolName.Ollama,
     body: (context: ProtocolBuildContext) => ({
         model: context.model,
-        messages: context.messages,
+        messages: context.messages.filter((message) => message.role !== 'action').map((message) => ({ role: message.role, content: message.content })),
         stream: true,
         options: { num_predict: context.maxTokens },
     }),

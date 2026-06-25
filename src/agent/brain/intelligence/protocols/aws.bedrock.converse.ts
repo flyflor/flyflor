@@ -1,6 +1,6 @@
 import { FModelProtocolName } from '@/configuration';
-import type { ProtocolAdapter, ProtocolBuildContext } from '../types';
-import { AgentChatRole, type AgentMemory } from '@/agent/memory';
+import type { ProtocolAdapter, ProtocolBuildContext, ProviderMessage } from '../types';
+import { AgentChatRole } from '@/agent/memory';
 
 export const awsBedrockConverseAdapter: ProtocolAdapter = {
     name: FModelProtocolName.AWSBedrockConverse,
@@ -27,13 +27,14 @@ export const awsBedrockConverseAdapter: ProtocolAdapter = {
     },
 };
 
-function bedrockMessages(messages: AgentMemory[]): {
+function bedrockMessages(messages: ProviderMessage[]): {
     system: string[];
     messages: Array<{ role: string; content: Array<{ text: string }> }>;
 } {
     const system: string[] = [];
     const conversation: Array<{ role: string; content: Array<{ text: string }> }> = [];
     for (const message of messages) {
+        if (message.role === 'action') continue;
         if (message.role === AgentChatRole.System) {
             system.push(message.content);
             continue;

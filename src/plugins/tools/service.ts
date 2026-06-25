@@ -1,10 +1,9 @@
-import type { AgentToolCall } from '@/agent/memory';
 import type { IntelligenceToolDefinition } from '@/agent/brain/intelligence/types';
 import { FService, Inject, Service, type FTool, type ToolError, type ToolMetadata } from '@/core';
 import { getMetadata } from '@/core/ioc/container';
 import { TOOL_METADATA_KEY } from '@/core/ioc/types';
 import { AskTool, ConfirmTool } from './interaction';
-import type { ToolRunResult } from './types';
+import type { ActionRequest, ToolRunResult } from './types';
 import { FilesystemTool } from './filesystem';
 
 @Service()
@@ -26,7 +25,7 @@ export class Tools extends FService {
         }));
     }
 
-    public async run(call: AgentToolCall): Promise<ToolRunResult> {
+    public async run(call: ActionRequest): Promise<ToolRunResult> {
         try {
             const record = this.records().find(({ metadata }) => metadata.name === call.name);
             if (!record) throw Error(`Unknown tool: ${call.name}`);

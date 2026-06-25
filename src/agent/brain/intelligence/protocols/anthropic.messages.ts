@@ -1,6 +1,6 @@
 import { FModelProtocolName } from '@/configuration';
-import type { ProtocolAdapter, ProtocolBuildContext, ProviderErrorShape } from '../types';
-import { AgentChatRole, type AgentMemory } from '@/agent/memory';
+import type { ProtocolAdapter, ProtocolBuildContext, ProviderErrorShape, ProviderMessage } from '../types';
+import { AgentChatRole } from '@/agent/memory';
 
 export const anthropicMessagesAdapter: ProtocolAdapter = {
     name: FModelProtocolName.AnthropicMessages,
@@ -41,10 +41,11 @@ export const anthropicMessagesAdapter: ProtocolAdapter = {
     },
 };
 
-function anthropicMessages(messages: AgentMemory[]): { system: string[]; messages: Array<{ role: string; content: string }> } {
+function anthropicMessages(messages: ProviderMessage[]): { system: string[]; messages: Array<{ role: string; content: string }> } {
     const system: string[] = [];
     const conversation: Array<{ role: string; content: string }> = [];
     for (const message of messages) {
+        if (message.role === 'action') continue;
         if (message.role === AgentChatRole.System) {
             system.push(message.content);
             continue;
