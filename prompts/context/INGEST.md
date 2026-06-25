@@ -9,7 +9,8 @@ Schema:
 Rules:
 
 - Do not include `userText`; runtime adds it.
-- Do not summarize or replace conversation history. Runtime stores the raw transcript separately.
+- Understand only the latest user turn. Do not invent prior history.
+- Runtime keeps turn understanding and summaries only; do not assume a raw transcript store.
 - Use `research` when code, files, external evidence, or clarification is needed.
 - Use `soul` only for durable agent/user/profile/capability memory changes.
 - Use `reply` only when a direct answer is enough.

@@ -9,10 +9,12 @@
 3. `AppModule` imports `PluginsModule`，并注入 `IPCService` 和 `Synapse`。
 4. `IPCService` 启动配置中的 socket endpoint。
 5. `FSocket` 接收 bytes，请 `PacketService` decode packets，并路由 valid packets。
-6. `Synapse` 持有 active agent pool，并把 user packets 发给 active `Agent`。
-7. `Agent` 拥有一个 turn：通过 `Memory` 组装 messages，流式输出 `Brain`，然后提交成功 turn。
-8. `Brain` 把 assembled memory messages 映射成 model signal output。
-9. `Intelligence` 通过 protocol adapters 打开配置中的 provider stream。
+6. `Synapse` 持有 active-agent routing，并广播 control signals，但不持久化 turn state。
+7. `Agent` 是由 `Synapse` 选中的可复用 person-like runtime object。
+8. `Brain` 编排一次用户输入，路由 reply/research/soul，并在完成时 settle turn。
+9. `Memory` 用协议包 sections 和 context summaries 组装纯净的 agent memory 输入。
+10. `Investigation` 只为 research turn 运行本地 action loop。
+11. `Intelligence` 通过 protocol adapters 打开配置中的 provider stream。
 
 ## IOC
 
@@ -97,14 +99,19 @@ Decorators 位于 `src/core`。decorator 表达 intent；base class 表达 objec
 
 `Synapse` 解析 active configured profile，并通过 container 获取 `Agent`。
 
-`Agent.next(text)` 向 `Memory.messages(text)` 请求：
+`Agent.next(text)` 把用户输入转发给 `Brain`。
 
-- assembled provider message list；或
-- 当 memory analysis 已处理该 turn 时的 direct reply。
+`Brain` 先让 `Context` ingest 当前 turn，再路由工作。对于 research turn，`Investigation` 执行本地 actions，并在需要澄清或批准时发出 Synapse signals。
 
-对于模型 turn，`Agent` 把 `Brain.transform(input)` 的 delta signals 通过自己的 subject 流出。只有成功完成后才提交 user/assistant context。
+`Memory` 拥有 prompt-section assembly 和纯净 short-term memory projection。`Context` 拥有 turn understanding 和 summaries。`Intelligence` 拥有 provider communication 和 cancellation。
 
-`Memory` 拥有 working context 和 prompt-section assembly。`Brain` 拥有 inference streaming。`Intelligence` 拥有 provider communication 和 cancellation。
+### 无 Session Runtime
+
+Flyflor 不保留 investigation session、pending provider replay 或 turn-resume store。
+
+- action replay 只存在于单次 investigation run；
+- ask/confirm 会触发 Synapse control signals；
+- resume 是 research loop 之上的 control signal，不是持久 runtime session。
 
 ## Neural And IPC
 

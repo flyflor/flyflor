@@ -49,11 +49,13 @@ Legacy dotted names may remain until a focused migration. New code should not ad
 
 ## Object Ownership
 
-- `Agent` owns a turn and streams output through its subject.
-- `Memory` owns prompt assembly and working conversation context.
-- `Brain` owns one inference transform.
+- `Agent` is the reusable person-like runtime object selected by `Synapse`.
+- `Memory` owns prompt assembly and pure short-term memory projection.
+- `Context` owns turn understanding and turn summaries only.
+- `Brain` owns one input orchestration flow.
+- `Investigation` owns one local action loop.
 - `Intelligence` owns provider communication and cancellation.
-- `Synapse` owns active-agent routing.
+- `Synapse` owns active-agent routing and control signaling, not state persistence.
 - `FSocket` owns Bun socket callbacks.
 - `PacketService` owns length-prefixed JSON packet encoding and decoding.
 - `FileService` owns path-bound file state and persistence.

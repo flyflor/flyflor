@@ -9,10 +9,12 @@ This document describes the current implementation. Shared code-shape rules live
 3. `AppModule` imports `PluginsModule` and injects `IPCService` plus `Synapse`.
 4. `IPCService` starts the configured socket endpoint.
 5. `FSocket` receives bytes, asks `PacketService` to decode packets, and routes valid packets.
-6. `Synapse` owns the active agent pool and sends user packets to the active `Agent`.
-7. `Agent` owns one turn: assemble messages through `Memory`, stream `Brain` output, then commit successful turns.
-8. `Brain` maps assembled memory messages into model signal output.
-9. `Intelligence` opens the configured provider stream through protocol adapters.
+6. `Synapse` owns active-agent routing and broadcasts control signals without persisting turn state.
+7. `Agent` is the reusable person-like runtime object selected by `Synapse`.
+8. `Brain` coordinates one user input, routes reply/research/soul work, and settles completed turns.
+9. `Memory` assembles pure agent memory input from protocol-package sections plus context summaries.
+10. `Investigation` runs a local action loop for research turns only.
+11. `Intelligence` opens the configured provider stream through protocol adapters.
 
 ## IOC
 
@@ -97,14 +99,19 @@ Decorators live under `src/core`. The decorator expresses intent; the base class
 
 `Synapse` resolves the active configured profile and asks the container for an `Agent`.
 
-`Agent.next(text)` asks `Memory.messages(text)` for either:
+`Agent.next(text)` forwards the user input to `Brain`.
 
-- an assembled provider message list; or
-- a direct reply when memory analysis handled the turn.
+`Brain` asks `Context` to ingest the turn, then routes the work. For research turns, `Investigation` executes local actions and emits Synapse signals when clarification or approval is needed.
 
-For model turns, `Agent` streams `Brain.transform(input)` delta signals through its subject. It commits user/assistant context only after successful completion.
+`Memory` owns prompt-section assembly and pure short-term memory projection. `Context` owns turn understanding and summaries. `Intelligence` owns provider communication and cancellation.
 
-`Memory` owns working context and prompt-section assembly. `Brain` owns inference streaming. `Intelligence` owns provider communication and cancellation.
+### No Session Runtime
+
+Flyflor does not keep an investigation session, pending provider replay, or turn-resume store.
+
+- action replay is local to one investigation run;
+- ask/confirm cause Synapse control signals;
+- resume is a control signal handled above the research loop, not a persisted runtime session.
 
 ## Neural And IPC
 

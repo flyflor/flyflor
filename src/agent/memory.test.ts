@@ -1,15 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import { useContainer } from '@/core';
-import { Memory } from './memory';
-import { AgentChatRole } from './memory';
+import { AgentChatRole, Memory, type AgentMemory } from './memory';
 import { Context, ContextIntent } from '@/neural/context';
 
 describe('Memory', () => {
-    test('buildMessage renders current understanding and completed work instead of raw infinite history', async () => {
+    test('keeps AgentMemory pure and renders summaries instead of transcripts or action replay', async () => {
         const memory = await useContainer().getAsync(Memory, { name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 });
         const context = await useContainer().getAsync(Context);
         context.current = undefined;
-        context.working = [];
         context.turns = [];
         context.completed = [];
         context.load({
@@ -31,12 +29,13 @@ describe('Memory', () => {
             remaining: ['补集成验证'],
             createdAt: Date.now(),
         });
-        context.work({ role: AgentChatRole.Assistant, content: '读取了 context service' });
 
         const messages = memory.buildMessage();
         const system = messages[0]?.content ?? '';
         const user = messages[1]?.content ?? '';
+        const role: AgentMemory['role'] = AgentChatRole.User;
 
+        expect(role).toBe(AgentChatRole.User);
         expect(system).toContain('<agent_memory>');
         expect(system).toContain('实现 synapse.context + agent.memory');
         expect(system).toContain('socket 背压写队列已完成');
@@ -44,7 +43,12 @@ describe('Memory', () => {
         expect(system).toContain('socket.test.ts 通过');
         expect(user).toContain('"goal":"实现 synapse.context + agent.memory"');
         expect(user).toContain('"user":"实现计划"');
-        expect(user).toContain('读取了 context service');
         expect(user).toContain('补集成验证');
+        expect(user).not.toContain('toolCalls');
+        expect(user).not.toContain('tool_call_id');
+        expect(user).not.toContain('toolName');
+        expect(user).not.toContain('"role":"tool"');
+        expect(user).not.toContain('pending');
+        expect(user).not.toContain('transcript');
     });
 });

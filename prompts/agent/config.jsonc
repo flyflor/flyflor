@@ -52,7 +52,7 @@
                     "key": "config",
                     "tag": "config",
                     "file": "config.jsonc",
-                    "note": "package metadata and write policy"
+                    "note": "package policy"
                 },
                 {
                     // EN: Include immutable package rules and minimal durable-memory unit definitions.
@@ -60,7 +60,7 @@
                     "key": "AGENTS",
                     "tag": "rules",
                     "file": "AGENTS.md",
-                    "note": "package rules and minimum durable-memory units"
+                    "note": "package rules"
                 },
                 {
                     // EN: Include editable agent identity, values, style, boundaries, and mission.
@@ -68,7 +68,7 @@
                     "key": "SOUL",
                     "tag": "editable",
                     "file": "SOUL.md",
-                    "note": "agent identity, values, style, boundaries, and mission"
+                    "note": "agent identity"
                 },
                 {
                     // EN: Include editable user profile, relationship, preferences, strengths, goals, and expectations.
@@ -76,7 +76,7 @@
                     "key": "USER",
                     "tag": "editable",
                     "file": "USER.md",
-                    "note": "user profile, relationship, preferences, strengths, goals, and expectations"
+                    "note": "user profile"
                 },
                 {
                     // EN: Include editable long-term tools, integrations, infrastructure, and reusable workflows.
@@ -84,7 +84,7 @@
                     "key": "EXTENSION",
                     "tag": "editable",
                     "file": "EXTENSION.md",
-                    "note": "long-term tools, integrations, infrastructure, and reusable workflows"
+                    "note": "capabilities"
                 }
             ]
         }

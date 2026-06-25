@@ -9,7 +9,8 @@ Schema:
 规则：
 
 - 不要包含 `userText`，运行时代码会补。
-- 不要总结或替代对话历史。运行时代码会单独保存原始 transcript。
+- 只理解当前这条用户 turn，不要虚构之前的历史。
+- 运行时代码只保留 turn understanding 和 summaries；不要假设存在原始 transcript 存储。
 - 需要代码、文件、外部证据或澄清时使用 `research`。
 - 只有长期 agent/user/profile/capability 记忆变更才使用 `soul`。
 - 可以直接回答时使用 `reply`。

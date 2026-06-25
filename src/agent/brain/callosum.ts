@@ -12,6 +12,8 @@ export enum CallosumSignalType {
     Research = 'research',
     ResearchSummary = 'research_summary',
     Clarification = 'clarification',
+    Pause = 'pause',
+    Resume = 'resume',
     ActionStart = 'action_start',
     ActionResult = 'action_result',
     LlmTurn = 'llm_turn',

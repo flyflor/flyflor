@@ -29,7 +29,7 @@ Rules:
 - Do not answer the user.
 - Do not write files.
 - If unsure, choose `research`.
-- If the latest user message answers a previous clarification question, choose `research` so the pending research task can resume.
+- If the latest user message answers a previous clarification question, treat it as a new turn and choose `research` when more investigation is still needed.
 
 Examples:
 

@@ -35,8 +35,11 @@ bun run build:binary
 5. `FSocket` receives bytes and delegates packet decoding to `PacketService`.
 6. `PacketService` encodes and decodes 8-byte big-endian length-prefixed JSON packets.
 7. `Synapse` creates the configured active `Agent` and routes decoded packets into it.
-8. `Agent` asks `Memory` for prompt/context messages, then streams output from `Brain`.
-9. `Intelligence` opens the configured provider stream through protocol adapters.
+8. `Brain` coordinates one user input, asks `Context` to ingest the turn, and routes reply/research/soul work.
+9. `Memory` assembles pure agent memory input from protocol-package sections plus turn summaries.
+10. `Investigation` runs a local action loop for research turns only.
+11. `Synapse` broadcasts reply, action, ask/confirm, and pause/resume control signals.
+12. `Intelligence` opens the configured provider stream through protocol adapters.
 
 ## Source Layout
 

@@ -42,6 +42,7 @@ export class Investigation extends FAgentAtom {
                 evidence.push(this.evidence(request, actionResult));
                 if (actionResult.ok && this.pause(actionResult.data)) {
                     this.synapse.emit(actionResult.data.kind === 'ask' ? SynapseSignalType.Ask : SynapseSignalType.Confirm, actionResult.data);
+                    this.synapse.emit(SynapseSignalType.Pause, { signal, action: request.name, data: actionResult.data });
                     return { answer: '', steps: step, completed: false, paused: true, evidence };
                 }
             }
@@ -69,6 +70,14 @@ export class Investigation extends FAgentAtom {
 
     private evidence(request: ActionRequest, result: Awaited<ReturnType<Tools['run']>>): string {
         if (result.ok) {
+            if (request.name === 'filesystem') {
+                const data = result.data as { action?: unknown; path?: unknown };
+                return `${request.name} ${String(data.action ?? 'unknown')} ${String(data.path ?? '')} ok`.trim();
+            }
+            if (request.name === 'ask' || request.name === 'confirm') {
+                const data = result.data as { question?: unknown };
+                return `${request.name} requested: ${String(data.question ?? '')}`.trim();
+            }
             return `${request.name} ok: ${JSON.stringify(result.data)}`;
         }
         return `${request.name} error: ${result.error?.message ?? 'unknown error'}`;

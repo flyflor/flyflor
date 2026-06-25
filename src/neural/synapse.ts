@@ -15,6 +15,8 @@ export enum SynapseSignalType {
     Event = 'event',
     Ask = 'ask',
     Confirm = 'confirm',
+    Pause = 'pause',
+    Resume = 'resume',
 }
 
 export interface SynapseSignal extends CortexSignal {
@@ -44,9 +46,8 @@ export class Synapse extends FCortex<SynapseSignal> {
     }
 
     /**
-     * Spawns the master agent from the configured `activeAgent` profile and logs the runtime as
-     * ready. The master agent's `@Init` runs the constitution-layer soul check before this method
-     * returns, so a missing soul file is fatal at boot.
+     * Spawns the active agent profile and wires Synapse as the broadcast-only control bus.
+     * Pause/resume are signals only; Synapse does not persist turn or research state.
      */
     @Init()
     public async init() {
@@ -70,6 +71,8 @@ export class Synapse extends FCortex<SynapseSignal> {
         this.on(SynapseSignalType.Event, (signal) => this.socket.write({ action: 'data', data: signal.data }));
         this.on(SynapseSignalType.Ask, (signal) => this.socket.write({ action: 'ask', data: signal.data }));
         this.on(SynapseSignalType.Confirm, (signal) => this.socket.write({ action: 'confirm', data: signal.data }));
+        this.on(SynapseSignalType.Pause, (signal) => this.socket.write({ action: 'pause', data: signal.data }));
+        this.on(SynapseSignalType.Resume, (signal) => this.socket.write({ action: 'resume', data: signal.data }));
         return true;
     }
 

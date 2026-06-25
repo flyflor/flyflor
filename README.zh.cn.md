@@ -35,8 +35,11 @@ bun run build:binary
 5. `FSocket` 接收 bytes，并把 packet decoding 交给 `PacketService`。
 6. `PacketService` 编解码 8-byte big-endian length-prefixed JSON packets。
 7. `Synapse` 创建配置中的 active `Agent`，并把 decoded packets 路由给它。
-8. `Agent` 向 `Memory` 请求 prompt/context messages，再从 `Brain` 流式输出。
-9. `Intelligence` 通过 protocol adapters 打开配置中的 provider stream。
+8. `Brain` 编排一次用户输入，先让 `Context` ingest 当前 turn，再路由 reply/research/soul。
+9. `Memory` 用协议包 sections 和 turn summaries 组装纯净的 agent memory 输入。
+10. `Investigation` 只在 research turn 中运行本地 action loop。
+11. `Synapse` 广播 reply、action、ask/confirm 与 pause/resume control signals。
+12. `Intelligence` 通过 protocol adapters 打开配置中的 provider stream。
 
 ## 源码布局
 

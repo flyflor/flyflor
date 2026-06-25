@@ -49,11 +49,13 @@ legacy dotted names 可以等专门迁移再处理。新代码不应在 folder �
 
 ## Object Ownership
 
-- `Agent` 拥有 turn，并通过自己的 subject 流式输出。
-- `Memory` 拥有 prompt assembly 和 working conversation context。
-- `Brain` 拥有一个 inference transform。
+- `Agent` 是由 `Synapse` 选中的可复用 person-like runtime object。
+- `Memory` 拥有 prompt assembly 和纯净 short-term memory projection。
+- `Context` 只拥有 turn understanding 和 turn summaries。
+- `Brain` 拥有一次输入的 orchestration flow。
+- `Investigation` 拥有一次本地 action loop。
 - `Intelligence` 拥有 provider communication 和 cancellation。
-- `Synapse` 拥有 active-agent routing。
+- `Synapse` 拥有 active-agent routing 和 control signaling，不拥有 state persistence。
 - `FSocket` 拥有 Bun socket callbacks。
 - `PacketService` 拥有 length-prefixed JSON packet encoding 和 decoding。
 - `FileService` 拥有 path-bound file state 和 persistence。
