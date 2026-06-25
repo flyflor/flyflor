@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { AgentChatRole, type AgentMemory } from '@/agent/memory';
+import { AgentChatRole, type AgentMemory } from '@/agent/types';
 import { createProtocolStreamState } from '../factory';
 import type { IntelligenceEvent, ProviderMessage } from '../types';
 import { openAIChatCompletionsAdapter } from './openai.chat.completions';

@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "description": "Tool definitions exposed to the model.",
+  "prompt": {
+    "sections": ["ask", "confirm", "filesystem", "execute"]
+  },
+  "tools": [
+    {
+      "key": "ask",
+      "name": "ask",
+      "file": "ask.md",
+      "risk": "interaction",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "question": { "type": "string" },
+          "options": { "type": "array" }
+        },
+        "required": ["question", "options"]
+      }
+    },
+    {
+      "key": "confirm",
+      "name": "confirm",
+      "file": "confirm.md",
+      "risk": "interaction",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "question": { "type": "string" },
+          "recommended": { "type": "boolean" }
+        },
+        "required": ["question", "recommended"]
+      }
+    },
+    {
+      "key": "filesystem",
+      "name": "filesystem",
+      "file": "filesystem.md",
+      "risk": "write",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": { "type": "string", "enum": ["list", "read", "write", "edit"] },
+          "cwd": { "type": "string" },
+          "path": { "type": "string" },
+          "depth": { "type": "number" },
+          "offsetLines": { "type": "number" },
+          "limitLines": { "type": "number" },
+          "limitBytes": { "type": "number" },
+          "content": { "type": "string" },
+          "oldText": { "type": "string" },
+          "newText": { "type": "string" }
+        },
+        "required": ["action", "cwd", "path"]
+      }
+    },
+    {
+      "key": "execute",
+      "name": "execute",
+      "file": "execute.md",
+      "risk": "external",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "cwd": { "type": "string" },
+          "command": { "type": "string" },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": ["string", "number", "boolean"]
+            }
+          },
+          "timeoutMs": { "type": "number" }
+        },
+        "required": ["cwd", "command"]
+      }
+    }
+  ]
+}

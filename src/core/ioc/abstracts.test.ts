@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { CortexSignalType, FCortex, FTool, Observable } from './abstracts';
+import { CortexSignalType, FCortex, FToolAtom, Observable } from './abstracts';
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -88,13 +88,17 @@ describe('Observable', () => {
     });
 });
 
-class TestTool extends FTool<{ value: number }, { value: number }> {
+/**
+ * EN: TestTool class declaration.
+ * ZH: TestTool class 声明。
+ */
+class TestTool extends FToolAtom<{ value: number }, { value: number }> {
     public override onPipe(input: { value: number }) {
         return { ok: true, data: { value: input.value + 1 } } as const;
     }
 }
 
-describe('FTool', () => {
+describe('FToolAtom', () => {
     test('execute returns onPipe result', async () => {
         const tool = new TestTool();
 
@@ -104,6 +108,10 @@ describe('FTool', () => {
     });
 });
 
+/**
+ * EN: TestCortex class declaration.
+ * ZH: TestCortex class 声明。
+ */
 class TestCortex extends FCortex {}
 
 describe('FCortex', () => {

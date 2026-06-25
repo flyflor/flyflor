@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { AgentChatRole, type AgentMemory } from '@/agent/memory';
+import { AgentChatRole, type AgentMemory } from '@/agent/types';
 import { Context, ContextIntent } from '@/neural/context';
-import { SynapseSignalType } from '@/neural/synapse';
-import type { ActionRequest } from '@/plugins/tools';
+import { SynapseSignalType } from '@/neural/types';
+import type { ActionRequest } from '@/plugins';
 import type { IntelligenceToolDefinition, ProviderMessage } from '../intelligence/types';
 import { CallosumSignalType } from '../callosum';
 import { Investigation } from './service';
 
+/**
+ * EN: investigation function declaration.
+ * ZH: investigation function 声明。
+ */
 function investigation(context: Context, turns: Array<{ text: string; actionRequests: ActionRequest[] }>) {
     const events: Array<{ type: SynapseSignalType; data: unknown }> = [];
     const seenMessages: ProviderMessage[][] = [];
@@ -17,7 +21,7 @@ function investigation(context: Context, turns: Array<{ text: string; actionRequ
     let index = 0;
     instance.context = context;
     instance.tools = {
-        list: () => [{ name: 'filesystem', description: 'filesystem', parameters: {} }, { name: 'ask', description: 'ask', parameters: {} }] as IntelligenceToolDefinition[],
+        list: async () => [{ name: 'filesystem', description: 'filesystem', parameters: {} }, { name: 'ask', description: 'ask', parameters: {} }] as IntelligenceToolDefinition[],
         run: async (call: ActionRequest) => call.name === 'ask'
             ? { ok: true, name: 'ask', data: { kind: 'ask', question: 'Pick?', options: ['a'] } }
             : { ok: true, name: call.name, data: { action: 'read', path: '/tmp/demo.ts', value: 'tool result' } },

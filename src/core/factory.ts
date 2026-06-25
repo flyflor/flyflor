@@ -1,17 +1,26 @@
 import { useContainer } from './ioc';
 import type { Ctor } from './decorator';
 import type { Container, FModule } from './ioc';
-import { Synapse } from '@/neural/synapse';
 
 /**
- * Bootstraps the Flyflor kernel from a root `@Module`.
+ * EN: Bootstraps the Flyflor kernel from a root `@Module`.
+ * ZH: 从根 `@Module` 启动 Flyflor kernel。
  *
- * It is the composition root: it registers the import graph, then eagerly builds and initializes the root module.
- * `getAsync` decides reuse from decorator metadata: singleton classes are cached, ordinary providers are fresh.
+ * EN: It is the composition root: it registers the import graph, then eagerly builds and initializes the root
+ * module. `getAsync` decides reuse from decorator metadata.
+ * ZH: 它是 composition root：注册 import graph，然后提前构建并初始化根 module。`getAsync` 根据 decorator metadata 决定复用策略。
  */
 export interface Factory extends Container {}
 
+/**
+ * EN: Proxy wrapper that exposes the IOC container plus Flyflor bootstrap helpers.
+ * ZH: 暴露 IOC container 与 Flyflor 启动 helper 的代理包装对象。
+ */
 export class Factory {
+    /**
+     * EN: Creates a proxy that forwards unknown properties to the underlying container.
+     * ZH: 创建一个会把未知属性转发到底层 container 的代理。
+     */
     constructor(public container: Container) {
         return new Proxy(this, {
             get: (target, key, receiver) => {
@@ -23,9 +32,8 @@ export class Factory {
     }
 
     /**
-     * Builds and initializes a root module that does not expose an external endpoint, such as an agent worker.
-     * @param rootModule - the application or worker root module class.
-     * @returns the initialized root module instance.
+     * EN: Builds and initializes the root application module.
+     * ZH: 构建并初始化根应用 module。
      */
     public static async create<T extends Ctor<FModule>>(rootModule: T) {
         const container = useContainer();
@@ -34,7 +42,12 @@ export class Factory {
         return factory;
     }
 
+    /**
+     * EN: Returns the initialized global `Synapse`.
+     * ZH: 返回已初始化的全局 `Synapse`。
+     */
     public async synapse() {
+        const { Synapse } = await import('@/neural/synapse');
         return await this.container.getAsync(Synapse);
     }
 }

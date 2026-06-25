@@ -1,8 +1,12 @@
-import { AgentChatRole } from '@/agent/memory';
+import { AgentChatRole } from '@/agent/types';
 import { FService, Prompt, PromptService, Singleton } from '@/core';
 import { ContextPrompt, ContextTurnStatus, type CompletedSummary, type ContextIntelligence, type ContextSettleInput, type ContextTurn, type TurnUnderstanding } from './types';
 
 @Singleton()
+/**
+ * EN: Context class declaration.
+ * ZH: Context class 声明。
+ */
 export class Context extends FService {
     public current?: TurnUnderstanding;
 

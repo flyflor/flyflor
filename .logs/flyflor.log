@@ -55,3 +55,52 @@
   | {
   |   error: undefined
   | }
+[INFO ]  2026-06-25T15:55:25.819Z  FSocket
+  | open
+[DEBUG]  2026-06-25T15:55:50.292Z  Controller
+  | cwd
+  | /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor
+[INFO ]  2026-06-25T15:55:57.628Z  Synapse
+  | input
+  | 你好
+[INFO ]  2026-06-25T15:55:57.628Z  Agent
+  | agent received
+  | {
+  |   data: '你好'
+  | }
+[DEBUG]  2026-06-25T15:55:59.631Z  Callosum
+  | callosum.start
+  | 你好
+[INFO ]  2026-06-25T15:59:42.728Z  Synapse
+  | input
+  | 研究下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-front
+[INFO ]  2026-06-25T15:59:42.728Z  Agent
+  | agent received
+  | {
+  |   data: '研究下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-front'
+  | }
+[DEBUG]  2026-06-25T15:59:45.255Z  Callosum
+  | callosum.start
+  | 研究下这个项目 /Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-front
+[INFO ]  2026-06-25T16:04:36.149Z  Synapse
+  | input
+  | 我现在想优化一下这个项目，我需要你给我一个优化方案。
+[INFO ]  2026-06-25T16:04:36.150Z  Agent
+  | agent received
+  | {
+  |   data: '我现在想优化一下这个项目，我需要你给我一个优化方案。'
+  | }
+[DEBUG]  2026-06-25T16:04:39.306Z  Callosum
+  | callosum.start
+  | 我现在想优化一下这个项目，我需要你给我一个优化方案。
+[INFO ]  2026-06-25T16:06:15.112Z  Synapse
+  | input
+  | 代码质量（类型安全、错误处理、可维护性、测试）
+[INFO ]  2026-06-25T16:06:15.113Z  Agent
+  | agent received
+  | {
+  |   data: '代码质量（类型安全、错误处理、可维护性、测试）'
+  | }
+[DEBUG]  2026-06-25T16:06:18.462Z  Callosum
+  | callosum.start
+  | 代码质量（类型安全、错误处理、可维护性、测试）

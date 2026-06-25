@@ -4,12 +4,20 @@ import { FService, of, type Observable } from '@/core/ioc';
 export const HEADER_BYTES = 8;
 export const TEXT_ENCODING = 'utf-8';
 
+/**
+ * EN: SocketPacket interface declaration.
+ * ZH: SocketPacket interface 声明。
+ */
 export interface SocketPacket<T = unknown> {
     action: string;
     data: T;
 }
 
 @Service()
+/**
+ * EN: IPCPacket class declaration.
+ * ZH: IPCPacket class 声明。
+ */
 export class IPCPacket extends FService {
     public buffer: Buffer;
 

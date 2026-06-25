@@ -3,10 +3,18 @@ import { describe, expect, test } from 'bun:test';
 import { defineMetadata, getMetadata, useContainer } from './container';
 import { INJECT_METADATA_KEY, type ClassType, type InjectMetadata } from './types';
 
+/**
+ * EN: Provide function declaration.
+ * ZH: Provide function 声明。
+ */
 function Provide(): ClassDecorator {
     return () => {};
 }
 
+/**
+ * EN: Scope function declaration.
+ * ZH: Scope function 声明。
+ */
 function Scope(): PropertyDecorator {
     return (target, propertyKey) => {
         const data: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, target.constructor) || [];
@@ -15,12 +23,24 @@ function Scope(): PropertyDecorator {
     };
 }
 
+/**
+ * EN: ScopedConfig interface declaration.
+ * ZH: ScopedConfig interface 声明。
+ */
 interface ScopedConfig {
     name: string;
 }
 
+/**
+ * EN: ScopedSynapse class declaration.
+ * ZH: ScopedSynapse class 声明。
+ */
 class ScopedSynapse {}
 
+/**
+ * EN: ScopedAtom class declaration.
+ * ZH: ScopedAtom class 声明。
+ */
 class ScopedAtom {
     constructor(
         public config: ScopedConfig,
@@ -29,9 +49,17 @@ class ScopedAtom {
 }
 
 @Provide()
+/**
+ * EN: ScopedMemory class declaration.
+ * ZH: ScopedMemory class 声明。
+ */
 class ScopedMemory extends ScopedAtom {}
 
 @Provide()
+/**
+ * EN: ScopedBrain class declaration.
+ * ZH: ScopedBrain class 声明。
+ */
 class ScopedBrain extends ScopedAtom {
     constructor(
         public override config: ScopedConfig,
@@ -43,6 +71,10 @@ class ScopedBrain extends ScopedAtom {
 }
 
 @Provide()
+/**
+ * EN: ObjectMetadataBrain class declaration.
+ * ZH: ObjectMetadataBrain class 声明。
+ */
 class ObjectMetadataBrain {
     constructor(
         public config: object,
@@ -52,6 +84,10 @@ class ObjectMetadataBrain {
 }
 
 @Provide()
+/**
+ * EN: ScopedHost class declaration.
+ * ZH: ScopedHost class 声明。
+ */
 class ScopedHost extends ScopedAtom {
     @Scope()
     public memory!: ScopedMemory;
@@ -61,6 +97,10 @@ class ScopedHost extends ScopedAtom {
 }
 
 @Provide()
+/**
+ * EN: ObjectMetadataHost class declaration.
+ * ZH: ObjectMetadataHost class 声明。
+ */
 class ObjectMetadataHost extends ScopedAtom {
     public filters = new Set();
 
@@ -74,11 +114,19 @@ class ObjectMetadataHost extends ScopedAtom {
 }
 
 @Provide()
+/**
+ * EN: ScopedHostChild class declaration.
+ * ZH: ScopedHostChild class 声明。
+ */
 class ScopedHostChild {
     constructor(public host: object) {}
 }
 
 @Provide()
+/**
+ * EN: ScopedHostWithChild class declaration.
+ * ZH: ScopedHostWithChild class 声明。
+ */
 class ScopedHostWithChild {
     @Scope()
     public child!: ScopedHostChild;

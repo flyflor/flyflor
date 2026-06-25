@@ -1,29 +1,20 @@
 import { Agent } from '@/agent';
 import type { ConfigService } from '@/configuration';
-import { Config, FCortex, Init, Inject, Module, Scope, useContainer, type CortexSignal } from '@/core';
+import { Config, FCortex, Init, Inject, Module, Scope, useContainer } from '@/core';
 import { FSocket } from './ipc';
 import type { Context } from './context';
+import { SynapseSignalType, type SynapseSignal } from './types';
 
 export interface AgentPool {
     active: string;
     agents: { [name: string]: Agent };
 }
 
-export enum SynapseSignalType {
-    Input = 'input',
-    Reply = 'reply',
-    Event = 'event',
-    Ask = 'ask',
-    Confirm = 'confirm',
-    Pause = 'pause',
-    Resume = 'resume',
-}
-
-export interface SynapseSignal extends CortexSignal {
-    type: SynapseSignalType;
-}
-
 @Module()
+/**
+ * EN: Synapse class declaration.
+ * ZH: Synapse class 声明。
+ */
 export class Synapse extends FCortex<SynapseSignal> {
     @Config()
     public readonly config!: ConfigService;

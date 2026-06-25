@@ -23,6 +23,10 @@ export enum SocketEvent {
     Timeout = 'timeout',
 }
 
+/**
+ * EN: SocketConnectionData interface declaration.
+ * ZH: SocketConnectionData interface 声明。
+ */
 export interface SocketConnectionData {}
 
 const SYNAPSE_INPUT = 'input' as Parameters<Synapse['emit']>[0];
@@ -35,6 +39,10 @@ const SYNAPSE_INPUT = 'input' as Parameters<Synapse['emit']>[0];
  * Bun invokes them; the instance is passed straight to `Bun.listen({ socket })`.
  */
 @Singleton()
+/**
+ * EN: FSocket class declaration.
+ * ZH: FSocket class 声明。
+ */
 export class FSocket extends FlyFlor {
     @Config('socket')
     public path!: string;

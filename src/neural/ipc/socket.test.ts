@@ -6,11 +6,19 @@ import { FSocket, SocketEvent, type SocketConnectionData } from './socket';
 import type { Controller } from './controller';
 import type { Synapse } from '../synapse';
 
+/**
+ * EN: RecordedSignal interface declaration.
+ * ZH: RecordedSignal interface 声明。
+ */
 interface RecordedSignal {
     type: string;
     data: unknown;
 }
 
+/**
+ * EN: PartialSocket class declaration.
+ * ZH: PartialSocket class 声明。
+ */
 class PartialSocket {
     public chunks: Buffer[];
     public limit: number;
@@ -31,6 +39,10 @@ class PartialSocket {
     }
 }
 
+/**
+ * EN: RecordingSynapse class declaration.
+ * ZH: RecordingSynapse class 声明。
+ */
 class RecordingSynapse {
     public signals: RecordedSignal[];
 
@@ -43,6 +55,10 @@ class RecordingSynapse {
     }
 }
 
+/**
+ * EN: RecordingController class declaration.
+ * ZH: RecordingController class 声明。
+ */
 class RecordingController {
     public cwdCalls: unknown[];
 

@@ -1,24 +1,33 @@
-import type { ToolError, ToolMetadata } from '@/core';
+import type { ToolError, ToolRisk } from '@/core';
 
-export enum ToolName {
-    Ask = 'ask',
-    Confirm = 'confirm',
-    Filesystem = 'filesystem',
+export interface ToolProtocol {
+    key: string;
+    name: string;
+    file: string;
+    risk: ToolRisk;
+    parameters: Record<string, unknown>;
 }
 
-export enum FilesystemAction {
-    List = 'list',
-    Read = 'read',
-    Write = 'write',
-    Edit = 'edit',
+export interface ToolPromptConfig {
+    version: number;
+    description: string;
+    tools: ToolProtocol[];
 }
 
+/**
+ * EN: One model-requested tool call.
+ * ZH: 模型请求的一次工具调用。
+ */
 export interface ActionRequest {
     id: string;
     name: string;
     arguments: Record<string, unknown>;
 }
 
+/**
+ * EN: Normalized tool call result returned to the model loop.
+ * ZH: 返回给模型循环的标准化工具调用结果。
+ */
 export interface ToolRunResult {
     ok: boolean;
     name: string;
@@ -26,34 +35,38 @@ export interface ToolRunResult {
     error?: ToolError;
 }
 
+/**
+ * EN: Persistable request/result pair for a tool call.
+ * ZH: 可持久化的一次工具请求与结果。
+ */
 export interface ActionRecord {
     request: ActionRequest;
     result: ToolRunResult;
 }
 
-export interface AskToolInput {
+export interface AskInput {
     question?: unknown;
     options?: unknown;
 }
 
-export interface AskToolOutput {
+export interface AskOutput {
     kind: 'ask';
     question: string;
     options: unknown;
 }
 
-export interface ConfirmToolInput {
+export interface ConfirmInput {
     question?: unknown;
     recommended?: unknown;
 }
 
-export interface ConfirmToolOutput {
+export interface ConfirmOutput {
     kind: 'confirm';
     question: string;
     recommended: boolean;
 }
 
-export interface FilesystemToolInput {
+export interface FilesystemInput {
     action?: unknown;
     cwd?: unknown;
     path?: unknown;
@@ -66,16 +79,34 @@ export interface FilesystemToolInput {
     newText?: unknown;
 }
 
+export type FilesystemInputAction = 'list' | 'read' | 'write' | 'edit';
+
 export interface FilesystemListEntry {
     name: string;
     path: string;
     type: 'file' | 'directory' | 'other';
 }
 
-export type FilesystemToolOutput =
-    | { action: FilesystemAction.List; path: string; entries: FilesystemListEntry[] }
-    | { action: FilesystemAction.Read; path: string; content: string; bytes: number; truncated: boolean }
-    | { action: FilesystemAction.Write; path: string; bytes: number }
-    | { action: FilesystemAction.Edit; path: string; replacements: number; bytes: number };
+export type FilesystemOutput =
+    | { action: 'list'; path: string; entries: FilesystemListEntry[] }
+    | { action: 'read'; path: string; content: string; bytes: number; truncated: boolean }
+    | { action: 'write'; path: string; bytes: number }
+    | { action: 'edit'; path: string; replacements: number; bytes: number };
 
-export type ToolClassMetadata = ToolMetadata & { className: string };
+export interface ExecuteInput {
+    cwd?: unknown;
+    command?: unknown;
+    args?: unknown;
+    timeoutMs?: unknown;
+}
+
+export interface ExecuteOutput {
+    action: 'execute';
+    cwd: string;
+    command: string;
+    args: string[];
+    exitCode: number | null;
+    stdout: string;
+    stderr: string;
+    timedOut: boolean;
+}

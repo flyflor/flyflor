@@ -1,6 +1,6 @@
 import { FModelProtocolName } from '@/configuration';
 import type { ProtocolAdapter, ProtocolBuildContext, ProviderErrorShape, ProviderMessage } from '../types';
-import { AgentChatRole } from '@/agent/memory';
+import { AgentChatRole } from '@/agent/types';
 
 export const anthropicMessagesAdapter: ProtocolAdapter = {
     name: FModelProtocolName.AnthropicMessages,
@@ -41,6 +41,10 @@ export const anthropicMessagesAdapter: ProtocolAdapter = {
     },
 };
 
+/**
+ * EN: anthropicMessages function declaration.
+ * ZH: anthropicMessages function 声明。
+ */
 function anthropicMessages(messages: ProviderMessage[]): { system: string[]; messages: Array<{ role: string; content: string }> } {
     const system: string[] = [];
     const conversation: Array<{ role: string; content: string }> = [];
@@ -55,12 +59,20 @@ function anthropicMessages(messages: ProviderMessage[]): { system: string[]; mes
     return { system, messages: conversation };
 }
 
+/**
+ * EN: sseData function declaration.
+ * ZH: sseData function 声明。
+ */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();
     if (trimmed.length === 0 || !trimmed.startsWith('data:')) return undefined;
     return trimmed.slice('data:'.length).trim();
 }
 
+/**
+ * EN: providerErrorMessage function declaration.
+ * ZH: providerErrorMessage function 声明。
+ */
 function providerErrorMessage(error: ProviderErrorShape | undefined, fallback: string): string {
     return error?.code ? `${error.code}: ${error.message ?? error.type ?? fallback}` : error?.message ?? error?.type ?? fallback;
 }

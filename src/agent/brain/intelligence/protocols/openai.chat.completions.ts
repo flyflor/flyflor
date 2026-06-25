@@ -1,14 +1,22 @@
-import { AgentChatRole } from '@/agent/memory';
-import type { ActionRequest } from '@/plugins/tools';
+import { AgentChatRole } from '@/agent/types';
+import type { ActionRequest } from '@/plugins';
 import type { IntelligenceEvent, ProtocolAdapter, ProtocolBuildContext, ProtocolStreamState, ProviderErrorShape, ProviderMessage, StreamingActionRequest } from '../types';
 import { FModelProtocolName } from '@/configuration';
 
+/**
+ * EN: WireActionDelta interface declaration.
+ * ZH: WireActionDelta interface 声明。
+ */
 interface WireActionDelta {
     index?: number;
     id?: string;
     function?: { name?: string; arguments?: string };
 }
 
+/**
+ * EN: ChatCompletionChunk interface declaration.
+ * ZH: ChatCompletionChunk interface 声明。
+ */
 interface ChatCompletionChunk {
     error?: ProviderErrorShape;
     choices?: Array<{
@@ -70,9 +78,12 @@ export const openAIChatCompletionsAdapter: ProtocolAdapter = {
 };
 
 /**
- * Routes one streamed OpenAI `tool_calls[]` delta to its internal action request, creating it on first sight.
- * Resolution is by provider `index` first, then `id`, because compatible providers disagree on which
+ * EN: Routes one streamed OpenAI `tool_calls[]` delta to its internal action request, creating it on first sight.
+ * ZH: 将一个 OpenAI `tool_calls[]` streaming delta 路由到内部 action request，首次出现时创建该请求。
+ *
+ * EN: Resolution is by provider `index` first, then `id`, because compatible providers disagree on which
  * they send on continuation deltas. Arguments are appended raw; the authoritative parse happens at finalize.
+ * ZH: 解析时优先使用 provider `index`，再使用 `id`，因为兼容 provider 在后续 delta 中发送哪个字段并不一致。参数先按原文追加，最终解析在 finalize 阶段完成。
  */
 function accumulateActionRequest(controller: ReadableStreamDefaultController<IntelligenceEvent>, state: ProtocolStreamState, delta: WireActionDelta): void {
     const request = resolveActionRequest(state, delta);
@@ -92,6 +103,10 @@ function accumulateActionRequest(controller: ReadableStreamDefaultController<Int
     }
 }
 
+/**
+ * EN: resolveActionRequest function declaration.
+ * ZH: resolveActionRequest function 声明。
+ */
 function resolveActionRequest(state: ProtocolStreamState, delta: WireActionDelta): StreamingActionRequest {
     const providerIndex = typeof delta.index === 'number' ? delta.index : undefined;
     let request = providerIndex !== undefined ? state.actionRequestsByIndex.get(providerIndex) : undefined;
@@ -106,8 +121,8 @@ function resolveActionRequest(state: ProtocolStreamState, delta: WireActionDelta
 }
 
 /**
- * Emits an `action_end` for every accumulated action request with its arguments parsed into an object.
- * Idempotent: a finished call is removed from the index so a later `[DONE]` does not re-emit it.
+ * EN: Emits an `action_end` for every accumulated action request with parsed object arguments.
+ * ZH: 为每条已累积 action request 发出 `action_end`，并把参数解析成对象。
  */
 function finalizeActionRequests(controller: ReadableStreamDefaultController<IntelligenceEvent>, state: ProtocolStreamState): void {
     const requests = [...state.actionRequestsByIndex.values()].sort((left, right) => left.index - right.index);
@@ -118,9 +133,12 @@ function finalizeActionRequests(controller: ReadableStreamDefaultController<Inte
 }
 
 /**
- * Best-effort parse of a streamed action-argument buffer.
- * The model usually emits valid JSON, but an early stop can truncate it; an empty object is a safe fallback
+ * EN: Best-effort parse of a streamed action-argument buffer.
+ * ZH: 尽力解析 streaming action 参数缓冲。
+ *
+ * EN: The model usually emits valid JSON, but an early stop can truncate it; an empty object is a safe fallback
  * so the loop can surface a tool error instead of throwing inside the stream.
+ * ZH: 模型通常会输出合法 JSON，但提前停止可能截断参数；空对象是更安全的回退，能让循环暴露工具错误，而不是在 stream 内抛错。
  */
 function parseActionArguments(partialArgs: string): Record<string, unknown> {
     const trimmed = partialArgs.trim();
@@ -134,8 +152,12 @@ function parseActionArguments(partialArgs: string): Record<string, unknown> {
 }
 
 /**
- * Projects provider-local messages to OpenAI chat messages. AgentMemory stays pure; action request/result
+ * EN: Projects provider-local messages to OpenAI chat messages.
+ * ZH: 将 provider-local 消息投影为 OpenAI chat messages。
+ *
+ * EN: AgentMemory stays pure; action request/result
  * replay exists only in the research call stack and is mapped back to OpenAI wire fields here.
+ * ZH: `AgentMemory` 保持纯净；action request/result replay 只存在于 research 调用栈，并在这里映射回 OpenAI 线协议字段。
  */
 function chatMessages(messages: ProviderMessage[]): Array<Record<string, unknown>> {
     return messages.map((message) => {
@@ -160,16 +182,28 @@ function chatMessages(messages: ProviderMessage[]): Array<Record<string, unknown
     });
 }
 
+/**
+ * EN: hasActionHistory function declaration.
+ * ZH: hasActionHistory function 声明。
+ */
 function hasActionHistory(messages: ProviderMessage[]): boolean {
     return messages.some((message) => message.role === 'action' || (message.role === AgentChatRole.Assistant && 'actionRequests' in message));
 }
 
+/**
+ * EN: sseData function declaration.
+ * ZH: sseData function 声明。
+ */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();
     if (trimmed.length === 0 || !trimmed.startsWith('data:')) return undefined;
     return trimmed.slice('data:'.length).trim();
 }
 
+/**
+ * EN: providerErrorMessage function declaration.
+ * ZH: providerErrorMessage function 声明。
+ */
 function providerErrorMessage(error: ProviderErrorShape | undefined, fallback: string): string {
     return error?.code ? `${error.code}: ${error.message ?? error.type ?? fallback}` : error?.message ?? error?.type ?? fallback;
 }

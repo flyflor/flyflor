@@ -9,12 +9,20 @@ import { LoggerLevel, type FLogger } from './types';
 
 let tempPaths: string[] = [];
 
+/**
+ * EN: tempPath function declaration.
+ * ZH: tempPath function 声明。
+ */
 function tempPath(): string {
     const path = mkdtempSync(join(tmpdir(), 'flyflor-logger-'));
     tempPaths.push(path);
     return path;
 }
 
+/**
+ * EN: resetLoggerConfiguration function declaration.
+ * ZH: resetLoggerConfiguration function 声明。
+ */
 function resetLoggerConfiguration(): void {
     configureLogger({
         consoleEnabled: true,
@@ -76,6 +84,10 @@ describe('logger service', () => {
     test('@Logger injects a scoped logger through the property getter', () => {
         const path = join(tempPath(), 'decorator.log');
 
+        /**
+         * EN: DecoratedLoggerHost class declaration.
+         * ZH: DecoratedLoggerHost class 声明。
+         */
         class DecoratedLoggerHost {
             @Logger('decorated', {
                 consoleEnabled: false,

@@ -6,6 +6,10 @@ import { MemoryEntity } from './memory.entity';
  * The current implementation records SQL statements for the future database adapter without pretending persistence exists.
  */
 @Repo()
+/**
+ * EN: MemoryRepo class declaration.
+ * ZH: MemoryRepo class 声明。
+ */
 export class MemoryRepo extends MemoryEntity {
     public readonly tableName = 'memories';
 

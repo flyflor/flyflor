@@ -17,11 +17,13 @@ import {
 import { LoggerLevel, type FLogger, type LoggerConfiguration, type LoggerConfigurationInput, type LoggerOptions } from './types';
 
 /**
- * Logger is a compact core utility, not a domain service.
+ * EN: Logger is a compact core utility, not a domain service.
+ * ZH: Logger 是一个紧凑的核心工具，不是业务服务。
  *
- * The public surface stays intentionally small: create a scoped logger, configure shared defaults, and inspect the
- * active configuration. Formatting and writing are private implementation details in this file so logger behavior is
- * easy to read without jumping through several one-function modules.
+ * EN: The public surface stays intentionally small: create a scoped logger, configure shared defaults, and inspect
+ * the active configuration. Formatting and writing stay private so logger behavior is easy to read without jumping
+ * through several one-function modules.
+ * ZH: 公开面保持刻意精简：创建作用域 logger、配置共享默认值、查看当前配置。格式化和写入保持私有，让 logger 行为不必在多个单函数模块之间来回跳转。
  */
 let currentConfiguration: LoggerConfiguration = {
     consoleEnabled: true,
@@ -32,10 +34,12 @@ let currentConfiguration: LoggerConfiguration = {
 };
 
 /**
- * Creates a scoped logger API.
- * @param scopeOrOptions - optional scope name or options object; the scope appears in every log header.
- * @param configuration - optional per-logger configuration override when the first argument is a scope string.
- * @returns logger methods for debug/info/warn/error with variadic object-safe `props` formatting.
+ * EN: Creates a scoped logger API.
+ * ZH: 创建一个作用域 logger API。
+ *
+ * EN: `scopeOrOptions` may be a scope name or options object; the scope appears in every log header.
+ * `configuration` overrides defaults when the first argument is a scope string.
+ * ZH: `scopeOrOptions` 可以是作用域名或选项对象；作用域会出现在每条日志头部。第一个参数是作用域字符串时，`configuration` 可覆盖默认值。
  */
 export function useLogger(scopeOrOptions: string | LoggerOptions = LOGGER_DEFAULT_SCOPE, configuration?: LoggerConfigurationInput): FLogger {
     const scope = typeof scopeOrOptions === 'string' ? scopeOrOptions : scopeOrOptions.scope ?? LOGGER_DEFAULT_SCOPE;
@@ -49,9 +53,11 @@ export function useLogger(scopeOrOptions: string | LoggerOptions = LOGGER_DEFAUL
 }
 
 /**
- * Updates the shared logger configuration used by subsequently created loggers.
- * @param configuration - partial logger configuration, usually adapted from the app config.
- * @returns the resolved logger configuration after applying overrides.
+ * EN: Updates the shared logger configuration used by subsequently created loggers.
+ * ZH: 更新后续新建 logger 使用的共享配置。
+ *
+ * EN: `configuration` is usually adapted from the app config.
+ * ZH: `configuration` 通常来自应用配置。
  */
 export function configureLogger(configuration: LoggerConfigurationInput): LoggerConfiguration {
     currentConfiguration = resolveLoggerConfiguration(configuration);
@@ -59,13 +65,17 @@ export function configureLogger(configuration: LoggerConfigurationInput): Logger
 }
 
 /**
- * Returns the active shared logger configuration.
- * @returns the logger configuration currently used by new logger calls.
+ * EN: Returns the active shared logger configuration.
+ * ZH: 返回当前生效的共享 logger 配置。
  */
 export function getLoggerConfiguration(): LoggerConfiguration {
     return currentConfiguration;
 }
 
+/**
+ * EN: Merges overrides with the current shared logger configuration.
+ * ZH: 把覆盖项合并进当前共享 logger 配置。
+ */
 function resolveLoggerConfiguration(configuration: LoggerConfigurationInput = {}): LoggerConfiguration {
     return {
         consoleEnabled: configuration.consoleEnabled ?? currentConfiguration.consoleEnabled,
@@ -76,6 +86,10 @@ function resolveLoggerConfiguration(configuration: LoggerConfigurationInput = {}
     };
 }
 
+/**
+ * EN: Emits one log record when the level passes the configured threshold.
+ * ZH: 当级别高于阈值时输出一条日志记录。
+ */
 function log(level: LoggerLevel, scope: string, props: unknown[], configuration: LoggerConfiguration): void {
     if (LOGGER_LEVEL_WEIGHT[level] < LOGGER_LEVEL_WEIGHT[configuration.level]) {
         return;
@@ -83,6 +97,10 @@ function log(level: LoggerLevel, scope: string, props: unknown[], configuration:
     writeLogRecord(level, formatLogRecord(level, scope, props, configuration), configuration);
 }
 
+/**
+ * EN: Formats one complete log record.
+ * ZH: 格式化一条完整日志记录。
+ */
 function formatLogRecord(level: LoggerLevel, scope: string, props: unknown[], configuration: LoggerConfiguration): string {
     const color = configuration.colorEnabled ? LOGGER_LEVEL_COLOR[level] : LOGGER_LAYOUT.emptyBody;
     const reset = configuration.colorEnabled ? LOGGER_COLOR.reset : LOGGER_LAYOUT.emptyBody;
@@ -101,6 +119,10 @@ function formatLogRecord(level: LoggerLevel, scope: string, props: unknown[], co
     return header + '\n' + body;
 }
 
+/**
+ * EN: Formats one log argument into text.
+ * ZH: 把单个日志参数格式化成文本。
+ */
 function formatProp(prop: unknown, configuration: LoggerConfiguration): string {
     if (typeof prop === 'string') {
         return prop;
@@ -117,6 +139,10 @@ function formatProp(prop: unknown, configuration: LoggerConfiguration): string {
     });
 }
 
+/**
+ * EN: Writes one log record to console and/or file.
+ * ZH: 将一条日志记录写入控制台和/或文件。
+ */
 function writeLogRecord(level: LoggerLevel, record: string, configuration: LoggerConfiguration): void {
     if (configuration.consoleEnabled) {
         console[level](record);
@@ -124,6 +150,10 @@ function writeLogRecord(level: LoggerLevel, record: string, configuration: Logge
     writeFileRecord(record, configuration);
 }
 
+/**
+ * EN: Appends one log record to the configured file.
+ * ZH: 把一条日志记录追加到配置文件。
+ */
 function writeFileRecord(record: string, configuration: LoggerConfiguration): void {
     if (configuration.path.length === 0) {
         throw Object.assign(Error('Logger path is empty'), { detail: { configuration } });
@@ -133,6 +163,10 @@ function writeFileRecord(record: string, configuration: LoggerConfiguration): vo
     appendFileSync(path, stripLoggerColors(record) + LOGGER_RECORD_SEPARATOR, 'utf8');
 }
 
+/**
+ * EN: Removes ANSI color codes from a log record.
+ * ZH: 从日志记录中移除 ANSI 颜色码。
+ */
 function stripLoggerColors(value: string): string {
     return value.replace(LOGGER_ANSI_PATTERN, LOGGER_LAYOUT.emptyBody);
 }

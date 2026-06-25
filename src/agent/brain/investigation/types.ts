@@ -1,7 +1,10 @@
 /**
- * System brief for an isolated investigation sub-agent.
- * It frames the evidence mandate so the model gathers facts with the filesystem tool and then answers,
+ * EN: System brief for an isolated investigation sub-agent.
+ * ZH: 独立 investigation 子 agent 使用的系统说明。
+ *
+ * EN: It frames the evidence mandate so the model gathers facts with the filesystem tool and then answers,
  * without expecting a user to talk to or any ability to change files.
+ * ZH: 它约束模型使用 filesystem tool 收集事实后再回答，不期待用户继续对话，也不具备改文件能力。
  */
 export const INVESTIGATION_SYSTEM = [
     'You are a focused read-only investigator.',
@@ -11,8 +14,11 @@ export const INVESTIGATION_SYSTEM = [
 ].join('\n');
 
 /**
- * One finished investigation.
- * `answer` is the synthesized read-only finding; `steps` is how many provider turns it took (for diagnostics).
+ * EN: One finished investigation.
+ * ZH: 一次已完成 investigation。
+ *
+ * EN: `answer` is the synthesized read-only finding; `steps` is how many provider turns it took for diagnostics.
+ * ZH: `answer` 是综合后的只读结论；`steps` 是 provider turn 数，用于诊断。
  */
 export interface InvestigationOutcome {
     answer: string;

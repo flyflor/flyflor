@@ -4,6 +4,10 @@ import type { SocketPacket } from './packet';
 import { Observable } from '@/core/ioc';
 
 @Provide()
+/**
+ * EN: Controller class declaration.
+ * ZH: Controller class 声明。
+ */
 export class Controller extends Observable {
     @Config()
     public config!: ConfigService;

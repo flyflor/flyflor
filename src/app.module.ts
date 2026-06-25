@@ -12,4 +12,8 @@ import { Synapse } from '@/neural';
 @Module({
     imports: [Synapse, PluginModule],
 })
+/**
+ * EN: AppModule class declaration.
+ * ZH: AppModule class 声明。
+ */
 export class AppModule extends FModule {}

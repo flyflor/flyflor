@@ -1,7 +1,7 @@
 import type { FModelConfiguration } from '@/configuration';
 import { Config, FAgentAtom, Provide } from '@/core';
 import { createIntelligenceTurnStream } from './factory';
-import type { ActionRequest } from '@/plugins/tools';
+import type { ActionRequest } from '@/plugins';
 import type { IntelligenceEvent, IntelligenceStopReason, IntelligenceToolDefinition, ProviderMessage } from './types';
 
 /**
@@ -18,6 +18,10 @@ export interface IntelligenceResult {
 }
 
 @Provide()
+/**
+ * EN: Intelligence class declaration.
+ * ZH: Intelligence class 声明。
+ */
 export class Intelligence extends FAgentAtom {
     @Config('model')
     public config!: FModelConfiguration;

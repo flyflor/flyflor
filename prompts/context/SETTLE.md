@@ -1,6 +1,6 @@
-# Context Settle Prompt
+# Record a Compact Completion Note
 
-Create a compact completed-work index for the finished turn. Return only compact JSON.
+Create a compact note for the completed work. Return only compact JSON.
 
 Input contains `user`, `assistant`, `completed`, `current`, `recent`, and optional text-only `evidence`, `decisions`, `remaining`.
 
@@ -10,8 +10,8 @@ Schema:
 
 Rules:
 
-- Do not include `createdAt`; runtime adds it.
+- Do not include `createdAt`; it is added later.
 - Keep it short.
-- Index durable outcome, decisions, evidence, and remaining work.
-- Use only compact text summaries. Do not serialize action objects, tool calls, or provider replay.
+- Record the result, useful decisions, evidence, and remaining work.
+- Use only compact text summaries. Do not serialize tool requests or raw service messages.
 - Return valid JSON only.

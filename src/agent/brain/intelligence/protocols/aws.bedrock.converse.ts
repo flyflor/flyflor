@@ -1,6 +1,6 @@
 import { FModelProtocolName } from '@/configuration';
 import type { ProtocolAdapter, ProtocolBuildContext, ProviderMessage } from '../types';
-import { AgentChatRole } from '@/agent/memory';
+import { AgentChatRole } from '@/agent/types';
 
 export const awsBedrockConverseAdapter: ProtocolAdapter = {
     name: FModelProtocolName.AWSBedrockConverse,
@@ -27,6 +27,10 @@ export const awsBedrockConverseAdapter: ProtocolAdapter = {
     },
 };
 
+/**
+ * EN: bedrockMessages function declaration.
+ * ZH: bedrockMessages function 声明。
+ */
 function bedrockMessages(messages: ProviderMessage[]): {
     system: string[];
     messages: Array<{ role: string; content: Array<{ text: string }> }>;
@@ -47,6 +51,10 @@ function bedrockMessages(messages: ProviderMessage[]): {
     return { system, messages: conversation };
 }
 
+/**
+ * EN: sseData function declaration.
+ * ZH: sseData function 声明。
+ */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();
     if (trimmed.length === 0 || !trimmed.startsWith('data:')) return undefined;

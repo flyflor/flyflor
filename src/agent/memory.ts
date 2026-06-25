@@ -1,46 +1,30 @@
 import { FAgentAtom, Inject, Prompt, PromptService, Provide, type PromptPackageData } from '@/core';
 import { Context } from '@/neural/context';
+import { AgentChatRole, type AgentMemory } from './types';
+
+export { AgentChatRole, type AgentMemory } from './types';
 
 export enum SoulSection {
-    /** Agent identity / constitution layer. Loaded from `SOUL.md`. */
+    /** EN: Agent identity / constitution layer loaded from `SOUL.md`. ZH: 来自 `SOUL.md` 的智能体身份/人格层。 */
     Soul = 'SOUL',
 
-    /** User profile (画像). Loaded from `USER.md`. */
+    /** EN: User profile loaded from `USER.md`. ZH: 来自 `USER.md` 的用户画像。 */
     User = 'USER',
 
-    /** Fixed protocol-package constitution. Loaded from `AGENTS.md`. */
+    /** EN: Fixed protocol-package constitution loaded from `AGENTS.md`. ZH: 来自 `AGENTS.md` 的固定协议包宪法。 */
     Agents = 'AGENTS',
 
-    /** Agent extension/capability summary. Loaded from `EXTENSION.md`. */
+    /** EN: Agent extension/capability summary loaded from `EXTENSION.md`. ZH: 来自 `EXTENSION.md` 的扩展/能力摘要。 */
     Extension = 'EXTENSION',
 }
 
 /**
- * Roles accepted by provider chat protocols.
- * These values are provider protocol strings, not Flyflor context section names.
+ * EN: Memory owns prompt assembly and pure short-term memory projection.
+ * ZH: Memory 负责 prompt 组装和纯短期记忆投影。
  */
-export enum AgentChatRole {
-    System = 'system',
-    User = 'user',
-    Assistant = 'assistant',
-}
-
-/**
- * One pure short-term memory message for an Agent.
- *
- * AgentMemory is the reusable agent-facing cache surface. It must not carry tool/action requests,
- * provider replay messages, turn transcripts, or pending state.
- */
-export interface AgentMemory {
-    role: AgentChatRole.System | AgentChatRole.User | AgentChatRole.Assistant;
-    content: string;
-}
-
 @Provide()
 export class Memory extends FAgentAtom {
-    @Prompt(function (this: Memory) {
-        return `.config/agents/${this.agentConfig.name}`;
-    })
+    @Prompt((prop: Memory) => `.config/agents/${prop.agentConfig.name}`)
     public prompt!: PromptService<SoulSection> & PromptPackageData<SoulSection>;
 
     @Inject()

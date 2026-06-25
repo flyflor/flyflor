@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { SynapseSignalType } from './synapse';
+import { SynapseSignalType } from './types';
 
 describe('SynapseSignalType', () => {
     test('exposes pause and resume as control signals', () => {

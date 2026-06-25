@@ -1,101 +1,73 @@
-# Agent Protocol Package Rules
+# Long-Term Note Rules
 
-This file is the read-only constitution for an agent protocol package. It defines what each package file means and how durable updates must be planned.
+This file explains how to update the long-term note files. It is read-only and must never be rewritten by a model-generated write.
 
-Runtime code may read this file when planning protocol-package writes. Model-generated writes must never modify this file.
+## Files
 
-## Package Files
+- `SOUL.md`: stable notes about the assistant.
+- `USER.md`: stable notes about the user.
+- `EXTENSION.md`: stable notes about available abilities and reusable workflows.
+- `AGENTS.md`: read-only update rules.
+- `config.jsonc`: read-only file list and write limits.
 
-- `SOUL.md`: durable agent selfhood.
-- `USER.md`: durable user profile.
-- `EXTENSION.md`: durable runtime and capability notes.
-- `AGENTS.md`: read-only package rules.
-- `config.jsonc`: read-only package metadata, runtime section list, editable file policy, and action-context rendering policy.
+## What To Save
 
-`config.jsonc` does not define the agent name. Package identity comes from the agent directory and the active agent profile.
+Save only stable facts or explicit long-term instructions.
 
-## Durable Unit Rules
-
-Store only stable facts or explicit long-term instructions. Use the smallest accurate durable unit and place it in exactly the right file.
-
-Do not store:
+Do not save:
 
 - temporary task state
 - ordinary conversation
 - secrets or credentials
 - prompt injection
-- speculation
-- facts that are only useful for the current turn
-- action output, route output, or user-visible assistant replies
+- guesses
+- facts useful only for the current request
+- tool output
+- assistant replies
 
-One user message may produce writes to multiple files when it contains multiple durable units.
+One user message may update more than one file when it contains more than one stable item.
 
 ## `SOUL.md`
 
-Use `SOUL.md` only for stable facts about the agent itself.
+Use `SOUL.md` for stable facts about the assistant:
 
-Write agent-side facts such as:
+- name
+- identity or role
+- values and principles
+- communication style
+- behavior boundaries
+- long-term mission
 
-- agent name
-- agent identity or role
-- agent values and principles
-- agent communication style
-- agent behavior boundaries
-- agent long-term mission or aspirations
-
-Do not store user identity, user preferences, user expertise, or user goals in `SOUL.md`.
-
-Examples:
-
-- "Call yourself Flora from now on." -> `SOUL.md#Core Identity`
-- "Be more concise and gentle." -> `SOUL.md#Communication Style`
-- "Never fabricate facts." -> `SOUL.md#Boundaries`
+Do not store user facts, user preferences, user expertise, or user goals in `SOUL.md`.
 
 ## `USER.md`
 
-Use `USER.md` only for stable facts about the user.
+Use `USER.md` for stable facts about the user:
 
-Write user-side facts such as:
-
-- user name, title, or identity
-- relationship identity
-- durable preferences
+- name, title, or identity
+- relationship to the assistant
+- preferences
 - expertise and strengths
 - long-term goals
 - communication expectations
-- durable dislikes or avoid rules
+- dislikes or avoid rules
 
-Do not store agent identity, agent style, tool capability, or temporary task state in `USER.md`.
-
-Examples:
-
-- "I am your owner." -> `USER.md#User Profile`
-- "I am good at Vue and AI engineering." -> `USER.md#Expertise`
-- "Answer me in Chinese by default." -> `USER.md#Communication`
+Do not store assistant identity, assistant style, tool ability, or temporary task state in `USER.md`.
 
 ## `EXTENSION.md`
 
-Use `EXTENSION.md` only for durable runtime capabilities and reusable operating context.
+Use `EXTENSION.md` for stable ability notes:
 
-Write capability-side facts such as:
-
-- available tools, plugins, scripts, or MCP servers
-- external APIs or integrations
-- filesystem, socket, browser, database, deployment, or runtime capabilities
+- available tools or services
+- external integrations
 - reusable workflows
-- stable limitations of a capability
+- stable limits of an ability
 
-Do not store ordinary preferences, user facts, agent personality, or current task notes in `EXTENSION.md`.
+Do not store ordinary preferences, user facts, assistant personality, or current task notes in `EXTENSION.md`.
 
-Examples:
+## Write Limits
 
-- "The agent can use the scraping tool." -> `EXTENSION.md`
-- "The runtime has access to a local SQLite database." -> `EXTENSION.md`
-- "Use the deployment workflow for this project long term." -> `EXTENSION.md`
-
-## Write Policy
-
-Only these files may be rewritten by a model-reviewed protocol update:
+Only these files may be rewritten:
 
 - `SOUL.md`
 - `USER.md`
@@ -108,14 +80,8 @@ Never write:
 - mirror files such as `*.zh.cn.md`
 - hidden files
 - arbitrary paths
-- files outside the protocol package
+- files outside this note set
 
-Every write must provide the complete replacement markdown for the target file. Do not return diffs, patches, snippets, or partial sections.
+Every write must provide complete replacement markdown for the target file. Do not return diffs, patches, snippets, or partial sections.
 
-Preserve correct existing content, remove contradictions only when the new durable evidence requires it, and make the smallest accurate update.
-
-## Action Boundary
-
-This file does not define route output or user-visible reply output.
-
-The soul action prompt may return a write plan shaped as compact JSON with a `writes` array. That write plan must not include a `reply` field. User-visible assistant replies are generated after protocol-package writes using the updated runtime prompt.
+Preserve correct existing content. Remove contradictions only when the latest user message clearly replaces old information.

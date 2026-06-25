@@ -3,18 +3,23 @@ import { INIT_METADATA_KEY, INJECT_METADATA_INSTANCE_KEY, INJECT_METADATA_KEY, M
 const CONSTRUCTOR_PARAM_METADATA_KEY = 'design:paramtypes';
 
 /**
- * 依赖注入容器类，用于管理应用程序的依赖注入 - 单例
+ * EN: Singleton IOC container that owns project class construction and injection.
+ * ZH: 负责项目 class 构造和注入的 singleton IOC container。
  */
 export class Container {
     /**
      * 依赖注入容器单例实例
      */
     protected static instance: Container;
-    // 依赖注入容器实例缓存存储
+    /** EN: Singleton instance cache keyed by class or symbol. ZH: 按 class 或 symbol 索引的 singleton 实例缓存。 */
     public singletons!: Map<ClassType | symbol, InstanceType<ClassType>>;
-    // 注入的所有依赖
+    /** EN: Classes seen by the container during construction. ZH: container 构造过程中见过的 class 列表。 */
     public classList!: ClassType[];
 
+    /**
+     * EN: Creates or returns the process-wide container instance.
+     * ZH: 创建或返回进程级 container 实例。
+     */
     constructor() {
         if (Container.instance) return Container.instance;
         this.singletons = new Map();
@@ -23,14 +28,12 @@ export class Container {
     }
 
     /**
-     * 获取异步依赖注入容器实例。
+     * EN: Resolves one class through the async IOC lifecycle.
+     * ZH: 通过异步 IOC 生命周期解析一个 class。
      *
-     * `getAsync` is the single IOC construction entrypoint. Classes marked with `@Singleton()` are cached;
+     * EN: `getAsync` is the single IOC construction entrypoint. Classes marked with `@Singleton()` are cached;
      * ordinary providers are constructed fresh on each call so stateful request objects do not leak between turns.
-     *
-     * @param Module 依赖注入类类型
-     * @param props 传给构造函数和 `@Init` 初始化钩子的兼容参数
-     * @returns 依赖注入类实例
+     * ZH: `getAsync` 是唯一 IOC 构造入口。`@Singleton()` class 会缓存；普通 provider 每次 fresh 构造，避免有状态请求对象跨 turn 泄漏。
      */
     public async getAsync<T extends ClassType, P extends unknown[]>(Module: T, ...props: P): Promise<InstanceType<T>> {
         if (!this.classList.includes(Module)) this.classList.push(Module);
@@ -84,15 +87,27 @@ export class Container {
         }
     }
 
+    /**
+     * EN: Creates one IOC-owned instance without singleton registration.
+     * ZH: 创建一个由 IOC 拥有但不注册 singleton 的实例。
+     */
     public create<T extends ClassType, P extends unknown[]>(Module: T, ...props: P): InstanceType<T> {
         if (!this.classList.includes(Module)) this.classList.push(Module);
         return new Module(...props);
     }
 
+    /**
+     * EN: Returns already-built imported module instances for constructor injection.
+     * ZH: 返回已构建的 imported module 实例，用于 constructor injection。
+     */
     public getModuleImportInstances(imports: ClassType[]): Array<{ classType: ClassType; instance: InstanceType<ClassType> }> {
         return imports.filter((classType) => this.singletons.has(classType)).map((classType) => ({ classType, instance: this.singletons.get(classType) as InstanceType<ClassType> }));
     }
 
+    /**
+     * EN: Builds constructor args from explicit props and imported module instances.
+     * ZH: 从显式 props 和 imported module 实例构造构造函数参数。
+     */
     public getConstructorProps<P extends unknown[]>(Module: ClassType, importInstances: Array<{ classType: ClassType; instance: InstanceType<ClassType> }>, props: P): unknown[] {
         const paramTypes: ClassType[] = getMetadata(CONSTRUCTOR_PARAM_METADATA_KEY, Module) || [];
         if (paramTypes.length === 0) return props;
@@ -104,6 +119,10 @@ export class Container {
         });
     }
 
+    /**
+     * EN: Builds constructor args for `@Scope()` injections from host-local values.
+     * ZH: 从 host 本地值构造 `@Scope()` 注入所需参数。
+     */
     private getScopedConstructorProps<P extends unknown[]>(Module: ClassType, host: object, props: P): unknown[] {
         const paramTypes: ClassType[] = getMetadata(CONSTRUCTOR_PARAM_METADATA_KEY, Module) || [];
         if (paramTypes.length === 0) return props;
@@ -125,6 +144,10 @@ export class Container {
         });
     }
 
+    /**
+     * EN: Collects current scope values from explicit props, injected properties, and host instance.
+     * ZH: 从显式 props、已注入属性和 host 实例收集当前 scope 值。
+     */
     private getScopedValues<P extends unknown[]>(host: object, props: P): unknown[] {
         const values = [...props];
         const injects: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, host.constructor) || [];
@@ -136,11 +159,19 @@ export class Container {
         return values;
     }
 
+    /**
+     * EN: Finds the next unused scoped value matching a reflected class type.
+     * ZH: 查找下一个匹配 reflected class type 且未使用的 scoped value。
+     */
     private getScopedValueIndex(values: unknown[], paramType: ClassType, used: Set<number>): number {
         if (!this.isScopedClassType(paramType)) return -1;
         return values.findIndex((value, index) => !used.has(index) && value instanceof paramType);
     }
 
+    /**
+     * EN: Rejects primitive reflected constructor placeholders for scoped matching.
+     * ZH: 在 scoped matching 中排除 primitive reflected constructor 占位类型。
+     */
     private isScopedClassType(paramType: ClassType): boolean {
         return paramType !== Object
             && paramType !== String
@@ -151,27 +182,56 @@ export class Container {
             && paramType !== Promise;
     }
 
+    /**
+     * EN: Registers an existing object in the singleton map.
+     * ZH: 把已有对象注册到 singleton map。
+     */
     public registerObject(key: ClassType | symbol, instance: any) {
         this.singletons.set(key, instance);
         return this;
     }
 }
 
-// 创建依赖注入容器实例
+/**
+ * EN: Returns the process-wide IOC container singleton.
+ * ZH: 返回进程级 IOC container singleton。
+ */
 export function useContainer() {
     return new Container();
 }
 
-// 定义依赖注入容器元数据
+/**
+ * EN: Stores metadata used by decorators and the IOC container.
+ * ZH: 保存 decorators 和 IOC container 使用的元数据。
+ */
 export function defineMetadata(metadataKey: any, metadataValue: any, target: Object): void;
+/**
+ * EN: Stores property-level metadata used by decorators and the IOC container.
+ * ZH: 保存 decorators 和 IOC container 使用的属性级元数据。
+ */
 export function defineMetadata(metadataKey: any, metadataValue: any, target: Object, propertyKey: string | symbol): void;
+/**
+ * EN: Forwards metadata writes to `Reflect.defineMetadata`.
+ * ZH: 将元数据写入转发给 `Reflect.defineMetadata`。
+ */
 export function defineMetadata(...props: any) {
     return Reflect.defineMetadata.apply(undefined, props);
 }
 
-// 获取依赖注入容器元数据
+/**
+ * EN: Reads metadata used by decorators and the IOC container.
+ * ZH: 读取 decorators 和 IOC container 使用的元数据。
+ */
 export function getMetadata(metadataKey: any, target: Object): any;
+/**
+ * EN: Reads property-level metadata used by decorators and the IOC container.
+ * ZH: 读取 decorators 和 IOC container 使用的属性级元数据。
+ */
 export function getMetadata(metadataKey: any, target: Object, propertyKey: string | symbol): any;
+/**
+ * EN: Forwards metadata reads to `Reflect.getMetadata`.
+ * ZH: 将元数据读取转发给 `Reflect.getMetadata`。
+ */
 export function getMetadata(...props: any): any {
     return Reflect.getMetadata.apply(undefined, props);
 }

@@ -1,6 +1,10 @@
 import { FModelProtocolName } from '@/configuration';
 import type { ProtocolAdapter, ProtocolBuildContext, ProviderErrorShape } from '../types';
 
+/**
+ * EN: ResponsesEvent interface declaration.
+ * ZH: ResponsesEvent interface 声明。
+ */
 interface ResponsesEvent {
     type?: string;
     delta?: string;
@@ -39,12 +43,20 @@ export const openAIResponsesAdapter: ProtocolAdapter = {
     },
 };
 
+/**
+ * EN: sseData function declaration.
+ * ZH: sseData function 声明。
+ */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();
     if (trimmed.length === 0 || !trimmed.startsWith('data:')) return undefined;
     return trimmed.slice('data:'.length).trim();
 }
 
+/**
+ * EN: providerErrorMessage function declaration.
+ * ZH: providerErrorMessage function 声明。
+ */
 function providerErrorMessage(error: ProviderErrorShape | undefined, fallback: string, message?: string, code?: string): string {
     const resolvedMessage = message ?? error?.message ?? error?.type;
     const resolvedCode = code ?? error?.code;

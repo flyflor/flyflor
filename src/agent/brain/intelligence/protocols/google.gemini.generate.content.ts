@@ -1,6 +1,6 @@
 import { FModelProtocolName } from '@/configuration';
 import type { ProtocolAdapter, ProtocolBuildContext, ProviderMessage } from '../types';
-import { AgentChatRole } from '@/agent/memory';
+import { AgentChatRole } from '@/agent/types';
 
 export const googleGeminiGenerateContentAdapter: ProtocolAdapter = {
     name: FModelProtocolName.GoogleGeminiGenerateContent,
@@ -29,6 +29,10 @@ export const googleGeminiGenerateContentAdapter: ProtocolAdapter = {
     },
 };
 
+/**
+ * EN: geminiRequest function declaration.
+ * ZH: geminiRequest function 声明。
+ */
 function geminiRequest(messages: ProviderMessage[]): {
     contents: Array<{ role: string; parts: Array<{ text: string }> }>;
     systemInstruction?: { parts: Array<{ text: string }> };
@@ -52,6 +56,10 @@ function geminiRequest(messages: ProviderMessage[]): {
     };
 }
 
+/**
+ * EN: sseData function declaration.
+ * ZH: sseData function 声明。
+ */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();
     if (trimmed.length === 0 || !trimmed.startsWith('data:')) return undefined;

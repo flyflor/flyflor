@@ -48,6 +48,10 @@ export const createIntelligenceTurnStream = (
     });
 };
 
+/**
+ * EN: start function declaration.
+ * ZH: start function 声明。
+ */
 async function start(controller: ReadableStreamDefaultController<IntelligenceEvent>, config: FModelConfiguration, messages: ProviderMessage[], signal: AbortSignal, tools?: IntelligenceToolDefinition[]): Promise<void> {
     try {
         await requestLlm(controller, config, messages, signal, tools);
@@ -56,6 +60,10 @@ async function start(controller: ReadableStreamDefaultController<IntelligenceEve
     }
 }
 
+/**
+ * EN: requestLlm function declaration.
+ * ZH: requestLlm function 声明。
+ */
 async function requestLlm(controller: ReadableStreamDefaultController<IntelligenceEvent>, config: FModelConfiguration, messages: ProviderMessage[], signal: AbortSignal, tools?: IntelligenceToolDefinition[]): Promise<void> {
     const errors: Array<Record<string, unknown>> = [];
     for (const protocol of protocols(config)) {
@@ -111,17 +119,29 @@ async function requestLlm(controller: ReadableStreamDefaultController<Intelligen
     });
 }
 
+/**
+ * EN: protocolMatchFailureMessage function declaration.
+ * ZH: protocolMatchFailureMessage function 声明。
+ */
 function protocolMatchFailureMessage(provider: string, errors: Array<Record<string, unknown>>): string {
     if (errors.length === 0) return 'LLM provider protocol matching failed';
     const attempts = errors.map((error) => JSON.stringify(error)).join(' | ');
     return `LLM provider protocol matching failed (${provider}): ${attempts}`;
 }
 
+/**
+ * EN: protocols function declaration.
+ * ZH: protocols function 声明。
+ */
 function protocols(config: FModelConfiguration) {
     if (config.protocols.length === 0) throw Error('LLM provider protocols are missing');
     return config.protocols;
 }
 
+/**
+ * EN: headers function declaration.
+ * ZH: headers function 声明。
+ */
 function headers(context: ProtocolBuildContext): Record<string, string> {
     // Auth stays protocol-local because compatible providers differ on header names.
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -152,6 +172,10 @@ function headers(context: ProtocolBuildContext): Record<string, string> {
     return headers;
 }
 
+/**
+ * EN: urls function declaration.
+ * ZH: urls function 声明。
+ */
 function urls(context: ProtocolBuildContext): string[] {
     const baseUrl = (context.protocol.baseUrl ?? context.config.baseUrl).replace(/\/+$/, '');
     const path = replaceModel(context.protocol.path, context.model);
@@ -162,24 +186,44 @@ function urls(context: ProtocolBuildContext): string[] {
     return [...new Set(urls)];
 }
 
+/**
+ * EN: joinEndpoint function declaration.
+ * ZH: joinEndpoint function 声明。
+ */
 function joinEndpoint(baseUrl: string, path: string): string {
     if (/^https?:\/\//.test(path)) return path;
     return baseUrl + (path.startsWith('/') ? '' : '/') + path;
 }
 
+/**
+ * EN: replaceModel function declaration.
+ * ZH: replaceModel function 声明。
+ */
 function replaceModel(path: string, model: string): string {
     return path.replaceAll('{model}', encodeURIComponent(model));
 }
 
+/**
+ * EN: canTryNextProtocol function declaration.
+ * ZH: canTryNextProtocol function 声明。
+ */
 function canTryNextProtocol(status: number): boolean {
     return [400, 404, 405, 415, 422, 501].includes(status);
 }
 
+/**
+ * EN: isJsonResponse function declaration.
+ * ZH: isJsonResponse function 声明。
+ */
 function isJsonResponse(context: ProtocolBuildContext, contentType: string): boolean {
     if (context.protocol.acceptsJsonStream === true) return false;
     return contentType.toLowerCase().includes('application/json');
 }
 
+/**
+ * EN: responsesText function declaration.
+ * ZH: responsesText function 声明。
+ */
 function responsesText(json: unknown): string {
     // Responses non-streaming JSON is folded back into the same text event contract.
     const root = json as { output_text?: unknown; output?: unknown };
@@ -199,6 +243,10 @@ function responsesText(json: unknown): string {
     throw Error('LLM provider Responses JSON did not include text');
 }
 
+/**
+ * EN: readStreamingContent function declaration.
+ * ZH: readStreamingContent function 声明。
+ */
 async function readStreamingContent(controller: ReadableStreamDefaultController<IntelligenceEvent>, reader: LlmByteStreamReader, context: ProtocolBuildContext): Promise<void> {
     // Providers may split UTF-8 bytes and SSE/JSON lines across chunks, so decoding is buffered.
     const decoder = new TextDecoder();
@@ -218,6 +266,10 @@ async function readStreamingContent(controller: ReadableStreamDefaultController<
     throw Error(context.protocol.missingTerminalMessage ?? 'LLM provider stream ended without a terminal event');
 }
 
+/**
+ * EN: drainStreamingLines function declaration.
+ * ZH: drainStreamingLines function 声明。
+ */
 async function drainStreamingLines(controller: ReadableStreamDefaultController<IntelligenceEvent>, reader: LlmByteStreamReader, state: ProtocolStreamState, adapter: ProtocolAdapter, flush = false): Promise<void> {
     const lines = state.buffer.split('\n');
     state.buffer = flush ? '' : (lines.pop() ?? '');

@@ -1,4 +1,4 @@
-import { AgentChatRole } from '@/agent/memory';
+import { AgentChatRole } from '@/agent/types';
 import { FAgentAtom, Prompt, PromptService, Provide, Scope, type IObservable } from '@/core';
 import { Intelligence } from './intelligence/service';
 
@@ -20,6 +20,10 @@ export enum CallosumSignalType {
     Done = 'done',
 }
 
+/**
+ * EN: CallosumSignal interface declaration.
+ * ZH: CallosumSignal interface 声明。
+ */
 export interface CallosumSignal {
     type: CallosumSignalType;
     chunk: CallosumSignalType.Done | string;
@@ -27,6 +31,10 @@ export interface CallosumSignal {
 }
 
 @Provide()
+/**
+ * EN: Callosum class declaration.
+ * ZH: Callosum class 声明。
+ */
 export class Callosum extends FAgentAtom<string, CallosumSignal> implements IObservable<string, CallosumSignal> {
     @Prompt('prompts/callosum')
     public prompt!: PromptService<CallosumPrompt>;

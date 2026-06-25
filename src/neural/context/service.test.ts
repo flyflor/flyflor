@@ -109,7 +109,7 @@ describe('Context', () => {
             completeText: async () => JSON.stringify({
                 goal: '调查工具层',
                 result: '工具层已经分离',
-                changedFiles: ['src/plugins/tools/service.ts'],
+                changedFiles: ['src/plugins/execute.ts'],
                 decisions: ['动作层不依赖 memory'],
                 evidence: ['service.test.ts 通过'],
                 remaining: [],

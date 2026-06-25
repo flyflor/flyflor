@@ -1,50 +1,19 @@
 {
   "research": {
-    "toolUnavailable": "Tool {name} is not available during research.",
+    "toolUnavailable": "Tool {name} is not available for this answer.",
     "runtimeToolContext": {
-      "verifiedRootsIntro": "Runtime has already verified these user-provided filesystem paths. Use them directly with filesystem. Do not ask the user to confirm, correct, or rewrite them.",
-      "workingDirectory": "Relative filesystem paths resolve against the provided cwd: {workingDirectory}"
+      "verifiedRootsIntro": "These user-provided file paths have already been checked. Use them directly with filesystem. Do not ask the user to confirm, correct, or rewrite them.",
+      "workingDirectory": "Relative file paths resolve from this cwd: {workingDirectory}"
     },
     "toolResult": {
-      "readFileHeader": "filesystem read result for {path}: {bytes} bytes, truncated={truncated}",
+      "readFileHeader": "filesystem read for {path}: {bytes} bytes, truncated={truncated}",
       "genericHeader": "{name} result: {bytes} bytes, truncated={truncated}",
       "errorHeader": "{name} failed: {summary}",
       "truncationNotice": "\n\n[... {chars} more characters truncated]",
       "middleOmission": "\n\n[... middle content omitted ...]\n\n"
     },
     "system": {
-      "brief": "You are running a research investigation. First understand the user's actual goal, then gather only the evidence needed to answer it. Tools are evidence samplers, not the final answer. Do not dump tool output as the answer. Use user-provided filesystem paths directly. For large files, read paged slices instead of whole files. After each tool result, keep a concise evidence note and decide the next smallest useful step. Final answers must synthesize the evidence into conclusions, causes, and concrete next actions."
-    }
-  },
-  "tools": {
-    "ask": {
-      "description": "Ask the user an open clarification question with one or more concrete solution options.",
-      "parameters": {
-        "question": "The clarification question shown to the user.",
-        "options": "One or more concrete solution options. Exactly one should be recommended."
-      }
-    },
-    "confirm": {
-      "description": "Ask the user to confirm one yes/no decision.",
-      "parameters": {
-        "question": "The yes/no confirmation question shown to the user.",
-        "recommended": "The recommended yes/no default."
-      }
-    },
-    "filesystem": {
-      "description": "List directories, read text files, write full file content, or perform guarded text edits on the real filesystem.",
-      "parameters": {
-        "action": "One of list, read, write, or edit.",
-        "cwd": "Base directory used to resolve relative paths.",
-        "path": "Absolute path, or a relative path resolved from cwd.",
-        "depth": "Maximum directory listing depth for list. Defaults to 1.",
-        "offsetLines": "Zero-based line offset for reads. Defaults to 0.",
-        "limitLines": "Maximum number of lines to return for reads. Defaults to 200.",
-        "limitBytes": "Maximum bytes to return for reads. Defaults to 20000.",
-        "content": "Full file content for write.",
-        "oldText": "Exact text to replace for edit.",
-        "newText": "Replacement text for edit."
-      }
+      "brief": "First understand the user's actual goal, then gather only the evidence needed to answer it. Available actions provide evidence; they are not the final answer. Do not dump action output as the answer. Use user-provided file paths directly. For large files, read small slices instead of whole files. After each action result, keep a concise evidence note and decide the next smallest useful step. Final answers must turn the evidence into conclusions, causes, and concrete next actions."
     }
   }
 }

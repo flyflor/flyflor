@@ -1,31 +1,34 @@
-import { FTool, Tool } from '@/core';
+import { FToolAtom, Tool } from '@/core';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
-import { FILESYSTEM_TOOL_METADATA } from '../constants';
-import { FilesystemAction, type FilesystemListEntry, type FilesystemToolInput, type FilesystemToolOutput } from '../types';
+import type { FilesystemInput, FilesystemInputAction, FilesystemListEntry, FilesystemOutput } from './types';
 
-@Tool(FILESYSTEM_TOOL_METADATA)
-export class FilesystemTool extends FTool<FilesystemToolInput, FilesystemToolOutput> {
-    public override onPipe(input: FilesystemToolInput) {
+@Tool()
+/**
+ * EN: Filesystem class declaration.
+ * ZH: Filesystem class 声明。
+ */
+export class Filesystem extends FToolAtom<FilesystemInput, FilesystemOutput> {
+    public override onPipe(input: FilesystemInput) {
         const action = this.action(input.action);
-        if (action === FilesystemAction.List) return this.list(input);
-        if (action === FilesystemAction.Read) return this.read(input);
-        if (action === FilesystemAction.Write) return this.write(input);
+        if (action === 'list') return this.list(input);
+        if (action === 'read') return this.read(input);
+        if (action === 'write') return this.write(input);
         return this.edit(input);
     }
 
-    private list(input: FilesystemToolInput) {
+    private list(input: FilesystemInput) {
         const path = this.path(input.path, input.cwd);
         const depth = this.number(input.depth, 'depth', 1);
         const entries = this.entries(path, depth);
         return {
             ok: true,
-            data: { action: FilesystemAction.List, path, entries },
+            data: { action: 'list', path, entries },
             effects: [{ type: 'read', path }],
         } as const;
     }
 
-    private read(input: FilesystemToolInput) {
+    private read(input: FilesystemInput) {
         const path = this.path(input.path, input.cwd);
         const offsetLines = this.number(input.offsetLines, 'offsetLines', 0);
         const limitLines = this.number(input.limitLines, 'limitLines', 200);
@@ -36,7 +39,7 @@ export class FilesystemTool extends FTool<FilesystemToolInput, FilesystemToolOut
         return {
             ok: true,
             data: {
-                action: FilesystemAction.Read,
+                action: 'read',
                 path,
                 content: limited,
                 bytes: Buffer.byteLength(limited),
@@ -46,19 +49,19 @@ export class FilesystemTool extends FTool<FilesystemToolInput, FilesystemToolOut
         } as const;
     }
 
-    private write(input: FilesystemToolInput) {
+    private write(input: FilesystemInput) {
         const path = this.path(input.path, input.cwd);
         const content = this.text(input.content, 'content');
         mkdirSync(dirname(path), { recursive: true });
         writeFileSync(path, content, 'utf-8');
         return {
             ok: true,
-            data: { action: FilesystemAction.Write, path, bytes: Buffer.byteLength(content) },
+            data: { action: 'write', path, bytes: Buffer.byteLength(content) },
             effects: [{ type: 'write', path }],
         } as const;
     }
 
-    private edit(input: FilesystemToolInput) {
+    private edit(input: FilesystemInput) {
         const path = this.path(input.path, input.cwd);
         const oldText = this.text(input.oldText, 'oldText');
         const newText = this.text(input.newText, 'newText');
@@ -68,7 +71,7 @@ export class FilesystemTool extends FTool<FilesystemToolInput, FilesystemToolOut
         writeFileSync(path, updated, 'utf-8');
         return {
             ok: true,
-            data: { action: FilesystemAction.Edit, path, replacements: 1, bytes: Buffer.byteLength(updated) },
+            data: { action: 'edit', path, replacements: 1, bytes: Buffer.byteLength(updated) },
             effects: [{ type: 'write', path }],
         } as const;
     }
@@ -92,8 +95,8 @@ export class FilesystemTool extends FTool<FilesystemToolInput, FilesystemToolOut
         return resolve(cwd, input);
     }
 
-    private action(value: unknown): FilesystemAction {
-        if (value === FilesystemAction.List || value === FilesystemAction.Read || value === FilesystemAction.Write || value === FilesystemAction.Edit) return value;
+    private action(value: unknown): FilesystemInputAction {
+        if (value === 'list' || value === 'read' || value === 'write' || value === 'edit') return value;
         throw Error('action must be list, read, write, or edit');
     }
 

@@ -1,88 +1,87 @@
 {
-    // EN: Protocol package schema version.
-    // ZH: 协议包结构版本。
+    // EN: Long-term note schema version.
+    // ZH: 长期记录结构版本。
     "version": 1,
-    // EN: Human-readable package description.
-    // ZH: 面向人的协议包描述。
-    "description": "Flyflor agent protocol package.",
-    // EN: Runtime prompt sections loaded into the model.
-    // ZH: 运行时会加载给模型的 prompt section。
+    // EN: Human-readable note set description.
+    // ZH: 面向人的记录集描述。
+    "description": "Long-term assistant notes.",
+    // EN: Files loaded into ordinary assistant messages.
+    // ZH: 会加载进普通助手消息的文件。
     "prompt": {
         "sections": [
             "SOUL",
             "USER",
-            "AGENTS",
             "EXTENSION"
         ]
     },
-    // EN: Controlled protocol-package update policy.
-    // ZH: 受控协议包更新策略。
+    // EN: Files and write limits for long-term note updates.
+    // ZH: 长期记录更新使用的文件和写入限制。
     "protocolPackage": {
-        // EN: Files that model-reviewed updates may modify.
-        // ZH: 模型审查后的更新允许修改的文件。
+        // EN: Files that a reviewed update may modify.
+        // ZH: 审查后的更新允许修改的文件。
         "editable": [
             "SOUL.md",
             "USER.md",
             "EXTENSION.md"
         ],
-        // EN: Files that are part of the package but locked against model writes.
-        // ZH: 属于协议包但禁止模型写入的文件。
+        // EN: Files that can be read for rules but must not be rewritten.
+        // ZH: 可读取规则但禁止重写的文件。
         "locked": [
             "AGENTS.md"
         ],
-        // EN: Metadata files read by runtime services but never injected as prompt sections.
-        // ZH: 运行时服务可读取、但不会作为 prompt section 注入的元信息文件。
+        // EN: Files not loaded into ordinary assistant messages.
+        // ZH: 不加载进普通助手消息的文件。
         "runtimeIgnored": [
-            "config.jsonc"
+            "config.jsonc",
+            "AGENTS.md",
+            "AGENTS.zh.cn.md",
+            "SOUL.zh.cn.md",
+            "USER.zh.cn.md",
+            "EXTENSION.zh.cn.md"
         ],
-        // EN: Context blocks used by Callosum when asking the model to plan durable protocol-package writes.
-        // ZH: Callosum 生成长期协议包写入计划时使用的上下文块。
+        // EN: XML documents supplied when planning note updates.
+        // ZH: 规划记录更新时提供的 XML 文档。
         "context": {
-            // EN: Root XML tag for the rendered protocol package context.
-            // ZH: 渲染协议包上下文时使用的 XML 根标签。
-            "root": "package",
-            // EN: Ordered files included in the soul write-plan prompt context.
-            // ZH: soul 写入计划 prompt 中按顺序注入的文件。
+            // EN: Root XML tag.
+            // ZH: XML 根标签。
+            "root": "prompt_package",
+            // EN: Ordered documents included for update planning.
+            // ZH: 更新规划时按顺序包含的文档。
             "blocks": [
                 {
-                    // EN: Include this config file as package metadata and policy context.
-                    // ZH: 注入当前配置文件，作为包元信息和写入策略上下文。
                     "key": "config",
-                    "tag": "config",
+                    "tag": "document",
                     "file": "config.jsonc",
-                    "note": "package metadata and write policy"
+                    "role": "policy",
+                    "note": "file list and write limits"
                 },
                 {
-                    // EN: Include immutable package rules and minimal durable-memory unit definitions.
-                    // ZH: 注入不可写包规则和最小长期记忆单元定义。
                     "key": "AGENTS",
-                    "tag": "rules",
+                    "tag": "document",
                     "file": "AGENTS.md",
-                    "note": "package rules and minimum durable-memory units"
+                    "role": "rules",
+                    "note": "update rules"
                 },
                 {
-                    // EN: Include editable agent identity, values, style, boundaries, and mission.
-                    // ZH: 注入可编辑的智能体身份、价值观、风格、边界和使命。
                     "key": "SOUL",
-                    "tag": "editable",
+                    "tag": "document",
                     "file": "SOUL.md",
-                    "note": "agent identity, values, style, boundaries, and mission"
+                    "role": "assistant_notes",
+                    "note": "assistant identity, style, boundaries, and mission"
                 },
                 {
-                    // EN: Include editable user profile, relationship, preferences, strengths, goals, and expectations.
-                    // ZH: 注入可编辑的用户画像、关系、偏好、擅长领域、目标和沟通期待。
                     "key": "USER",
-                    "tag": "editable",
+                    "tag": "document",
                     "file": "USER.md",
-                    "note": "user profile, relationship, preferences, strengths, goals, and expectations"
+                    "role": "user_notes",
+                    "note": "user profile, preferences, expertise, goals, and communication"
                 },
                 {
-                    // EN: Include editable long-term tools, integrations, infrastructure, and reusable workflows.
-                    // ZH: 注入可编辑的长期工具、集成、基础设施和可复用工作流。
                     "key": "EXTENSION",
-                    "tag": "editable",
+                    "tag": "document",
                     "file": "EXTENSION.md",
-                    "note": "long-term tools, integrations, infrastructure, and reusable workflows"
+                    "role": "capabilities",
+                    "note": "available abilities, workflows, and limits"
                 }
             ]
         }

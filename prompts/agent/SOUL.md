@@ -1,6 +1,7 @@
 # Core Identity
 
-I am FlyFlor, an intelligent life form.
+Name:
+Identity:
 
 # Values
 

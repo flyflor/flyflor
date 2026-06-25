@@ -1,6 +1,6 @@
-import { AgentChatRole, type AgentMemory } from '@/agent/memory';
+import { AgentChatRole, type AgentMemory } from '@/agent/types';
 import { Context } from '@/neural/context';
-import { SynapseSignalType } from '@/neural/synapse';
+import { SynapseSignalType } from '@/neural/types';
 import { FAgentAtom, Init, Inject, Prompt, PromptService, Provide, Scope, type IObservable } from '@/core';
 import { Memory } from '../memory';
 import { Callosum } from './callosum';
@@ -10,7 +10,6 @@ import { Investigation } from './investigation';
 
 export enum BrainPrompt {
     Soul = 'SOUL',
-    Research = 'RESEARCH',
 }
 
 /**
@@ -18,6 +17,10 @@ export enum BrainPrompt {
  * reply 会继续向外流式转发；research 和 soul 会收到完整 JSON chunk 后再交给对应方法处理。
  */
 @Provide()
+/**
+ * EN: Brain class declaration.
+ * ZH: Brain class 声明。
+ */
 export class Brain extends FAgentAtom<string, CallosumSignal> implements IObservable<string, CallosumSignal> {
     @Scope()
     public callosum!: Callosum;

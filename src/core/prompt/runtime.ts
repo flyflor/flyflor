@@ -3,11 +3,19 @@ import { FService } from '@/core/ioc';
 import { Prompt } from './decorator';
 import { PromptService } from './service';
 
+/**
+ * EN: RuntimeToolText interface declaration.
+ * ZH: RuntimeToolText interface 声明。
+ */
 export interface RuntimeToolText {
     description?: string;
     parameters?: Record<string, string>;
 }
 
+/**
+ * EN: RuntimeTextData interface declaration.
+ * ZH: RuntimeTextData interface 声明。
+ */
 export interface RuntimeTextData {
     research?: {
         toolUnavailable?: string;
@@ -30,6 +38,10 @@ export interface RuntimeTextData {
 }
 
 @Service()
+/**
+ * EN: RuntimeText class declaration.
+ * ZH: RuntimeText class 声明。
+ */
 export class RuntimeText extends FService {
     @Prompt('prompts/runtime.json')
     public source!: PromptService<string, string>;

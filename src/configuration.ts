@@ -3,6 +3,10 @@ import { FService, Singleton } from '@/core';
 import { readFileSync } from 'fs';
 import { JSON5 } from 'bun';
 
+/**
+ * EN: Resolved runtime paths shared across the process.
+ * ZH: 进程级共享的运行时路径集合。
+ */
 export interface FSystemPathInfo {
     root: string;
     runtime: string;
@@ -11,11 +15,18 @@ export interface FSystemPathInfo {
     socket: string;
 }
 
+/**
+ * EN: Authentication strategy used by one model protocol.
+ * ZH: 单个模型协议使用的鉴权策略。
+ */
 export type FModelProtocolAuthMode = 'bearer' | 'optionalBearer' | 'anthropic' | 'google' | 'none';
 
 /**
- * One provider/model timeout override.
- * `timeoutSeconds` controls a single model request; `staleTimeoutSeconds` controls idle-call detection.
+ * EN: One provider/model timeout override.
+ * ZH: 单个 provider/model 的超时覆盖配置。
+ *
+ * EN: `timeoutSeconds` controls a single model request; `staleTimeoutSeconds` controls idle-call detection.
+ * ZH: `timeoutSeconds` 控制单次模型请求；`staleTimeoutSeconds` 控制空闲调用检测。
  */
 export interface FProviderModelConfiguration {
     timeoutSeconds: number;
@@ -35,6 +46,10 @@ export enum FModelProtocolName {
     OpenAIChatCompletions = 'openaiChatCompletions',
 }
 
+/**
+ * EN: One transport protocol candidate for a provider/model pair.
+ * ZH: 一个 provider/model 对应的传输协议候选项。
+ */
 export interface FModelProtocolConfiguration {
     name: FModelProtocolName;
     enabled?: boolean;
@@ -50,9 +65,12 @@ export interface FModelProtocolConfiguration {
 }
 
 /**
- * One inference provider configuration.
- * `requestTimeoutSeconds` and `staleTimeoutSeconds` are provider defaults; `models` stores per-model
+ * EN: One inference provider configuration.
+ * ZH: 单个推理 provider 配置。
+ *
+ * EN: `requestTimeoutSeconds` and `staleTimeoutSeconds` are provider defaults; `models` stores per-model
  * overrides keyed by provider model name.
+ * ZH: `requestTimeoutSeconds` 和 `staleTimeoutSeconds` 是 provider 默认值；`models` 按 provider model 名保存每模型覆盖项。
  */
 export interface FProviderConfiguration {
     requestTimeoutSeconds: number;
@@ -62,10 +80,12 @@ export interface FProviderConfiguration {
 }
 
 /**
- * flyflor model selection and endpoint configuration.
- * `default` and `model` identify the default model; `provider` selects a provider entry; `apiKeyEnv` names
+ * EN: Flyflor model selection and endpoint configuration.
+ * ZH: Flyflor 模型选择和端点配置。
+ *
+ * EN: `default` and `model` identify the default model; `provider` selects a provider entry; `apiKeyEnv` names
  * the environment variable used for auth; `baseUrl` is the OpenAI-compatible endpoint root;
- * `fastModel` is the cheap model used by the conductor's route-decision oracle (falls back to `default`).
+ * ZH: `default` 和 `model` 标识默认模型；`provider` 选择 provider 条目；`apiKeyEnv` 命名鉴权环境变量；`baseUrl` 是 OpenAI-compatible endpoint root。
  */
 export interface FModelConfiguration {
     default: string;
@@ -80,8 +100,11 @@ export interface FModelConfiguration {
 }
 
 /**
- * Persistent memory configuration.
- * It controls agent memory, user profile memory, character budgets, periodic nudges, and flush timing.
+ * EN: Persistent memory configuration.
+ * ZH: 持久记忆配置。
+ *
+ * EN: It controls agent memory, user profile memory, character budgets, periodic nudges, and flush timing.
+ * ZH: 它控制 agent memory、user profile memory、字符预算、周期性提醒和 flush 时机。
  */
 export interface FMemoryConfiguration {
     memoryEnabled: boolean;
@@ -93,9 +116,11 @@ export interface FMemoryConfiguration {
 }
 
 /**
- * One configured agent profile.
- * Profiles enable multi-agent setups by giving each agent its own role, model/provider, prompt, personality,
- * toolsets, MCP server allowlist, turn budget, and enabled flag.
+ * EN: One configured agent profile.
+ * ZH: 单个已配置 agent profile。
+ *
+ * EN: Profiles enable multi-agent setups by giving each agent its own model/provider and token budget.
+ * ZH: profile 通过为每个 agent 提供自己的 model/provider 和 token budget 来支持多 agent 配置。
  */
 export interface FAgentProfileConfiguration {
     name: string;
@@ -106,9 +131,12 @@ export interface FAgentProfileConfiguration {
 }
 
 /**
- * Flyflor's single configuration object.
- * It keeps only the fields Flyflor currently needs: model/provider settings, memory, global agent behavior,
- * named agent profiles, and the public IPC socket path.
+ * EN: Flyflor's single configuration object.
+ * ZH: Flyflor 的单一配置对象。
+ *
+ * EN: It keeps the fields Flyflor currently needs: model/provider settings, memory, agent profiles, skills,
+ * MCP servers, and the public IPC socket path.
+ * ZH: 它只保存 Flyflor 当前需要的字段：model/provider 设置、memory、agent profiles、skills、MCP servers 和公开 IPC socket path。
  */
 export interface FConfiguration {
     model: FModelConfiguration;
@@ -121,15 +149,27 @@ export interface FConfiguration {
     mcp: MCPServerConfig;
 }
 
+/**
+ * EN: Skill loading and discovery settings.
+ * ZH: skill 加载与发现配置。
+ */
 export interface SkillsConfig {
     directory: string;
     creationNudgeInterval: number;
     externalDirs: string[];
 }
 
+/**
+ * EN: One MCP server registry block.
+ * ZH: 一组 MCP server 注册配置。
+ */
 export interface MCPServerConfig {
     servers?: { [mcpName: string]: MCPConfig };
 }
+/**
+ * EN: One MCP server launch or remote endpoint definition.
+ * ZH: 单个 MCP server 的启动或远端端点定义。
+ */
 export interface MCPConfig {
     command?: string;
     args?: string[];
@@ -138,8 +178,11 @@ export interface MCPConfig {
 }
 
 /**
- * Resolved active provider consumed by the current runtime service.
- * It is derived from `FConfiguration.model`.
+ * EN: Resolved active provider consumed by the current runtime service.
+ * ZH: 当前运行时服务使用的已解析 active provider。
+ *
+ * EN: It is derived from `FConfiguration.model`.
+ * ZH: 它从 `FConfiguration.model` 派生。
  */
 export interface ActiveLlmProviderConfig {
     name: string;
@@ -149,8 +192,16 @@ export interface ActiveLlmProviderConfig {
     models: string[];
 }
 
+/**
+ * EN: Singleton service that loads and exposes runtime configuration.
+ * ZH: 加载并暴露运行时配置的 singleton service。
+ */
 @Singleton()
 export class ConfigService extends FService implements FConfiguration {
+    /**
+     * EN: Process-wide resolved path cache.
+     * ZH: 进程级解析后的路径缓存。
+     */
     public static path: FSystemPathInfo = {
         root: join(__dirname, '..'),
         runtime: __dirname,
@@ -159,10 +210,18 @@ export class ConfigService extends FService implements FConfiguration {
         socket: '',
     };
 
+    /**
+     * EN: Reads the shared runtime path state.
+     * ZH: 读取共享运行时路径状态。
+     */
     public get path() {
         return ConfigService.path;
     }
 
+    /**
+     * EN: Replaces the shared runtime path state.
+     * ZH: 替换共享运行时路径状态。
+     */
     public set path(value) {
         ConfigService.path = value;
     }
@@ -176,6 +235,10 @@ export class ConfigService extends FService implements FConfiguration {
     public skills: SkillsConfig;
     public mcp: MCPServerConfig;
 
+    /**
+     * EN: Loads config defaults, merges `.config/config.jsonc`, and resolves active model protocols.
+     * ZH: 加载默认配置，合并 `.config/config.jsonc`，并解析当前模型协议。
+     */
     constructor() {
         super();
         this.model = {
@@ -221,6 +284,10 @@ export class ConfigService extends FService implements FConfiguration {
         this.model.protocols = this.resolveModelProtocols();
     }
 
+    /**
+     * EN: Chooses the protocol list for the active provider and fails fast when none exists.
+     * ZH: 为当前 provider 选出协议列表；缺失时立即报错。
+     */
     private resolveModelProtocols(): FModelProtocolConfiguration[] {
         const providerProtocols = this.providers[this.model.provider]?.protocols;
         const protocols = providerProtocols && providerProtocols.length > 0 ? providerProtocols : this.model.protocols;
@@ -229,6 +296,10 @@ export class ConfigService extends FService implements FConfiguration {
     }
 }
 
+/**
+ * EN: Returns the repository root resolved by `ConfigService`.
+ * ZH: 返回 `ConfigService` 解析出的仓库根路径。
+ */
 export function useRootPath() {
     return ConfigService.path.root;
 }

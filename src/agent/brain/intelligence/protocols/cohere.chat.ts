@@ -31,6 +31,10 @@ export const cohereChatAdapter: ProtocolAdapter = {
     },
 };
 
+/**
+ * EN: sseData function declaration.
+ * ZH: sseData function 声明。
+ */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();
     if (trimmed.length === 0 || !trimmed.startsWith('data:')) return undefined;

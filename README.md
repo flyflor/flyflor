@@ -63,7 +63,6 @@ Runtime prompt files are canonical English `.md` files. Human mirror files such 
 
 Agent prompt directories are loaded through `@Prompt()` as `FileService` objects. The agent consumes the loaded file data; it does not read prompt files directly.
 
-## More Docs
+## Documentation
 
-- [Architecture](docs/architecture.md): runtime flow, decorator index, base class index, and IOC details.
-- [Boundaries](docs/boundaries.md): directory ownership, core source locations, object ownership, and import rules.
+This README is the implementation overview. Runtime rules live in [AGENTS.md](AGENTS.md), and detailed behavior should stay near the code that implements it.

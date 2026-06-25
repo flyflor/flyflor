@@ -63,7 +63,6 @@ runtime prompt files 是 canonical English `.md`。`.zh.cn.md` 这类 human mirr
 
 Agent prompt directory 通过 `@Prompt()` 加载为 `FileService` object。agent 消费已加载的 file data，不直接读 prompt 文件。
 
-## 更多文档
+## 文档
 
-- [Architecture](docs/architecture.md)：runtime flow、decorator index、base class index 和 IOC details。
-- [Boundaries](docs/boundaries.md)：directory ownership、core source locations、object ownership 和 import rules。
+本 README 是实现总览。运行时规则在 [AGENTS.md](AGENTS.md)，详细行为说明应靠近实现它的代码。

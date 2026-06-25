@@ -1,4 +1,4 @@
-# Context Ingest Prompt
+# Summarize the Latest User Request
 
 Read the latest user message, understand the user's active intent, and return only compact JSON.
 
@@ -8,11 +8,10 @@ Schema:
 
 Rules:
 
-- Do not include `userText`; runtime adds it.
-- Understand only the latest user turn. Do not invent prior history.
-- Runtime keeps turn understanding and summaries only; do not assume a raw transcript store.
+- Do not include `userText`; it is added later.
+- Understand only the latest user message. Do not invent prior history.
 - Use `research` when code, files, external evidence, or clarification is needed.
-- Use `soul` only for durable agent/user/profile/capability memory changes.
+- Use `soul` only for long-term assistant, user, profile, preference, or ability-note changes.
 - Use `reply` only when a direct answer is enough.
 - `references` items use `{ "type": "path|error|command|symbol|text", "value": "..." }`.
 - Return valid JSON only.

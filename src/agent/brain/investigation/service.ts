@@ -1,14 +1,18 @@
-import { AgentChatRole, type AgentMemory } from '@/agent/memory';
+import { AgentChatRole, type AgentMemory } from '@/agent/types';
 import { FAgentAtom, Inject, Provide, Scope } from '@/core';
 import { Context } from '@/neural/context';
-import { SynapseSignalType } from '@/neural/synapse';
-import { type ActionRequest, Tools } from '@/plugins/tools';
+import { SynapseSignalType } from '@/neural/types';
+import { type ActionRequest, ToolComponent } from '@/plugins';
 import { CallosumSignalType, type CallosumSignal } from '../callosum';
 import { Intelligence } from '../intelligence/service';
 import type { ProviderActionRequestMessage, ProviderActionResultMessage, ProviderMessage } from '../intelligence/types';
 import type { InvestigationOutcome } from './types';
 
 @Provide()
+/**
+ * EN: Investigation class declaration.
+ * ZH: Investigation class 声明。
+ */
 export class Investigation extends FAgentAtom {
     @Scope()
     public intelligence!: Intelligence;
@@ -17,7 +21,7 @@ export class Investigation extends FAgentAtom {
     public context!: Context;
 
     @Inject()
-    public tools!: Tools;
+    public tools!: ToolComponent;
 
     public async run(signal: CallosumSignal, baseMessages: AgentMemory[]): Promise<InvestigationOutcome> {
         const messages: ProviderMessage[] = [...baseMessages];
@@ -26,7 +30,7 @@ export class Investigation extends FAgentAtom {
         while (true) {
             step += 1;
             this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.LlmTurn, chunk: String(step), data: { step } });
-            const result = await this.intelligence.streamTurn(messages, this.tools.list(), (chunk) => {
+            const result = await this.intelligence.streamTurn(messages, await this.tools.list(), (chunk) => {
                 this.synapse.emit(SynapseSignalType.Reply, chunk);
             });
             if (result.actionRequests.length === 0) {
@@ -58,7 +62,7 @@ export class Investigation extends FAgentAtom {
         };
     }
 
-    private actionResultMessage(request: ActionRequest, result: Awaited<ReturnType<Tools['run']>>): ProviderActionResultMessage {
+    private actionResultMessage(request: ActionRequest, result: Awaited<ReturnType<ToolComponent['run']>>): ProviderActionResultMessage {
         return {
             role: 'action',
             content: JSON.stringify(result),
@@ -68,7 +72,7 @@ export class Investigation extends FAgentAtom {
         };
     }
 
-    private evidence(request: ActionRequest, result: Awaited<ReturnType<Tools['run']>>): string {
+    private evidence(request: ActionRequest, result: Awaited<ReturnType<ToolComponent['run']>>): string {
         if (result.ok) {
             if (request.name === 'filesystem') {
                 const data = result.data as { action?: unknown; path?: unknown };
