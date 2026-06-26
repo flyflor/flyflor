@@ -1,6 +1,6 @@
 import type { FModelConfiguration } from '@/configuration';
 import { Config, FAgentAtom, Provide } from '@/core';
-import { createIntelligenceTurnStream } from './factory';
+import { createIntelligenceRequestStream } from './factory';
 import type { ActionRequest } from '@/plugins';
 import type { IntelligenceEvent, IntelligenceStopReason, IntelligenceToolDefinition, ProviderMessage } from './types';
 
@@ -8,7 +8,7 @@ import type { IntelligenceEvent, IntelligenceStopReason, IntelligenceToolDefinit
  * One finished provider result assembled from the event stream.
  * `text` is the visible answer; `actionRequests` carries model-requested actions; `reasoning` is
  * provider thinking text that must be replayed with action requests on the next local provider call
- * (DeepSeek thinking mode rejects a tool turn otherwise).
+ * so compatible providers can continue the same response cycle.
  */
 export interface IntelligenceResult {
     text: string;
@@ -33,16 +33,16 @@ export class Intelligence extends FAgentAtom {
     private abortController?: AbortController;
 
     /**
-     * Opens one streaming LLM turn.
+     * Opens one streaming provider request.
      * Callers receive structured provider events and do not need to know protocol details.
      */
     public reader(messages: ProviderMessage[], tools?: IntelligenceToolDefinition[]) {
         this.abortController = new AbortController();
-        return createIntelligenceTurnStream(this.config, messages, this.abortController.signal, tools).getReader();
+        return createIntelligenceRequestStream(this.config, messages, this.abortController.signal, tools).getReader();
     }
 
     /**
-     * Streams one text LLM turn, forwarding only visible text deltas.
+     * Streams one text provider request, forwarding only visible text deltas.
      * 中文：业务对象只关心 chunk；reader 生命周期留在 Intelligence 内部统一处理。
      */
     public async stream(messages: ProviderMessage[], next: (chunk: string) => void): Promise<void> {
@@ -66,32 +66,32 @@ export class Intelligence extends FAgentAtom {
     }
 
     /**
-     * Runs one full text LLM call, concatenating visible text deltas.
+     * Runs one full text provider request, concatenating visible text deltas.
      * Used by route classification and soul write planning, which expect a plain string answer.
      */
     public async completeText(messages: ProviderMessage[]): Promise<string> {
-        const result = await this.runTurn(messages);
+        const result = await this.runRequest(messages);
         return result.text;
     }
 
     /**
-     * Runs one full LLM turn, optionally advertising tools, and assembles the structured result.
+     * Runs one full provider request, optionally advertising tools, and assembles the structured result.
      * The research loop uses action requests to drive tool execution before continuing.
      */
-    public async runTurn(messages: ProviderMessage[], tools?: IntelligenceToolDefinition[]): Promise<IntelligenceResult> {
+    public async runRequest(messages: ProviderMessage[], tools?: IntelligenceToolDefinition[]): Promise<IntelligenceResult> {
         return this.consume(this.reader(messages, tools));
     }
 
     /**
-     * Streams one research turn, forwarding text deltas live while collecting action requests.
-     * Lets the loop surface a streamed answer and act on tool requests from the same turn.
+     * Streams one research request, forwarding text deltas live while collecting action requests.
+     * Lets the loop surface a streamed answer and act on tool requests from the same response cycle.
      */
-    public async streamTurn(messages: ProviderMessage[], tools: IntelligenceToolDefinition[] | undefined, onText: (chunk: string) => void): Promise<IntelligenceResult> {
+    public async streamRequest(messages: ProviderMessage[], tools: IntelligenceToolDefinition[] | undefined, onText: (chunk: string) => void): Promise<IntelligenceResult> {
         return this.consume(this.reader(messages, tools), onText);
     }
 
     /**
-     * Drains one structured turn stream into a finished `IntelligenceResult`.
+     * Drains one structured provider stream into a finished `IntelligenceResult`.
      * `onText` (when given) forwards visible text deltas live so the loop can stream a partial answer.
      */
     private async consume(reader: ReturnType<Intelligence['reader']>, onText?: (chunk: string) => void): Promise<IntelligenceResult> {

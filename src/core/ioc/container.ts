@@ -32,8 +32,8 @@ export class Container {
      * ZH: 通过异步 IOC 生命周期解析一个 class。
      *
      * EN: `getAsync` is the single IOC construction entrypoint. Classes marked with `@Singleton()` are cached;
-     * ordinary providers are constructed fresh on each call so stateful request objects do not leak between turns.
-     * ZH: `getAsync` 是唯一 IOC 构造入口。`@Singleton()` class 会缓存；普通 provider 每次 fresh 构造，避免有状态请求对象跨 turn 泄漏。
+     * ordinary providers are constructed fresh on each call so stateful request objects do not leak across requests.
+     * ZH: `getAsync` 是唯一 IOC 构造入口。`@Singleton()` class 会缓存；普通 provider 每次 fresh 构造，避免有状态请求对象跨请求泄漏。
      */
     public async getAsync<T extends ClassType, P extends unknown[]>(Module: T, ...props: P): Promise<InstanceType<T>> {
         if (!this.classList.includes(Module)) this.classList.push(Module);

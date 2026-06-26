@@ -32,7 +32,7 @@ export abstract class FService extends FlyFlor {}
 export abstract class FComponent extends FService {}
 
 /**
- * Base class for module boundaries declared with `@Module()` (capillary, ipc, guard, agent, root).
+ * Base class for module boundaries declared with `@Module()`.
  */
 export abstract class FModule extends FComponent {}
 
@@ -365,12 +365,11 @@ export interface FAgentSynapseBus {
 }
 
 /**
- * Base class for autonomous intelligent agents ("person" semantic).
+ * Base class for autonomous agents.
  *
- * Parallel to `FService`: an agent is NOT a stateless service — it has its own mind (soul), its own
- * memory, its own capillary subscriptions. The runtime uses `FAgent` to discover every active agent
- * via `listModule(FAgent)` and to manage their lifecycles. An agent's `chat` is the canonical
- * entry point: the runtime never inspects or rewrites the agent's system prompt.
+ * Parallel to `FService`: an agent is not a stateless service. It owns its own memory, scoped
+ * cognition objects, and runtime subscriptions. The observable input surface is the canonical
+ * interaction boundary for the active profile.
  */
 export abstract class FAgentAtom<T = object | number | string | boolean | undefined, R = T> extends Observable<T, R> {
     /**

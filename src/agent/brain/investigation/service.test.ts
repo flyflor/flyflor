@@ -11,7 +11,7 @@ import { Investigation } from './service';
  * EN: investigation function declaration.
  * ZH: investigation function 声明。
  */
-function investigation(context: Context, turns: Array<{ text: string; actionRequests: ActionRequest[] }>) {
+function investigation(context: Context, responses: Array<{ text: string; actionRequests: ActionRequest[] }>) {
     const events: Array<{ type: SynapseSignalType; data: unknown }> = [];
     const seenMessages: ProviderMessage[][] = [];
     const instance = new Investigation(
@@ -27,11 +27,11 @@ function investigation(context: Context, turns: Array<{ text: string; actionRequ
             : { ok: true, name: call.name, data: { action: 'read', path: '/tmp/demo.ts', value: 'tool result' } },
     } as never;
     instance.intelligence = {
-        streamTurn: async (messages: ProviderMessage[], _tools: IntelligenceToolDefinition[] | undefined, onText: (chunk: string) => void) => {
+        streamRequest: async (messages: ProviderMessage[], _tools: IntelligenceToolDefinition[] | undefined, onText: (chunk: string) => void) => {
             seenMessages.push(messages.map((message) => ({ ...message } as ProviderMessage)));
-            const turn = turns[index++]!;
-            if (turn.actionRequests.length === 0) onText(turn.text);
-            return { text: turn.text, reasoning: '', actionRequests: turn.actionRequests, stopReason: 'stop' };
+            const response = responses[index++]!;
+            if (response.actionRequests.length === 0) onText(response.text);
+            return { text: response.text, reasoning: '', actionRequests: response.actionRequests, stopReason: 'stop' };
         },
     } as never;
     return { instance, events, seenMessages };

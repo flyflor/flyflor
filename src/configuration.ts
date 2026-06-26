@@ -178,21 +178,6 @@ export interface MCPConfig {
 }
 
 /**
- * EN: Resolved active provider consumed by the current runtime service.
- * ZH: 当前运行时服务使用的已解析 active provider。
- *
- * EN: It is derived from `FConfiguration.model`.
- * ZH: 它从 `FConfiguration.model` 派生。
- */
-export interface ActiveLlmProviderConfig {
-    name: string;
-    baseUrl: string;
-    apiKeyEnv: string;
-    defaultModel: string;
-    models: string[];
-}
-
-/**
  * EN: Singleton service that loads and exposes runtime configuration.
  * ZH: 加载并暴露运行时配置的 singleton service。
  */

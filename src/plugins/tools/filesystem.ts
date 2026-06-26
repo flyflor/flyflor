@@ -1,7 +1,8 @@
-import { FToolAtom, Tool } from '@/core';
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import type { ConfigService } from '@/configuration';
+import { Config, FToolAtom, Tool } from '@/core';
+import { mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
-import type { FilesystemInput, FilesystemInputAction, FilesystemListEntry, FilesystemOutput } from './types';
+import type { FilesystemInput, FilesystemInputAction, FilesystemOutput } from './types';
 
 @Tool()
 /**
@@ -9,23 +10,15 @@ import type { FilesystemInput, FilesystemInputAction, FilesystemListEntry, Files
  * ZH: Filesystem class 声明。
  */
 export class Filesystem extends FToolAtom<FilesystemInput, FilesystemOutput> {
+    @Config()
+    public config!: ConfigService;
+
     public override onPipe(input: FilesystemInput) {
         const action = this.action(input.action);
-        if (action === 'list') return this.list(input);
         if (action === 'read') return this.read(input);
         if (action === 'write') return this.write(input);
-        return this.edit(input);
-    }
-
-    private list(input: FilesystemInput) {
-        const path = this.path(input.path, input.cwd);
-        const depth = this.number(input.depth, 'depth', 1);
-        const entries = this.entries(path, depth);
-        return {
-            ok: true,
-            data: { action: 'list', path, entries },
-            effects: [{ type: 'read', path }],
-        } as const;
+        if (action === 'edit') return this.edit(input);
+        return this.remove(input);
     }
 
     private read(input: FilesystemInput) {
@@ -76,28 +69,32 @@ export class Filesystem extends FToolAtom<FilesystemInput, FilesystemOutput> {
         } as const;
     }
 
-    private entries(path: string, depth: number): FilesystemListEntry[] {
-        if (depth <= 0) return [];
-        const entries: FilesystemListEntry[] = [];
-        for (const entry of readdirSync(path, { withFileTypes: true })) {
-            const childPath = resolve(path, entry.name);
-            const type = entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other';
-            entries.push({ name: entry.name, path: childPath, type });
-            if (entry.isDirectory()) entries.push(...this.entries(childPath, depth - 1));
-        }
-        return entries;
+    private remove(input: FilesystemInput) {
+        const path = this.path(input.path, input.cwd);
+        const stat = statSync(path);
+        if (!stat.isFile()) throw Error('delete only supports files');
+        unlinkSync(path);
+        return {
+            ok: true,
+            data: { action: 'delete', path },
+            effects: [{ type: 'delete', path }],
+        } as const;
     }
 
     private path(value: unknown, cwdValue?: unknown): string {
-        const cwd = this.text(cwdValue, 'cwd');
         const input = this.text(value, 'path');
         if (isAbsolute(input)) return resolve(input);
+        const cwdSource = typeof cwdValue === 'string' && cwdValue.length > 0 ? cwdValue : this.config.path.cwd;
+        const cwd = typeof cwdSource === 'string' && cwdSource.length > 0
+            ? (isAbsolute(cwdSource) ? cwdSource : resolve(this.config.path.cwd, cwdSource))
+            : cwdSource;
+        if (typeof cwd !== 'string' || cwd.length === 0) throw Error('cwd is required');
         return resolve(cwd, input);
     }
 
     private action(value: unknown): FilesystemInputAction {
-        if (value === 'list' || value === 'read' || value === 'write' || value === 'edit') return value;
-        throw Error('action must be list, read, write, or edit');
+        if (value === 'read' || value === 'write' || value === 'edit' || value === 'delete') return value;
+        throw Error('action must be read, write, edit, or delete');
     }
 
     private text(value: unknown, name: string): string {

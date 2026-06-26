@@ -55,8 +55,8 @@ export interface ProviderActionResultMessage {
 export type ProviderMessage = AgentMemory | ProviderActionRequestMessage | ProviderActionResultMessage;
 
 /**
- * EN: Reason a provider turn ended.
- * ZH: provider turn 结束的原因。
+ * EN: Reason a provider request ended.
+ * ZH: provider request 结束的原因。
  *
  * EN: `stop`/`length` finish a plain text answer; `toolUse` means the model emitted action requests and expects results.
  * ZH: `stop`/`length` 表示普通文本回答结束；`toolUse` 表示模型发出了 action request 并等待结果。
@@ -64,12 +64,12 @@ export type ProviderMessage = AgentMemory | ProviderActionRequestMessage | Provi
 export type IntelligenceStopReason = 'stop' | 'length' | 'toolUse';
 
 /**
- * EN: One structured event from a provider turn.
- * ZH: provider turn 产生的一条结构化事件。
+ * EN: One structured event from a provider request.
+ * ZH: provider request 产生的一条结构化事件。
  *
- * EN: Text turns emit only `text_delta` then `done`. Provider wire tool calls are normalized into action
+ * EN: Text requests emit only `text_delta` then `done`. Provider wire tool calls are normalized into action
  * events so only protocol adapters know wire names such as OpenAI `tool_calls`.
- * ZH: 文本 turn 只发出 `text_delta` 和 `done`。provider 线协议工具调用会被规范化成 action event，因此只有 protocol adapter 需要知道 OpenAI `tool_calls` 这类线协议名称。
+ * ZH: 文本 request 只发出 `text_delta` 和 `done`。provider 线协议工具调用会被规范化成 action event，因此只有 protocol adapter 需要知道 OpenAI `tool_calls` 这类线协议名称。
  */
 export type IntelligenceEvent =
     | { type: 'text_delta'; text: string }

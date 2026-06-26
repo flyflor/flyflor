@@ -79,15 +79,15 @@ export class Memory extends FAgentAtom {
                 openQuestions: this.context.current.openQuestions,
                 shouldInvestigate: this.context.current.shouldInvestigate,
             } : undefined,
-            recentTurns: this.context.recent().map((turn) => ({
-                status: turn.status,
-                goal: turn.understanding.goal,
-                user: turn.understanding.userText,
-                summary: turn.summary ? {
-                    result: turn.summary.result,
-                    decisions: turn.summary.decisions,
-                    evidence: turn.summary.evidence,
-                    remaining: turn.summary.remaining,
+            recentContext: this.context.recent().map((entry) => ({
+                status: entry.status,
+                goal: entry.understanding.goal,
+                user: entry.understanding.userText,
+                summary: entry.summary ? {
+                    result: entry.summary.result,
+                    decisions: entry.summary.decisions,
+                    evidence: entry.summary.evidence,
+                    remaining: entry.summary.remaining,
                 } : undefined,
             })),
             completed: this.context.completed.map((summary) => ({

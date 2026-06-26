@@ -34,7 +34,7 @@ export const createProtocolStreamState = (): ProtocolStreamState => ({
  * Creates a cancellable structured event stream for one provider-facing LLM request.
  * Provider wire tool calls are normalized into action events before callers see the stream.
  */
-export const createIntelligenceTurnStream = (
+export const createIntelligenceRequestStream = (
     config: FModelConfiguration,
     messages: ProviderMessage[],
     signal: AbortSignal,

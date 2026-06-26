@@ -70,7 +70,6 @@ export interface FilesystemInput {
     action?: unknown;
     cwd?: unknown;
     path?: unknown;
-    depth?: unknown;
     offsetLines?: unknown;
     limitLines?: unknown;
     limitBytes?: unknown;
@@ -79,29 +78,22 @@ export interface FilesystemInput {
     newText?: unknown;
 }
 
-export type FilesystemInputAction = 'list' | 'read' | 'write' | 'edit';
-
-export interface FilesystemListEntry {
-    name: string;
-    path: string;
-    type: 'file' | 'directory' | 'other';
-}
+export type FilesystemInputAction = 'read' | 'write' | 'edit' | 'delete';
 
 export type FilesystemOutput =
-    | { action: 'list'; path: string; entries: FilesystemListEntry[] }
     | { action: 'read'; path: string; content: string; bytes: number; truncated: boolean }
     | { action: 'write'; path: string; bytes: number }
-    | { action: 'edit'; path: string; replacements: number; bytes: number };
+    | { action: 'edit'; path: string; replacements: number; bytes: number }
+    | { action: 'delete'; path: string };
 
-export interface ExecuteInput {
-    cwd?: unknown;
+export interface ShellInput {
     command?: unknown;
     args?: unknown;
     timeoutMs?: unknown;
 }
 
-export interface ExecuteOutput {
-    action: 'execute';
+export interface ShellOutput {
+    action: 'shell';
     cwd: string;
     command: string;
     args: string[];
@@ -109,4 +101,47 @@ export interface ExecuteOutput {
     stdout: string;
     stderr: string;
     timedOut: boolean;
+}
+
+export interface ExecuteInput {
+    cwd?: unknown;
+    mode?: unknown;
+    maxConcurrency?: unknown;
+    tasks?: unknown;
+}
+
+export type ExecuteMode = 'serial' | 'parallel';
+
+export interface ExecuteTaskInput {
+    id?: unknown;
+    runtime?: unknown;
+    path?: unknown;
+    args?: unknown;
+    cwd?: unknown;
+    env?: unknown;
+    timeoutMs?: unknown;
+}
+
+export interface ExecuteTaskResult {
+    id?: string;
+    runtime: 'python' | 'sh';
+    path: string;
+    cwd: string;
+    args: string[];
+    exitCode: number | null;
+    stdout: string;
+    stderr: string;
+    timedOut: boolean;
+    ok: boolean;
+    durationMs: number;
+}
+
+export interface ExecuteOutput {
+    action: 'execute';
+    mode: ExecuteMode;
+    cwd: string;
+    total: number;
+    success: number;
+    failed: number;
+    results: ExecuteTaskResult[];
 }

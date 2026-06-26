@@ -141,8 +141,8 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
     }
 
     /**
-     * EN: Renders the package context into the XML-like format used by prompt planning turns.
-     * ZH: 把包上下文渲染成提示词规划轮次使用的类 XML 格式。
+     * EN: Renders the package context into the XML-like format used by prompt planning requests.
+     * ZH: 把包上下文渲染成提示词规划请求使用的类 XML 格式。
      */
     public renderXml(options: PromptXmlRenderOptions<TSection>): string {
         this.assertXmlName(options.root);

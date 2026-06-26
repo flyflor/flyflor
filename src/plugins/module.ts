@@ -2,8 +2,8 @@ import { FModule, Module } from '@/core';
 import { ToolComponent } from './tools';
 
 /**
- * The plugins module: external capability boundaries kept isolated from the kernel.
- * Imports the skill loader and the MCP client; base classes auto-classify them as plugins in the DI tree.
+ * External capability boundary kept isolated from the kernel.
+ * The current module imports the local tool surface used by the active agent.
  */
 @Module({
     imports: [ToolComponent],

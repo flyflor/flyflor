@@ -253,7 +253,7 @@
     "promptsDir": "./prompts",
     "sqlDir": "./sql",
     // 记忆系统配置。
-    // 这些值在 ConfigComponent 中已有默认值，通常不需要配置；需要覆盖时取消注释。
+    // 这些值在 ConfigService 中已有默认值，通常不需要配置；需要覆盖时取消注释。
     // memoryEnabled: 是否启用长期记忆。
     // userProfileEnabled: 是否启用用户画像记忆。
     // memoryCharLimit: 单次记忆内容字符预算。
@@ -269,13 +269,13 @@
     //     "flushMinTurns": 6,
     // },
     // 当前启用的 agent profile 名称。
-    // ConfigComponent 默认值为 main；需要切换多 agent profile 时取消注释。
+    // ConfigService 默认值为 main；需要切换多 agent profile 时取消注释。
     // "agent": "main",
     // Agent profile 列表。
     // name: profile 名称。
     // model: profile 使用的模型名。
     // provider: profile 使用的 provider key。
-    // ConfigComponent 已有 main 占位默认值；需要多 agent 或覆盖模型时取消注释。
+    // ConfigService 已有 main 占位默认值；需要多 agent 或覆盖模型时取消注释。
     // "agents": {
     //     "flyflor": {
     //         "name": "flyflor",
@@ -291,7 +291,7 @@
     // directory: skill 根目录。
     // creationNudgeInterval: skill 创建提示间隔。
     // externalDirs: 额外 skill 搜索目录。
-    // ConfigComponent 中已有默认值；需要自定义 skill 目录时取消注释。
+    // ConfigService 中已有默认值；需要自定义 skill 目录时取消注释。
     // "skills": {
     //     "directory": "./.config/skills",
     //     "creationNudgeInterval": 15,

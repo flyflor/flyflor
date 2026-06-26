@@ -2,6 +2,7 @@ import type { ConfigService } from '@/configuration';
 import { Config, Provide } from '@/core/decorator';
 import type { SocketPacket } from './packet';
 import { Observable } from '@/core/ioc';
+import { isAbsolute, resolve } from 'node:path';
 
 @Provide()
 /**
@@ -20,7 +21,8 @@ export class Controller extends Observable {
 
     public async cwd({ path }: { path: string }) {
         this.log.debug('cwd', path);
-        this.config.path.cwd = path;
+        const base = this.config.path.cwd;
+        this.config.path.cwd = isAbsolute(path) ? resolve(path) : resolve(base, path);
         return true;
     }
 }

@@ -1,35 +1,64 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { ConfigService } from '@/configuration';
 import { FToolAtom, useContainer } from '@/core';
-import { Ask, Confirm, Execute, Filesystem, ToolComponent } from '@/plugins';
+import { Context, ContextIntent } from '@/neural/context';
+import { Ask, Confirm, Execute, Filesystem, Shell, ToolComponent } from '@/plugins';
 
 async function component(): Promise<ToolComponent> {
     return await useContainer().getAsync(ToolComponent);
 }
 
 describe('ToolComponent', () => {
-    let cwd: string;
+    let originalProcessCwd: string;
+    let originalConfigPath: typeof ConfigService.path;
     let root: string;
+    let other: string;
 
-    beforeEach(() => {
-        cwd = process.cwd();
-        root = mkdtempSync(join(tmpdir(), 'flyflor-tools-'));
-        process.chdir(root);
+    beforeEach(async () => {
+        originalProcessCwd = process.cwd();
+        originalConfigPath = { ...ConfigService.path };
+        root = mkdtempSync(join(tmpdir(), 'flyflor-tools-root-'));
+        other = mkdtempSync(join(tmpdir(), 'flyflor-tools-other-'));
+        ConfigService.path = { ...ConfigService.path, cwd: root };
+        process.chdir(other);
+        const context = await useContainer().getAsync(Context);
+        context.current = {
+            userText: '调查当前环境',
+            intent: ContextIntent.Research,
+            goal: '调查工具边界',
+            constraints: ['只读探索'],
+            references: [{ type: 'path', value: 'src/plugins/tools' }],
+            knownDone: [],
+            openQuestions: [],
+            shouldInvestigate: true,
+        };
+        context.turns = [];
+        context.completed = [];
     });
 
     afterEach(() => {
-        process.chdir(cwd);
+        ConfigService.path = originalConfigPath;
+        process.chdir(originalProcessCwd);
         rmSync(root, { recursive: true, force: true });
+        rmSync(other, { recursive: true, force: true });
     });
 
-    test('lists tool definitions from prompt config', async () => {
+    test('lists tool definitions from prompt config and expands shell description with runtime context', async () => {
         const definitions = await (await component()).list();
 
-        expect(definitions.map((definition) => definition.name)).toEqual(['ask', 'confirm', 'filesystem', 'execute']);
-        expect(definitions.find((definition) => definition.name === 'filesystem')?.parameters.required).toEqual(['action', 'cwd', 'path']);
+        expect(definitions.map((definition) => definition.name)).toEqual(['ask', 'confirm', 'filesystem', 'shell', 'execute']);
+        expect(definitions.find((definition) => definition.name === 'filesystem')?.parameters.required).toEqual(['action', 'path']);
         expect(definitions.find((definition) => definition.name === 'ask')?.description).toContain('Ask the user');
+        const shell = definitions.find((definition) => definition.name === 'shell');
+        expect(shell?.description).toContain(`cwd=${root}`);
+        expect(shell?.description).toContain('goal=调查工具边界');
+        expect(shell?.description).toContain('intent=research');
+        expect(shell?.description).toContain('constraints=只读探索');
+        expect(shell?.description).toContain('shell is read-only exploration');
+        expect(shell?.description).not.toContain('git, rg, cat, ls');
     });
 
     test('tool atoms inherit the atom base', async () => {
@@ -38,10 +67,12 @@ describe('ToolComponent', () => {
         expect(tools.ask).toBeInstanceOf(FToolAtom);
         expect(tools.confirm).toBeInstanceOf(FToolAtom);
         expect(tools.filesystem).toBeInstanceOf(FToolAtom);
+        expect(tools.shell).toBeInstanceOf(FToolAtom);
         expect(tools.execute).toBeInstanceOf(FToolAtom);
         expect(tools.ask).toBeInstanceOf(Ask);
         expect(tools.confirm).toBeInstanceOf(Confirm);
         expect(tools.filesystem).toBeInstanceOf(Filesystem);
+        expect(tools.shell).toBeInstanceOf(Shell);
         expect(tools.execute).toBeInstanceOf(Execute);
     });
 
@@ -62,67 +93,126 @@ describe('ToolComponent', () => {
         expect(result.error?.message).toBe('recommended is required');
     });
 
-    test('filesystem lists reads writes and edits from relative path + cwd', async () => {
+    test('filesystem reads writes edits and deletes using config cwd by default', async () => {
         const tools = await component();
 
-        await tools.run({ id: 'write_1', name: 'filesystem', arguments: { action: 'write', cwd: root, path: 'dir/file.txt', content: 'hello world' } });
-        const list = await tools.run({ id: 'list_1', name: 'filesystem', arguments: { action: 'list', cwd: root, path: '.', depth: 2 } });
-        const read = await tools.run({ id: 'read_1', name: 'filesystem', arguments: { action: 'read', cwd: root, path: 'dir/file.txt' } });
-        const edit = await tools.run({ id: 'edit_1', name: 'filesystem', arguments: { action: 'edit', cwd: root, path: 'dir/file.txt', oldText: 'world', newText: 'flyflor' } });
+        await tools.run({ id: 'write_1', name: 'filesystem', arguments: { action: 'write', path: 'dir/file.txt', content: 'hello world' } });
+        const read = await tools.run({ id: 'read_1', name: 'filesystem', arguments: { action: 'read', path: 'dir/file.txt' } });
+        const edit = await tools.run({ id: 'edit_1', name: 'filesystem', arguments: { action: 'edit', path: 'dir/file.txt', oldText: 'world', newText: 'flyflor' } });
+        const remove = await tools.run({ id: 'delete_1', name: 'filesystem', arguments: { action: 'delete', path: 'dir/file.txt' } });
 
-        expect(list.data).toMatchObject({ action: 'list', path: root });
-        expect((list.data as { entries: Array<{ path: string }> }).entries.map((entry) => entry.path)).toContain(resolve(root, 'dir/file.txt'));
         expect(read.data).toMatchObject({ action: 'read', path: resolve(root, 'dir/file.txt'), content: 'hello world', truncated: false });
         expect(edit.data).toMatchObject({ action: 'edit', path: resolve(root, 'dir/file.txt'), replacements: 1 });
+        expect(remove.data).toMatchObject({ action: 'delete', path: resolve(root, 'dir/file.txt') });
     });
 
-    test('filesystem accepts absolute paths outside cwd root restriction', async () => {
+    test('filesystem accepts explicit cwd and absolute paths', async () => {
         const tools = await component();
         const target = join(tmpdir(), `flyflor-filesystem-${Date.now()}.txt`);
         writeFileSync(target, 'safe');
 
-        const result = await tools.run({ id: 'read_1', name: 'filesystem', arguments: { action: 'read', cwd: root, path: target } });
+        const write = await tools.run({ id: 'write_1', name: 'filesystem', arguments: { action: 'write', cwd: other, path: 'dir/file.txt', content: 'alt' } });
+        const read = await tools.run({ id: 'read_1', name: 'filesystem', arguments: { action: 'read', path: target } });
 
-        expect(result).toMatchObject({ ok: true, name: 'filesystem' });
-        expect(result.data).toMatchObject({ action: 'read', path: resolve(target), content: 'safe' });
+        expect(write.data).toMatchObject({ action: 'write', path: resolve(other, 'dir/file.txt') });
+        expect(read).toMatchObject({ ok: true, name: 'filesystem' });
+        expect(read.data).toMatchObject({ action: 'read', path: resolve(target), content: 'safe' });
         rmSync(target, { force: true });
     });
 
-    test('filesystem requires cwd for relative paths', async () => {
-        const result = await (await component()).run({ id: 'read_1', name: 'filesystem', arguments: { action: 'read', path: 'dir/file.txt' } });
+    test('filesystem rejects list and directory deletion', async () => {
+        const tools = await component();
+        mkdirSync(join(root, 'dir'), { recursive: true });
 
-        expect(result.ok).toBe(false);
-        expect(result.error?.message).toBe('cwd is required');
+        const list = await tools.run({ id: 'list_1', name: 'filesystem', arguments: { action: 'list', path: '.' } });
+        const remove = await tools.run({ id: 'delete_1', name: 'filesystem', arguments: { action: 'delete', path: 'dir' } });
+
+        expect(list.ok).toBe(false);
+        expect(list.error?.message).toBe('action must be read, write, edit, or delete');
+        expect(remove.ok).toBe(false);
+        expect(remove.error?.message).toBe('delete only supports files');
     });
 
-    test('execute runs a local command and captures stdout and stderr', async () => {
+    test('shell runs from config cwd instead of process cwd', async () => {
         const result = await (await component()).run({
-            id: 'execute_1',
-            name: 'execute',
+            id: 'shell_1',
+            name: 'shell',
             arguments: {
-                cwd: root,
                 command: process.execPath,
-                args: ['-e', 'console.log("ok"); console.error("warn")'],
+                args: ['-e', 'console.log(process.cwd())'],
             },
         });
 
         expect(result.ok).toBe(true);
-        expect(result.data).toMatchObject({ action: 'execute', cwd: root, command: process.execPath, stdout: 'ok\n', stderr: 'warn\n', timedOut: false });
+        const data = result.data as { action: string; cwd: string; command: string; stdout: string; timedOut: boolean };
+        expect(data).toMatchObject({ action: 'shell', command: process.execPath, timedOut: false });
+        expect(data.stdout).toBe(`${realpathSync(data.cwd)}\n`);
     });
 
-    test('execute times out', async () => {
+    test('execute runs script batches from config cwd and keeps serial order', async () => {
+        writeFileSync(join(root, 'one.sh'), 'printf "one:%s\\n" "$PWD"\n', 'utf-8');
+        writeFileSync(join(root, 'two.sh'), 'printf "two:%s\\n" "$PWD"\n', 'utf-8');
+
         const result = await (await component()).run({
             id: 'execute_1',
             name: 'execute',
             arguments: {
-                cwd: root,
-                command: process.execPath,
-                args: ['-e', 'setTimeout(() => {}, 5000)'],
-                timeoutMs: 1000,
+                tasks: [
+                    { id: 'one', runtime: 'sh', path: 'one.sh' },
+                    { id: 'two', runtime: 'sh', path: 'two.sh' },
+                ],
             },
         });
 
         expect(result.ok).toBe(true);
-        expect(result.data).toMatchObject({ action: 'execute', timedOut: true });
+        expect(result.data).toMatchObject({ action: 'execute', mode: 'serial', cwd: root, total: 2, success: 2, failed: 0 });
+        const results = (result.data as { results: Array<{ id?: string; stdout: string; cwd: string }> }).results;
+        expect(results.map((item) => item.id)).toEqual(['one', 'two']);
+        expect(results[0]?.stdout).toBe(`one:${realpathSync(results[0]!.cwd)}\n`);
+        expect(results[1]?.stdout).toBe(`two:${realpathSync(results[1]!.cwd)}\n`);
+    });
+
+    test('execute supports parallel batches, task cwd overrides, and timeouts', async () => {
+        mkdirSync(join(root, 'sub'), { recursive: true });
+        writeFileSync(join(root, 'base.sh'), 'sleep 1\nprintf "base:%s\\n" "$PWD"\n', 'utf-8');
+        writeFileSync(join(root, 'sub', 'nested.sh'), 'printf "nested:%s\\n" "$PWD"\n', 'utf-8');
+
+        const result = await (await component()).run({
+            id: 'execute_1',
+            name: 'execute',
+            arguments: {
+                mode: 'parallel',
+                maxConcurrency: 2,
+                tasks: [
+                    { id: 'slow', runtime: 'sh', path: 'base.sh', timeoutMs: 200 },
+                    { id: 'nested', runtime: 'sh', path: 'nested.sh', cwd: 'sub' },
+                ],
+            },
+        });
+
+        expect(result.ok).toBe(true);
+        expect(result.data).toMatchObject({ action: 'execute', mode: 'parallel', cwd: root, total: 2, success: 1, failed: 1 });
+        const results = (result.data as { results: Array<{ id?: string; cwd: string; timedOut: boolean; ok: boolean; stdout: string }> }).results;
+        expect(results.find((item) => item.id === 'slow')).toMatchObject({ cwd: root, timedOut: true, ok: false });
+        const nested = results.find((item) => item.id === 'nested');
+        expect(nested).toMatchObject({ cwd: resolve(root, 'sub'), timedOut: false, ok: true });
+        expect(nested?.stdout).toBe(`nested:${realpathSync(nested!.cwd)}\n`);
+    });
+
+    test('filesystem and execute ignore process cwd changes when config cwd is fixed', async () => {
+        writeFileSync(join(root, 'cwd.sh'), 'printf "%s\\n" "$PWD"\n', 'utf-8');
+        process.chdir(other);
+        await (await component()).run({ id: 'write_1', name: 'filesystem', arguments: { action: 'write', path: 'config.txt', content: 'ok' } });
+        const read = await (await component()).run({ id: 'read_1', name: 'filesystem', arguments: { action: 'read', path: 'config.txt' } });
+        const execute = await (await component()).run({
+            id: 'execute_1',
+            name: 'execute',
+            arguments: { tasks: [{ runtime: 'sh', path: 'cwd.sh' }] },
+        });
+
+        expect(read.data).toMatchObject({ path: resolve(root, 'config.txt'), content: 'ok' });
+        const task = (execute.data as { results: Array<{ stdout: string; cwd: string }> }).results[0];
+        expect(task?.stdout).toBe(`${realpathSync(task!.cwd)}\n`);
+        expect(readFileSync(join(root, 'config.txt'), 'utf-8')).toBe('ok');
     });
 });

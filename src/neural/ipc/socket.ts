@@ -32,7 +32,7 @@ export interface SocketConnectionData {}
 const SYNAPSE_INPUT = 'input' as Parameters<Synapse['emit']>[0];
 
 /**
- * Bun socket handler used by IPCService.
+ * Bun socket handler used by the runtime IPC listener.
  *
  * The class owns socket lifecycle callbacks only: connection open/close, inbound data, and transport
  * errors. Callback methods are bound in the constructor so `this` is the FSocket instance however

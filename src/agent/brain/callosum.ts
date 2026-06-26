@@ -16,7 +16,7 @@ export enum CallosumSignalType {
     Resume = 'resume',
     ActionStart = 'action_start',
     ActionResult = 'action_result',
-    LlmTurn = 'llm_turn',
+    LlmRequest = 'llm_request',
     Done = 'done',
 }
 

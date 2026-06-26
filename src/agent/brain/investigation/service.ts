@@ -29,8 +29,8 @@ export class Investigation extends FAgentAtom {
         let step = 0;
         while (true) {
             step += 1;
-            this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.LlmTurn, chunk: String(step), data: { step } });
-            const result = await this.intelligence.streamTurn(messages, await this.tools.list(), (chunk) => {
+            this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.LlmRequest, chunk: String(step), data: { step } });
+            const result = await this.intelligence.streamRequest(messages, await this.tools.list(), (chunk) => {
                 this.synapse.emit(SynapseSignalType.Reply, chunk);
             });
             if (result.actionRequests.length === 0) {
@@ -53,7 +53,7 @@ export class Investigation extends FAgentAtom {
         }
     }
 
-    private actionRequestMessage(result: Awaited<ReturnType<Intelligence['runTurn']>>): ProviderActionRequestMessage {
+    private actionRequestMessage(result: Awaited<ReturnType<Intelligence['runRequest']>>): ProviderActionRequestMessage {
         return {
             role: AgentChatRole.Assistant,
             content: result.text,
@@ -77,6 +77,14 @@ export class Investigation extends FAgentAtom {
             if (request.name === 'filesystem') {
                 const data = result.data as { action?: unknown; path?: unknown };
                 return `${request.name} ${String(data.action ?? 'unknown')} ${String(data.path ?? '')} ok`.trim();
+            }
+            if (request.name === 'shell') {
+                const data = result.data as { command?: unknown; cwd?: unknown; exitCode?: unknown };
+                return `${request.name} ${String(data.command ?? 'unknown')} @ ${String(data.cwd ?? '')} exit ${String(data.exitCode ?? 'null')}`.trim();
+            }
+            if (request.name === 'execute') {
+                const data = result.data as { total?: unknown; success?: unknown; failed?: unknown };
+                return `${request.name} total ${String(data.total ?? 0)} success ${String(data.success ?? 0)} failed ${String(data.failed ?? 0)}`.trim();
             }
             if (request.name === 'ask' || request.name === 'confirm') {
                 const data = result.data as { question?: unknown };

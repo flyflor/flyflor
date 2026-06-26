@@ -4,6 +4,7 @@ import { Ask } from './ask';
 import { Confirm } from './confirm';
 import { Execute } from './execute';
 import { Filesystem } from './filesystem';
+import { Shell } from './shell';
 import type { ActionRequest, ToolPromptConfig, ToolProtocol, ToolRunResult } from './types';
 
 @Singleton()
@@ -20,6 +21,9 @@ export class ToolComponent extends FTool {
 
     @Inject()
     public filesystem!: Filesystem;
+
+    @Inject()
+    public shell!: Shell;
 
     @Inject()
     public execute!: Execute;
@@ -53,12 +57,13 @@ export class ToolComponent extends FTool {
             if (!protocol) throw Error(`Tool protocol missing: ${atom.key()}`);
             const source = prompt.data[atom.key()]?.data;
             if (typeof source !== 'string') throw Error(`Tool prompt missing: ${protocol.file}`);
-            return { atom, protocol, description: source.trim() };
+            const description = atom instanceof Shell ? atom.description(source) : source.trim();
+            return { atom, protocol, description };
         }));
     }
 
     private atoms(): Array<FToolAtom<any, any>> {
-        return [this.ask, this.confirm, this.filesystem, this.execute];
+        return [this.ask, this.confirm, this.filesystem, this.shell, this.execute];
     }
 
     private error(error: unknown): ToolError {

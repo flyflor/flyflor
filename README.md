@@ -30,14 +30,14 @@ bun run build:binary
 
 1. `src/bootstrap.ts` imports `reflect-metadata`, then calls `Factory.create(AppModule)`.
 2. `Container` builds module imports, injects decorated properties, runs `@Init()`, and stores singleton instances.
-3. `ConfigComponent` loads `./.config/config.jsonc`; secrets stay in environment variables.
-4. `IPCService` starts the Bun Unix socket or Windows named pipe.
-5. `FSocket` receives bytes and delegates packet decoding to `PacketService`.
-6. `PacketService` encodes and decodes 8-byte big-endian length-prefixed JSON packets.
+3. `ConfigService` loads `./.config/config.jsonc`; secrets stay in environment variables.
+4. `FSocket` starts the Bun Unix socket or Windows named pipe.
+5. `FSocket` receives bytes and delegates packet decoding to `IPCPacket`.
+6. `IPCPacket` encodes and decodes 8-byte big-endian length-prefixed JSON packets.
 7. `Synapse` creates the configured active `Agent` and routes decoded packets into it.
-8. `Brain` coordinates one user input, asks `Context` to ingest the turn, and routes reply/research/soul work.
-9. `Memory` assembles pure agent memory input from protocol-package sections plus turn summaries.
-10. `Investigation` runs a local action loop for research turns only.
+8. `Brain` coordinates one user input, asks `Context` to ingest it, and routes reply/research/soul work.
+9. `Memory` assembles pure agent memory input from protocol-package sections plus context summaries.
+10. `Investigation` runs a local action loop for research requests only.
 11. `Synapse` broadcasts reply, action, ask/confirm, and pause/resume control signals.
 12. `Intelligence` opens the configured provider stream through protocol adapters.
 
@@ -61,7 +61,7 @@ Folders are semantic nouns. Files inside them use role names such as `service.ts
 
 Runtime prompt files are canonical English `.md` files. Human mirror files such as `.zh.cn.md` exist for readers and are not opened by runtime code.
 
-Agent prompt directories are loaded through `@Prompt()` as `FileService` objects. The agent consumes the loaded file data; it does not read prompt files directly.
+Agent prompt directories are loaded through `@Prompt()` as `PromptService` objects. The agent consumes the loaded file data; it does not read prompt files directly.
 
 ## Documentation
 

@@ -38,7 +38,7 @@ export class Synapse extends FCortex<SynapseSignal> {
 
     /**
      * Spawns the active agent profile and wires Synapse as the broadcast-only control bus.
-     * Pause/resume are signals only; Synapse does not persist turn or research state.
+     * Pause/resume are signals only; Synapse does not persist conversation or research state.
      */
     @Init()
     public async init() {

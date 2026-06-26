@@ -169,7 +169,7 @@ function chatMessages(messages: ProviderMessage[]): Array<Record<string, unknown
                 role: 'assistant',
                 // DeepSeek rejects replayed assistant tool-call messages when `content` is null.
                 content: message.content,
-                // DeepSeek thinking mode rejects a replayed tool-call turn unless its reasoning is passed back.
+                // DeepSeek thinking mode rejects a replayed tool-call request unless its reasoning is passed back.
                 ...(message.reasoning ? { reasoning_content: message.reasoning } : {}),
                 tool_calls: message.actionRequests.map((request) => ({
                     id: request.id,

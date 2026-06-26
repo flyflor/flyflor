@@ -2,7 +2,7 @@
   "version": 1,
   "description": "Tool definitions exposed to the model.",
   "prompt": {
-    "sections": ["ask", "confirm", "filesystem", "execute"]
+    "sections": ["ask", "confirm", "filesystem", "shell", "execute"]
   },
   "tools": [
     {
@@ -37,14 +37,13 @@
       "key": "filesystem",
       "name": "filesystem",
       "file": "filesystem.md",
-      "risk": "write",
+      "risk": "destructive",
       "parameters": {
         "type": "object",
         "properties": {
-          "action": { "type": "string", "enum": ["list", "read", "write", "edit"] },
+          "action": { "type": "string", "enum": ["read", "write", "edit", "delete"] },
           "cwd": { "type": "string" },
           "path": { "type": "string" },
-          "depth": { "type": "number" },
           "offsetLines": { "type": "number" },
           "limitLines": { "type": "number" },
           "limitBytes": { "type": "number" },
@@ -52,7 +51,27 @@
           "oldText": { "type": "string" },
           "newText": { "type": "string" }
         },
-        "required": ["action", "cwd", "path"]
+        "required": ["action", "path"]
+      }
+    },
+    {
+      "key": "shell",
+      "name": "shell",
+      "file": "shell.md",
+      "risk": "external",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": { "type": "string" },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": ["string", "number", "boolean"]
+            }
+          },
+          "timeoutMs": { "type": "number" }
+        },
+        "required": ["command"]
       }
     },
     {
@@ -64,16 +83,31 @@
         "type": "object",
         "properties": {
           "cwd": { "type": "string" },
-          "command": { "type": "string" },
-          "args": {
+          "mode": { "type": "string", "enum": ["serial", "parallel"] },
+          "maxConcurrency": { "type": "number" },
+          "tasks": {
             "type": "array",
             "items": {
-              "type": ["string", "number", "boolean"]
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "runtime": { "type": "string", "enum": ["python", "sh"] },
+                "path": { "type": "string" },
+                "args": {
+                  "type": "array",
+                  "items": {
+                    "type": ["string", "number", "boolean"]
+                  }
+                },
+                "cwd": { "type": "string" },
+                "env": { "type": "object" },
+                "timeoutMs": { "type": "number" }
+              },
+              "required": ["runtime", "path"]
             }
-          },
-          "timeoutMs": { "type": "number" }
+          }
         },
-        "required": ["cwd", "command"]
+        "required": ["tasks"]
       }
     }
   ]
