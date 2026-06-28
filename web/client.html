@@ -961,6 +961,151 @@
                 errorCount.textContent = String(errorTotal);
             }
 
+            function sendAnswer(text) {
+                if (!ws || ws.readyState !== WebSocket.OPEN) return;
+                const packet = { action: 'answer', data: { text } };
+                debugIpc('ws.out', { action: packet.action, textLength: text.length });
+                ws.send(JSON.stringify(packet));
+                addMessage(text, 'user');
+                pending = true;
+                setInputEnabled();
+                createPendingAgentMessage();
+            }
+
+            function renderAskPrompt(data) {
+                removeEmptyState();
+                const questions = Array.isArray(data?.questions) ? data.questions : [];
+                const card = document.createElement('article');
+                card.className = 'message system ask-card';
+
+                const head = document.createElement('div');
+                head.className = 'ask-head';
+                head.textContent = '需要你的回答';
+                card.appendChild(head);
+
+                const picks = questions.map(() => ({ label: null, custom: '' }));
+
+                questions.forEach((item, qIndex) => {
+                    const block = document.createElement('div');
+                    block.className = 'ask-question';
+
+                    const title = document.createElement('div');
+                    title.className = 'ask-question-title';
+                    title.textContent = `${qIndex + 1}. ${String(item?.question ?? '')}`;
+                    block.appendChild(title);
+
+                    const options = Array.isArray(item?.options) ? item.options : [];
+                    options.forEach((option) => {
+                        const isOther = option?.label === 'other';
+                        const row = document.createElement('div');
+                        row.className = 'ask-option';
+
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = 'ask-option-btn';
+                        if (option?.recommended) button.classList.add('recommended');
+                        button.textContent = option?.description
+                            ? `${option.label} — ${option.description}`
+                            : String(option?.label ?? '');
+                        row.appendChild(button);
+
+                        let customInput = null;
+                        if (isOther) {
+                            customInput = document.createElement('input');
+                            customInput.type = 'text';
+                            customInput.className = 'ask-other-input';
+                            customInput.placeholder = '自定义回答，可引用上面的方案';
+                            customInput.disabled = true;
+                            customInput.addEventListener('input', () => {
+                                picks[qIndex].custom = customInput.value;
+                            });
+                            row.appendChild(customInput);
+                        }
+
+                        button.addEventListener('click', () => {
+                            block.querySelectorAll('.ask-option-btn').forEach((other) => other.classList.remove('selected'));
+                            button.classList.add('selected');
+                            picks[qIndex].label = String(option?.label ?? '');
+                            block.querySelectorAll('.ask-other-input').forEach((input) => {
+                                input.disabled = true;
+                            });
+                            if (isOther && customInput) {
+                                customInput.disabled = false;
+                                customInput.focus();
+                            }
+                        });
+
+                        block.appendChild(row);
+                    });
+
+                    card.appendChild(block);
+                });
+
+                const submit = document.createElement('button');
+                submit.type = 'button';
+                submit.className = 'primary ask-submit';
+                submit.textContent = '提交回答';
+                submit.addEventListener('click', () => {
+                    const lines = questions.map((item, qIndex) => {
+                        const pick = picks[qIndex];
+                        const question = String(item?.question ?? '');
+                        if (pick.label === 'other') return `${question} -> ${pick.custom || '(空)'}`;
+                        return `${question} -> ${pick.label ?? '(未选)'}`;
+                    });
+                    card.querySelectorAll('button, input').forEach((el) => { el.disabled = true; });
+                    sendAnswer(lines.join('\n'));
+                });
+                card.appendChild(submit);
+
+                chat.appendChild(card);
+                chat.scrollTop = chat.scrollHeight;
+            }
+
+            function renderConfirmPrompt(data) {
+                removeEmptyState();
+                const card = document.createElement('article');
+                card.className = 'message system confirm-card';
+
+                const head = document.createElement('div');
+                head.className = 'ask-head';
+                head.textContent = '需要批准';
+                card.appendChild(head);
+
+                const title = document.createElement('div');
+                title.className = 'ask-question-title';
+                title.textContent = String(data?.question ?? '');
+                card.appendChild(title);
+
+                const actions = document.createElement('div');
+                actions.className = 'confirm-actions';
+
+                const approve = document.createElement('button');
+                approve.type = 'button';
+                approve.className = 'ask-option-btn';
+                approve.textContent = '批准';
+
+                const reject = document.createElement('button');
+                reject.type = 'button';
+                reject.className = 'ask-option-btn';
+                reject.textContent = '拒绝';
+
+                if (data?.recommended === true) approve.classList.add('recommended');
+                if (data?.recommended === false) reject.classList.add('recommended');
+
+                const finish = (text) => {
+                    card.querySelectorAll('button').forEach((el) => { el.disabled = true; });
+                    sendAnswer(text);
+                };
+                approve.addEventListener('click', () => finish('approve'));
+                reject.addEventListener('click', () => finish('reject'));
+
+                actions.append(approve, reject);
+                card.appendChild(actions);
+
+                chat.appendChild(card);
+                chat.scrollTop = chat.scrollHeight;
+            }
+
             function handlePacket(msg) {
                 packetTotal += 1;
                 updateStats();
@@ -977,10 +1122,16 @@
                     renderAgentSignal(msg.data);
                     return;
                 }
-                if (msg.action === 'ask' || msg.action === 'confirm') {
+                if (msg.action === 'ask') {
                     cancelPendingMessage();
-                    signalPill.textContent = msg.action;
-                    addMessage(`${msg.action}: ${formatDebugDetail(msg.data)}`, 'system');
+                    signalPill.textContent = 'ask';
+                    renderAskPrompt(msg.data);
+                    return;
+                }
+                if (msg.action === 'confirm') {
+                    cancelPendingMessage();
+                    signalPill.textContent = 'confirm';
+                    renderConfirmPrompt(msg.data);
                     return;
                 }
                 if (msg.action === 'open') {

@@ -13,10 +13,30 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "question": { "type": "string" },
-          "options": { "type": "array" }
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "question": { "type": "string" },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "label": { "type": "string" },
+                      "description": { "type": "string" },
+                      "recommended": { "type": "boolean" }
+                    },
+                    "required": ["label"]
+                  }
+                }
+              },
+              "required": ["question", "options"]
+            }
+          }
         },
-        "required": ["question", "options"]
+        "required": ["questions"]
       }
     },
     {

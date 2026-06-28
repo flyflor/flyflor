@@ -44,15 +44,24 @@ export interface ActionRecord {
     result: ToolRunResult;
 }
 
+export interface AskOption {
+    label: string;
+    description?: string;
+    recommended?: boolean;
+}
+
+export interface AskQuestion {
+    question: string;
+    options: AskOption[];
+}
+
 export interface AskInput {
-    question?: unknown;
-    options?: unknown;
+    questions?: unknown;
 }
 
 export interface AskOutput {
     kind: 'ask';
-    question: string;
-    options: unknown;
+    questions: AskQuestion[];
 }
 
 export interface ConfirmInput {

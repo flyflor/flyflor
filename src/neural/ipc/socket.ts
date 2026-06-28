@@ -13,6 +13,7 @@ export enum SocketEvent {
     Error = 'error',
     Open = 'open',
     User = 'user',
+    Answer = 'answer',
     Agent = 'agent',
     Data = 'data',
     StreamEnd = 'streamEnd',
@@ -113,6 +114,10 @@ export class FSocket extends FlyFlor {
             .pipe((buffer: Uint8Array) => this.packet.decode<SocketPacket>(buffer))
             .switch((packet) => (packet as unknown as SocketPacket).action, {
                 [SocketEvent.User]: (packet) => {
+                    this.synapse.emit(SYNAPSE_INPUT, this.readUserText((packet as unknown as SocketPacket).data));
+                    return undefined;
+                },
+                [SocketEvent.Answer]: (packet) => {
                     this.synapse.emit(SYNAPSE_INPUT, this.readUserText((packet as unknown as SocketPacket).data));
                     return undefined;
                 },
