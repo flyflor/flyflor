@@ -89,7 +89,7 @@ describe('Investigation', () => {
         expect(seenMessages[1]?.some((message) => message.role === 'action')).toBe(true);
     });
 
-    test('ask action emits ask and pause signals without writing pending state into context', async () => {
+    test('ask action emits ask and pause signals while storing only pause semantics in context', async () => {
         const { instance, events } = investigation(context, [
             { text: '需要确认', actionRequests: [{ id: 'tool_1', name: 'ask', arguments: { question: 'Pick?', options: ['a'] } }] },
         ]);
@@ -105,7 +105,11 @@ describe('Investigation', () => {
             data: { kind: 'ask', question: 'Pick?', options: ['a'] },
         });
         expect(events.some((event) => event.type === SynapseSignalType.Pause)).toBe(true);
+        expect(context.turns[0]?.paused).toBe(true);
+        expect(context.turns[0]?.pauseKind).toBe('ask');
+        expect(context.turns[0]?.pausePrompt).toBe('Pick?');
         expect(JSON.stringify(context)).not.toContain('pending');
+        expect(JSON.stringify(context.turns)).not.toContain('tool_call_id');
     });
 
     test('separate runs do not leak the previous action buffer', async () => {

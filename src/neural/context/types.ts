@@ -76,6 +76,19 @@ export enum ContextTurnStatus {
     Completed = 'completed',
 }
 
+export type ContextPauseKind = 'ask' | 'confirm';
+
+export interface ContextScope {
+    project?: string;
+    root?: string;
+    anchor?: string[];
+}
+
+export interface ContextPauseInput {
+    kind: ContextPauseKind;
+    prompt: string;
+}
+
 /**
  * EN: One tracked user turn with state, timestamps, and optional summary.
  * ZH: 一条被跟踪的用户 turn，包含状态、时间戳和可选摘要。
@@ -85,6 +98,11 @@ export interface ContextTurn {
     understanding: TurnUnderstanding;
     status: ContextTurnStatus;
     summary?: CompletedSummary;
+    assistantText?: string;
+    paused?: boolean;
+    pauseKind?: ContextPauseKind;
+    pausePrompt?: string;
+    scope?: ContextScope;
     createdAt: number;
     updatedAt: number;
 }

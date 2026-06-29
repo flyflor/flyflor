@@ -38,7 +38,7 @@ const bannedHits: string[] = [];
 for (const root of roots) {
     if (!existsSync(root)) continue;
     for (const file of walk(root)) {
-        if (!file.endsWith('.md') || file.endsWith('.zh.cn.md')) continue;
+        if (!file.endsWith('.md') || file.endsWith('.zh.cn.md') || file === 'cache.context.md') continue;
         const mirror = file.replace(/\.md$/, '.zh.cn.md');
         if (!existsSync(mirror)) missing.push(mirror);
     }

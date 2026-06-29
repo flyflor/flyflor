@@ -20,6 +20,7 @@ describe('Memory', () => {
             openQuestions: [],
             shouldInvestigate: true,
         });
+        context.pause({ kind: 'confirm', prompt: '允许写文件？' });
         context.done({
             goal: '修复 IPC',
             result: 'socket 背压写队列已完成',
@@ -43,6 +44,9 @@ describe('Memory', () => {
         expect(system).toContain('socket.test.ts 通过');
         expect(user).toContain('"goal":"实现 synapse.context + agent.memory"');
         expect(user).toContain('"user":"实现计划"');
+        expect(user).toContain('"paused":true');
+        expect(user).toContain('"pauseKind":"confirm"');
+        expect(user).toContain('允许写文件？');
         expect(user).toContain('补集成验证');
         expect(user).not.toContain('toolCalls');
         expect(user).not.toContain('tool_call_id');

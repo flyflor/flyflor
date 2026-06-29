@@ -68,6 +68,7 @@ export class Memory extends FAgentAtom {
     }
 
     private contextBlock(): object {
+        const active = this.context.recent(1).at(-1);
         return {
             current: this.context.current ? {
                 goal: this.context.current.goal,
@@ -78,11 +79,20 @@ export class Memory extends FAgentAtom {
                 knownDone: this.context.current.knownDone,
                 openQuestions: this.context.current.openQuestions,
                 shouldInvestigate: this.context.current.shouldInvestigate,
+                paused: active?.paused ?? false,
+                pauseKind: active?.pauseKind,
+                pausePrompt: active?.pausePrompt,
+                scope: active?.scope,
             } : undefined,
             recentContext: this.context.recent().map((entry) => ({
                 status: entry.status,
                 goal: entry.understanding.goal,
                 user: entry.understanding.userText,
+                assistantText: entry.assistantText,
+                paused: entry.paused ?? false,
+                pauseKind: entry.pauseKind,
+                pausePrompt: entry.pausePrompt,
+                scope: entry.scope,
                 summary: entry.summary ? {
                     result: entry.summary.result,
                     decisions: entry.summary.decisions,

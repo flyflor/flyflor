@@ -45,6 +45,7 @@ export class Investigation extends FAgentAtom {
                 messages.push(this.actionResultMessage(request, actionResult));
                 evidence.push(this.evidence(request, actionResult));
                 if (actionResult.ok && this.pause(actionResult.data)) {
+                    this.context.pause({ kind: actionResult.data.kind, prompt: this.pausePrompt(actionResult.data) });
                     this.synapse.emit(actionResult.data.kind === 'ask' ? SynapseSignalType.Ask : SynapseSignalType.Confirm, actionResult.data);
                     this.synapse.emit(SynapseSignalType.Pause, { signal, action: request.name, data: actionResult.data });
                     return { answer: '', steps: step, completed: false, paused: true, evidence };
@@ -95,7 +96,12 @@ export class Investigation extends FAgentAtom {
         return `${request.name} error: ${result.error?.message ?? 'unknown error'}`;
     }
 
-    private pause(data: unknown): data is { kind: 'ask' | 'confirm' } {
+    private pause(data: unknown): data is { kind: 'ask' | 'confirm'; question?: string; questions?: Array<{ question?: string }> } {
         return typeof data === 'object' && data !== null && ((data as { kind?: unknown }).kind === 'ask' || (data as { kind?: unknown }).kind === 'confirm');
+    }
+
+    private pausePrompt(data: { question?: string; questions?: Array<{ question?: string }> }): string {
+        if (typeof data.question === 'string') return data.question;
+        return (data.questions ?? []).map((item) => item.question).filter((question): question is string => typeof question === 'string' && question.length > 0).join('\n');
     }
 }
