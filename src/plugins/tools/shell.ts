@@ -17,7 +17,7 @@ export class Shell extends FToolAtom<ShellInput, ShellOutput> {
     public context!: Context;
 
     public override async onPipe(input: ShellInput) {
-        const cwd = this.config.path.cwd;
+        const cwd = input.cwd === undefined ? this.config.path.cwd : this.text(input.cwd, 'cwd');
         const command = this.text(input.command, 'command');
         const args = this.args(input.args);
         const timeoutMs = this.timeout(input.timeoutMs);

@@ -14,6 +14,7 @@ describe('Memory', () => {
             userText: '实现计划',
             intent: ContextIntent.Research,
             goal: '实现 synapse.context + agent.memory',
+            workingDirectory: '/tmp/flyflor',
             constraints: ['不要过度抽象'],
             references: [],
             knownDone: [],
@@ -44,6 +45,7 @@ describe('Memory', () => {
         expect(system).toContain('socket.test.ts 通过');
         expect(user).toContain('"goal":"实现 synapse.context + agent.memory"');
         expect(user).toContain('"user":"实现计划"');
+        expect(user).toContain('"workingDirectory":"/tmp/flyflor"');
         expect(user).toContain('"paused":true');
         expect(user).toContain('"pauseKind":"confirm"');
         expect(user).toContain('允许写文件？');

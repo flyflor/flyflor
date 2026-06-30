@@ -79,10 +79,10 @@ describe('ToolComponent', () => {
     test('dispatches ask and confirm tools', async () => {
         const tools = await component();
 
-        const ask = await tools.run({ id: 'ask_1', name: 'ask', arguments: { question: 'Pick?', options: [{ id: 'a' }] } });
+        const ask = await tools.run({ id: 'ask_1', name: 'ask', arguments: { questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] } });
         const confirm = await tools.run({ id: 'confirm_1', name: 'confirm', arguments: { question: 'Proceed?', recommended: true } });
 
-        expect(ask).toEqual({ ok: true, name: 'ask', data: { kind: 'ask', question: 'Pick?', options: [{ id: 'a' }] } });
+        expect(ask).toEqual({ ok: true, name: 'ask', data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }, { label: 'other', description: '自定义回答，可引用上面的方案' }] }] } });
         expect(confirm).toEqual({ ok: true, name: 'confirm', data: { kind: 'confirm', question: 'Proceed?', recommended: true } });
     });
 
@@ -147,6 +147,24 @@ describe('ToolComponent', () => {
         const data = result.data as { action: string; cwd: string; command: string; stdout: string; timedOut: boolean };
         expect(data).toMatchObject({ action: 'shell', command: process.execPath, timedOut: false });
         expect(data.stdout).toBe(`${realpathSync(data.cwd)}\n`);
+    });
+
+    test('shell accepts explicit cwd without changing config cwd', async () => {
+        const result = await (await component()).run({
+            id: 'shell_1',
+            name: 'shell',
+            arguments: {
+                cwd: other,
+                command: process.execPath,
+                args: ['-e', 'console.log(process.cwd())'],
+            },
+        });
+
+        expect(result.ok).toBe(true);
+        const data = result.data as { cwd: string; stdout: string };
+        expect(data.cwd).toBe(other);
+        expect(data.stdout).toBe(`${realpathSync(other)}\n`);
+        expect(ConfigService.path.cwd).toBe(root);
     });
 
     test('execute runs script batches from config cwd and keeps serial order', async () => {

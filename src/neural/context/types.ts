@@ -36,6 +36,7 @@ export interface TurnUnderstanding {
     userText: string;
     intent: ContextIntent;
     goal: string;
+    workingDirectory?: string;
     constraints: string[];
     requestedOutput?: string;
     references: ContextReference[];
@@ -78,12 +79,6 @@ export enum ContextTurnStatus {
 
 export type ContextPauseKind = 'ask' | 'confirm';
 
-export interface ContextScope {
-    project?: string;
-    root?: string;
-    anchor?: string[];
-}
-
 export interface ContextPauseInput {
     kind: ContextPauseKind;
     prompt: string;
@@ -102,7 +97,6 @@ export interface ContextTurn {
     paused?: boolean;
     pauseKind?: ContextPauseKind;
     pausePrompt?: string;
-    scope?: ContextScope;
     createdAt: number;
     updatedAt: number;
 }

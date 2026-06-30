@@ -96,6 +96,7 @@ export type FilesystemOutput =
     | { action: 'delete'; path: string };
 
 export interface ShellInput {
+    cwd?: unknown;
     command?: unknown;
     args?: unknown;
     timeoutMs?: unknown;

@@ -37,8 +37,9 @@ export class Investigation extends FAgentAtom {
                 return { answer: result.text, steps: step, completed: true, paused: false, evidence };
             }
 
-            messages.push(this.actionRequestMessage(result));
-            for (const request of result.actionRequests) {
+            const requests = result.actionRequests.map((request) => this.withWorkingDirectory(request));
+            messages.push(this.actionRequestMessage({ ...result, actionRequests: requests }));
+            for (const request of requests) {
                 this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.ActionStart, chunk: request.name, data: request.arguments });
                 const actionResult = await this.tools.run(request);
                 this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.ActionResult, chunk: request.name, data: actionResult });
@@ -61,6 +62,14 @@ export class Investigation extends FAgentAtom {
             actionRequests: result.actionRequests,
             reasoning: result.reasoning,
         };
+    }
+
+    private withWorkingDirectory(request: ActionRequest): ActionRequest {
+        const cwd = this.context.current?.workingDirectory;
+        if (typeof cwd !== 'string' || cwd.length === 0) return request;
+        if (request.name !== 'filesystem' && request.name !== 'execute' && request.name !== 'shell') return request;
+        if ('cwd' in request.arguments) return request;
+        return { ...request, arguments: { ...request.arguments, cwd } };
     }
 
     private actionResultMessage(request: ActionRequest, result: Awaited<ReturnType<ToolComponent['run']>>): ProviderActionResultMessage {

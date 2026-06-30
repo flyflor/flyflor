@@ -74,6 +74,7 @@ export class Memory extends FAgentAtom {
                 goal: this.context.current.goal,
                 user: this.context.current.userText,
                 intent: this.context.current.intent,
+                workingDirectory: this.context.current.workingDirectory,
                 constraints: this.context.current.constraints,
                 references: this.context.current.references,
                 knownDone: this.context.current.knownDone,
@@ -82,7 +83,6 @@ export class Memory extends FAgentAtom {
                 paused: active?.paused ?? false,
                 pauseKind: active?.pauseKind,
                 pausePrompt: active?.pausePrompt,
-                scope: active?.scope,
             } : undefined,
             recentContext: this.context.recent().map((entry) => ({
                 status: entry.status,
@@ -92,7 +92,6 @@ export class Memory extends FAgentAtom {
                 paused: entry.paused ?? false,
                 pauseKind: entry.pauseKind,
                 pausePrompt: entry.pausePrompt,
-                scope: entry.scope,
                 summary: entry.summary ? {
                     result: entry.summary.result,
                     decisions: entry.summary.decisions,

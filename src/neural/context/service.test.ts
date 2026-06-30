@@ -21,6 +21,7 @@ describe('Context', () => {
             completeText: async () => JSON.stringify({
                 intent: 'research',
                 goal: '修复 IPC JSON 解析错误',
+                workingDirectory: '/tmp/flyflor-ipc',
                 constraints: ['以后用中文交流'],
                 references: [{ type: 'error', value: 'Bad control character in string literal' }],
                 knownDone: ['已经加过日志'],
@@ -33,6 +34,7 @@ describe('Context', () => {
 
         expect(understanding.intent).toBe(ContextIntent.Research);
         expect(context.current?.goal).toBe('修复 IPC JSON 解析错误');
+        expect(context.current?.workingDirectory).toBe('/tmp/flyflor-ipc');
         expect(context.current?.references).toContainEqual({ type: 'error', value: 'Bad control character in string literal' });
         expect(context.turns).toHaveLength(1);
         expect(context.turns[0]?.understanding.userText).toBe('解析错误: Bad control character in string literal');
@@ -105,9 +107,10 @@ describe('Context', () => {
         process.chdir(directory);
         try {
             context.load({
-                userText: '继续优化 flyflor-cli 的 context',
+                userText: '继续优化 ../flyflor-cli 的 context',
                 intent: ContextIntent.Research,
-                goal: '优化 flyflor-cli context',
+                goal: '优化 context',
+                workingDirectory: '../flyflor-cli',
                 constraints: ['turn 只存在于 context'],
                 references: [{ type: 'path', value: '../flyflor-cli' }],
                 knownDone: [],
@@ -121,11 +124,10 @@ describe('Context', () => {
             expect(context.turns[0]?.paused).toBe(true);
             expect(context.turns[0]?.pauseKind).toBe('ask');
             expect(context.turns[0]?.pausePrompt).toBe('继续优化哪个项目？');
-            expect(context.turns[0]?.scope?.project).toBe('flyflor-cli');
-            expect(context.turns[0]?.scope?.anchor).toContain('flyflor-cli');
+            expect(context.turns[0]?.understanding.workingDirectory).toBe('../flyflor-cli');
             expect(snapshot).toContain('Derived debug view only');
             expect(snapshot).toContain('继续优化哪个项目？');
-            expect(snapshot).toContain('flyflor-cli');
+            expect(snapshot).toContain('../flyflor-cli');
             expect(snapshot).not.toContain('tool_call_id');
         } finally {
             process.chdir(cwd);
@@ -133,11 +135,11 @@ describe('Context', () => {
         }
     });
 
-    test('uses the latest explicit project anchor when the user corrects scope', () => {
+    test('does not infer workingDirectory from project names in user text', () => {
         context.load({
             userText: '不对，之前是让 agent 研究 flyflor-cli，不是 flyflor',
             intent: ContextIntent.Research,
-            goal: '纠正项目 scope',
+            goal: '纠正项目',
             constraints: [],
             references: [],
             knownDone: [],
@@ -145,14 +147,15 @@ describe('Context', () => {
             shouldInvestigate: true,
         });
 
-        expect(context.turns[0]?.scope?.project).toBe('flyflor-cli');
+        expect(context.turns[0]?.understanding.workingDirectory).toBeUndefined();
     });
 
-    test('ingest clears previous pause after using recent context for the next turn', async () => {
+    test('ingest clears previous pause without inheriting workingDirectory into the next turn', async () => {
         context.load({
             userText: '需要选择项目',
             intent: ContextIntent.Research,
             goal: '确认项目',
+            workingDirectory: '/tmp/old-project',
             constraints: [],
             references: [],
             knownDone: [],
@@ -165,7 +168,7 @@ describe('Context', () => {
                 expect(messages[1]?.content).toContain('继续哪个项目？');
                 return JSON.stringify({
                     intent: 'research',
-                    goal: '继续优化 flyflor-cli',
+                    goal: '继续优化项目',
                     constraints: [],
                     references: [{ type: 'text', value: 'flyflor-cli' }],
                     knownDone: [],
@@ -180,8 +183,8 @@ describe('Context', () => {
         expect(context.turns).toHaveLength(2);
         expect(context.turns[0]?.paused).toBe(false);
         expect(context.turns[0]?.pausePrompt).toBeUndefined();
-        expect(context.turns[1]?.understanding.goal).toBe('继续优化 flyflor-cli');
-        expect(context.turns[1]?.scope?.project).toBe('flyflor-cli');
+        expect(context.turns[1]?.understanding.goal).toBe('继续优化项目');
+        expect(context.turns[1]?.understanding.workingDirectory).toBeUndefined();
     });
 
     test('recent exposes only turn understanding and summaries', async () => {
