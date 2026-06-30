@@ -1,6 +1,5 @@
 import type { ConfigService } from '@/configuration';
-import { Context } from '@/neural/context';
-import { Config, FToolAtom, Inject, Tool } from '@/core';
+import { Config, FToolAtom, Tool } from '@/core';
 import { spawn } from 'node:child_process';
 import type { ShellInput, ShellOutput } from './types';
 
@@ -12,9 +11,6 @@ import type { ShellInput, ShellOutput } from './types';
 export class Shell extends FToolAtom<ShellInput, ShellOutput> {
     @Config()
     public config!: ConfigService;
-
-    @Inject()
-    public context!: Context;
 
     public override async onPipe(input: ShellInput) {
         const cwd = input.cwd === undefined ? this.config.path.cwd : this.text(input.cwd, 'cwd');
@@ -51,25 +47,13 @@ export class Shell extends FToolAtom<ShellInput, ShellOutput> {
     }
 
     public description(base: string): string {
-        const current = this.context.current;
-        const user = current?.userText?.trim() || '';
-        const goal = current?.goal?.trim() || '';
-        const intent = current?.intent || '';
-        const constraints = (current?.constraints ?? []).filter((item) => item.trim().length > 0);
-        const references = (current?.references ?? []).map((item) => `${item.type}:${item.value}`);
         const lines = [
             base.trim(),
             '',
             '<shell_runtime>',
-            `cwd=${this.config.path.cwd}`,
             `platform=${process.platform}`,
             `arch=${process.arch}`,
-            `goal=${goal}`,
-            `user=${user}`,
-            `intent=${intent}`,
-            `constraints=${constraints.length > 0 ? constraints.join(' | ') : 'none'}`,
-            `references=${references.length > 0 ? references.join(' | ') : 'none'}`,
-            'boundaries=shell is read-only exploration; use filesystem for file CRUD; use execute for scripts, queues, and parallel task runs',
+            'boundaries=shell executes one command directly; use execute for scripts, queues, or multi-step work',
             '</shell_runtime>',
         ];
         return lines.join('\n').trim();

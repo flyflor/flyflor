@@ -102,7 +102,7 @@ const DEFAULT_CONFIG: IpcClientBridgeConfig = {
  */
 function startIpcClientBridge(options: Partial<IpcClientBridgeConfig> = {}) {
     const config: IpcClientBridgeConfig = { ...DEFAULT_CONFIG, ...options };
-    const page = readFileSync(config.pagePath, PACKET_TEXT_ENCODING);
+    const page = () => readFileSync(config.pagePath, PACKET_TEXT_ENCODING);
 
     const server = Bun.serve<BrowserSocketData>({
         hostname: config.host,
@@ -111,7 +111,7 @@ function startIpcClientBridge(options: Partial<IpcClientBridgeConfig> = {}) {
             if (server.upgrade(request, { data: {} })) {
                 return;
             }
-            return new Response(page, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+            return new Response(page(), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
         },
         websocket: {
             async open(browser) {

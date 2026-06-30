@@ -16,9 +16,10 @@ describe('Context', () => {
         context.completed = [];
     });
 
-    test('ingest creates a distilled turn understanding', async () => {
+    test('ingest preserves an explicit workingDirectory from fenced JSON', async () => {
         context.intelligence = {
-            completeText: async () => JSON.stringify({
+            completeText: async () => `\`\`\`json
+${JSON.stringify({
                 intent: 'research',
                 goal: '修复 IPC JSON 解析错误',
                 workingDirectory: '/tmp/flyflor-ipc',
@@ -27,7 +28,8 @@ describe('Context', () => {
                 knownDone: ['已经加过日志'],
                 openQuestions: [],
                 shouldInvestigate: true,
-            }),
+            })}
+\`\`\``,
         } as never;
 
         const understanding = await context.ingest({ content: '解析错误: Bad control character in string literal' });
@@ -39,6 +41,73 @@ describe('Context', () => {
         expect(context.turns).toHaveLength(1);
         expect(context.turns[0]?.understanding.userText).toBe('解析错误: Bad control character in string literal');
         expect(context.turns[0]?.status).toBe(ContextTurnStatus.Working);
+    });
+
+    test('ingest keeps a model-resolved workingDirectory for unique references', async () => {
+        context.load({
+            userText: '研究下这个项目',
+            intent: ContextIntent.Research,
+            goal: '研究项目',
+            workingDirectory: '/tmp/flyflor-cli',
+            constraints: [],
+            references: [{ type: 'path', value: '/tmp/flyflor-cli' }],
+            knownDone: [],
+            openQuestions: [],
+            shouldInvestigate: true,
+        });
+        context.intelligence = {
+            completeText: async (messages: AgentMemory[]) => {
+                expect(messages[1]?.content).toContain('研究下这个项目');
+                expect(messages[1]?.content).toContain('/tmp/flyflor-cli');
+                return JSON.stringify({
+                    intent: 'research',
+                    goal: '继续研究项目',
+                    workingDirectory: '/tmp/flyflor-cli',
+                    constraints: [],
+                    references: [{ type: 'path', value: '/tmp/flyflor-cli' }],
+                    knownDone: [],
+                    openQuestions: [],
+                    shouldInvestigate: true,
+                });
+            },
+        } as never;
+
+        const understanding = await context.ingest({ content: '继续这个项目' });
+
+        expect(understanding.workingDirectory).toBe('/tmp/flyflor-cli');
+        expect(context.current?.workingDirectory).toBe('/tmp/flyflor-cli');
+        expect(context.turns).toHaveLength(2);
+    });
+
+    test('ingest does not inherit a workingDirectory when the model leaves it empty', async () => {
+        context.load({
+            userText: '继续优化',
+            intent: ContextIntent.Research,
+            goal: '继续优化',
+            workingDirectory: '/tmp/old-project',
+            constraints: [],
+            references: [],
+            knownDone: [],
+            openQuestions: [],
+            shouldInvestigate: true,
+        });
+        context.intelligence = {
+            completeText: async () => JSON.stringify({
+                intent: 'research',
+                goal: '继续优化',
+                constraints: [],
+                references: [],
+                knownDone: [],
+                openQuestions: [],
+                shouldInvestigate: true,
+            }),
+        } as never;
+
+        const understanding = await context.ingest({ content: '继续优化' });
+
+        expect(understanding.workingDirectory).toBeUndefined();
+        expect(context.current?.workingDirectory).toBeUndefined();
+        expect(context.turns).toHaveLength(2);
     });
 
     test('settle creates a completed summary and stores it on the active turn', async () => {
@@ -53,14 +122,16 @@ describe('Context', () => {
             shouldInvestigate: true,
         });
         context.intelligence = {
-            completeText: async () => JSON.stringify({
+            completeText: async () => `\`\`\`json
+${JSON.stringify({
                 goal: '实现 context/memory 重构',
                 result: '已将 synapse.context 接入 agent.memory',
                 changedFiles: ['src/neural/synapse.ts'],
                 decisions: ['不引入额外 context pipeline'],
                 evidence: ['agent.memory.completed 写入完成态'],
                 remaining: [],
-            }),
+            })}
+\`\`\``,
         } as never;
 
         const summary = await context.settle({

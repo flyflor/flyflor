@@ -41,7 +41,7 @@ export class Context extends FService {
             { role: AgentChatRole.System, content: String(this.prompt.data[ContextPrompt.Ingest]?.data ?? '') },
             { role: AgentChatRole.User, content: JSON.stringify({ latest: input.content, current: this.current, recent: this.recent() }) },
         ]);
-        const current = { ...(JSON.parse(raw) as Omit<TurnUnderstanding, 'userText'>), userText: input.content };
+        const current = { ...(this.json<Omit<TurnUnderstanding, 'userText'>>(raw)), userText: input.content };
         const paused = this.activeTurn();
         if (paused) this.resume(paused);
         this.current = current;
@@ -83,7 +83,7 @@ export class Context extends FService {
                 }),
             },
         ]);
-        const summary = { ...(JSON.parse(raw) as Omit<CompletedSummary, 'createdAt'>), createdAt: Date.now() };
+        const summary = { ...(this.json<Omit<CompletedSummary, 'createdAt'>>(raw)), createdAt: Date.now() };
         this.completed.push(summary);
         if (turn) {
             turn.status = ContextTurnStatus.Completed;
@@ -96,6 +96,28 @@ export class Context extends FService {
         }
         this.writeSnapshot();
         return summary;
+    }
+
+    private json<T>(raw: string): T {
+        const trimmed = raw.trim();
+        try {
+            return JSON.parse(trimmed) as T;
+        } catch {
+            const fenced = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+            if (fenced !== trimmed) {
+                try {
+                    return JSON.parse(fenced) as T;
+                } catch {
+                    // fall through to object extraction below
+                }
+            }
+            const start = trimmed.indexOf('{');
+            const end = trimmed.lastIndexOf('}');
+            if (start >= 0 && end > start) {
+                return JSON.parse(trimmed.slice(start, end + 1)) as T;
+            }
+            throw new SyntaxError(`Invalid JSON from model: ${raw}`);
+        }
     }
 
     private begin(current: TurnUnderstanding): ContextTurn {

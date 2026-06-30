@@ -1,3 +1,9 @@
-Use this tool for read-only environment exploration and local evidence gathering.
+Use this tool for single-command execution and local environment checks.
 
-The runtime will tell you the current working directory and user intent in the tool description. Use that context to decide how to inspect the machine. Do not use this tool for file writes or script execution. Use filesystem for file CRUD, and use execute for scripts, queues, or parallel task runs.
+Rules:
+
+- `command` must be an executable name or absolute path.
+- `args` is the argument list passed to that executable.
+- Do not put pipes, redirects, `&&`, `||`, subshells, or other shell syntax into `command`.
+- Use `execute` for scripts, queues, batch work, or multi-step command flows.
+- The runtime description is fixed and does not carry turn-specific working-directory semantics.

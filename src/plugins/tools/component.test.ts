@@ -29,6 +29,7 @@ describe('ToolComponent', () => {
             userText: '调查当前环境',
             intent: ContextIntent.Research,
             goal: '调查工具边界',
+            workingDirectory: other,
             constraints: ['只读探索'],
             references: [{ type: 'path', value: 'src/plugins/tools' }],
             knownDone: [],
@@ -46,18 +47,23 @@ describe('ToolComponent', () => {
         rmSync(other, { recursive: true, force: true });
     });
 
-    test('lists tool definitions from prompt config and expands shell description with runtime context', async () => {
+    test('lists tool definitions from prompt config and keeps shell description free of semantic cwd', async () => {
         const definitions = await (await component()).list();
 
         expect(definitions.map((definition) => definition.name)).toEqual(['ask', 'confirm', 'filesystem', 'shell', 'execute']);
         expect(definitions.find((definition) => definition.name === 'filesystem')?.parameters.required).toEqual(['action', 'path']);
         expect(definitions.find((definition) => definition.name === 'ask')?.description).toContain('Ask the user');
         const shell = definitions.find((definition) => definition.name === 'shell');
-        expect(shell?.description).toContain(`cwd=${root}`);
-        expect(shell?.description).toContain('goal=调查工具边界');
-        expect(shell?.description).toContain('intent=research');
-        expect(shell?.description).toContain('constraints=只读探索');
-        expect(shell?.description).toContain('shell is read-only exploration');
+        expect(shell?.description).toContain('platform=');
+        expect(shell?.description).toContain('arch=');
+        expect(shell?.description).toContain('shell executes one command directly');
+        expect(shell?.description).not.toContain('cwd=');
+        expect(shell?.description).not.toContain('configCwd=');
+        expect(shell?.description).not.toContain('goal=');
+        expect(shell?.description).not.toContain('intent=');
+        expect(shell?.description).not.toContain('constraints=');
+        expect(shell?.description).not.toContain(other);
+        expect(shell?.description).not.toContain(root);
         expect(shell?.description).not.toContain('git, rg, cat, ls');
     });
 
@@ -133,7 +139,7 @@ describe('ToolComponent', () => {
         expect(remove.error?.message).toBe('delete only supports files');
     });
 
-    test('shell runs from config cwd instead of process cwd', async () => {
+    test('shell executes a direct command with args from config cwd', async () => {
         const result = await (await component()).run({
             id: 'shell_1',
             name: 'shell',

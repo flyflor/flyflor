@@ -86,7 +86,6 @@ export class Memory extends FAgentAtom {
             } : undefined,
             recentContext: this.context.recent().map((entry) => ({
                 status: entry.status,
-                goal: entry.understanding.goal,
                 user: entry.understanding.userText,
                 assistantText: entry.assistantText,
                 paused: entry.paused ?? false,

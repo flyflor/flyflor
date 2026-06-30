@@ -10,7 +10,7 @@
 
 Schema:
 
-{"intent":"reply|research|soul","goal":"short goal","workingDirectory":"optional explicit working directory from latest","constraints":[],"requestedOutput":"optional output shape","references":[],"knownDone":[],"openQuestions":[],"shouldInvestigate":false}
+{"intent":"reply|research|soul","goal":"short goal","workingDirectory":"optional working directory for latest","constraints":[],"requestedOutput":"optional output shape","references":[],"knownDone":[],"openQuestions":[],"shouldInvestigate":false}
 
 规则：
 
@@ -18,8 +18,10 @@ Schema:
 - 只把 `latest` 理解为新的用户请求。不要编造历史。
 - 只用 `recent` 保持连贯性、解析指代，并避免混淆相似项目。
 - 如果 `latest` 与 `recent` 冲突，以 `latest` 为准。
-- 只有当 `latest` 明确说出要工作的目录或项目路径时，才设置 `workingDirectory`。
-- 不要从 `current` 或 `recent` 继承 `workingDirectory`。
+- 当 `latest` 明确说出要工作的目录或项目路径时，设置 `workingDirectory`。
+- 当 `latest` 本身指代之前说过的某一个项目或目录，例如“这个项目”“那个项目”“这里”“继续”，并且 `current` 或 `recent` 能把该指代唯一解析到一个工作目录时，也设置 `workingDirectory`。
+- `current` 和 `recent` 只作为解析当前消息的语义证据，不是 `workingDirectory` 的默认来源。
+- 如果 `latest` 没有项目/目录指代，或者可能匹配多个工作目录，就不要填写 `workingDirectory`。
 - 需要代码、文件、外部证据或澄清时使用 `research`。
 - 只有长期助手、用户、画像、偏好或能力记录变更时使用 `soul`。
 - 可以直接回答时使用 `reply`。

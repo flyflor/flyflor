@@ -21,8 +21,7 @@ describe('Memory', () => {
             openQuestions: [],
             shouldInvestigate: true,
         });
-        context.pause({ kind: 'confirm', prompt: '允许写文件？' });
-        context.done({
+        const summary = {
             goal: '修复 IPC',
             result: 'socket 背压写队列已完成',
             changedFiles: ['src/neural/ipc/socket.ts'],
@@ -30,7 +29,16 @@ describe('Memory', () => {
             evidence: ['socket.test.ts 通过'],
             remaining: ['补集成验证'],
             createdAt: Date.now(),
-        });
+        };
+        const turn = context.turns[0];
+        if (turn) {
+            turn.paused = true;
+            turn.pauseKind = 'confirm';
+            turn.pausePrompt = '允许写文件？';
+            turn.assistantText = '已完成';
+            turn.summary = summary;
+        }
+        context.completed = [summary];
 
         const messages = memory.buildMessage();
         const system = messages[0]?.content ?? '';
@@ -43,11 +51,42 @@ describe('Memory', () => {
         expect(system).toContain('socket 背压写队列已完成');
         expect(system).toContain('packet 保持 8-byte header');
         expect(system).toContain('socket.test.ts 通过');
-        expect(user).toContain('"goal":"实现 synapse.context + agent.memory"');
-        expect(user).toContain('"user":"实现计划"');
-        expect(user).toContain('"workingDirectory":"/tmp/flyflor"');
-        expect(user).toContain('"paused":true');
-        expect(user).toContain('"pauseKind":"confirm"');
+        const payload = JSON.parse(user) as {
+            current?: {
+                goal?: string;
+                user?: string;
+                workingDirectory?: string;
+            };
+            recentContext?: Array<{
+                status?: string;
+                user?: string;
+                assistantText?: string;
+                paused?: boolean;
+                pauseKind?: string;
+                pausePrompt?: string;
+                summary?: { result?: string };
+                goal?: string;
+                workingDirectory?: string;
+            }>;
+        };
+
+        expect(payload.current).toMatchObject({
+            goal: '实现 synapse.context + agent.memory',
+            user: '实现计划',
+            workingDirectory: '/tmp/flyflor',
+        });
+        expect(payload.recentContext?.[0]).toMatchObject({
+            status: 'working',
+            user: '实现计划',
+            paused: true,
+            pauseKind: 'confirm',
+            pausePrompt: '允许写文件？',
+            summary: {
+                result: 'socket 背压写队列已完成',
+            },
+        });
+        expect(JSON.stringify(payload.recentContext)).not.toContain('"goal":"实现 synapse.context + agent.memory"');
+        expect(JSON.stringify(payload.recentContext)).not.toContain('"workingDirectory":"/tmp/flyflor"');
         expect(user).toContain('允许写文件？');
         expect(user).toContain('补集成验证');
         expect(user).not.toContain('toolCalls');
