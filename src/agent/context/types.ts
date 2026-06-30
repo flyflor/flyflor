@@ -5,14 +5,6 @@ export enum ContextPrompt {
     Settle = 'SETTLE',
 }
 
-/**
- * EN: Minimal intelligence surface used by Context.
- * ZH: Context 使用的最小 intelligence 接口面。
- */
-export interface ContextIntelligence {
-    completeText(messages: AgentMemory[]): Promise<string>;
-}
-
 export enum ContextIntent {
     Reply = 'reply',
     Research = 'research',

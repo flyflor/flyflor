@@ -37,7 +37,7 @@ describe('PromptService', () => {
         });
         const service = new PromptService<'SOUL' | 'AGENTS'>(root);
 
-        const xml = service.renderXml(service.config!.protocolPackage.context);
+        const xml = service.render({ kind: 'document' });
 
         expect(xml).toContain('<prompt_package path="');
         expect(xml).toContain('version="1"');
@@ -68,8 +68,39 @@ describe('PromptService', () => {
         });
         const service = new PromptService<'SOUL'>(root);
 
-        expect(() => service.renderXml({ root: 'bad tag', blocks: [] })).toThrow('Prompt XML name is invalid');
-        expect(() => service.renderXml({ root: 'prompt_package', blocks: [{ key: 'SOUL', tag: 'document', file: 'USER.md' }] })).toThrow('Prompt context block file is mismatched');
+        expect(() => service.render({ kind: 'document', context: { root: 'bad tag', blocks: [] } })).toThrow('Prompt XML name is invalid');
+        expect(() => service.render({ kind: 'document', context: { root: 'prompt_package', blocks: [{ key: 'SOUL', tag: 'document', file: 'USER.md' }] } })).toThrow('Prompt context block file is mismatched');
+    });
+
+    test('renders ordered sections and skips runtime-ignored files', () => {
+        const root = packageRoot({
+            'SOUL.md': 'soul-body',
+            'USER.md': '  user-body  ',
+            'AGENTS.md': 'agents-body',
+            'config.jsonc': `{
+                "version": 1,
+                "description": "test",
+                "prompt": { "sections": ["SOUL", "USER", "AGENTS"] },
+                "protocolPackage": {
+                    "editable": ["SOUL.md", "USER.md"],
+                    "locked": ["AGENTS.md"],
+                    "runtimeIgnored": ["AGENTS.md", "config.jsonc"],
+                    "context": {
+                        "root": "prompt_package",
+                        "blocks": [
+                            { "key": "SOUL", "tag": "document", "file": "SOUL.md" },
+                            { "key": "USER", "tag": "document", "file": "USER.md" },
+                            { "key": "AGENTS", "tag": "document", "file": "AGENTS.md" }
+                        ]
+                    }
+                }
+            }`,
+        });
+        const service = new PromptService<'SOUL' | 'USER' | 'AGENTS'>(root);
+
+        // Order preserved, content trimmed, runtime-ignored AGENTS dropped.
+        expect(service.render({ kind: 'sections' })).toBe('soul-body\n\nuser-body');
+        expect(service.section('AGENTS')).toBe('agents-body');
     });
 });
 

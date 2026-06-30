@@ -1,6 +1,6 @@
 import { AgentChatRole, type AgentMemory } from '@/agent/types';
-import { FAgentAtom, Inject, Provide, Scope } from '@/core';
-import { Context } from '@/neural/context';
+import { FAgentAtom, Inject, Provide } from '@/core';
+import { Context } from '@/agent/context';
 import { SynapseSignalType } from '@/neural/types';
 import { type ActionRequest, ToolComponent } from '@/plugins';
 import { CallosumSignalType, type CallosumSignal } from '../callosum';
@@ -14,7 +14,7 @@ import type { InvestigationOutcome } from './types';
  * ZH: Investigation class 声明。
  */
 export class Investigation extends FAgentAtom {
-    @Scope()
+    @Inject()
     public intelligence!: Intelligence;
 
     @Inject()

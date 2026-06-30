@@ -56,14 +56,16 @@ export interface IPromptConfig<TSection extends string, TFile extends string = s
 }
 
 /**
- * EN: Parameters used to render a prompt package into XML blocks.
- * ZH: 把 prompt 包渲染成 XML 区块时使用的参数。
+ * EN: One rendering shape produced by `PromptService.render`.
+ * ZH: `PromptService.render` 支持的一种渲染形状。
+ *
+ * EN: `sections` concatenates ordered prompt files; `document` emits the attributed XML snapshot
+ * (the only XML output). Both default their inputs from the package config.
+ * ZH: `sections` 拼接有序 prompt 文件;`document` 输出带属性的 XML 快照(唯一 XML 输出)。两者输入均缺省取包配置。
  */
-export interface PromptXmlRenderOptions<TSection extends string> {
-    root: string;
-    attributes?: Record<string, string>;
-    blocks: IPromptProtocolPackageContextBlock<TSection>[];
-}
+export type PromptRender<TSection extends string = string> =
+    | { kind: 'sections'; sections?: TSection[]; separator?: string }
+    | { kind: 'document'; context?: IPromptProtocolPackageContext<TSection>; attributes?: Record<string, string> };
 
 /**
  * EN: In-memory mapping from section name to loaded prompt file service.
@@ -141,14 +143,77 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
     }
 
     /**
-     * EN: Renders the package context into the XML-like format used by prompt planning requests.
-     * ZH: 把包上下文渲染成提示词规划请求使用的类 XML 格式。
+     * EN: Renders this package into model-bound text. The single rendering entry point.
+     * ZH: 把当前包渲染成 model-bound 文本。唯一渲染入口。
      */
-    public renderXml(options: PromptXmlRenderOptions<TSection>): string {
-        this.assertXmlName(options.root);
-        const rootAttributeParts = this.attributes({ path: this.path, version: '1', ...(options.attributes ?? {}) });
-        const lines = [`<${options.root}${rootAttributeParts.length === 0 ? '' : ` ${rootAttributeParts.join(' ')}`}>`];
-        for (const block of options.blocks) {
+    public render(shape: PromptRender<TSection>): string {
+        if (shape.kind === 'document') {
+            const context = shape.context ?? this.config?.protocolPackage.context;
+            if (context === undefined) throw Object.assign(Error('Prompt package has no document context'), { detail: { path: this.path } });
+            return this.renderDocument(context, shape.attributes);
+        }
+        return this.renderSections(shape.sections ?? this.config?.prompt.sections ?? [], shape.separator ?? '\n\n');
+    }
+
+    /**
+     * EN: Reads one section's trimmed text, or '' when the section is absent.
+     * ZH: 读取单个 section 的去空白文本,section 缺失时返回 ''。
+     */
+    public section(key: TSection): string {
+        return String((this.data as PromptPackageData<TSection>)[key]?.data ?? '').trim();
+    }
+
+    /**
+     * EN: Applies model-planned writes to editable package files, enforcing package policy.
+     * ZH: 把模型规划的写入应用到可编辑包文件,并执行包策略。
+     *
+     * EN: A write is rejected when its file is unknown, is `config`, or is not in `editable`, or when
+     * its content is not a string. `.set()` on a locked file throws and is left to the caller's boundary.
+     * ZH: 文件未知 / 为 `config` / 不在 `editable` / content 非字符串时拒绝。锁定文件上的 `.set()` 会抛出,交给调用方边界处理。
+     */
+    public applyWrites(writes: Array<{ file?: string; content?: string }>): { written: string[]; rejected: string[] } {
+        const written: string[] = [];
+        const rejected: string[] = [];
+        const blocks = this.config?.protocolPackage.context.blocks ?? [];
+        const editable = this.config?.protocolPackage.editable ?? [];
+        for (const write of writes) {
+            const block = blocks.find((item) => item.file === write.file);
+            if (!block || block.key === 'config' || !editable.includes(block.file) || typeof write.content !== 'string') {
+                rejected.push(String(write.file ?? 'unknown'));
+                continue;
+            }
+            (this.data as PromptPackageData<TSection>)[block.key as TSection]?.set(write.content);
+            written.push(block.file);
+        }
+        return { written, rejected };
+    }
+
+    /**
+     * EN: Concatenates ordered sections, skipping runtime-ignored files.
+     * ZH: 按顺序拼接 sections,跳过 runtimeIgnored 文件。
+     */
+    private renderSections(sections: TSection[], separator: string): string {
+        const ignored = new Set(this.config?.protocolPackage.runtimeIgnored ?? []);
+        const blocks = this.config?.protocolPackage.context.blocks ?? [];
+        return sections
+            .map((key) => {
+                const block = blocks.find((item) => item.key === key);
+                if (block && ignored.has(block.file)) return '';
+                return this.section(key);
+            })
+            .filter((text) => text.length > 0)
+            .join(separator);
+    }
+
+    /**
+     * EN: Renders the protocol-package context as an attributed XML document (the only XML output).
+     * ZH: 把协议包上下文渲染成带属性的 XML 文档(唯一的 XML 输出)。
+     */
+    private renderDocument(context: IPromptProtocolPackageContext<TSection>, attributes?: Record<string, string>): string {
+        this.assertXmlName(context.root);
+        const rootAttributeParts = this.attributes({ path: this.path, version: '1', ...(attributes ?? {}) });
+        const lines = [`<${context.root}${rootAttributeParts.length === 0 ? '' : ` ${rootAttributeParts.join(' ')}`}>`];
+        for (const block of context.blocks) {
             this.assertXmlName(block.tag);
             const content = this.blockContent(block);
             const blockAttributeParts = this.attributes({
@@ -160,7 +225,7 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
             });
             lines.push(`<${block.tag}${blockAttributeParts.length === 0 ? '' : ` ${blockAttributeParts.join(' ')}`}>\n<content><![CDATA[${this.cdata(content)}]]></content>\n</${block.tag}>`);
         }
-        lines.push(`</${options.root}>`);
+        lines.push(`</${context.root}>`);
         return lines.join('\n');
     }
 

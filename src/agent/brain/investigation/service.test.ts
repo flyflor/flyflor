@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { AgentChatRole, type AgentMemory } from '@/agent/types';
-import { Context, ContextIntent } from '@/neural/context';
+import { Context, ContextIntent } from '@/agent/context';
 import { SynapseSignalType } from '@/neural/types';
 import type { ActionRequest } from '@/plugins';
 import type { IntelligenceToolDefinition, ProviderMessage } from '../intelligence/types';

@@ -1,5 +1,5 @@
 import type { FModelConfiguration } from '@/configuration';
-import { Config, FAgentAtom, Provide } from '@/core';
+import { Config, FService, Singleton } from '@/core';
 import { createIntelligenceRequestStream } from './factory';
 import type { ActionRequest } from '@/plugins';
 import type { IntelligenceEvent, IntelligenceStopReason, IntelligenceToolDefinition, ProviderMessage } from './types';
@@ -17,12 +17,12 @@ export interface IntelligenceResult {
     stopReason: IntelligenceStopReason;
 }
 
-@Provide()
+@Singleton()
 /**
  * EN: Intelligence class declaration.
  * ZH: Intelligence class 声明。
  */
-export class Intelligence extends FAgentAtom {
+export class Intelligence extends FService {
     @Config('model')
     public config!: FModelConfiguration;
 

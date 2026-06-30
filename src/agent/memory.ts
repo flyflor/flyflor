@@ -1,5 +1,5 @@
 import { FAgentAtom, Inject, Prompt, PromptService, Provide, type PromptPackageData } from '@/core';
-import { Context } from '@/neural/context';
+import { Context } from '@/agent/context';
 import { AgentChatRole, type AgentMemory } from './types';
 
 export { AgentChatRole, type AgentMemory } from './types';
@@ -31,10 +31,7 @@ export class Memory extends FAgentAtom {
     public context!: Context;
 
     public buildMessage(): AgentMemory[] {
-        const system = [
-            ...this.sections(),
-            this.memory(),
-        ].filter((text) => text.trim().length > 0).join('\n\n');
+        const system = this.prompt.render({ kind: 'sections' });
         const messages: AgentMemory[] = system.trim().length === 0 ? [] : [{ role: AgentChatRole.System, content: system }];
         if (this.context.current) {
             messages.push({
@@ -43,28 +40,6 @@ export class Memory extends FAgentAtom {
             });
         }
         return messages;
-    }
-
-    private sections(): string[] {
-        const ignored = new Set(this.prompt.config?.protocolPackage.runtimeIgnored ?? []);
-        return (this.prompt.config?.prompt.sections ?? [])
-            .map((section) => {
-                const block = this.prompt.config?.protocolPackage.context.blocks.find((item) => item.key === section);
-                if (block && ignored.has(block.file)) return '';
-                return String((this.prompt.data as PromptPackageData<string>)[section]?.data ?? '').trim();
-            });
-    }
-
-    private memory(): string {
-        const current = this.context.current ? `<current>${this.context.current.goal}</current>` : '';
-        const completed = this.context.completed.map((summary) => `<completed>${JSON.stringify({
-            goal: summary.goal,
-            result: summary.result,
-            decisions: summary.decisions,
-            evidence: summary.evidence,
-            remaining: summary.remaining,
-        })}</completed>`).join('\n');
-        return `<agent_memory>\n${[current, completed].filter(Boolean).join('\n')}\n</agent_memory>`;
     }
 
     private contextBlock(): object {

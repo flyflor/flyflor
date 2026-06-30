@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { ConfigService } from '@/configuration';
 import { FToolAtom, useContainer } from '@/core';
-import { Context, ContextIntent } from '@/neural/context';
+import { Context, ContextIntent } from '@/agent/context';
 import { Ask, Confirm, Execute, Filesystem, Shell, ToolComponent } from '@/plugins';
 
 async function component(): Promise<ToolComponent> {

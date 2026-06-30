@@ -1,8 +1,7 @@
 import { Agent } from '@/agent';
 import type { ConfigService } from '@/configuration';
-import { Config, FCortex, Init, Inject, Module, Scope, useContainer } from '@/core';
+import { Config, FCortex, Init, Module, Scope, useContainer } from '@/core';
 import { FSocket } from './ipc';
-import type { Context } from './context';
 import { SynapseSignalType, type SynapseSignal } from './types';
 
 export interface AgentPool {
@@ -18,9 +17,6 @@ export interface AgentPool {
 export class Synapse extends FCortex<SynapseSignal> {
     @Config()
     public readonly config!: ConfigService;
-
-    @Inject()
-    public context!: Context;
 
     @Scope()
     public socket!: FSocket;

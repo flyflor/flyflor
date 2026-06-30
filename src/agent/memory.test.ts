@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { useContainer } from '@/core';
 import { AgentChatRole, Memory, type AgentMemory } from './memory';
-import { Context, ContextIntent } from '@/neural/context';
+import { Context, ContextIntent } from '@/agent/context';
 
 describe('Memory', () => {
     test('keeps AgentMemory pure and renders summaries instead of transcripts or action replay', async () => {
@@ -46,11 +46,12 @@ describe('Memory', () => {
         const role: AgentMemory['role'] = AgentChatRole.User;
 
         expect(role).toBe(AgentChatRole.User);
-        expect(system).toContain('<agent_memory>');
-        expect(system).toContain('实现 synapse.context + agent.memory');
-        expect(system).toContain('socket 背压写队列已完成');
-        expect(system).toContain('packet 保持 8-byte header');
-        expect(system).toContain('socket.test.ts 通过');
+        // 摘要不再以 <agent_memory> XML 进 system,而是随 contextBlock 进 user JSON。
+        expect(system).not.toContain('<agent_memory>');
+        expect(user).toContain('实现 synapse.context + agent.memory');
+        expect(user).toContain('socket 背压写队列已完成');
+        expect(user).toContain('packet 保持 8-byte header');
+        expect(user).toContain('socket.test.ts 通过');
         const payload = JSON.parse(user) as {
             current?: {
                 goal?: string;

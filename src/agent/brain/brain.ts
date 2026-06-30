@@ -1,7 +1,7 @@
 import { AgentChatRole, type AgentMemory } from '@/agent/types';
-import { Context } from '@/neural/context';
+import { Context } from '@/agent/context';
 import { SynapseSignalType } from '@/neural/types';
-import { FAgentAtom, Init, Inject, Prompt, PromptService, Provide, Scope, type IObservable } from '@/core';
+import { FAgentAtom, Inject, Prompt, PromptService, Provide, Scope, type IObservable } from '@/core';
 import { Memory } from '../memory';
 import { Callosum } from './callosum';
 import { CallosumSignalType, type CallosumSignal } from './callosum';
@@ -28,7 +28,7 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
     @Prompt('prompts/callosum')
     public prompt!: PromptService<BrainPrompt>;
 
-    @Scope()
+    @Inject()
     public intelligence!: Intelligence;
 
     @Inject()
@@ -40,19 +40,34 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
     @Scope()
     public investigation!: Investigation;
 
-    @Init()
-    public init() {
-        this.context.intelligence = this.intelligence;
-        this.callosum.switch((signal) => signal.type, {
-            [CallosumSignalType.Reply]: (signal) => { void this.reply(signal); },
-            [CallosumSignalType.Research]: (signal) => { void this.research(signal); },
-            [CallosumSignalType.Soul]: (signal) => { void this.soul(signal); },
-        });
+    /**
+     * EN: Runs one whole user turn behind a single error boundary.
+     * ZH: 在单一错误边界内运行一整个用户回合。
+     *
+     * EN: ingest, route, and the chosen handler all throw freely; `fail` is the only recovery site,
+     * so cognition code stays free of scattered defensive try/catch.
+     * ZH: ingest、route 和选中的 handler 都可自由抛出；`fail` 是唯一恢复点，
+     * 认知代码因此不再散落防御式 try/catch。
+     */
+    public override async onPipe(data: string) {
+        try {
+            await this.context.ingest({ content: data });
+            await this.handle(await this.callosum.route(data));
+        } catch (error) {
+            this.fail(error);
+        }
     }
 
-    public override async onPipe(data: string) {
-        await this.context.ingest({ content: data });
-        this.callosum.next(data);
+    private handle(signal: CallosumSignal): Promise<void> {
+        if (signal.type === CallosumSignalType.Reply) return this.reply(signal);
+        if (signal.type === CallosumSignalType.Soul) return this.soul(signal);
+        return this.research(signal);
+    }
+
+    private fail(error: unknown): void {
+        this.log.error('brain.turn', error);
+        this.synapse.emit(SynapseSignalType.Reply, '处理这条消息时出错，请重试。');
+        this.synapse.emit(SynapseSignalType.Reply, null);
     }
 
     private async reply(signal: CallosumSignal): Promise<void> {
@@ -81,26 +96,11 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
     private async soul(signal: CallosumSignal): Promise<void> {
         const pkg = this.memory.prompt;
         const raw = await this.intelligence.completeText([
-            { role: AgentChatRole.System, content: String(this.prompt.data[BrainPrompt.Soul]?.data ?? '') },
-            { role: AgentChatRole.User, content: `${pkg.renderXml(pkg.config!.protocolPackage.context)}\n<latest_user_message>${signal.chunk}</latest_user_message>` },
+            { role: AgentChatRole.System, content: this.prompt.section(BrainPrompt.Soul) },
+            { role: AgentChatRole.User, content: `${pkg.render({ kind: 'document' })}\n<latest_user_message>${signal.chunk}</latest_user_message>` },
         ]);
         const plan = this.json<{ writes?: Array<{ file?: string; content?: string }> }>(raw);
-        const written: string[] = [];
-        const rejected: string[] = [];
-        for (const write of plan.writes ?? []) {
-            const block = pkg.config?.protocolPackage.context.blocks.find((item) => item.file === write.file);
-            const section = block?.key;
-            if (!block || section === 'config' || !pkg.config?.protocolPackage.editable.includes(block.file) || typeof write.content !== 'string') {
-                rejected.push(String(write.file ?? 'unknown'));
-                continue;
-            }
-            try {
-                (pkg.data as Record<string, { set(content: string): void } | undefined>)[section as string]?.set(write.content);
-                written.push(block.file);
-            } catch {
-                rejected.push(block.file);
-            }
-        }
+        const { written, rejected } = pkg.applyWrites(plan.writes ?? []);
         const assistant = `协议包已更新: ${written.join(', ') || '无'}${rejected.length ? `；已拒绝: ${rejected.join(', ')}` : ''}`;
         this.synapse.emit(SynapseSignalType.Reply, assistant);
         this.synapse.emit(SynapseSignalType.Reply, null);
