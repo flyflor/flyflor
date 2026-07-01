@@ -155,3 +155,23 @@ export interface ExecuteOutput {
     failed: number;
     results: ExecuteTaskResult[];
 }
+
+export interface TaskInput {
+    goal?: unknown;
+    agents?: unknown;
+}
+
+export interface TaskAgentInput {
+    name?: unknown;
+    soul?: unknown;
+    extension?: unknown;
+    prompt?: unknown;
+}
+
+export interface TaskOutput {
+    action: 'task';
+    goal: string;
+    created: string[];
+    reused: string[];
+    dispatched: string[];
+}

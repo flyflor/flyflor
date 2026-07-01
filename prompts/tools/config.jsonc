@@ -2,7 +2,7 @@
   "version": 1,
   "description": "Tool definitions exposed to the model.",
   "prompt": {
-    "sections": ["ask", "confirm", "filesystem", "shell", "execute"]
+    "sections": ["ask", "confirm", "filesystem", "shell", "execute", "task"]
   },
   "tools": [
     {
@@ -128,6 +128,32 @@
           }
         },
         "required": ["tasks"]
+      }
+    },
+    {
+      "key": "task",
+      "name": "task",
+      "file": "task.md",
+      "risk": "external",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "goal": { "type": "string" },
+          "agents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "soul": { "type": "string" },
+                "extension": { "type": "string" },
+                "prompt": { "type": "string" }
+              },
+              "required": ["name", "soul", "extension", "prompt"]
+            }
+          }
+        },
+        "required": ["goal", "agents"]
       }
     }
   ]

@@ -1,7 +1,6 @@
 import { Config, Init, Inject, Singleton } from '@/core/decorator';
 import { FlyFlor } from '@/core/ioc';
-import { existsSync } from 'fs';
-import { unlink } from 'fs/promises';
+import { rm } from 'fs/promises';
 import type { Socket, UnixSocketListener } from 'bun';
 import { IPCPacket, type SocketPacket } from './packet';
 import { Controller } from './controller';
@@ -69,7 +68,7 @@ export class FSocket extends FlyFlor {
 
     @Init()
     public async init() {
-        if (existsSync(this.path)) await unlink(this.path);
+        await rm(this.path, { force: true });
         // this.service = Bun.listen({ unix: this.path, socket: this });
         this.service = Bun.listen({
             unix: this.path,

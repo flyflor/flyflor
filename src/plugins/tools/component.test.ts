@@ -5,7 +5,8 @@ import { join, resolve } from 'node:path';
 import { ConfigService } from '@/configuration';
 import { FToolAtom, useContainer } from '@/core';
 import { Context, ContextIntent } from '@/agent/context';
-import { Ask, Confirm, Execute, Filesystem, Shell, ToolComponent } from '@/plugins';
+import { Ask, Confirm, Execute, Filesystem, Shell, Task, ToolComponent } from '@/plugins';
+import { Synapse } from '@/neural';
 
 async function component(): Promise<ToolComponent> {
     return await useContainer().getAsync(ToolComponent);
@@ -50,8 +51,9 @@ describe('ToolComponent', () => {
     test('lists tool definitions from prompt config and keeps shell description free of semantic cwd', async () => {
         const definitions = await (await component()).list();
 
-        expect(definitions.map((definition) => definition.name)).toEqual(['ask', 'confirm', 'filesystem', 'shell', 'execute']);
+        expect(definitions.map((definition) => definition.name)).toEqual(['ask', 'confirm', 'filesystem', 'shell', 'execute', 'task']);
         expect(definitions.find((definition) => definition.name === 'filesystem')?.parameters.required).toEqual(['action', 'path']);
+        expect(definitions.find((definition) => definition.name === 'task')?.parameters.required).toEqual(['goal', 'agents']);
         expect(definitions.find((definition) => definition.name === 'ask')?.description).toContain('Ask the user');
         const shell = definitions.find((definition) => definition.name === 'shell');
         expect(shell?.description).toContain('platform=');
@@ -80,6 +82,7 @@ describe('ToolComponent', () => {
         expect(tools.filesystem).toBeInstanceOf(Filesystem);
         expect(tools.shell).toBeInstanceOf(Shell);
         expect(tools.execute).toBeInstanceOf(Execute);
+        expect(tools.task).toBeInstanceOf(Task);
     });
 
     test('dispatches ask and confirm tools', async () => {
@@ -238,5 +241,76 @@ describe('ToolComponent', () => {
         const task = (execute.data as { results: Array<{ stdout: string; cwd: string }> }).results[0];
         expect(task?.stdout).toBe(`${realpathSync(task!.cwd)}\n`);
         expect(readFileSync(join(root, 'config.txt'), 'utf-8')).toBe('ok');
+    });
+
+    test('task creates agent packages, registers profiles, and dispatches through synapse', async () => {
+        await useContainer().getAsync(ConfigService);
+        const configPath = join(root, '.config');
+        const flyflor = join(configPath, 'agents', 'flyflor');
+        mkdirSync(flyflor, { recursive: true });
+        writeFileSync(join(flyflor, 'SOUL.md'), 'flyflor soul\n', 'utf-8');
+        writeFileSync(join(flyflor, 'USER.md'), 'user\n', 'utf-8');
+        writeFileSync(join(flyflor, 'AGENTS.md'), 'rules\n', 'utf-8');
+        writeFileSync(join(flyflor, 'EXTENSION.md'), 'base extension\n', 'utf-8');
+        writeFileSync(join(flyflor, 'config.jsonc'), '{}\n', 'utf-8');
+        ConfigService.path = { ...ConfigService.path, root, config: configPath, cwd: root };
+
+        const dispatched: Array<{ name: string; prompt: string }> = [];
+        const fakeSynapse = {
+            agentPool: {} as Record<string, { next(prompt: string): void }>,
+            async spawnAgent(name: string) {
+                const agent = { next: (prompt: string) => dispatched.push({ name, prompt }) };
+                this.agentPool[name] = agent;
+                return agent;
+            },
+        };
+        const container = useContainer();
+        const previousSynapse = container.singletons.get(Synapse);
+        container.registerObject(Synapse, fakeSynapse);
+        try {
+            const result = await (await component()).run({
+                id: 'task_1',
+                name: 'task',
+                arguments: {
+                    goal: '完成复杂任务',
+                    agents: [
+                        { name: 'codex_worker', soul: 'Codex soul', extension: 'Codex extension', prompt: 'Inspect code' },
+                        { name: 'deepseek_worker', soul: 'DeepSeek soul', extension: 'DeepSeek extension', prompt: 'Reason about plan' },
+                    ],
+                },
+            });
+
+            expect(result.ok).toBe(true);
+            expect(result.data).toMatchObject({
+                action: 'task',
+                goal: '完成复杂任务',
+                created: ['codex_worker', 'deepseek_worker'],
+                reused: [],
+                dispatched: ['codex_worker', 'deepseek_worker'],
+            });
+            expect(readFileSync(join(configPath, 'agents', 'codex_worker', 'SOUL.md'), 'utf-8')).toBe('Codex soul\n');
+            expect(readFileSync(join(configPath, 'agents', 'codex_worker', 'EXTENSION.md'), 'utf-8')).toBe('Codex extension\n');
+            expect((await useContainer().getAsync(ConfigService)).agents.codex_worker?.name).toBe('codex_worker');
+            expect(fakeSynapse.agentPool.codex_worker).toBeDefined();
+            expect(dispatched).toEqual([
+                { name: 'codex_worker', prompt: 'Inspect code' },
+                { name: 'deepseek_worker', prompt: 'Reason about plan' },
+            ]);
+
+            const reused = await (await component()).run({
+                id: 'task_2',
+                name: 'task',
+                arguments: {
+                    goal: '复用',
+                    agents: [{ name: 'codex_worker', soul: 'New soul', extension: 'New extension', prompt: 'Again' }],
+                },
+            });
+
+            expect(reused.data).toMatchObject({ created: [], reused: ['codex_worker'], dispatched: ['codex_worker'] });
+            expect(readFileSync(join(configPath, 'agents', 'codex_worker', 'SOUL.md'), 'utf-8')).toBe('Codex soul\n');
+        } finally {
+            if (previousSynapse) container.registerObject(Synapse, previousSynapse);
+            else container.singletons.delete(Synapse);
+        }
     });
 });

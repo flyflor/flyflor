@@ -5,8 +5,7 @@ import { FSocket } from './ipc';
 import { SynapseSignalType, type SynapseSignal } from './types';
 
 export interface AgentPool {
-    active: string;
-    agents: { [name: string]: Agent };
+    [name: string]: Agent;
 }
 
 @Module()
@@ -22,14 +21,16 @@ export class Synapse extends FCortex<SynapseSignal> {
     public socket!: FSocket;
 
     public agentPool: AgentPool;
+    public active: string;
 
     public get agent() {
-        return this.agentPool.agents[this.agentPool.active]!;
+        return this.agentPool[this.active]!;
     }
 
     constructor() {
         super();
-        this.agentPool = { active: '', agents: {} };
+        this.agentPool = {};
+        this.active = '';
     }
 
     /**
@@ -39,19 +40,8 @@ export class Synapse extends FCortex<SynapseSignal> {
     @Init()
     public async init() {
         const active = this.config.agent;
-        this.agentPool.active = active;
-        const agentConfig = this.config.agents[active];
-        if (!agentConfig) {
-            throw Object.assign(Error('Default agent profile is missing'), {
-                detail: { active, configuredAgents: Object.keys(this.config.agents) },
-            });
-        }
-        agentConfig.model = agentConfig.model || this.config.model.model || this.config.model.default;
-        agentConfig.provider = agentConfig.provider || this.config.model.provider;
-        agentConfig.contextLength = agentConfig.contextLength || this.config.model.contextLength;
-        agentConfig.maxTokens = agentConfig.maxTokens || this.config.model.maxTokens;
-        // Agent owns its private Memory through IOC injection; Synapse only selects and drives the active person.
-        this.agentPool.agents[active] = await useContainer().getAsync(Agent, agentConfig, this);
+        this.active = active;
+        await this.spawnAgent(active);
         this.socket.synapse = this;
         this.on(SynapseSignalType.Input, (signal) => this.input(String(signal.data)));
         this.on(SynapseSignalType.Reply, (signal) => this.output(signal.data));
@@ -61,6 +51,25 @@ export class Synapse extends FCortex<SynapseSignal> {
         this.on(SynapseSignalType.Pause, (signal) => this.socket.write({ action: 'pause', data: signal.data }));
         this.on(SynapseSignalType.Resume, (signal) => this.socket.write({ action: 'resume', data: signal.data }));
         return true;
+    }
+
+    public async spawnAgent(name: string): Promise<Agent> {
+        const existing = this.agentPool[name];
+        if (existing) return existing;
+        const agentConfig = this.config.agents[name];
+        if (!agentConfig) {
+            throw Object.assign(Error('Default agent profile is missing'), {
+                detail: { active: name, configuredAgents: Object.keys(this.config.agents) },
+            });
+        }
+        agentConfig.model = agentConfig.model || this.config.model.model || this.config.model.default;
+        agentConfig.provider = agentConfig.provider || this.config.model.provider;
+        agentConfig.contextLength = agentConfig.contextLength || this.config.model.contextLength;
+        agentConfig.maxTokens = agentConfig.maxTokens || this.config.model.maxTokens;
+        // Agent owns its private Memory through IOC injection; Synapse only selects and drives the active person.
+        const agent = await useContainer().getAsync(Agent, agentConfig, this);
+        this.agentPool[name] = agent;
+        return agent;
     }
 
     public async input(data: any) {
