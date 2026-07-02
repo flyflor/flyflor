@@ -5,7 +5,6 @@ import { Confirm } from './confirm';
 import { Execute } from './execute';
 import { Filesystem } from './filesystem';
 import { Shell } from './shell';
-import { Task } from './task';
 import type { ActionRequest, ToolPromptConfig, ToolProtocol, ToolRunResult } from './types';
 
 @Singleton()
@@ -28,9 +27,6 @@ export class ToolComponent extends FTool {
 
     @Inject()
     public execute!: Execute;
-
-    @Inject()
-    public task!: Task;
 
     public async list(): Promise<IntelligenceToolDefinition[]> {
         const records = await this.records();
@@ -67,7 +63,7 @@ export class ToolComponent extends FTool {
     }
 
     private atoms(): Array<FToolAtom<any, any>> {
-        return [this.ask, this.confirm, this.filesystem, this.shell, this.execute, this.task];
+        return [this.ask, this.confirm, this.filesystem, this.shell, this.execute];
     }
 
     private error(error: unknown): ToolError {

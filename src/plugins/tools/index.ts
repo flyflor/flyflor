@@ -4,5 +4,4 @@ export * from './confirm';
 export * from './execute';
 export * from './filesystem';
 export * from './shell';
-export * from './task';
 export * from './types';

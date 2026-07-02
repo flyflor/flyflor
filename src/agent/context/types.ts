@@ -1,15 +1,11 @@
-import type { AgentMemory } from '@/agent/types';
+export const ContextPrompt = {
+    Ingest: 'INGEST',
+    Settle: 'SETTLE',
+} as const;
 
-export enum ContextPrompt {
-    Ingest = 'INGEST',
-    Settle = 'SETTLE',
-}
+export type ContextPrompt = typeof ContextPrompt[keyof typeof ContextPrompt];
 
-export enum ContextIntent {
-    Reply = 'reply',
-    Research = 'research',
-    Soul = 'soul',
-}
+export type ContextIntent = 'reply' | 'research' | 'soul';
 
 /**
  * EN: One normalized reference item from turn understanding.
@@ -64,10 +60,7 @@ export interface ContextSettleInput {
     remaining?: string[];
 }
 
-export enum ContextTurnStatus {
-    Working = 'working',
-    Completed = 'completed',
-}
+export type ContextTurnStatus = 'working' | 'completed';
 
 export type ContextPauseKind = 'ask' | 'confirm';
 
@@ -82,7 +75,16 @@ export interface ContextPauseInput {
  */
 export interface ContextTurn {
     id: string;
-    understanding: TurnUnderstanding;
+    userText: string;
+    intent: ContextIntent;
+    goal: string;
+    workingDirectory?: string;
+    constraints: string[];
+    requestedOutput?: string;
+    references: ContextReference[];
+    knownDone: string[];
+    openQuestions: string[];
+    shouldInvestigate: boolean;
     status: ContextTurnStatus;
     summary?: CompletedSummary;
     assistantText?: string;

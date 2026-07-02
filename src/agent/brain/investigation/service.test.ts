@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { AgentChatRole, type AgentMemory } from '@/agent/types';
-import { Context, ContextIntent } from '@/agent/context';
+import { Context } from '@/agent/context';
 import { SynapseSignalType } from '@/neural/types';
 import type { ActionRequest } from '@/plugins';
 import type { IntelligenceToolDefinition, ProviderMessage } from '../intelligence/types';
@@ -51,7 +51,7 @@ describe('Investigation', () => {
         context.completed = [];
         context.load({
             userText: '调查工具层',
-            intent: ContextIntent.Research,
+            intent: 'research',
             goal: '调查工具层',
             constraints: [],
             references: [],

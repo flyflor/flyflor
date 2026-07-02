@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { useContainer } from '@/core';
 import { AgentChatRole, Memory, type AgentMemory } from './memory';
-import { Context, ContextIntent } from '@/agent/context';
+import { Context } from '@/agent/context';
 
 describe('Memory', () => {
     test('keeps AgentMemory pure and renders summaries instead of transcripts or action replay', async () => {
@@ -12,7 +12,7 @@ describe('Memory', () => {
         context.completed = [];
         context.load({
             userText: '实现计划',
-            intent: ContextIntent.Research,
+            intent: 'research',
             goal: '实现 synapse.context + agent.memory',
             workingDirectory: '/tmp/flyflor',
             constraints: ['不要过度抽象'],

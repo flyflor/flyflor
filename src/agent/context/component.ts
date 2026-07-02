@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { AgentChatRole } from '@/agent/types';
 import { FComponent, Inject, Prompt, PromptService, Singleton } from '@/core';
 import { Intelligence } from '@/agent/brain/intelligence/service';
-import { ContextPrompt, ContextTurnStatus, type CompletedSummary, type ContextPauseInput, type ContextSettleInput, type ContextTurn, type TurnUnderstanding } from './types';
+import { ContextPrompt, type CompletedSummary, type ContextPauseInput, type ContextSettleInput, type ContextTurn, type TurnUnderstanding } from './types';
 
 @Singleton()
 /**
@@ -88,7 +88,7 @@ export class Context extends FComponent {
         const summary = { ...this.json<Omit<CompletedSummary, 'createdAt'>>(raw), createdAt: Date.now() };
         this.completed.push(summary);
         if (turn) {
-            turn.status = ContextTurnStatus.Completed;
+            turn.status = 'completed';
             turn.summary = summary;
             turn.assistantText = input.assistant;
             turn.paused = false;
@@ -108,8 +108,8 @@ export class Context extends FComponent {
         const now = Date.now();
         const turn: ContextTurn = {
             id: `turn_${this.turns.length + 1}`,
-            understanding: current,
-            status: ContextTurnStatus.Working,
+            ...current,
+            status: 'working',
             createdAt: now,
             updatedAt: now,
         };
@@ -119,7 +119,7 @@ export class Context extends FComponent {
 
     private activeTurn(): ContextTurn | undefined {
         const turn = this.turns.at(-1);
-        return turn?.status === ContextTurnStatus.Completed ? undefined : turn;
+        return turn?.status === 'completed' ? undefined : turn;
     }
 
     private writeSnapshot(): void {
@@ -135,9 +135,9 @@ export class Context extends FComponent {
             paused: turn.paused ?? false,
             pauseKind: turn.pauseKind,
             pausePrompt: turn.pausePrompt,
-            user: turn.understanding.userText,
-            goal: turn.understanding.goal,
-            workingDirectory: turn.understanding.workingDirectory,
+            user: turn.userText,
+            goal: turn.goal,
+            workingDirectory: turn.workingDirectory,
             assistant: turn.assistantText,
             summary: turn.summary
                 ? {
