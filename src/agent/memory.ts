@@ -19,8 +19,8 @@ export enum SoulSection {
 }
 
 /**
- * EN: Memory owns prompt assembly and pure short-term memory projection.
- * ZH: Memory 负责 prompt 组装和纯短期记忆投影。
+ * EN: Memory is a pure projection of Context into the agent's prompt input.
+ * ZH: Memory 是 Context 到 agent prompt 输入的纯投影。
  */
 @Provide()
 export class Memory extends FAgentAtom {
@@ -36,50 +36,18 @@ export class Memory extends FAgentAtom {
         if (this.context.current) {
             messages.push({
                 role: AgentChatRole.User,
-                content: JSON.stringify(this.contextBlock()),
+                content: JSON.stringify(this.block()),
             });
         }
         return messages;
     }
 
-    private contextBlock(): object {
-        const active = this.context.recent(1).at(-1);
+    private block(): object {
+        const turns = this.context.turns;
         return {
-            current: this.context.current ? {
-                goal: this.context.current.goal,
-                user: this.context.current.userText,
-                intent: this.context.current.intent,
-                workingDirectory: this.context.current.workingDirectory,
-                constraints: this.context.current.constraints,
-                references: this.context.current.references,
-                knownDone: this.context.current.knownDone,
-                openQuestions: this.context.current.openQuestions,
-                shouldInvestigate: this.context.current.shouldInvestigate,
-                paused: active?.paused ?? false,
-                pauseKind: active?.pauseKind,
-                pausePrompt: active?.pausePrompt,
-            } : undefined,
-            recentContext: this.context.recent().map((entry) => ({
-                status: entry.status,
-                user: entry.userText,
-                assistantText: entry.assistantText,
-                paused: entry.paused ?? false,
-                pauseKind: entry.pauseKind,
-                pausePrompt: entry.pausePrompt,
-                summary: entry.summary ? {
-                    result: entry.summary.result,
-                    decisions: entry.summary.decisions,
-                    evidence: entry.summary.evidence,
-                    remaining: entry.summary.remaining,
-                } : undefined,
-            })),
-            completed: this.context.completed.map((summary) => ({
-                goal: summary.goal,
-                result: summary.result,
-                decisions: summary.decisions,
-                evidence: summary.evidence,
-                remaining: summary.remaining,
-            })),
+            current: this.context.current,
+            recent: this.context.recent(),
+            done: turns.filter((turn) => turn.status === 'completed').map((turn) => turn.summary),
         };
     }
 }

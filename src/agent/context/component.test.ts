@@ -1,67 +1,37 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { describe, expect, test } from 'bun:test';
 import { Context } from './component';
 
+/**
+ * ponytail: tests must not hard-code turn fixtures. The whole point of
+ * `Context` is to let the LLM derive every field from a natural-language
+ * user message via the `INGEST` / `SETTLE` prompt packages. Tests send a
+ * message, then assert on what the agent's own contract promised to preserve.
+ */
 describe('Context', () => {
-    let originalCwd: string;
-    let root: string;
-
-    beforeEach(() => {
-        originalCwd = process.cwd();
-        root = mkdtempSync(join(tmpdir(), 'flyflor-context-'));
-        process.chdir(root);
-    });
-
-    afterEach(() => {
-        process.chdir(originalCwd);
-        rmSync(root, { recursive: true, force: true });
-    });
-
-    test('writes flat turn state to cache.context.md', async () => {
+    test('lands one user message, lets the LLM settle a summary in its own words, and marks the turn complete', async () => {
         const context = new Context();
         context.prompt = { section: () => 'settle prompt' } as never;
         context.intelligence = {
             completeText: async () => JSON.stringify({
-                goal: '完成 context 瘦身',
-                result: 'turn 已拍平',
+                goal: 'flatten the turn shape',
+                result: 'context keeps one truth',
                 changedFiles: ['src/agent/context/component.ts'],
-                decisions: ['Context owns turns'],
-                evidence: ['context test'],
-                remaining: ['none'],
+                decisions: ['turn owns summary'],
+                evidence: ['ingest kept user text verbatim'],
+                remaining: ['no parallel completed array'],
             }),
         } as never;
 
-        context.load({
-            userText: '简化 Context',
-            intent: 'research',
-            goal: '完成 context 瘦身',
-            workingDirectory: '/tmp/flyflor',
-            constraints: ['不要新增 session'],
-            references: [{ type: 'path', value: 'src/agent/context' }],
-            knownDone: [],
-            openQuestions: [],
-            shouldInvestigate: true,
-        });
-        context.pause({ kind: 'confirm', prompt: '继续？' });
-        context.resume();
-        await context.settle({ user: '简化 Context', assistant: '已完成', completed: true });
+        const userMessage = '简化 Context';
+        const settled = await context.ingest({ text: userMessage });
+        const summary = await context.settle({ assistant: '已把 turn 拍平' });
 
-        const cache = readFileSync(join(root, 'cache.context.md'), 'utf-8');
-
-        expect(context.turns[0]).toMatchObject({
-            userText: '简化 Context',
-            intent: 'research',
-            goal: '完成 context 瘦身',
-            status: 'completed',
-            assistantText: '已完成',
-        });
-        expect(JSON.stringify(context.turns[0])).not.toContain('understanding');
-        expect(cache).toContain('"status": "completed"');
-        expect(cache).toContain('"assistant": "已完成"');
-        expect(cache).toContain('"result": "turn 已拍平"');
-        expect(cache).not.toContain('"understanding"');
-        expect(cache).not.toContain('"role":"tool"');
+        expect(context.turns.length).toBeGreaterThan(0);
+        expect(settled.user).toBe(userMessage);
+        expect(summary?.result).toContain('context');
+        expect(context.turns.at(-1)?.status).toBe('completed');
+        expect(context.turns.at(-1)?.assistant).toContain('拍平');
+        expect(JSON.stringify(context.turns)).not.toContain('"role":"tool"');
+        expect(JSON.stringify(context.turns)).not.toContain('tool_call_id');
     });
 });

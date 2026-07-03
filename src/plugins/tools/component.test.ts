@@ -24,20 +24,25 @@ describe('ToolComponent', () => {
         other = mkdtempSync(join(tmpdir(), 'flyflor-tools-other-'));
         ConfigService.path = { ...ConfigService.path, cwd: root };
         process.chdir(other);
-        const context = await useContainer().getAsync(Context);
-        context.current = {
-            userText: '调查当前环境',
-            intent: 'research',
-            goal: '调查工具边界',
-            workingDirectory: other,
-            constraints: ['只读探索'],
-            references: [{ type: 'path', value: 'src/plugins/tools' }],
-            knownDone: [],
-            openQuestions: [],
-            shouldInvestigate: true,
-        };
-        context.turns = [];
-        context.completed = [];
+        const context = new Context();
+        context.prompt = { section: () => 'system placeholder' } as never;
+        context.intelligence = {
+            completeText: async (messages: Array<{ role: string; content: string }>) => {
+                const user = messages.find((m) => m.role === 'user')?.content ?? '';
+                const match = /cwd=([^\s,"}]+)/.exec(user);
+                return JSON.stringify({
+                    intent: 'research',
+                    goal: user,
+                    cwd: match?.[1],
+                    constraints: [],
+                    refs: [],
+                    done: [],
+                    open: [],
+                    investigate: true,
+                });
+            },
+        } as never;
+        await context.ingest({ text: `调查当前环境 cwd=${other}` });
     });
 
     afterEach(() => {

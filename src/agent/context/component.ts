@@ -1,153 +1,99 @@
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { AgentChatRole } from '@/agent/types';
 import { FComponent, Inject, Prompt, PromptService, Singleton } from '@/core';
 import { Intelligence } from '@/agent/brain/intelligence/service';
-import { ContextPrompt, type CompletedSummary, type ContextPauseInput, type ContextSettleInput, type ContextTurn, type TurnUnderstanding } from './types';
+import { parse } from '@/agent/json';
+import type { Ingest, Pause, Settle, Summary, Turn } from './types';
 
 @Singleton()
 /**
- * EN: Context class declaration.
- * ZH: Context class 声明。
+ * EN: Context owns every turn the life-form has ever heard.
+ * ZH: Context 持有这个生命体听到过的每一条 turn。
+ *
+ * EN: `current` is the latest active turn; `turns` is the durable record.
+ * Settlement flips `status` and writes `summary` directly on the turn — no
+ * parallel completed array, no separate snapshot file.
+ * ZH: `current` 是当前活动 turn,`turns` 是持久记录。settle 直接翻 status 并把
+ * summary 写在 turn 上 — 不维护平行 completed 数组,也不写 snapshot 文件。
  */
 export class Context extends FComponent {
-    public current?: TurnUnderstanding;
+    public current?: Omit<Turn, 'id' | 'status' | 'ts'>;
 
     @Inject()
     public intelligence!: Intelligence;
 
-    public turns: ContextTurn[] = [];
-
-    public completed: CompletedSummary[] = [];
+    public turns: Turn[] = [];
 
     @Prompt('prompts/context')
-    public prompt!: PromptService<ContextPrompt>;
+    public prompt!: PromptService;
 
-    public load(current: TurnUnderstanding): void {
+    public load(current: Omit<Turn, 'id' | 'status' | 'ts'>): Turn {
         this.current = current;
-        this.begin(current);
-        this.writeSnapshot();
+        return this.begin(current);
     }
 
-    public done(summary: CompletedSummary): void {
-        this.completed.push(summary);
-        this.writeSnapshot();
-    }
-
-    public recent(limit = 4): ContextTurn[] {
+    public recent(limit = 4): Turn[] {
         return this.turns.slice(-limit);
     }
 
-    public async ingest(input: { content: string }): Promise<TurnUnderstanding> {
+    public async ingest(input: Ingest): Promise<Turn> {
         const raw = await this.intelligence.completeText([
-            { role: AgentChatRole.System, content: this.prompt.section(ContextPrompt.Ingest) },
-            { role: AgentChatRole.User, content: JSON.stringify({ latest: input.content, current: this.current, recent: this.recent() }) },
+            { role: AgentChatRole.System, content: this.prompt.section('INGEST') },
+            { role: AgentChatRole.User, content: JSON.stringify({ latest: input.text, current: this.current, recent: this.recent() }) },
         ]);
-        const current = { ...this.json<Omit<TurnUnderstanding, 'userText'>>(raw), userText: input.content };
-        const paused = this.activeTurn();
+        const draft: Omit<Turn, 'id' | 'status' | 'ts'> = { ...parse<Omit<Turn, 'user' | 'id' | 'status' | 'ts'>>(raw), user: input.text };
+        const paused = this.active();
         if (paused) this.resume(paused);
-        this.current = current;
-        this.begin(current);
-        this.writeSnapshot();
-        return current;
+        this.current = draft;
+        return this.begin(draft);
     }
 
-    public pause(input: ContextPauseInput): void {
-        const turn = this.activeTurn();
+    public pause(input: Pause): void {
+        const turn = this.active();
         if (!turn) return;
-        turn.paused = true;
-        turn.pauseKind = input.kind;
-        turn.pausePrompt = input.prompt;
-        turn.updatedAt = Date.now();
-        this.writeSnapshot();
+        turn.pause = input;
+        turn.updated = Date.now();
     }
 
-    public resume(turn = this.activeTurn()): void {
+    public resume(turn = this.active()): void {
         if (!turn) return;
-        turn.paused = false;
-        turn.pauseKind = undefined;
-        turn.pausePrompt = undefined;
-        turn.updatedAt = Date.now();
-        this.writeSnapshot();
+        delete turn.pause;
+        turn.updated = Date.now();
     }
 
-    public async settle(input: ContextSettleInput): Promise<CompletedSummary | undefined> {
-        if (!input.completed) return undefined;
-        const turn = this.activeTurn();
+    public async settle(input: Settle): Promise<Summary | undefined> {
+        const turn = this.active();
         const raw = await this.intelligence.completeText([
-            { role: AgentChatRole.System, content: this.prompt.section(ContextPrompt.Settle) },
+            { role: AgentChatRole.System, content: this.prompt.section('SETTLE') },
             {
                 role: AgentChatRole.User,
-                content: JSON.stringify({
-                    ...input,
-                    current: this.current,
-                    recent: this.recent(),
-                }),
+                content: JSON.stringify({ ...input, current: this.current, recent: this.recent() }),
             },
         ]);
-        const summary = { ...this.json<Omit<CompletedSummary, 'createdAt'>>(raw), createdAt: Date.now() };
-        this.completed.push(summary);
+        const summary = { ...parse<Omit<Summary, 'createdAt'>>(raw), createdAt: Date.now() };
         if (turn) {
             turn.status = 'completed';
             turn.summary = summary;
-            turn.assistantText = input.assistant;
-            turn.paused = false;
-            turn.pauseKind = undefined;
-            turn.pausePrompt = undefined;
-            turn.updatedAt = summary.createdAt;
+            turn.assistant = input.assistant;
+            delete turn.pause;
+            turn.updated = summary.createdAt;
         }
-        this.writeSnapshot();
         return summary;
     }
 
-    private json<T>(raw: string): T {
-        return JSON.parse(raw.replace(/^```json\s*|\s*```$/g, '')) as T;
-    }
-
-    private begin(current: TurnUnderstanding): ContextTurn {
+    private begin(current: Omit<Turn, 'id' | 'status' | 'ts'>): Turn {
         const now = Date.now();
-        const turn: ContextTurn = {
-            id: `turn_${this.turns.length + 1}`,
+        const turn: Turn = {
             ...current,
+            id: `turn_${this.turns.length + 1}`,
             status: 'working',
-            createdAt: now,
-            updatedAt: now,
+            ts: now,
         };
         this.turns.push(turn);
         return turn;
     }
 
-    private activeTurn(): ContextTurn | undefined {
+    private active(): Turn | undefined {
         const turn = this.turns.at(-1);
         return turn?.status === 'completed' ? undefined : turn;
-    }
-
-    private writeSnapshot(): void {
-        const lines = ['# Context Cache', '', 'Derived debug view only. Source of truth is Context.turns in memory.', '', `updatedAt: ${new Date().toISOString()}`, '', '## Current', '', this.current ? this.turn(this.turns.at(-1)) : 'none', '', '## Recent', '', ...this.recent().map((turn) => this.turn(turn)), ''];
-        writeFileSync(join(process.cwd(), 'cache.context.md'), lines.join('\n'), 'utf8');
-    }
-
-    private turn(turn: ContextTurn | undefined): string {
-        if (turn === undefined) return 'none';
-        const payload = {
-            id: turn.id,
-            status: turn.status,
-            paused: turn.paused ?? false,
-            pauseKind: turn.pauseKind,
-            pausePrompt: turn.pausePrompt,
-            user: turn.userText,
-            goal: turn.goal,
-            workingDirectory: turn.workingDirectory,
-            assistant: turn.assistantText,
-            summary: turn.summary
-                ? {
-                      result: turn.summary.result,
-                      decisions: turn.summary.decisions,
-                      evidence: turn.summary.evidence,
-                      remaining: turn.summary.remaining,
-                  }
-                : undefined,
-        };
-        return `\`\`\`json\n${JSON.stringify(payload, undefined, 2)}\n\`\`\``;
     }
 }

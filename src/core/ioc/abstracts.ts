@@ -120,9 +120,9 @@ export class Observable<T = unknown, R = T> extends FlyFlor implements IObservab
      * EN: Pushes one value through pipes and subscribers.
      * ZH: 将单个值推过管道并发送给订阅者。
      */
-    public next(value: T): void {
-        if (this.state === ObservableState.Closed) return;
-        void this.emit(value, this.subscribers);
+    public next(value: T): Promise<void> {
+        if (this.state === ObservableState.Closed) return Promise.resolve();
+        return this.emit(value, this.subscribers);
     }
 
     /**

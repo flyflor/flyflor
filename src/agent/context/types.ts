@@ -1,43 +1,37 @@
-export const ContextPrompt = {
-    Ingest: 'INGEST',
-    Settle: 'SETTLE',
-} as const;
-
-export type ContextPrompt = typeof ContextPrompt[keyof typeof ContextPrompt];
-
-export type ContextIntent = 'reply' | 'research' | 'soul';
-
 /**
  * EN: One normalized reference item from turn understanding.
  * ZH: turn understanding 里的单条规范化引用项。
  */
-export interface ContextReference {
+export interface Reference {
     type: 'path' | 'error' | 'command' | 'symbol' | 'text';
     value: string;
 }
 
-/**
- * EN: One parsed view of the user's current turn.
- * ZH: 对当前用户 turn 的一次解析视图。
- */
-export interface TurnUnderstanding {
-    userText: string;
-    intent: ContextIntent;
-    goal: string;
-    workingDirectory?: string;
-    constraints: string[];
-    requestedOutput?: string;
-    references: ContextReference[];
-    knownDone: string[];
-    openQuestions: string[];
-    shouldInvestigate: boolean;
+export type Intent = 'reply' | 'research' | 'soul';
+export type PauseKind = 'ask' | 'confirm';
+export type TurnStatus = 'working' | 'completed';
+
+export interface Pause {
+    kind: PauseKind;
+    prompt: string;
+}
+
+export interface Ingest {
+    text: string;
+}
+
+export interface Settle {
+    assistant: string;
+    evidence?: string[];
+    decisions?: string[];
+    remaining?: string[];
 }
 
 /**
  * EN: One durable summary saved after a completed turn.
  * ZH: 一次完成 turn 后保存的长期摘要。
  */
-export interface CompletedSummary {
+export interface Summary {
     goal: string;
     result: string;
     changedFiles: string[];
@@ -48,49 +42,26 @@ export interface CompletedSummary {
 }
 
 /**
- * EN: Input payload for settling a completed turn summary.
- * ZH: 用于 settle 完成 turn 摘要的输入载荷。
+ * EN: One tracked user turn. Acts as both the in-flight understanding and the
+ * durable record after settlement, decided by `status`.
+ * ZH: 一条被跟踪的用户 turn。既是进行中的理解视图,也靠 status 成为落地后的持久记录。
  */
-export interface ContextSettleInput {
-    user: string;
-    assistant: string;
-    completed: boolean;
-    evidence?: string[];
-    decisions?: string[];
-    remaining?: string[];
-}
-
-export type ContextTurnStatus = 'working' | 'completed';
-
-export type ContextPauseKind = 'ask' | 'confirm';
-
-export interface ContextPauseInput {
-    kind: ContextPauseKind;
-    prompt: string;
-}
-
-/**
- * EN: One tracked user turn with state, timestamps, and optional summary.
- * ZH: 一条被跟踪的用户 turn，包含状态、时间戳和可选摘要。
- */
-export interface ContextTurn {
+export interface Turn {
     id: string;
-    userText: string;
-    intent: ContextIntent;
+    user: string;
+    intent: Intent;
     goal: string;
-    workingDirectory?: string;
+    cwd?: string;
     constraints: string[];
-    requestedOutput?: string;
-    references: ContextReference[];
-    knownDone: string[];
-    openQuestions: string[];
-    shouldInvestigate: boolean;
-    status: ContextTurnStatus;
-    summary?: CompletedSummary;
-    assistantText?: string;
-    paused?: boolean;
-    pauseKind?: ContextPauseKind;
-    pausePrompt?: string;
-    createdAt: number;
-    updatedAt: number;
+    output?: string;
+    refs: Reference[];
+    done: string[];
+    open: string[];
+    investigate: boolean;
+    status: TurnStatus;
+    summary?: Summary;
+    assistant?: string;
+    pause?: Pause;
+    ts: number;
+    updated?: number;
 }

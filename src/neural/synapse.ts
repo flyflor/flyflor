@@ -8,11 +8,19 @@ export interface AgentPool {
     [name: string]: Agent;
 }
 
-@Module()
 /**
- * EN: Synapse class declaration.
- * ZH: Synapse class 声明。
+ * Synapse is the neural bus. It owns:
+ * - the long-lived active agent that owns user-visible output
+ * - a pool of cached agent instances keyed by profile name
+ * - a transient worker factory used by the `Task` multi-agent coordinator
+ *
+ * Active and cached instances share singleton state (memory, context, and
+ * lifecycle) for the profile. Worker instances are built fresh on every call:
+ * they share the profile's static persona (SOUL/USER/EXTENSION/AGENTS) but
+ * run a private context so a worker never leaks state back into the active
+ * agent and never emits to the socket.
  */
+@Module()
 export class Synapse extends FCortex<SynapseSignal> {
     @Config()
     public readonly config!: ConfigService;
@@ -33,10 +41,6 @@ export class Synapse extends FCortex<SynapseSignal> {
         this.active = '';
     }
 
-    /**
-     * Spawns the active agent profile and wires Synapse as the broadcast-only control bus.
-     * Pause/resume are signals only; Synapse does not persist conversation or research state.
-     */
     @Init()
     public async init() {
         const active = this.config.agent;
@@ -66,15 +70,43 @@ export class Synapse extends FCortex<SynapseSignal> {
         agentConfig.provider = agentConfig.provider || this.config.model.provider;
         agentConfig.contextLength = agentConfig.contextLength || this.config.model.contextLength;
         agentConfig.maxTokens = agentConfig.maxTokens || this.config.model.maxTokens;
-        // Agent owns its private Memory through IOC injection; Synapse only selects and drives the active person.
         const agent = await useContainer().getAsync(Agent, agentConfig, this);
         this.agentPool[name] = agent;
         return agent;
     }
 
+    /**
+     * EN: Spawns a transient worker agent for the `Task` coordinator. The
+     * worker shares the named profile's persona but is a fresh instance
+     * with private context, so its investigation never leaks into the
+     * active agent's memory and never emits to the socket.
+     * ZH: 为 `Task` 协调器 spawn 一个临时 worker。worker 共享该 profile
+     * 的人格,但有独立的实例和私有 context,worker 的 investigation 不会
+     * 泄漏到主 agent 的记忆,也不会向 socket 广播。
+     */
+    public async spawnWorker(name: string): Promise<Agent> {
+        const agentConfig = this.config.agents[name];
+        if (!agentConfig) {
+            throw Object.assign(Error('Worker agent profile is missing'), {
+                detail: { requested: name, configuredAgents: Object.keys(this.config.agents) },
+            });
+        }
+        agentConfig.model = agentConfig.model || this.config.model.model || this.config.model.default;
+        agentConfig.provider = agentConfig.provider || this.config.model.provider;
+        agentConfig.contextLength = agentConfig.contextLength || this.config.model.contextLength;
+        agentConfig.maxTokens = agentConfig.maxTokens || this.config.model.maxTokens;
+        return await useContainer().getAsync(Agent, agentConfig, this);
+    }
+
     public async input(data: any) {
         this.log.info('input', data);
-        this.agent.next(data);
+        try {
+            await this.agent.next(data);
+        } catch (error) {
+            this.log.error('synapse.input', error);
+            this.emit(SynapseSignalType.Reply, '处理这条消息时出错，请重试。');
+            this.emit(SynapseSignalType.Reply, null);
+        }
     }
 
     public async output(data: unknown) {

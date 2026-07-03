@@ -65,7 +65,7 @@ export class Investigation extends FAgentAtom {
     }
 
     private withWorkingDirectory(request: ActionRequest): ActionRequest {
-        const cwd = this.context.current?.workingDirectory;
+        const cwd = this.context.current?.cwd;
         if (typeof cwd !== 'string' || cwd.length === 0) return request;
         if (request.name !== 'filesystem' && request.name !== 'execute' && request.name !== 'shell') return request;
         if ('cwd' in request.arguments) return request;

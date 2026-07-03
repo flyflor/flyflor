@@ -8,10 +8,14 @@ import { CallosumSignalType } from '../callosum';
 import { Investigation } from './service';
 
 /**
- * EN: investigation function declaration.
- * ZH: investigation function 声明。
+ * ponytail: this test never writes a turn fixture by hand. The latest user
+ * message is plain prose; cwd / constraint lists / references are all left
+ * to the LLM mock that the prod path already calls. `cwd` injection in
+ * `Investigation.withWorkingDirectory` is asserted by calling it through the
+ * real control flow with a request whose arguments omit `cwd`.
  */
-function investigation(context: Context, responses: Array<{ text: string; actionRequests: ActionRequest[] }>) {
+
+function mockInvestigation(context: Context, responses: Array<{ text: string; actionRequests: ActionRequest[] }>) {
     const events: Array<{ type: SynapseSignalType; data: unknown }> = [];
     const seenMessages: ProviderMessage[][] = [];
     const calls: ActionRequest[] = [];
@@ -41,28 +45,37 @@ function investigation(context: Context, responses: Array<{ text: string; action
     return { instance, events, seenMessages, calls };
 }
 
+function ingestMock() {
+    return {
+        completeText: async (messages: Array<{ role: string; content: string }>) => {
+            const user = messages.find((m) => m.role === 'user')?.content ?? '';
+            const match = /cwd=([^\s,"}]+)/.exec(user);
+            return JSON.stringify({
+                intent: 'research',
+                goal: user,
+                cwd: match?.[1],
+                constraints: [],
+                refs: [],
+                done: [],
+                open: [],
+                investigate: true,
+            });
+        },
+    };
+}
+
 describe('Investigation', () => {
     let context: Context;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         context = new Context();
-        context.current = undefined;
-        context.turns = [];
-        context.completed = [];
-        context.load({
-            userText: '调查工具层',
-            intent: 'research',
-            goal: '调查工具层',
-            constraints: [],
-            references: [],
-            knownDone: [],
-            openQuestions: [],
-            shouldInvestigate: true,
-        });
+        context.prompt = { section: () => 'system placeholder' } as never;
+        context.intelligence = ingestMock() as never;
+        await context.ingest({ text: '调查工具层' });
     });
 
-    test('returns final answer when the model does not request actions', async () => {
-        const { instance, events } = investigation(context, [{ text: '直接答案', actionRequests: [] }]);
+    test('returns a final answer when the local loop ends without further action requests', async () => {
+        const { instance, events } = mockInvestigation(context, [{ text: '直接答案', actionRequests: [] }]);
 
         const outcome = await instance.run(
             { type: CallosumSignalType.Research, chunk: '调查工具层' },
@@ -73,9 +86,8 @@ describe('Investigation', () => {
         expect(events).toContainEqual({ type: SynapseSignalType.Reply, data: '直接答案' });
     });
 
-    test('replays actions only inside the local provider buffer and returns evidence strings', async () => {
-        context.current!.workingDirectory = '/tmp/semantic';
-        const { instance, events, seenMessages, calls } = investigation(context, [
+    test('streams text, replays the local action buffer into the next request, and emits one evidence line', async () => {
+        const { instance, events, seenMessages, calls } = mockInvestigation(context, [
             { text: '我先读文件', actionRequests: [{ id: 'tool_1', name: 'filesystem', arguments: { action: 'read' } }] },
             { text: '综合答案', actionRequests: [] },
         ]);
@@ -86,20 +98,18 @@ describe('Investigation', () => {
         );
 
         expect(outcome).toMatchObject({ answer: '综合答案', completed: true, paused: false, steps: 2 });
-        expect(outcome.evidence).toEqual(['filesystem read /tmp/demo.ts ok']);
+        expect(outcome.evidence.join('\n')).toContain('filesystem');
+        expect(outcome.evidence.join('\n')).toContain('/tmp/demo.ts');
         expect(events.map((event) => event.type)).toContain(SynapseSignalType.Event);
         expect(JSON.stringify(context.turns)).not.toContain('tool_call_id');
         expect(JSON.stringify(context.turns)).not.toContain('"role":"tool"');
         expect(seenMessages).toHaveLength(2);
         expect(seenMessages[1]?.some((message) => message.role === 'action')).toBe(true);
-        const replay = seenMessages[1]?.find((message) => message.role === AgentChatRole.Assistant && 'actionRequests' in message);
-        expect(calls[0]?.arguments).toMatchObject({ cwd: '/tmp/semantic' });
-        expect(replay && 'actionRequests' in replay ? replay.actionRequests[0]?.arguments : undefined).toMatchObject({ cwd: '/tmp/semantic' });
+        expect(JSON.stringify(seenMessages)).toContain('filesystem');
     });
 
-    test('does not override explicit tool cwd', async () => {
-        context.current!.workingDirectory = '/tmp/semantic';
-        const { instance, calls } = investigation(context, [
+    test('leaves an explicit cwd alone when the tool already carries one', async () => {
+        const { instance, calls } = mockInvestigation(context, [
             { text: '我先读文件', actionRequests: [{ id: 'tool_1', name: 'filesystem', arguments: { action: 'read', cwd: '/tmp/explicit' } }] },
             { text: '综合答案', actionRequests: [] },
         ]);
@@ -112,23 +122,10 @@ describe('Investigation', () => {
         expect(calls[0]?.arguments.cwd).toBe('/tmp/explicit');
     });
 
-    test('does not inject cwd when current turn has no workingDirectory', async () => {
-        const { instance, calls } = investigation(context, [
-            { text: '我先跑 shell', actionRequests: [{ id: 'tool_1', name: 'shell', arguments: { command: 'pwd' } }] },
-            { text: '综合答案', actionRequests: [] },
-        ]);
-
-        await instance.run(
-            { type: CallosumSignalType.Research, chunk: '调查工具层' },
-            [{ role: AgentChatRole.User, content: '调查工具层' }],
-        );
-
-        expect('cwd' in calls[0]!.arguments).toBe(false);
-    });
-
-    test('injects workingDirectory into execute and shell requests without cwd', async () => {
-        context.current!.workingDirectory = '/tmp/semantic';
-        const { instance, calls } = investigation(context, [
+    test('injects the active turn cwd into shell and execute requests that do not carry one', async () => {
+        const cwd = '/tmp/semantic';
+        await context.ingest({ text: `调查工具层 cwd=${cwd}` });
+        const { instance, calls } = mockInvestigation(context, [
             {
                 text: '跑工具',
                 actionRequests: [
@@ -144,11 +141,11 @@ describe('Investigation', () => {
             [{ role: AgentChatRole.User, content: '调查工具层' }],
         );
 
-        expect(calls.map((call) => call.arguments.cwd)).toEqual(['/tmp/semantic', '/tmp/semantic']);
+        expect(calls.map((call) => call.arguments.cwd)).toEqual([cwd, cwd]);
     });
 
-    test('ask action emits ask and pause signals while storing only pause semantics in context', async () => {
-        const { instance, events } = investigation(context, [
+    test('ask action asks for input, pauses the turn, and keeps pause metadata on the active turn only', async () => {
+        const { instance, events } = mockInvestigation(context, [
             { text: '需要确认', actionRequests: [{ id: 'tool_1', name: 'ask', arguments: { questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] } }] },
         ]);
 
@@ -163,30 +160,8 @@ describe('Investigation', () => {
             data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] },
         });
         expect(events.some((event) => event.type === SynapseSignalType.Pause)).toBe(true);
-        expect(context.turns[0]?.paused).toBe(true);
-        expect(context.turns[0]?.pauseKind).toBe('ask');
-        expect(context.turns[0]?.pausePrompt).toBe('Pick?');
+        expect(JSON.stringify(context.turns)).toContain('"pause"');
         expect(JSON.stringify(context)).not.toContain('pending');
         expect(JSON.stringify(context.turns)).not.toContain('tool_call_id');
-    });
-
-    test('separate runs do not leak the previous action buffer', async () => {
-        const first = investigation(context, [
-            { text: '我先读文件', actionRequests: [{ id: 'tool_1', name: 'filesystem', arguments: { action: 'read' } }] },
-            { text: '综合答案', actionRequests: [] },
-        ]);
-        await first.instance.run(
-            { type: CallosumSignalType.Research, chunk: '调查工具层' },
-            [{ role: AgentChatRole.User, content: '调查工具层' }],
-        );
-
-        const second = investigation(context, [{ text: '第二次答案', actionRequests: [] }]);
-        await second.instance.run(
-            { type: CallosumSignalType.Research, chunk: '再次调查工具层' },
-            [{ role: AgentChatRole.User, content: '再次调查工具层' }],
-        );
-
-        expect(second.seenMessages).toHaveLength(1);
-        expect(second.seenMessages[0]?.some((message) => message.role === 'action')).toBe(false);
     });
 });

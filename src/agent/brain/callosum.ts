@@ -1,5 +1,6 @@
 import { AgentChatRole } from '@/agent/types';
 import { FAgentAtom, Inject, Prompt, PromptService, Provide } from '@/core';
+import { parse } from '@/agent/json';
 import { Intelligence } from './intelligence/service';
 
 export enum CallosumPrompt {
@@ -10,6 +11,7 @@ export enum CallosumSignalType {
     Soul = 'soul',
     Reply = 'reply',
     Research = 'research',
+    Task = 'task',
     ResearchSummary = 'research_summary',
     Clarification = 'clarification',
     Pause = 'pause',
@@ -55,8 +57,8 @@ export class Callosum extends FAgentAtom<string, CallosumSignal> {
             { role: AgentChatRole.System, content: this.prompt.section(CallosumPrompt.Route) },
             { role: AgentChatRole.User, content: `<latest_user_message>${data}</latest_user_message>` },
         ]);
-        const type = (JSON.parse(raw) as { type?: CallosumSignalType }).type;
-        if (type === CallosumSignalType.Soul || type === CallosumSignalType.Reply || type === CallosumSignalType.Research) {
+        const type = parse<{ type?: CallosumSignalType }>(raw).type;
+        if (type === CallosumSignalType.Soul || type === CallosumSignalType.Reply || type === CallosumSignalType.Task) {
             return { type, chunk: data };
         }
         return { type: CallosumSignalType.Research, chunk: data };
