@@ -322,3 +322,27 @@
 [DEBUG]  2026-07-03T08:53:29.505Z  Controller
   | cwd
   | /tmp/absolute-root
+[DEBUG]  2026-07-06T09:14:27.080Z  Controller
+  | cwd
+  | workspace
+[DEBUG]  2026-07-06T09:14:27.084Z  Controller
+  | cwd
+  | /tmp/absolute-root
+[DEBUG]  2026-07-06T09:16:53.648Z  Controller
+  | cwd
+  | workspace
+[DEBUG]  2026-07-06T09:16:53.648Z  Controller
+  | cwd
+  | /tmp/absolute-root
+[DEBUG]  2026-07-06T09:18:03.902Z  Controller
+  | cwd
+  | workspace
+[DEBUG]  2026-07-06T09:18:03.902Z  Controller
+  | cwd
+  | /tmp/absolute-root
+[DEBUG]  2026-07-06T09:41:57.763Z  Controller
+  | cwd
+  | workspace
+[DEBUG]  2026-07-06T09:41:57.763Z  Controller
+  | cwd
+  | /tmp/absolute-root

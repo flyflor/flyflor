@@ -34,4 +34,30 @@ describe('Context', () => {
         expect(JSON.stringify(context.turns)).not.toContain('"role":"tool"');
         expect(JSON.stringify(context.turns)).not.toContain('tool_call_id');
     });
+
+    test('briefs an agent with the current turn understanding, not the raw conversation', async () => {
+        const context = new Context();
+        context.prompt = { section: () => 'ingest prompt' } as never;
+        context.intelligence = {
+            completeText: async () => JSON.stringify({
+                intent: 'research',
+                goal: 'flatten the turn shape',
+                cwd: '/tmp/flyflor',
+                constraints: ['keep one truth'],
+                refs: [{ type: 'path', value: 'src/agent/context/component.ts' }],
+                done: [],
+                open: [],
+                investigate: true,
+            }),
+        } as never;
+
+        await context.ingest({ text: '简化 Context' });
+        const brief = context.brief('worker');
+
+        expect(brief.intent).toBe('research');
+        expect(brief.goal).toContain('flatten');
+        expect(brief.constraints).toContain('keep one truth');
+        expect(brief.refs[0]?.value).toBe('src/agent/context/component.ts');
+        expect(brief.recentSummaries).toEqual([]);
+    });
 });

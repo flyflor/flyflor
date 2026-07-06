@@ -2,7 +2,7 @@ import { AgentChatRole } from '@/agent/types';
 import { FComponent, Inject, Prompt, PromptService, Singleton } from '@/core';
 import { Intelligence } from '@/agent/brain/intelligence/service';
 import { parse } from '@/agent/json';
-import type { Ingest, Pause, Settle, Summary, Turn } from './types';
+import type { AgentBrief, Ingest, Pause, Settle, Summary, Turn } from './types';
 
 @Singleton()
 /**
@@ -33,6 +33,41 @@ export class Context extends FComponent {
 
     public recent(limit = 4): Turn[] {
         return this.turns.slice(-limit);
+    }
+
+    /**
+     * EN: Produces a scoped briefing for one agent. It contains only the current
+     * turn understanding and recent completed summaries, not the raw conversation.
+     * ZH: 为一个 agent 生成范围简报。只包含当前 turn 理解和最近完成的摘要，不含原始对话。
+     */
+    public brief(forAgent: string): AgentBrief {
+        const current = this.current;
+        if (!current) {
+            return {
+                turnId: 'none',
+                intent: 'research',
+                goal: '',
+                constraints: [],
+                refs: [],
+                recentSummaries: this.doneSummaries(),
+            };
+        }
+        return {
+            turnId: this.active()?.id ?? 'none',
+            intent: current.intent,
+            goal: current.goal,
+            constraints: [...current.constraints],
+            refs: current.refs.map((ref) => ({ ...ref })),
+            cwd: current.cwd,
+            recentSummaries: this.doneSummaries(),
+        };
+    }
+
+    private doneSummaries(): Summary[] {
+        return this.turns
+            .filter((turn) => turn.status === 'completed')
+            .map((turn) => turn.summary)
+            .filter((summary): summary is Summary => summary !== undefined);
     }
 
     public async ingest(input: Ingest): Promise<Turn> {

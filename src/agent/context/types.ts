@@ -42,6 +42,34 @@ export interface Summary {
 }
 
 /**
+ * EN: A concise briefing of the current turn understanding handed to one agent.
+ * This is not a conversation transcript; it is the organism's current grasp of
+ * user intent, scoped for the receiving agent.
+ * ZH: 交给某个 agent 的当前 turn 理解简报。它不是对话原文，而是生命体对接收
+ * agent 范围的当前意图理解。
+ */
+export interface AgentBrief {
+    turnId: string;
+    intent: Intent;
+    goal: string;
+    constraints: string[];
+    refs: Reference[];
+    cwd?: string;
+    recentSummaries: Summary[];
+}
+
+/**
+ * EN: One note inside an agent's private memory cache.
+ * ZH: agent 私有记忆缓存中的一条笔记。
+ */
+export interface MemoryNote {
+    id: string;
+    content: string;
+    source: 'brief' | 'observation' | 'reflection';
+    ts: number;
+}
+
+/**
  * EN: One tracked user turn. Acts as both the in-flight understanding and the
  * durable record after settlement, decided by `status`.
  * ZH: 一条被跟踪的用户 turn。既是进行中的理解视图,也靠 status 成为落地后的持久记录。

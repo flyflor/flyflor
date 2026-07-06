@@ -1,4 +1,4 @@
-import { AgentChatRole, type AgentMemory } from '@/agent/types';
+import { AgentChatRole } from '@/agent/types';
 import { Context, type Summary } from '@/agent/context';
 import { SynapseSignalType } from '@/neural/types';
 import { FAgentAtom, Inject, Prompt, PromptService, Provide, Scope, type IObservable } from '@/core';
@@ -8,18 +8,20 @@ import { Callosum } from './callosum';
 import { CallosumSignalType, type CallosumSignal } from './callosum';
 import { Intelligence } from './intelligence/service';
 import { Investigation } from './investigation';
-import { Task, type TaskOutcome } from './task';
+import type { InvestigationOutcome } from './investigation/types';
+import type { AgentBrief } from '@/agent/context/types';
 
 export enum BrainPrompt {
     Soul = 'SOUL',
 }
 
 /**
- * 大脑皮层负责承接 Callosum 的路由结果。
- * reply 会继续向外流式转发;research、task、soul 会收到完整 JSON chunk 后再交给对应方法处理。
+ * EN: Brain receives the routed intent from Callosum.
+ * ZH: Brain 接收 Callosum 路由后的意图。
  *
- * `delegate()` 是 worker 入口:跳过 callosum,直接 ingest brief → research →
- * settle,把 summary 返回给 Task 协调器,全程不向 socket 广播。
+ * EN: `reply`, `research`, `soul` are handled locally; `coordinate` is forwarded
+ * to Synapse so the cortex can dispatch the agent pool.
+ * ZH: `reply`、`research`、`soul` 在本地处理；`coordinate` 转发给 Synapse，由皮层派发 agent pool。
  */
 @Provide()
 export class Brain extends FAgentAtom<string, CallosumSignal> implements IObservable<string, CallosumSignal> {
@@ -41,9 +43,6 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
     @Scope()
     public investigation!: Investigation;
 
-    @Scope()
-    public task!: Task;
-
     /**
      * EN: Runs one whole user turn behind a single error boundary.
      * ZH: 在单一错误边界内运行一整个用户回合。
@@ -62,7 +61,12 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
     private handle(signal: CallosumSignal): Promise<void> {
         if (signal.type === CallosumSignalType.Reply) return this.reply(signal);
         if (signal.type === CallosumSignalType.Soul) return this.soul(signal);
-        if (signal.type === CallosumSignalType.Task) return this.taskRoute(signal);
+        if (signal.type === CallosumSignalType.Coordinate) {
+            // EN: The cortex (Synapse) owns agent-pool dispatch, not the local Brain.
+            // ZH: 皮层（Synapse）负责 agent pool 派发，本地 Brain 只转发信号。
+            this.synapse.emit(SynapseSignalType.Coordinate, signal);
+            return Promise.resolve();
+        }
         return this.research(signal);
     }
 
@@ -98,50 +102,17 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
         await this.context.settle({ assistant });
     }
 
-    private async taskRoute(signal: CallosumSignal): Promise<void> {
-        const plan = await this.task.plan(this.memory.buildMessage(), signal.chunk);
-        if (!plan.decompose || plan.plan.length === 0) {
-            await this.research(signal);
-            return;
-        }
-        const outcome = await this.task.run(plan, signal.chunk);
-        const assistant = await this.synthesize(outcome);
-        this.synapse.emit(SynapseSignalType.Reply, assistant);
-        this.synapse.emit(SynapseSignalType.Reply, null);
-        const evidence = outcome.workers.map((worker) => worker.summary?.result ?? '').filter((line) => line.length > 0);
-        await this.context.settle({ assistant, evidence });
-    }
-
-    private async synthesize(outcome: TaskOutcome): Promise<string> {
-        const messages: AgentMemory[] = [...this.memory.buildMessage()];
-        const digest = outcome.workers.map((worker) => ({
-            profile: worker.profile,
-            slice: worker.slice,
-            result: worker.summary?.result ?? '',
-            decisions: worker.summary?.decisions ?? [],
-            evidence: worker.summary?.evidence ?? [],
-            remaining: worker.summary?.remaining ?? [],
-        }));
-        messages.push({ role: AgentChatRole.User, content: JSON.stringify({ workers: digest, synthesisHint: outcome.synthesisHint }) });
-        let answer = '';
-        await this.intelligence.stream(messages, (chunk) => {
-            answer += chunk;
-        });
-        return answer;
-    }
-
     /**
-     * EN: Worker entrypoint. Skips the Callosum and runs a headless research
-     * pass on the agent's own Context, then returns the produced summary.
-     * Does not emit to the socket.
-     * ZH: worker 入口。跳过 Callosum,在自己的 Context 上跑一次无头
-     * research 循环,返回产出的摘要。不向 socket 广播。
+     * EN: Worker understanding entry. Ingests the Context brief into this agent's
+     * private memory, then runs one investigation loop without touching Context.turns.
+     * ZH: worker 理解入口。把 Context 简报写入该 agent 的私有记忆，然后跑一轮
+     * investigation，不修改 Context.turns。
      */
-    public async delegate(brief: string): Promise<Summary | undefined> {
-        await this.context.ingest({ text: brief });
+    public async understand(brief: AgentBrief): Promise<InvestigationOutcome | undefined> {
+        this.memory.ingestBrief(brief);
         const messages = this.memory.buildMessage();
-        const outcome = await this.investigation.run({ type: CallosumSignalType.Research, chunk: brief }, messages);
+        const outcome = await this.investigation.run({ type: CallosumSignalType.Research, chunk: brief.goal }, messages);
         if (outcome.paused) return undefined;
-        return await this.context.settle({ assistant: outcome.answer, evidence: outcome.evidence });
+        return outcome;
     }
 }

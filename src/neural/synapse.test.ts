@@ -8,4 +8,8 @@ describe('SynapseSignalType', () => {
         expect(String(SynapseSignalType.Ask)).toBe('ask');
         expect(String(SynapseSignalType.Confirm)).toBe('confirm');
     });
+
+    test('exposes coordinate for cortex dispatch', () => {
+        expect(String(SynapseSignalType.Coordinate)).toBe('coordinate');
+    });
 });

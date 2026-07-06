@@ -8,6 +8,7 @@ export enum SynapseSignalType {
     Confirm = 'confirm',
     Pause = 'pause',
     Resume = 'resume',
+    Coordinate = 'coordinate',
 }
 
 /**
@@ -16,4 +17,15 @@ export enum SynapseSignalType {
  */
 export interface SynapseSignal extends CortexSignal {
     type: SynapseSignalType;
+}
+
+/**
+ * EN: Plan produced by the cortex for multi-agent understanding.
+ * ZH: 皮层为多 agent 理解生成的计划。
+ */
+export interface CoordinatePlan {
+    intent: string;
+    strategy: 'parallel' | 'sequential';
+    slices: Array<{ profile: string; brief: string; slice: string }>;
+    synthesisHint: string;
 }
