@@ -18,7 +18,7 @@ Meaning:
 - `soul`: the user asks to save or change long-term notes about the assistant, the user, preferences, communication style, goals, or stable abilities.
 - `reply`: choose this when the assistant can answer directly without tools, files, external lookup, codebase investigation, or durable memory writes.
 - `research`: choose this when the answer needs file evidence, tool evidence, current information, project inspection, comparison with references, or a clarifying question.
-- `coordinate`: choose this when the user intent is complex enough that multiple agents must jointly summarize and understand it from different perspectives. The cortex will then dispatch the agent pool and synthesize their understandings.
+- `coordinate`: choose this when the request is complex, separable into independent parts, benefits from multiple viewpoints, or needs a review step before the final answer.
 
 Rules:
 
@@ -28,7 +28,7 @@ Rules:
 - Do not write files.
 - If unsure, choose `research`.
 - If the latest user message answers a previous clarification question, classify the new message on its own.
-- Prefer `research` over `coordinate` for anything a single agent can finish in one investigation loop; `coordinate` is reserved for multi-perspective understanding.
+- Prefer `research` when one investigation pass can finish the work. Use `coordinate` when a shared temporary plan would improve intent understanding, evidence coverage, or final review.
 
 Examples:
 

@@ -86,6 +86,19 @@ describe('Investigation', () => {
         expect(events).toContainEqual({ type: SynapseSignalType.Reply, data: '直接答案' });
     });
 
+    test('can finish silently for worker and reviewer runs', async () => {
+        const { instance, events } = mockInvestigation(context, [{ text: '静默答案', actionRequests: [] }]);
+
+        const outcome = await instance.run(
+            { type: CallosumSignalType.Research, chunk: '调查工具层' },
+            [{ role: AgentChatRole.User, content: '调查工具层' }],
+            { emitReply: false },
+        );
+
+        expect(outcome.answer).toBe('静默答案');
+        expect(events.some((event) => event.type === SynapseSignalType.Reply)).toBe(false);
+    });
+
     test('streams text, replays the local action buffer into the next request, and emits one evidence line', async () => {
         const { instance, events, seenMessages, calls } = mockInvestigation(context, [
             { text: '我先读文件', actionRequests: [{ id: 'tool_1', name: 'filesystem', arguments: { action: 'read' } }] },

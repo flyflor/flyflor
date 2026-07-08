@@ -56,4 +56,38 @@ describe('Memory', () => {
         expect(user).not.toContain('pending');
         expect(user).not.toContain('transcript');
     });
+
+    test('loads minimal worker persona package and keeps dynamic persona in brief notes', async () => {
+        const memory = await useContainer().getAsync(Memory, {
+            name: 'worker',
+            model: '',
+            provider: '',
+            contextLength: 0,
+            maxTokens: 0,
+            promptPackage: './prompts/agents',
+            promptSections: ['worker'],
+        });
+
+        memory.ingestBrief({
+            turnId: 'turn_1',
+            intent: 'research',
+            goal: 'inspect one slice',
+            persona: 'temporary evidence specialist',
+            constraints: [],
+            refs: [],
+            recentSummaries: [],
+        });
+
+        const messages = memory.buildMessage();
+
+        expect(messages[0]?.content).toBe(`# Worker Base
+
+You are a temporary work unit.
+
+Use the persona and task brief supplied in short-term notes. Stay inside the assigned slice and return a compact, evidence-based result.
+
+Do not claim ownership of the whole user request. Do not save the temporary persona. Do not answer outside the assigned slice.`);
+        expect(messages[1]?.content).toBe(`-[brief] turn turn_1: intent=research, goal=inspect one slice, constraints=[]
+-[brief] persona: temporary evidence specialist`);
+    });
 });

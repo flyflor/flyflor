@@ -6,7 +6,7 @@ import { type ActionRequest, ToolComponent } from '@/plugins';
 import { CallosumSignalType, type CallosumSignal } from '../callosum';
 import { Intelligence } from '../intelligence/service';
 import type { ProviderActionRequestMessage, ProviderActionResultMessage, ProviderMessage } from '../intelligence/types';
-import type { InvestigationOutcome } from './types';
+import type { InvestigationOutcome, InvestigationRunOptions } from './types';
 
 @Provide()
 /**
@@ -23,15 +23,16 @@ export class Investigation extends FAgentAtom {
     @Inject()
     public tools!: ToolComponent;
 
-    public async run(signal: CallosumSignal, baseMessages: AgentMemory[]): Promise<InvestigationOutcome> {
+    public async run(signal: CallosumSignal, baseMessages: AgentMemory[], options: InvestigationRunOptions = {}): Promise<InvestigationOutcome> {
         const messages: ProviderMessage[] = [...baseMessages];
         const evidence: string[] = [];
+        const emitReply = options.emitReply !== false;
         let step = 0;
         while (true) {
             step += 1;
             this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.LlmRequest, chunk: String(step), data: { step } });
             const result = await this.intelligence.streamRequest(messages, await this.tools.list(), (chunk) => {
-                this.synapse.emit(SynapseSignalType.Reply, chunk);
+                if (emitReply) this.synapse.emit(SynapseSignalType.Reply, chunk);
             });
             if (result.actionRequests.length === 0) {
                 return { answer: result.text, steps: step, completed: true, paused: false, evidence };

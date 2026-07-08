@@ -128,6 +128,8 @@ export interface FAgentProfileConfiguration {
     provider: string;
     contextLength: number;
     maxTokens: number;
+    promptPackage?: string;
+    promptSections?: string[];
 }
 
 /**
@@ -254,6 +256,24 @@ export class ConfigService extends FService implements FConfiguration {
                 provider: '',
                 contextLength: 0,
                 maxTokens: 0,
+            },
+            worker: {
+                name: 'worker',
+                model: '',
+                provider: '',
+                contextLength: 0,
+                maxTokens: 0,
+                promptPackage: './prompts/agents',
+                promptSections: ['worker'],
+            },
+            reviewer: {
+                name: 'reviewer',
+                model: '',
+                provider: '',
+                contextLength: 0,
+                maxTokens: 0,
+                promptPackage: './prompts/agents',
+                promptSections: ['reviewer'],
             },
         };
         if (process.platform !== 'win32') this.socket = './flyflor.sock';

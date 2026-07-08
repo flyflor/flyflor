@@ -24,7 +24,7 @@ export class Agent extends FAgent<string, string> implements IObservable<string,
 
     public override async onPipe(data: string) {
         this.log.info('agent received', { data });
-        this.brain.next(data);
+        await this.brain.next(data);
     }
 
     /**

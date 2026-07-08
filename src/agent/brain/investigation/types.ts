@@ -9,3 +9,7 @@ export interface InvestigationOutcome {
     paused: boolean;
     evidence: string[];
 }
+
+export interface InvestigationRunOptions {
+    emitReply?: boolean;
+}

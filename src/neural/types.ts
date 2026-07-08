@@ -26,6 +26,7 @@ export interface SynapseSignal extends CortexSignal {
 export interface CoordinatePlan {
     intent: string;
     strategy: 'parallel' | 'sequential';
-    slices: Array<{ profile: string; brief: string; slice: string }>;
+    slices: Array<{ profile: string; persona: string; brief: string; slice: string }>;
+    review: { profile: string; persona: string; brief: string; focus: string };
     synthesisHint: string;
 }

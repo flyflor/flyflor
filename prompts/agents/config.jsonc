@@ -1,0 +1,47 @@
+{
+    "version": 1,
+    "description": "Minimal shared personas for temporary coordinated work.",
+    "prompt": {
+        "sections": [
+            "worker"
+        ]
+    },
+    "protocolPackage": {
+        "editable": [],
+        "locked": [
+            "worker.md",
+            "reviewer.md"
+        ],
+        "runtimeIgnored": [
+            "config.jsonc",
+            "worker.zh.cn.md",
+            "reviewer.zh.cn.md"
+        ],
+        "context": {
+            "root": "agent_personas",
+            "blocks": [
+                {
+                    "key": "config",
+                    "tag": "document",
+                    "file": "config.jsonc",
+                    "role": "policy",
+                    "note": "file list and write limits"
+                },
+                {
+                    "key": "worker",
+                    "tag": "document",
+                    "file": "worker.md",
+                    "role": "rules",
+                    "note": "default worker base"
+                },
+                {
+                    "key": "reviewer",
+                    "tag": "document",
+                    "file": "reviewer.md",
+                    "role": "rules",
+                    "note": "default reviewer base"
+                }
+            ]
+        }
+    }
+}

@@ -72,7 +72,8 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
 
     private async reply(signal: CallosumSignal): Promise<void> {
         let assistant = '';
-        await this.intelligence.stream(this.memory.buildMessage(), (chunk) => {
+        const messages = [...this.memory.buildMessage(), { role: AgentChatRole.User, content: String(signal.chunk) }];
+        await this.intelligence.stream(messages, (chunk) => {
             assistant += chunk;
             this.synapse.emit(SynapseSignalType.Reply, chunk);
         });
@@ -81,7 +82,7 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
     }
 
     private async research(signal: CallosumSignal): Promise<void> {
-        const messages = this.memory.buildMessage();
+        const messages = [...this.memory.buildMessage(), { role: AgentChatRole.User, content: String(signal.chunk) }];
         const outcome = await this.investigation.run(signal, messages);
         if (outcome.paused) return;
         this.synapse.emit(SynapseSignalType.Reply, null);
@@ -111,7 +112,7 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
     public async understand(brief: AgentBrief): Promise<InvestigationOutcome | undefined> {
         this.memory.ingestBrief(brief);
         const messages = this.memory.buildMessage();
-        const outcome = await this.investigation.run({ type: CallosumSignalType.Research, chunk: brief.goal }, messages);
+        const outcome = await this.investigation.run({ type: CallosumSignalType.Research, chunk: brief.goal }, messages, { emitReply: false });
         if (outcome.paused) return undefined;
         return outcome;
     }

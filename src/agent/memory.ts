@@ -27,8 +27,8 @@ export enum SoulSection {
  */
 @Provide()
 export class Memory extends FAgentAtom {
-    @Prompt((prop: Memory) => `.config/agents/${prop.agentConfig.name}`)
-    public prompt!: PromptService<SoulSection> & PromptPackageData<SoulSection>;
+    @Prompt((prop: Memory) => prop.agentConfig.promptPackage ?? `.config/agents/${prop.agentConfig.name}`)
+    public prompt!: PromptService<string> & PromptPackageData<string>;
 
     /** EN: Max number of notes this agent can hold. ZH: 该 agent 可持有的最大笔记数。 */
     public capacity = 16;
@@ -43,6 +43,7 @@ export class Memory extends FAgentAtom {
             `turn ${brief.turnId}: intent=${brief.intent}, goal=${brief.goal}, constraints=[${brief.constraints.join('; ')}]`,
             'brief',
         );
+        if (brief.persona) this.remember(`persona: ${brief.persona}`, 'brief');
         for (const ref of brief.refs) {
             this.remember(`${ref.type}: ${ref.value}`, 'brief');
         }
@@ -57,7 +58,7 @@ export class Memory extends FAgentAtom {
     }
 
     public buildMessage(): AgentMemory[] {
-        const system = this.prompt.render({ kind: 'sections' });
+        const system = this.prompt.render({ kind: 'sections', sections: this.agentConfig.promptSections });
         const messages: AgentMemory[] = system.trim().length === 0 ? [] : [{ role: AgentChatRole.System, content: system }];
         if (this.notes.length > 0) {
             messages.push({

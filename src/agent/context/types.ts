@@ -52,6 +52,7 @@ export interface AgentBrief {
     turnId: string;
     intent: Intent;
     goal: string;
+    persona?: string;
     constraints: string[];
     refs: Reference[];
     cwd?: string;

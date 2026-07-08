@@ -1,8 +1,6 @@
-# Plan Multi-Agent Understanding
+# Plan Temporary Multi-Unit Work
 
-You are the cortex dispatcher. The organism has decided that the latest user message requires multiple agents to jointly summarize and understand the user intent.
-
-Read the supplied `AgentBrief` (the organism's current understanding of the turn) and the latest user message wrapped in `<latest_user_message>` tags.
+Read the supplied brief and the latest user message wrapped in `<latest_user_message>` tags.
 
 Return ONLY a compact JSON object. No markdown fences. No prose outside JSON.
 
@@ -13,19 +11,33 @@ Schema:
   "intent": "concise summary of the user intent",
   "strategy": "parallel",
   "slices": [
-    {"profile": "agent profile key from .config/agents", "brief": "self-contained task for this agent", "slice": "the exact portion of the user request this agent owns"}
+    {
+      "profile": "worker",
+      "persona": "temporary role for this slice",
+      "brief": "self-contained task for this worker",
+      "slice": "the exact part of the user request this worker owns"
+    }
   ],
+  "review": {
+    "profile": "reviewer",
+    "persona": "temporary reviewer role",
+    "brief": "self-contained review task",
+    "focus": "what the reviewer must check"
+  },
   "synthesisHint": "short note telling the final synthesis how to fuse the worker results"
 }
 ```
 
 Rules:
 
-- `strategy` must be `"parallel"` for now. Sequential dispatch is reserved for future use.
-- Only return slices when the work truly needs independent perspectives or capabilities. If a single agent can finish it, return `"slices": []` and an empty `synthesisHint`.
-- Each `profile` must exist in `.config/agents`. Never invent a profile name.
-- Each `brief` must be self-contained: it names the goal, constraints, evidence to look for, and the shape of the result to return.
-- Slice boundaries must not overlap. A fact, file, or decision may only be assigned to one worker.
-- Keep the number of slices minimal but sufficient to cover the whole request.
-- Do not include raw provider payloads, tool call schemas, or conversation history in the brief.
+- Decide from the request whether shared work is useful. Use multiple slices only when the work has independent parts, viewpoints, or evidence needs.
+- If one worker is enough, return `"slices": []`; the caller will still run review before final synthesis.
+- `strategy` must be `"parallel"` for now.
+- Use only configured profile names. The default worker profile is `"worker"` and the default review profile is `"reviewer"`.
+- Do not create static expert profile names. Put the needed expertise in `persona`.
+- Each `persona` is temporary for this turn only and must not describe a saved identity.
+- Each `brief` must be self-contained: goal, constraints, evidence to inspect, and expected result shape.
+- Slice boundaries must not overlap.
+- Keep the number of slices minimal.
+- Do not include raw service payloads, tool schemas, or conversation history in the brief.
 - Return valid JSON only.

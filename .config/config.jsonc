@@ -283,6 +283,27 @@
     //         "provider": "deepseek",
     //     },
     // },
+    "agents": {
+        "flyflor": {
+            "name": "flyflor",
+            "model": "deepseek-v4-flash",
+            "provider": "deepseek",
+        },
+        "worker": {
+            "name": "worker",
+            "model": "deepseek-v4-flash",
+            "provider": "deepseek",
+            "promptPackage": "./prompts/agents",
+            "promptSections": ["worker"],
+        },
+        "reviewer": {
+            "name": "reviewer",
+            "model": "deepseek-v4-flash",
+            "provider": "deepseek",
+            "promptPackage": "./prompts/agents",
+            "promptSections": ["reviewer"],
+        },
+    },
     // IPC socket 路径。
     // 默认值为 ./flyflor.sock；通常不需要配置。
     // Windows 运行时内部会转换为命名管道。

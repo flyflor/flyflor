@@ -1,5 +1,5 @@
 import { Agent, AgentChatRole } from '@/agent';
-import { Context } from '@/agent/context';
+import { Context, type AgentBrief } from '@/agent/context';
 import type { ConfigService } from '@/configuration';
 import { Config, FCortex, Init, Inject, Module, Prompt, PromptService, Scope, useContainer } from '@/core';
 import { Intelligence } from '@/agent/brain/intelligence/service';
@@ -33,10 +33,10 @@ export class Synapse extends FCortex<SynapseSignal> {
     @Inject()
     public intelligence!: Intelligence;
 
-    @Prompt('prompts/synapse/plan')
+    @Prompt('prompts/synapse')
     public planPrompt!: PromptService;
 
-    @Prompt('prompts/synapse/synthesis')
+    @Prompt('prompts/synapse')
     public synthesisPrompt!: PromptService;
 
     public agentPool: AgentPool;
@@ -141,35 +141,57 @@ export class Synapse extends FCortex<SynapseSignal> {
             { role: AgentChatRole.User, content: `${JSON.stringify(brief)}\n<latest_user_message>${signal.chunk}</latest_user_message>` },
         ]));
 
-        if (plan.slices.length === 0) {
-            // EN: No real decomposition; fall back to the active agent's single-agent path.
-            // ZH: 没有实际分解；退回 active agent 的单 agent 路径。
-            await this.agent.next(signal.chunk);
-            return;
-        }
-
         // EN: Dispatch one independent worker per slice. Each worker gets its own
         // private Memory seeded from the Context brief. If any worker pauses for
         // ask/confirm, stop and let Synapse resume later.
         // ZH: 每个切片派发一个独立 worker。每个 worker 都从 Context 简报获得私有记忆
         // 种子。如果某个 worker 因 ask/confirm 暂停，则停止，稍后再由 Synapse 恢复。
-        const outcomes: Array<{ profile: string; slice: string; brief: string; result: string; evidence: string[] }> = [];
-        for (const slice of plan.slices) {
-            const agent = await this.spawnWorker(slice.profile);
-            const outcome = await agent.understand(this.context.brief(slice.profile));
+        const outcomes: Array<{ profile: string; persona: string; slice: string; brief: string; result: string; evidence: string[] }> = [];
+        const slices = plan.slices.length === 0
+            ? [{ profile: this.active, persona: '', brief: this.context.brief(this.active).goal, slice: String(signal.chunk) }]
+            : plan.slices;
+        for (const slice of slices) {
+            const agent = slice.profile === this.active ? this.agent : await this.spawnWorker(slice.profile);
+            const outcome = await agent.understand(this.workerBrief(slice));
             if (!outcome) return;
-            outcomes.push({ profile: slice.profile, slice: slice.slice, brief: slice.brief, result: outcome.answer, evidence: outcome.evidence });
+            outcomes.push({ profile: slice.profile, persona: slice.persona, slice: slice.slice, brief: slice.brief, result: outcome.answer, evidence: outcome.evidence });
         }
+
+        const reviewer = await this.spawnWorker(plan.review.profile);
+        const review = await reviewer.understand(this.reviewBrief(plan, outcomes));
+        if (!review) return;
 
         // EN: Synthesize worker understandings into one coherent reply.
         // ZH: 把各 worker 的理解合成一条连贯回复。
         const answer = await this.intelligence.completeText([
             { role: AgentChatRole.System, content: this.synthesisPrompt.section('synthesis') },
-            { role: AgentChatRole.User, content: JSON.stringify({ outcomes, hint: plan.synthesisHint }) },
+            { role: AgentChatRole.User, content: JSON.stringify({ outcomes, review: { profile: plan.review.profile, persona: plan.review.persona, result: review.answer, evidence: review.evidence }, hint: plan.synthesisHint }) },
         ]);
 
         this.emit(SynapseSignalType.Reply, answer);
         this.emit(SynapseSignalType.Reply, null);
-        await this.context.settle({ assistant: answer, evidence: outcomes.flatMap((outcome) => outcome.evidence) });
+        await this.context.settle({ assistant: answer, evidence: [...outcomes.flatMap((outcome) => outcome.evidence), ...review.evidence] });
+    }
+
+    private workerBrief(slice: { profile: string; persona: string; brief: string; slice: string }): AgentBrief {
+        const brief = this.context.brief(slice.profile);
+        return {
+            ...brief,
+            goal: slice.brief,
+            persona: slice.persona,
+            constraints: [...brief.constraints, slice.slice],
+        };
+    }
+
+    private reviewBrief(
+        plan: CoordinatePlan,
+        outcomes: Array<{ profile: string; persona: string; slice: string; brief: string; result: string; evidence: string[] }>,
+    ): AgentBrief {
+        const brief = this.context.brief(plan.review.profile);
+        return {
+            ...brief,
+            goal: JSON.stringify({ review: plan.review.brief, focus: plan.review.focus, intent: plan.intent, outcomes }),
+            persona: plan.review.persona,
+        };
     }
 }
