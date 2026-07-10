@@ -34,10 +34,7 @@ export class Synapse extends FCortex<SynapseSignal> {
     public intelligence!: Intelligence;
 
     @Prompt('prompts/synapse')
-    public planPrompt!: PromptService;
-
-    @Prompt('prompts/synapse')
-    public synthesisPrompt!: PromptService;
+    public prompt!: PromptService;
 
     public agentPool: AgentPool;
     public active: string;
@@ -166,7 +163,7 @@ export class Synapse extends FCortex<SynapseSignal> {
         // ZH: 询问皮层计划提示词如何切分理解工作。
         const brief = this.context.brief(turnId);
         const plan = parse<CoordinatePlan>(await this.intelligence.completeText([
-            { role: AgentChatRole.System, content: this.planPrompt.section('plan') },
+            { role: AgentChatRole.System, content: this.prompt.section('plan') },
             { role: AgentChatRole.User, content: `${JSON.stringify(brief)}\n<latest_user_message>${signal.chunk}</latest_user_message>` },
         ]));
 
@@ -193,7 +190,7 @@ export class Synapse extends FCortex<SynapseSignal> {
         // EN: Synthesize worker understandings into one coherent reply.
         // ZH: 把各 worker 的理解合成一条连贯回复。
         const answer = await this.intelligence.completeText([
-            { role: AgentChatRole.System, content: this.synthesisPrompt.section('synthesis') },
+            { role: AgentChatRole.System, content: this.prompt.section('synthesis') },
             { role: AgentChatRole.User, content: JSON.stringify({ outcomes, review: { profile: plan.review.profile, persona: plan.review.persona, result: review.answer, evidence: review.evidence }, hint: plan.synthesisHint }) },
         ]);
 

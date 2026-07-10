@@ -102,8 +102,7 @@ function coordinateHarness(plan: CoordinatePlan): Synapse & {
         }),
         settle: async () => undefined,
     } as never;
-    synapse.planPrompt = { section: () => 'plan prompt' } as never;
-    synapse.synthesisPrompt = { section: () => 'synthesis prompt' } as never;
+    synapse.prompt = { section: (name: string) => `${name} prompt` } as never;
     let call = 0;
     synapse.intelligence = {
         completeText: async (messages: Array<{ content: string }>) => {
