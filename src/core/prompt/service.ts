@@ -1,4 +1,4 @@
-import { Service } from '@/core/decorator';
+import { Provide } from '@/core/decorator';
 import { FService, useContainer } from '@/core/ioc';
 import { JSON5 } from 'bun';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
@@ -73,7 +73,7 @@ export type PromptRender<TSection extends string = string> =
  */
 export type PromptPackageData<TSection extends string> = Partial<Record<TSection, PromptService<string, string>>>;
 
-@Service()
+@Provide()
 /**
  * EN: PromptService class declaration.
  * ZH: PromptService class 声明。

@@ -1,5 +1,5 @@
 import type { ConfigService } from '@/configuration';
-import { Config, FToolAtom, Tool } from '@/core';
+import { Config, FTool, Provide } from '@/core';
 import { spawn } from 'node:child_process';
 import { isAbsolute, resolve } from 'node:path';
 import type { ExecuteInput, ExecuteMode, ExecuteOutput, ExecuteTaskInput, ExecuteTaskResult } from './types';
@@ -14,12 +14,12 @@ interface ExecuteTask {
     timeoutMs: number;
 }
 
-@Tool()
+@Provide()
 /**
  * EN: Execute class declaration.
  * ZH: Execute class 声明。
  */
-export class Execute extends FToolAtom<ExecuteInput, ExecuteOutput> {
+export class Execute extends FTool<ExecuteInput, ExecuteOutput> {
     @Config()
     public config!: ConfigService;
 
@@ -27,7 +27,7 @@ export class Execute extends FToolAtom<ExecuteInput, ExecuteOutput> {
         return true;
     }
 
-    public override async onPipe(input: ExecuteInput) {
+    public override async execute(input: ExecuteInput) {
         const cwd = this.cwd(input.cwd, this.config.path.cwd);
         const mode = this.mode(input.mode);
         const tasks = this.tasks(input.tasks);

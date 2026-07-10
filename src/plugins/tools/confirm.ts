@@ -1,13 +1,13 @@
-import { FToolAtom, Tool } from '@/core';
+import { FTool, Provide } from '@/core';
 import type { ConfirmInput, ConfirmOutput } from './types';
 
-@Tool()
+@Provide()
 /**
  * EN: Confirm class declaration.
  * ZH: Confirm class 声明。
  */
-export class Confirm extends FToolAtom<ConfirmInput, ConfirmOutput> {
-    public override onPipe(input: ConfirmInput) {
+export class Confirm extends FTool<ConfirmInput, ConfirmOutput> {
+    public override execute(input: ConfirmInput) {
         if (typeof input.recommended !== 'boolean') throw Error('recommended is required');
         return {
             ok: true,

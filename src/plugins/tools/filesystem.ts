@@ -1,15 +1,15 @@
 import type { ConfigService } from '@/configuration';
-import { Config, FToolAtom, Tool } from '@/core';
+import { Config, FTool, Provide } from '@/core';
 import { mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import type { FilesystemInput, FilesystemInputAction, FilesystemOutput } from './types';
 
-@Tool()
+@Provide()
 /**
  * EN: Filesystem class declaration.
  * ZH: Filesystem class 声明。
  */
-export class Filesystem extends FToolAtom<FilesystemInput, FilesystemOutput> {
+export class Filesystem extends FTool<FilesystemInput, FilesystemOutput> {
     @Config()
     public config!: ConfigService;
 
@@ -17,7 +17,7 @@ export class Filesystem extends FToolAtom<FilesystemInput, FilesystemOutput> {
         return input.action !== 'read';
     }
 
-    public override onPipe(input: FilesystemInput) {
+    public override execute(input: FilesystemInput) {
         const action = this.action(input.action);
         if (action === 'read') return this.read(input);
         if (action === 'write') return this.write(input);

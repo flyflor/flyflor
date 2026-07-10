@@ -1,4 +1,4 @@
-import { FTool, FToolAtom, Inject, Singleton, type ToolError } from '@/core';
+import { FComponent, FTool, Inject, Singleton, type ToolError } from '@/core';
 import type { IntelligenceToolDefinition } from '@/agent/brain/intelligence/types';
 import { Ask } from './ask';
 import { Execute } from './execute';
@@ -11,7 +11,7 @@ import type { ActionRequest, ToolPromptConfig, ToolProtocol, ToolRunResult } fro
  * EN: ToolComponent class declaration.
  * ZH: ToolComponent class 声明。
  */
-export class ToolComponent extends FTool {
+export class ToolComponent extends FComponent {
     @Inject()
     public ask!: Ask;
 
@@ -56,7 +56,7 @@ export class ToolComponent extends FTool {
         }
     }
 
-    private async records(): Promise<Array<{ atom: FToolAtom<any, any>; protocol: ToolProtocol; description: string }>> {
+    private async records(): Promise<Array<{ atom: FTool<any, any>; protocol: ToolProtocol; description: string }>> {
         return await Promise.all(this.atoms().map(async (atom) => {
             const prompt = await atom.prompt();
             const config = prompt.config as unknown as ToolPromptConfig | undefined;
@@ -69,7 +69,7 @@ export class ToolComponent extends FTool {
         }));
     }
 
-    private atoms(): Array<FToolAtom<any, any>> {
+    private atoms(): Array<FTool<any, any>> {
         return [this.ask, this.filesystem, this.shell, this.execute];
     }
 

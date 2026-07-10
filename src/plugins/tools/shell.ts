@@ -1,14 +1,14 @@
 import type { ConfigService } from '@/configuration';
-import { Config, FToolAtom, Tool } from '@/core';
+import { Config, FTool, Provide } from '@/core';
 import { spawn } from 'node:child_process';
 import type { ShellInput, ShellOutput } from './types';
 
-@Tool()
+@Provide()
 /**
  * EN: Shell class declaration.
  * ZH: Shell class 声明。
  */
-export class Shell extends FToolAtom<ShellInput, ShellOutput> {
+export class Shell extends FTool<ShellInput, ShellOutput> {
     @Config()
     public config!: ConfigService;
 
@@ -16,7 +16,7 @@ export class Shell extends FToolAtom<ShellInput, ShellOutput> {
         return true;
     }
 
-    public override async onPipe(input: ShellInput) {
+    public override async execute(input: ShellInput) {
         const cwd = input.cwd === undefined ? this.config.path.cwd : this.text(input.cwd, 'cwd');
         const command = this.text(input.command, 'command');
         const args = this.args(input.args);

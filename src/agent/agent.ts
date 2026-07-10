@@ -1,15 +1,15 @@
-import { Scope, Provide, FAgent, type IObservable } from '@/core';
+import { Scope, Provide, FAgent } from '@/core';
 import type { Assignment, Outcome } from './types';
 import { Brain } from './brain';
 
 @Provide()
-export class Agent extends FAgent<string> implements IObservable<string> {
+export class Agent extends FAgent<string> {
     @Scope()
     public brain!: Brain;
 
-    public override async onPipe(input: string): Promise<void> {
+    public override async receive(input: string): Promise<void> {
         this.log.info('agent received', { input });
-        await this.brain.next(input);
+        await this.brain.receive(input);
     }
 
     public async work(assignment: Assignment): Promise<Outcome | undefined> {

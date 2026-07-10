@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { ConfigService } from '@/configuration';
-import { FToolAtom, useContainer } from '@/core';
+import { FTool, useContainer } from '@/core';
 import { Ask, Execute, Filesystem, Shell, ToolComponent } from '@/plugins';
 
 async function component(): Promise<ToolComponent> {
@@ -53,13 +53,13 @@ describe('ToolComponent', () => {
         expect(shell?.description).not.toContain('git, rg, cat, ls');
     });
 
-    test('tool atoms inherit the atom base', async () => {
+    test('tools inherit the executable tool base', async () => {
         const tools = await component();
 
-        expect(tools.ask).toBeInstanceOf(FToolAtom);
-        expect(tools.filesystem).toBeInstanceOf(FToolAtom);
-        expect(tools.shell).toBeInstanceOf(FToolAtom);
-        expect(tools.execute).toBeInstanceOf(FToolAtom);
+        expect(tools.ask).toBeInstanceOf(FTool);
+        expect(tools.filesystem).toBeInstanceOf(FTool);
+        expect(tools.shell).toBeInstanceOf(FTool);
+        expect(tools.execute).toBeInstanceOf(FTool);
         expect(tools.ask).toBeInstanceOf(Ask);
         expect(tools.filesystem).toBeInstanceOf(Filesystem);
         expect(tools.shell).toBeInstanceOf(Shell);

@@ -2,8 +2,9 @@ import { AgentChatRole, type Assignment, type Outcome } from '@/agent/types';
 import { Identity } from '@/agent/identity';
 import { Memory } from '@/agent/memory';
 import { Turn } from '@/agent/turn';
+import type { FAgentProfileConfiguration } from '@/configuration';
 import { SynapseSignalType } from '@/neural/types';
-import { FAgentAtom, Inject, Prompt, PromptService, Provide, Scope, type IObservable } from '@/core';
+import { FComponent, Inject, Prompt, PromptService, Provide, Scope, type FAgentSynapseBus } from '@/core';
 import { parse } from '@/agent/json';
 import { Callosum } from './callosum';
 import { Intelligence } from './intelligence/service';
@@ -14,7 +15,7 @@ export enum BrainPrompt {
 }
 
 @Provide()
-export class Brain extends FAgentAtom<string> implements IObservable<string> {
+export class Brain extends FComponent {
     @Scope()
     public callosum!: Callosum;
 
@@ -33,7 +34,14 @@ export class Brain extends FAgentAtom<string> implements IObservable<string> {
     @Scope()
     public investigation!: Investigation;
 
-    public override async onPipe(input: string): Promise<void> {
+    public constructor(
+        public readonly agentConfig: FAgentProfileConfiguration,
+        public readonly synapse: FAgentSynapseBus,
+    ) {
+        super();
+    }
+
+    public async receive(input: string): Promise<void> {
         let turn: Turn | undefined;
         try {
             const perception = await this.callosum.perceive(input, this.memory.recent());

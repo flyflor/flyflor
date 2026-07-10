@@ -1,5 +1,5 @@
 import { Config, Init, Inject, Singleton } from '@/core/decorator';
-import { FlyFlor } from '@/core/ioc';
+import { FService } from '@/core/ioc';
 import { rm } from 'fs/promises';
 import type { Socket, UnixSocketListener } from 'bun';
 import { IPCPacket, type SocketPacket } from './packet';
@@ -44,7 +44,7 @@ const SYNAPSE_INPUT = 'input' as Parameters<Synapse['emit']>[0];
  * EN: FSocket class declaration.
  * ZH: FSocket class 声明。
  */
-export class FSocket extends FlyFlor {
+export class FSocket extends FService {
     @Config('socket')
     public path!: string;
 
@@ -113,22 +113,20 @@ export class FSocket extends FlyFlor {
     public async data(socket: Socket<SocketConnectionData>, data: Uint8Array) {
         if (socket !== this.connection) return;
         // this.log.info('data', data);
-        this.packet
-            .of(data)
-            .pipe((buffer: Uint8Array) => this.packet.decode<SocketPacket>(buffer))
-            .switch((packet) => (packet as unknown as SocketPacket).action, {
-                [SocketEvent.User]: (packet) => {
-                    this.synapse.emit(SYNAPSE_INPUT, this.readUserText((packet as unknown as SocketPacket).data));
-                    return undefined;
-                },
-                [SocketEvent.Answer]: (packet) => {
-                    const data = (packet as unknown as SocketPacket).data as { turnId?: unknown; id?: unknown; response?: unknown };
-                    if (typeof data?.turnId !== 'string' || typeof data.id !== 'string') throw Error('Invalid interaction IPC packet');
-                    this.synapse.answer(data.turnId, data.id, data.response as InteractionResponse);
-                    return undefined;
-                },
-            })
-            .subscribe<SocketPacket>((packet) => Reflect.get(this.controller, packet.action)?.call(this.controller, packet.data));
+        for (const buffer of this.packet.read(data)) {
+            const packet = this.packet.decode<SocketPacket>(buffer);
+            if (packet.action === SocketEvent.User) {
+                this.synapse.emit(SYNAPSE_INPUT, this.readUserText(packet.data));
+                continue;
+            }
+            if (packet.action === SocketEvent.Answer) {
+                const answer = packet.data as { turnId?: unknown; id?: unknown; response?: unknown };
+                if (typeof answer?.turnId !== 'string' || typeof answer.id !== 'string') throw Error('Invalid interaction IPC packet');
+                this.synapse.answer(answer.turnId, answer.id, answer.response as InteractionResponse);
+                continue;
+            }
+            this.controller.dispatch(packet);
+        }
     }
 
     public write(packet: SocketPacket): void {

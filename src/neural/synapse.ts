@@ -111,7 +111,7 @@ export class Synapse extends FCortex<SynapseSignal> {
     public async input(data: any) {
         this.log.info('input', data);
         try {
-            await this.agent.next(data);
+            await this.agent.receive(data);
         } catch (error) {
             this.log.error('synapse.input', error);
             this.emit(SynapseSignalType.Reply, '处理这条消息时出错，请重试。');

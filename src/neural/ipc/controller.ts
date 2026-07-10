@@ -1,7 +1,7 @@
 import type { ConfigService } from '@/configuration';
 import { Config, Provide } from '@/core/decorator';
 import type { SocketPacket } from './packet';
-import { Observable } from '@/core/ioc';
+import { FService } from '@/core/ioc';
 import { isAbsolute, resolve } from 'node:path';
 
 @Provide()
@@ -9,7 +9,7 @@ import { isAbsolute, resolve } from 'node:path';
  * EN: Controller class declaration.
  * ZH: Controller class 声明。
  */
-export class Controller extends Observable {
+export class Controller extends FService {
     @Config()
     public config!: ConfigService;
 

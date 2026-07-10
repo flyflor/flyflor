@@ -2,8 +2,10 @@
 // so this side-effect import stays at the very top of the entry file.
 import 'reflect-metadata';
 
-import { Factory } from '@/core';
+import { useContainer } from '@/core';
+import { Synapse } from '@/neural';
 import { AppModule } from './app.module';
 
-const app = await Factory.create(AppModule);
-await app.synapse();
+const container = useContainer();
+await container.getAsync(AppModule);
+await container.getAsync(Synapse);

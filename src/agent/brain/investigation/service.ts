@@ -1,5 +1,6 @@
 import { AgentChatRole, AgentEventType, type AgentMemory } from '@/agent/types';
-import { FAgentAtom, Inject, Provide, Scope } from '@/core';
+import type { FAgentProfileConfiguration } from '@/configuration';
+import { FComponent, Inject, Provide, Scope, type FAgentSynapseBus } from '@/core';
 import { SynapseSignalType } from '@/neural/types';
 import { type ActionRequest, ToolComponent } from '@/plugins';
 import { Intelligence } from '../intelligence/service';
@@ -11,12 +12,19 @@ import type { InvestigationOutcome, InvestigationRunOptions } from './types';
  * EN: Investigation class declaration.
  * ZH: Investigation class 声明。
  */
-export class Investigation extends FAgentAtom {
+export class Investigation extends FComponent {
     @Scope()
     public intelligence!: Intelligence;
 
     @Inject()
     public tools!: ToolComponent;
+
+    public constructor(
+        public readonly agentConfig: FAgentProfileConfiguration,
+        public readonly synapse: FAgentSynapseBus,
+    ) {
+        super();
+    }
 
     public async run(baseMessages: AgentMemory[], options: InvestigationRunOptions = {}): Promise<InvestigationOutcome> {
         const messages: ProviderMessage[] = [...baseMessages];

@@ -1,5 +1,5 @@
-import { Service } from '@/core/decorator';
-import { FService, of, type Observable } from '@/core/ioc';
+import { Provide } from '@/core/decorator';
+import { FService } from '@/core/ioc';
 
 export const HEADER_BYTES = 8;
 export const MAX_BODY_BYTES = 4 * 1024 * 1024;
@@ -14,7 +14,7 @@ export interface SocketPacket<T = unknown> {
     data: T;
 }
 
-@Service()
+@Provide()
 /**
  * EN: IPCPacket class declaration.
  * ZH: IPCPacket class 声明。
@@ -29,10 +29,6 @@ export class IPCPacket extends FService {
 
     public reset(): void {
         this.buffer = Buffer.alloc(0);
-    }
-
-    public of(data: Uint8Array): Observable<Uint8Array> {
-        return of(...this.read(data));
     }
 
     public read(data: Uint8Array): Uint8Array[] {

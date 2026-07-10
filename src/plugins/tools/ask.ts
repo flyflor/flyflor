@@ -1,13 +1,13 @@
-import { FToolAtom, Tool } from '@/core';
+import { FTool, Provide } from '@/core';
 import type { AskInput, AskOption, AskOutput, AskQuestion } from './types';
 
-@Tool()
+@Provide()
 /**
  * EN: Ask class declaration.
  * ZH: Ask class 声明。
  */
-export class Ask extends FToolAtom<AskInput, AskOutput> {
-    public override onPipe(input: AskInput) {
+export class Ask extends FTool<AskInput, AskOutput> {
+    public override execute(input: AskInput) {
         if (!Array.isArray(input.questions) || input.questions.length === 0) throw Error('questions is required');
         const questions = input.questions.map((item) => this.question(item));
         return {

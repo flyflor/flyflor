@@ -39,7 +39,7 @@ describe('Brain', () => {
             },
         } as never;
 
-        await brain.onPipe('latest question');
+        await brain.receive('latest question');
 
         expect(perceptions).toBe(1);
         expect(seen[0]).toEqual([
@@ -67,7 +67,7 @@ describe('Brain', () => {
             perceive: async () => ({ mode: 'coordinate', goal: 'compare layers', constraints: [], references: [] }),
         } as never;
 
-        await brain.onPipe('compare src/agent and src/neural');
+        await brain.receive('compare src/agent and src/neural');
 
         expect(coordinated).toBe(true);
         expect(memory.snapshots()[0]).toMatchObject({ status: 'completed', answer: 'coordinated' });
@@ -83,7 +83,7 @@ describe('Brain', () => {
         brain.identity = { messages: () => [] } as never;
         brain.investigation = { run: async () => { throw Error('tool loop failed'); } } as never;
 
-        await expect(brain.onPipe('inspect')).rejects.toThrow('tool loop failed');
+        await expect(brain.receive('inspect')).rejects.toThrow('tool loop failed');
 
         expect(memory.current()).toBeUndefined();
         expect(memory.snapshots()[0]).toMatchObject({ status: 'failed', error: 'tool loop failed' });

@@ -12,7 +12,7 @@ describe('Identity', () => {
             maxTokens: 0,
             promptPackage: './prompts/agents',
             promptSections: ['worker'],
-        });
+        }, { emit: () => undefined });
 
         const messages = identity.messages();
 

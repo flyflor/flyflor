@@ -1,6 +1,7 @@
 import { AgentChatRole } from '@/agent/types';
 import type { Perception, Reference, TurnMode, TurnSnapshot } from '@/agent/turn';
-import { FAgentAtom, Prompt, PromptService, Provide, Scope } from '@/core';
+import type { FAgentProfileConfiguration } from '@/configuration';
+import { FComponent, Prompt, PromptService, Provide, Scope, type FAgentSynapseBus } from '@/core';
 import { parse } from '@/agent/json';
 import { Intelligence } from './intelligence/service';
 
@@ -9,12 +10,19 @@ export enum CallosumPrompt {
 }
 
 @Provide()
-export class Callosum extends FAgentAtom {
+export class Callosum extends FComponent {
     @Prompt('prompts/callosum')
     public prompt!: PromptService<CallosumPrompt>;
 
     @Scope()
     public intelligence!: Intelligence;
+
+    public constructor(
+        public readonly agentConfig: FAgentProfileConfiguration,
+        public readonly synapse: FAgentSynapseBus,
+    ) {
+        super();
+    }
 
     /**
      * EN: Understands and routes one input in a single model request.
