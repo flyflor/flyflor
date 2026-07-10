@@ -2,6 +2,9 @@ import 'reflect-metadata';
 import { describe, expect, test } from 'bun:test';
 import { defineMetadata, getMetadata, useContainer } from './container';
 import { INJECT_METADATA_KEY, type ClassType, type InjectMetadata } from './types';
+import { Init, Module, Singleton } from '../decorator';
+import { FModule, FService } from './abstracts';
+import { Factory } from './factory';
 
 /**
  * EN: Provide function declaration.
@@ -132,6 +135,35 @@ class ScopedHostWithChild {
     public child!: ScopedHostChild;
 }
 
+/** EN: Singleton lifecycle fixture initialized through a module import. ZH: 通过 module import 初始化的 singleton lifecycle fixture。 */
+@Singleton()
+class LivingSingleton extends FService {
+    public static initCount = 0;
+
+    /** EN: Records one successful singleton initialization. ZH: 记录一次成功 singleton 初始化。 */
+    @Init()
+    public init(): void {
+        LivingSingleton.initCount += 1;
+    }
+}
+
+/** EN: Root fixture for Factory lifecycle verification. ZH: 用于 Factory lifecycle 验证的根 fixture。 */
+@Module({ imports: [LivingSingleton] })
+class LivingModule extends FModule {}
+
+/** EN: Singleton fixture whose initialization always rejects. ZH: 初始化始终 reject 的 singleton fixture。 */
+@Singleton()
+class FailingSingleton extends FService {
+    public static attempts = 0;
+
+    /** EN: Rejects after recording each unpublished construction. ZH: 记录每次未发布构造后 reject。 */
+    @Init()
+    public init(): void {
+        FailingSingleton.attempts += 1;
+        throw Error('init failed');
+    }
+}
+
 describe('@Scope', () => {
     test('resolves constructor args from the host scope', async () => {
         const config = { name: 'flyflor' };
@@ -159,5 +191,23 @@ describe('@Scope', () => {
         const host = await useContainer().getAsync(ScopedHostWithChild);
 
         expect(host.child.host).toBe(host);
+    });
+});
+
+describe('IOC lifecycle', () => {
+    test('Factory initializes a module graph and singleton only once', async () => {
+        const first = await Factory.create(LivingModule);
+        const second = await Factory.create(LivingModule);
+
+        expect(first).toBe(second);
+        expect(LivingSingleton.initCount).toBe(1);
+    });
+
+    test('does not publish a singleton whose Init rejects', async () => {
+        await expect(useContainer().getAsync(FailingSingleton)).rejects.toThrow('init failed');
+        await expect(useContainer().getAsync(FailingSingleton)).rejects.toThrow('init failed');
+
+        expect(FailingSingleton.attempts).toBe(2);
+        expect(useContainer().singletons.has(FailingSingleton)).toBe(false);
     });
 });

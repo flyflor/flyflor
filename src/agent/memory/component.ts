@@ -1,74 +1,97 @@
-import { AgentChatRole, type AgentMemory } from '@/agent/types';
-import { FComponent, Singleton, useContainer } from '@/core';
-import { Turn, type Perception, type TurnInteraction, type TurnSnapshot } from '../turn';
+import type { FAgentProfileConfiguration } from '@/config';
+import { FComponent, Prompt, Provide } from '@/core';
+import { PromptService } from '@/prompt';
+import type { ContextBrief } from '@/agent/context';
+import { AgentChatRole, type AgentBus, type AgentMemory, type AgentTask } from '@/agent/types';
+
+/** EN: Origin of one finite Agent memory note. ZH: 一条有限 Agent 记忆笔记的来源。 */
+export type MemorySource = 'brief' | 'observation' | 'reflection';
+
+/** EN: One bounded note retained by one Agent. ZH: 一个 Agent 保留的一条有界笔记。 */
+export interface MemoryNote {
+    id: string;
+    source: MemorySource;
+    content: string;
+    createdAt: number;
+}
 
 /**
- * EN: Memory is the only owner of turn continuity for the active life form.
- * ZH: Memory 是当前生命体回合连续性的唯一所有者。
+ * EN: Finite continuous short-term memory owned by exactly one Agent scope.
+ * ZH: 由唯一 Agent scope 持有的有限连续短期记忆。
  */
-@Singleton()
+@Provide()
 export class Memory extends FComponent {
+    @Prompt('prompts/memory')
+    public prompt!: PromptService;
+
     private sequence = 0;
-    private readonly turns: Turn[] = [];
+    private readonly capacity = 16;
+    private notes: MemoryNote[] = [];
 
-    public begin(input: string, perception: Perception): Turn {
-        if (this.current()) throw Error('A turn is already active');
+    /**
+     * EN: Binds this Memory to one Agent identity and its cortical bus.
+     * ZH: 将当前 Memory 绑定到一个 Agent 身份及其皮层总线。
+     */
+    public constructor(
+        public readonly agentConfig: FAgentProfileConfiguration,
+        public readonly synapse: AgentBus,
+    ) {
+        super();
+    }
+
+    /**
+     * EN: Remembers one root Context brief without taking ownership of its Turn.
+     * ZH: 记住一个根 Context brief，但不取得其 Turn 所有权。
+     */
+    public observe(brief: ContextBrief): void {
+        this.remember(`goal=${brief.goal}; input=${brief.input}; constraints=${brief.constraints.join('; ')}`, 'brief');
+    }
+
+    /**
+     * EN: Remembers one cortical task assigned to this Agent.
+     * ZH: 记住一项由皮层分配给当前 Agent 的任务。
+     */
+    public assign(task: AgentTask): void {
+        this.remember(`task=${task.goal}; parent=${task.context.goal}`, 'brief');
+    }
+
+    /**
+     * EN: Adds one note and evicts the oldest note past finite capacity.
+     * ZH: 添加一条笔记，并在超过有限容量时淘汰最旧笔记。
+     */
+    public remember(content: string, source: MemorySource): void {
+        if (content.length === 0) throw Error('Memory note is empty');
         this.sequence += 1;
-        const turn = useContainer().create(Turn, `turn_${this.sequence}`, input, perception);
-        this.turns.push(turn);
-        return turn;
+        this.notes.push({ id: `note_${this.sequence}`, source, content, createdAt: Date.now() });
+        if (this.notes.length > this.capacity) this.notes = this.notes.slice(-this.capacity);
     }
 
-    public turn(id: string): Turn {
-        const turn = this.turns.find((candidate) => candidate.id === id);
-        if (!turn) throw Error(`Turn not found: ${id}`);
-        return turn;
+    /**
+     * EN: Projects finite notes into one model-bound XML memory message.
+     * ZH: 将有限笔记投影为一条面向模型的 XML memory 消息。
+     */
+    public messages(): AgentMemory[] {
+        if (this.notes.length === 0) return [];
+        return [{
+            role: AgentChatRole.User,
+            content: this.prompt.render({
+                kind: 'document',
+                root: 'agent_memory',
+                attributes: { agent: this.agentConfig.name },
+                blocks: this.notes.map((note) => ({
+                    tag: 'note',
+                    content: note.content,
+                    attributes: { id: note.id, source: note.source },
+                })),
+            }),
+        }];
     }
 
-    public current(): Turn | undefined {
-        return this.turns.findLast((turn) => turn.status === 'active' || turn.status === 'paused');
-    }
-
-    public recent(limit = 4): TurnSnapshot[] {
-        return this.turns
-            .filter((turn) => turn.status === 'completed')
-            .slice(-limit)
-            .map((turn) => turn.snapshot());
-    }
-
-    public context(turnId?: string): { current?: TurnSnapshot; recent: TurnSnapshot[] } {
-        const current = turnId ? this.turn(turnId) : this.current();
-        return { current: current?.snapshot(), recent: this.recent() };
-    }
-
-    public messages(limit = 4): AgentMemory[] {
-        return this.recent(limit).flatMap((turn) => [
-            { role: AgentChatRole.User, content: turn.input },
-            { role: AgentChatRole.Assistant, content: turn.answer },
-        ]);
-    }
-
-    public pause(turnId: string, interaction: TurnInteraction): void {
-        this.turn(turnId).pause(interaction);
-    }
-
-    public resume(turnId: string, interactionId: string): void {
-        this.turn(turnId).resume(interactionId);
-    }
-
-    public complete(turnId: string, answer: string, evidence: string[] = []): Turn {
-        const turn = this.turn(turnId);
-        turn.complete(answer, evidence);
-        return turn;
-    }
-
-    public fail(turnId: string, error: unknown): Turn {
-        const turn = this.turn(turnId);
-        turn.fail(error);
-        return turn;
-    }
-
-    public snapshots(): TurnSnapshot[] {
-        return this.turns.map((turn) => turn.snapshot());
+    /**
+     * EN: Returns immutable notes for diagnostics and focused tests.
+     * ZH: 返回用于诊断和聚焦测试的不可变笔记。
+     */
+    public snapshot(): MemoryNote[] {
+        return this.notes.map((note) => ({ ...note }));
     }
 }

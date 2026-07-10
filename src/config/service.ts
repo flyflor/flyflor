@@ -36,6 +36,7 @@ export interface FConfiguration {
     socket: string;
 }
 
+/** EN: Process-wide strict configuration loaded from the canonical JSONC file. ZH: 从规范 JSONC 文件加载的进程级严格配置。 */
 @Singleton()
 export class ConfigService extends FService implements FConfiguration {
     public static path: FSystemPathInfo = {
@@ -46,28 +47,40 @@ export class ConfigService extends FService implements FConfiguration {
         socket: '',
     };
 
-    public model: FModelConfiguration = {
-        model: '',
-        provider: '',
-        apiKeyEnv: '',
-        baseUrl: '',
-        timeoutSeconds: 60,
-    };
+    public model!: FModelConfiguration;
+    public agent!: string;
+    public agents!: Record<string, FAgentProfileConfiguration>;
+    public socket!: string;
 
-    public agent = 'flyflor';
-    public agents: Record<string, FAgentProfileConfiguration> = {};
-    public socket = process.platform === 'win32' ? `\\\\.\\pipe\\flyflor.sock` : './flyflor.sock';
-
+    /** EN: Loads canonical configuration without synthesizing missing values. ZH: 加载规范配置，不合成缺失值。 */
     public constructor() {
         super();
-        Object.assign(this, JSON5.parse(readFileSync(join(ConfigService.path.config, 'config.jsonc'), 'utf-8')));
+        const value: unknown = JSON5.parse(readFileSync(join(ConfigService.path.config, 'config.jsonc'), 'utf-8'));
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) throw Error('Configuration root is invalid');
+        const config = value as Partial<FConfiguration>;
+        if (!config.model || typeof config.model.model !== 'string' || config.model.model.length === 0
+            || typeof config.model.provider !== 'string' || config.model.provider.length === 0
+            || typeof config.model.apiKeyEnv !== 'string' || config.model.apiKeyEnv.length === 0
+            || typeof config.model.baseUrl !== 'string' || config.model.baseUrl.length === 0
+            || typeof config.model.timeoutSeconds !== 'number' || !Number.isFinite(config.model.timeoutSeconds) || config.model.timeoutSeconds <= 0) {
+            throw Error('Model configuration is incomplete');
+        }
+        if (typeof config.agent !== 'string' || config.agent.length === 0) throw Error('Active Agent configuration is missing');
+        if (typeof config.agents !== 'object' || config.agents === null || Array.isArray(config.agents)) throw Error('Agent configuration is missing');
+        if (typeof config.socket !== 'string' || config.socket.length === 0) throw Error('Socket configuration is missing');
+        this.model = { ...config.model };
+        this.agent = config.agent;
+        this.agents = Object.fromEntries(Object.entries(config.agents).map(([name, profile]) => [name, { ...profile, promptSections: profile.promptSections ? [...profile.promptSections] : undefined }]));
+        this.socket = config.socket;
         ConfigService.path.socket = this.socket;
     }
 
+    /** EN: Returns process-wide resolved paths. ZH: 返回进程级解析路径。 */
     public get path(): FSystemPathInfo {
         return ConfigService.path;
     }
 
+    /** EN: Replaces process-wide paths for controlled runtime updates. ZH: 为受控 runtime 更新替换进程级路径。 */
     public set path(value: FSystemPathInfo) {
         ConfigService.path = value;
     }

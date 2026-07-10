@@ -22,8 +22,15 @@ export enum SocketEvent {
     Error = 'error',
     Open = 'open',
     User = 'user',
+    Answer = 'answer',
     Agent = 'agent',
     Data = 'data',
+    Ask = 'ask',
+    Confirm = 'confirm',
+    Complete = 'complete',
+    Pause = 'pause',
+    Resume = 'resume',
+    Cwd = 'cwd',
     StreamEnd = 'streamEnd',
     Drain = 'drain',
     Handshake = 'handshake',
@@ -73,9 +80,6 @@ export const PACKET_PROTOCOL_MISMATCH_MESSAGE = 'Invalid IPC packet: expected 8-
 /** Error text used when a declared packet body length is not usable by the bridge. */
 export const PACKET_LENGTH_INVALID_MESSAGE = 'IPC packet body length is invalid';
 
-/** Error text used when a decoded packet body is not valid JSON. */
-export const PACKET_JSON_INVALID_MESSAGE = 'Invalid IPC packet: JSON body is malformed';
-
 /** Enables local IPC bridge diagnostics unless explicitly disabled. */
 const IPC_DEBUG = process.env.NODE_ENV !== 'test' && process.env.FLYFLOR_IPC_DEBUG !== '0';
 
@@ -85,7 +89,6 @@ const IPC_DEBUG = process.env.NODE_ENV !== 'test' && process.env.FLYFLOR_IPC_DEB
  */
 export interface PacketTextDecodeResult {
     packets: string[];
-    errors: string[];
     pending: Buffer<ArrayBufferLike>;
 }
 
@@ -115,30 +118,19 @@ function startIpcClientBridge(options: Partial<IpcClientBridgeConfig> = {}) {
         },
         websocket: {
             async open(browser) {
-                try {
-                    browser.data.ipc = await connectKernelSocket(browser, config.socketEndpoint);
-                } catch (error) {
-                    sendBrowserError(browser, `Kernel socket connection failed: ${messageFromError(error)}`);
-                }
+                browser.data.ipc = await connectKernelSocket(browser, config.socketEndpoint);
             },
             message(browser, message) {
                 const ipc = browser.data.ipc;
                 debugBridge('browser.in', describeBrowserMessage(message));
-                if (ipc === undefined) {
-                    sendBrowserError(browser, 'IPC socket is not connected');
-                    return;
-                }
-                try {
-                    const encoded = encodeBrowserMessage(message);
-                    debugBridge('kernel.out', {
-                        bytes: encoded.byteLength,
-                        headerHex: previewHex(encoded, PACKET_LENGTH_HEADER_BYTES),
-                        bodyPreview: previewText(encoded.subarray(PACKET_LENGTH_HEADER_BYTES).toString(PACKET_TEXT_ENCODING)),
-                    });
-                    ipc.write(encoded);
-                } catch (error) {
-                    sendBrowserError(browser, messageFromError(error));
-                }
+                if (ipc === undefined) throw Error('IPC socket is not connected');
+                const encoded = encodeBrowserMessage(message);
+                debugBridge('kernel.out', {
+                    bytes: encoded.byteLength,
+                    headerHex: previewHex(encoded, PACKET_LENGTH_HEADER_BYTES),
+                    bodyPreview: previewText(encoded.subarray(PACKET_LENGTH_HEADER_BYTES).toString(PACKET_TEXT_ENCODING)),
+                });
+                ipc.write(encoded);
             },
             close(browser) {
                 browser.data.ipc?.end();
@@ -178,7 +170,7 @@ async function connectKernelSocket(browser: ServerWebSocket<BrowserSocketData>, 
             },
             error(_socket, error) {
                 debugBridge('kernel.error', { message: error.message });
-                sendBrowserError(browser, error.message);
+                throw error;
             },
             close() {
                 debugBridge('kernel.close');
@@ -197,7 +189,6 @@ function forwardPackets(browser: ServerWebSocket<BrowserSocketData>, pending: Bu
     const result = decodePacketTexts(pending, data);
     debugBridge('kernel.in.decode', {
         packets: result.packets.length,
-        errors: result.errors,
         pending: result.pending.byteLength,
     });
     for (const packet of result.packets) {
@@ -206,9 +197,6 @@ function forwardPackets(browser: ServerWebSocket<BrowserSocketData>, pending: Bu
             preview: previewText(packet),
         });
         browser.send(packet);
-    }
-    for (const error of result.errors) {
-        sendBrowserError(browser, error);
     }
     return result.pending;
 }
@@ -220,18 +208,11 @@ function forwardPackets(browser: ServerWebSocket<BrowserSocketData>, pending: Bu
 function decodePacketTexts(pending: Buffer<ArrayBufferLike>, data: Uint8Array): PacketTextDecodeResult {
     let buffer = Buffer.concat([pending, Buffer.from(data)]);
     const packets: string[] = [];
-    const errors: string[] = [];
 
     while (buffer.byteLength >= PACKET_LENGTH_HEADER_BYTES) {
-        if (looksLikeTextProtocol(buffer)) {
-            errors.push(PACKET_PROTOCOL_MISMATCH_MESSAGE);
-            return { packets, errors, pending: Buffer.alloc(0) };
-        }
+        if (looksLikeTextProtocol(buffer)) throw Error(PACKET_PROTOCOL_MISMATCH_MESSAGE);
         const contentLength = buffer.readBigUInt64BE(0);
-        if (contentLength > BigInt(Number.MAX_SAFE_INTEGER)) {
-            errors.push(PACKET_LENGTH_INVALID_MESSAGE);
-            return { packets, errors, pending: Buffer.alloc(0) };
-        }
+        if (contentLength > BigInt(Number.MAX_SAFE_INTEGER)) throw Error(PACKET_LENGTH_INVALID_MESSAGE);
         const bodyLength = Number(contentLength);
         const packetLength = PACKET_LENGTH_HEADER_BYTES + bodyLength;
         if (buffer.byteLength < packetLength) {
@@ -239,16 +220,12 @@ function decodePacketTexts(pending: Buffer<ArrayBufferLike>, data: Uint8Array): 
         }
         const body = buffer.subarray(PACKET_LENGTH_HEADER_BYTES, packetLength);
         const text = body.toString(PACKET_TEXT_ENCODING);
-        try {
-            JSON.parse(text);
-            packets.push(text);
-        } catch (error) {
-            errors.push(`${PACKET_JSON_INVALID_MESSAGE}: ${messageFromError(error)}; bytes=${body.byteLength}; preview=${previewText(text)}`);
-        }
+        JSON.parse(text);
+        packets.push(text);
         buffer = Buffer.from(buffer.subarray(packetLength));
     }
 
-    return { packets, errors, pending: buffer };
+    return { packets, pending: buffer };
 }
 
 /**
@@ -281,27 +258,11 @@ function encodePacketText(content: string): Buffer {
 }
 
 /**
- * EN: Sends one bridge error packet to the browser client.
- * ZH: 向浏览器客户端发送一条 bridge error packet。
- */
-function sendBrowserError(browser: ServerWebSocket<BrowserSocketData>, message: string) {
-    sendBrowserPacket(browser, SocketEvent.Error, message);
-}
-
-/**
  * EN: Sends one bridge packet to the browser client.
  * ZH: 向浏览器客户端发送一条 bridge packet。
  */
 function sendBrowserPacket(browser: ServerWebSocket<BrowserSocketData>, action: SocketEvent, data: unknown) {
     browser.send(JSON.stringify({ action, data } satisfies IPCMessage));
-}
-
-/**
- * EN: Converts an unknown thrown value into a message string.
- * ZH: 将未知抛出值转换成 message 字符串。
- */
-function messageFromError(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
 }
 
 /**

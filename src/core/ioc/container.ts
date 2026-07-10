@@ -3,6 +3,12 @@ import { INIT_METADATA_KEY, INJECT_METADATA_INSTANCE_KEY, INJECT_METADATA_KEY, M
 
 const CONSTRUCTOR_PARAM_METADATA_KEY = 'design:paramtypes';
 
+interface ResolutionScope {
+    instances: Map<ClassType, InstanceType<ClassType>>;
+    values: unknown[];
+    host: object;
+}
+
 /**
  * EN: Singleton IOC container that owns project class construction and injection.
  * ZH: 负责项目 class 构造和注入的 singleton IOC container。
@@ -14,6 +20,8 @@ export class Container {
     protected static instance: Container;
     /** EN: Singleton instance cache keyed by class or symbol. ZH: 按 class 或 symbol 索引的 singleton 实例缓存。 */
     public singletons!: Map<ClassType | symbol, InstanceType<ClassType>>;
+    /** EN: Singleton constructions currently in flight. ZH: 当前正在构造的 singleton。 */
+    private pending!: Map<ClassType | symbol, Promise<InstanceType<ClassType>>>;
     /** EN: Classes seen by the container during construction. ZH: container 构造过程中见过的 class 列表。 */
     public classList!: ClassType[];
 
@@ -24,6 +32,7 @@ export class Container {
     constructor() {
         if (Container.instance) return Container.instance;
         this.singletons = new Map();
+        this.pending = new Map();
         this.classList = [];
         Container.instance = this;
     }
@@ -37,55 +46,70 @@ export class Container {
      * ZH: `getAsync` 是唯一 IOC 构造入口。`@Singleton()` class 会缓存；普通 provider 每次 fresh 构造，避免有状态请求对象跨请求泄漏。
      */
     public async getAsync<T extends ClassType, P extends unknown[]>(Module: T, ...props: P): Promise<InstanceType<T>> {
+        return await this.resolve(Module, props, undefined, false);
+    }
+
+    /**
+     * EN: Resolves one class inside an optional Agent-local dependency scope.
+     * ZH: 在可选的 Agent 本地依赖作用域中解析一个 class。
+     */
+    private async resolve<T extends ClassType, P extends unknown[]>(
+        Module: T,
+        props: P,
+        scope: ResolutionScope | undefined,
+        scoped: boolean,
+    ): Promise<InstanceType<T>> {
         if (!this.classList.includes(Module)) this.classList.push(Module);
         const isSingleton = getMetadata(PROVIDER_SINGLETON_KEY, Module) === true;
         if (isSingleton && this.singletons.has(Module)) return this.singletons.get(Module) as InstanceType<T>;
+        if (isSingleton && this.pending.has(Module)) return await this.pending.get(Module) as InstanceType<T>;
+        if (scoped && scope?.instances.has(Module)) return scope.instances.get(Module) as InstanceType<T>;
+        const construction = this.construct(Module, props, scope, scoped);
+        if (!isSingleton) return await construction;
+        this.pending.set(Module, construction);
+        return await construction.finally(() => this.pending.delete(Module));
+    }
+
+    /**
+     * EN: Constructs, injects, initializes, and only then publishes one object.
+     * ZH: 构造、注入并初始化对象，完成后才发布该对象。
+     */
+    private async construct<T extends ClassType, P extends unknown[]>(
+        Module: T,
+        props: P,
+        scope: ResolutionScope | undefined,
+        scoped: boolean,
+    ): Promise<InstanceType<T>> {
         const config = getMetadata(MODULE_METADATA_KEY, Module);
-        if ((config?.imports || []).length !== 0) {
-            for (const importModule of config.imports) {
-                await this.getAsync(importModule);
-            }
-        }
+        for (const importModule of config?.imports || []) await this.resolve(importModule, [], undefined, false);
         const constructorProps = this.getConstructorProps(Module, this.getModuleImportInstances(config?.imports || []), props);
         const clz = new Module(...constructorProps);
-        if (isSingleton) this.singletons.set(Module, clz);
-        try {
-            /**
-             * 提前注入 register 实例
-             */
-            const injectInstances: InjectInstanceMetadata[] = getMetadata(INJECT_METADATA_INSTANCE_KEY, Module) || [];
-            for (const inject of injectInstances) {
-                const instance = await inject.instance?.call(clz);
-                clz[inject.propertyKey] = instance;
-            }
-            /**
-             * 通过 INJECT_METADATA_KEY 注入依赖
-             * 为实例化 new Module
-             */
-            const injects: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, Module) || [];
-            for (const inject of injects) {
-                const resolvedProps = inject.scoped || !inject.factoryArgs ? undefined : await inject.factoryArgs.call(clz);
-                const injectProps = inject.scoped
-                    ? this.getScopedConstructorProps(inject.classType, clz, props)
-                    : resolvedProps === undefined
-                        ? []
-                        : Array.isArray(resolvedProps)
-                            ? resolvedProps
-                            : [resolvedProps];
-                const instance = await this.getAsync(inject.classType, ...injectProps);
-                clz[inject.propertyKey] = instance;
-            }
-            /**
-             * 判断是否有 @Init
-             * 如果有 执行 @Init 方法
-             */
-            const actionPropertyKey = getMetadata(INIT_METADATA_KEY, Module.prototype);
-            if (actionPropertyKey) await clz[actionPropertyKey]?.apply(clz, props);
-            return clz;
-        } catch (error) {
-            if (isSingleton) this.singletons.delete(Module);
-            throw error;
+        const localScope = scope ?? { instances: new Map(), values: [...props], host: clz };
+        const injectInstances: InjectInstanceMetadata[] = getMetadata(INJECT_METADATA_INSTANCE_KEY, Module) || [];
+        for (const inject of injectInstances) {
+            const instance = await inject.instance?.call(clz);
+            clz[inject.propertyKey] = instance;
+            if (instance !== undefined && !localScope.values.includes(instance)) localScope.values.push(instance);
         }
+        const injects: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, Module) || [];
+        for (const inject of injects) {
+            const resolvedProps = inject.scoped || !inject.factoryArgs ? undefined : await inject.factoryArgs.call(clz);
+            const injectProps = inject.scoped
+                ? this.getScopedConstructorProps(inject.classType, [...localScope.values, localScope.host], props)
+                : resolvedProps === undefined
+                    ? []
+                    : Array.isArray(resolvedProps)
+                        ? resolvedProps
+                        : [resolvedProps];
+            const instance = await this.resolve(inject.classType, injectProps, inject.scoped ? localScope : undefined, inject.scoped === true);
+            clz[inject.propertyKey] = instance;
+            if (!localScope.values.includes(instance)) localScope.values.push(instance);
+        }
+        const actionPropertyKey = getMetadata(INIT_METADATA_KEY, Module.prototype);
+        if (actionPropertyKey) await clz[actionPropertyKey]?.apply(clz, props);
+        if (getMetadata(PROVIDER_SINGLETON_KEY, Module) === true) this.singletons.set(Module, clz);
+        if (scoped) localScope.instances.set(Module, clz);
+        return clz;
     }
 
     /**
@@ -124,40 +148,24 @@ export class Container {
      * EN: Builds constructor args for `@Scope()` injections from host-local values.
      * ZH: 从 host 本地值构造 `@Scope()` 注入所需参数。
      */
-    private getScopedConstructorProps<P extends unknown[]>(Module: ClassType, host: object, props: P): unknown[] {
+    private getScopedConstructorProps<P extends unknown[]>(Module: ClassType, values: unknown[], props: P): unknown[] {
         const paramTypes: ClassType[] = getMetadata(CONSTRUCTOR_PARAM_METADATA_KEY, Module) || [];
         if (paramTypes.length === 0) return props;
-        const scopedValues = this.getScopedValues(host, props);
         const used = new Set<number>();
         return paramTypes.map((paramType, index) => {
-            const matchedIndex = this.getScopedValueIndex(scopedValues, paramType, used);
+            const matchedIndex = this.getScopedValueIndex(values, paramType, used);
             if (matchedIndex >= 0) {
                 used.add(matchedIndex);
-                return scopedValues[matchedIndex];
+                return values[matchedIndex];
             }
-            const nextIndex = scopedValues.findIndex((_, valueIndex) => !used.has(valueIndex));
+            const nextIndex = values.findIndex((_, valueIndex) => !used.has(valueIndex));
             if (nextIndex >= 0) {
                 used.add(nextIndex);
-                return scopedValues[nextIndex];
+                return values[nextIndex];
             }
             if (index < props.length) return props[index];
             throw Error(`Scoped constructor dependency not found: ${Module.name}[${index}]`);
         });
-    }
-
-    /**
-     * EN: Collects current scope values from explicit props, injected properties, and host instance.
-     * ZH: 从显式 props、已注入属性和 host 实例收集当前 scope 值。
-     */
-    private getScopedValues<P extends unknown[]>(host: object, props: P): unknown[] {
-        const values = [...props];
-        const injects: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, host.constructor) || [];
-        for (const inject of injects) {
-            const value = Reflect.get(host, inject.propertyKey);
-            if (value !== undefined && !values.includes(value)) values.push(value);
-        }
-        if (!values.includes(host)) values.push(host);
-        return values;
     }
 
     /**

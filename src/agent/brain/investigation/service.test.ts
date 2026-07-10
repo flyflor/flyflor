@@ -1,122 +1,115 @@
 import { describe, expect, test } from 'bun:test';
-import { AgentChatRole, AgentSignal } from '@/agent/types';
-import { useContainer } from '@/core';
+import { Memory } from '@/agent/memory';
+import { AgentChatRole, type AgentBus, type CompleteSignal, type NeuralSignal } from '@/agent/types';
+import { Observable, useContainer } from '@/core';
 import type { Message, ToolCall, ToolDefinition } from '@/model';
+import { PromptService } from '@/prompt';
+import type { ToolRunResult } from '@/tool';
 import { Investigation } from './service';
+import type { InvestigationRequest, InvestigationSignal } from './types';
 
-interface HarnessOptions {
-    confirm?: boolean;
-    interaction?: boolean;
-}
+const profile = {
+    name: 'flyflor',
+    model: 'model',
+    provider: 'provider',
+    contextLength: 1024,
+    maxTokens: 256,
+    promptPackage: '.config/agents/flyflor',
+    promptSections: ['SOUL'],
+};
 
-function harness(responses: Array<{ text: string; toolCalls: ToolCall[] }>, options: HarnessOptions = {}) {
-    const events: Array<{ type: string; data: unknown }> = [];
-    const seenMessages: Message[][] = [];
+const request: InvestigationRequest = {
+    id: 'turn_1',
+    turnId: 'turn_1',
+    goal: 'inspect',
+    context: { turnId: 'turn_1', input: 'inspect', goal: 'inspect', constraints: [], references: [], cwd: '/tmp/semantic', recent: [] },
+    delegation: true,
+    visible: true,
+};
+
+/** EN: Builds one persistent Investigation network with deterministic boundaries. ZH: 使用确定性边界构造一张持久 Investigation 网络。 */
+function harness(responses: Array<{ text: string; toolCalls: ToolCall[] }>, confirm = true) {
+    const signals: NeuralSignal[] = [];
     const calls: ToolCall[] = [];
-    const bus = {
-        emit: (type: string, data: unknown) => events.push({ type, data }),
-        interact: options.interaction === false
-            ? undefined
-            : async (request: { kind: 'ask' | 'confirm' }) => request.kind === 'ask'
-                ? { kind: 'ask', answers: [{ question: 'Pick?', answer: 'a' }] }
-                : { kind: 'confirm', approved: true },
+    const seen: Message[][] = [];
+    const bus: AgentBus = {
+        fire: async (signal) => {
+            signals.push(signal);
+            if (signal.type === 'ask') return { kind: 'ask', answers: [{ question: 'Pick?', answer: 'a' }] } as never;
+            if (signal.type === 'confirm') return { kind: 'confirm', approved: confirm } as never;
+            if (signal.type === 'task') {
+                return [{ type: 'complete', id: `${signal.id}:1`, turnId: signal.turnId, agent: 'worker', answer: 'worker fact', evidence: ['worker evidence'] }] as never;
+            }
+            return undefined as never;
+        },
     };
-    const instance = useContainer().create(
-        Investigation,
-        { name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 },
-        bus as never,
-    );
-    let index = 0;
-    instance.tools = {
-        list: async () => [{ name: 'filesystem', description: 'filesystem', parameters: {} }, { name: 'ask', description: 'ask', parameters: {} }] as ToolDefinition[],
-        cwd: async (name: string) => name !== 'ask',
-        requiresConfirm: async () => options.confirm === true,
-        run: async (call: ToolCall) => {
+    const investigation = useContainer().create(Investigation, profile, bus);
+    investigation.circuit = useContainer().create(Observable<InvestigationSignal>, 'investigation-test');
+    investigation.prompt = useContainer().create(PromptService, 'prompts/investigation/RUN.md') as PromptService<string, string>;
+    investigation.memory = useContainer().create(Memory, profile, bus);
+    investigation.memory.prompt = useContainer().create(PromptService, 'prompts/memory') as PromptService;
+    investigation.tools = {
+        list: async () => [{ name: 'filesystem', description: 'filesystem', parameters: {} }] as ToolDefinition[],
+        cwd: async (name: string) => name === 'filesystem',
+        requiresConfirm: async (call: ToolCall) => call.name === 'filesystem' && call.arguments.action === 'write',
+        run: async (call: ToolCall): Promise<ToolRunResult> => {
             calls.push(call);
-            return call.name === 'ask'
-                ? { ok: true, name: 'ask', data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] } }
-                : { ok: true, name: call.name, data: { action: 'read', path: '/tmp/demo.ts' } };
+            if (call.name === 'ask') return { ok: true, name: 'ask', data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] } };
+            if (call.name === 'task') return { ok: true, name: 'task', data: { tasks: [{ agent: 'worker', goal: 'inspect child' }] } };
+            return { ok: true, name: call.name, data: { action: call.arguments.action, path: '/tmp/demo.ts' } };
         },
     } as never;
-    instance.model = {
-        streamRun: async (messages: Message[], _tools: ToolDefinition[] | undefined, onText: (chunk: string) => void) => {
-            seenMessages.push(messages.map((message) => ({ ...message } as Message)));
+    let index = 0;
+    investigation.model = {
+        streamRun: async (messages: Message[], _tools: ToolDefinition[] | undefined, onText: (chunk: string) => void | Promise<void>) => {
+            seen.push(messages.map((message) => ({ ...message } as Message)));
             const response = responses[index++]!;
-            if (response.toolCalls.length === 0) onText(response.text);
-            return { text: response.text, reasoning: '', toolCalls: response.toolCalls, stopReason: 'stop' };
+            if (response.toolCalls.length === 0) await onText(response.text);
+            return { ...response, reasoning: '', stopReason: 'stop' };
         },
     } as never;
-    return { instance, events, seenMessages, calls };
+    investigation.init();
+    return { investigation, signals, calls, seen };
 }
 
-const messages = [{ role: AgentChatRole.User, content: '调查工具层' }];
+const messages = [{ role: AgentChatRole.User, content: 'inspect' }] as Message[];
 
 describe('Investigation', () => {
-    test('returns and streams a final answer', async () => {
-        const { instance, events } = harness([{ text: '直接答案', toolCalls: [] }]);
+    test('streams and returns pure Complete without steps or pause state', async () => {
+        const { investigation, signals } = harness([{ text: 'answer', toolCalls: [] }]);
 
-        const outcome = await instance.run(messages);
+        const complete = await investigation.run(messages, request);
 
-        expect(outcome).toMatchObject({ answer: '直接答案', completed: true, paused: false, steps: 1, evidence: [] });
-        expect(events).toContainEqual({ type: AgentSignal.Reply, data: '直接答案' });
+        expect(complete).toEqual({ type: 'complete', id: 'turn_1', turnId: 'turn_1', agent: 'flyflor', answer: 'answer', evidence: [] });
+        expect(signals).toContainEqual({ type: 'reply', turnId: 'turn_1', agent: 'flyflor', chunk: 'answer' });
     });
 
-    test('can finish silently for coordinated work', async () => {
-        const { instance, events } = harness([{ text: '静默答案', toolCalls: [] }]);
-
-        const outcome = await instance.run(messages, { emitReply: false });
-
-        expect(outcome.answer).toBe('静默答案');
-        expect(events.some((event) => event.type === AgentSignal.Reply)).toBe(false);
-    });
-
-    test('replays tool requests and results without leaking them into turn state', async () => {
-        const { instance, events, seenMessages, calls } = harness([
-            { text: '我先读文件', toolCalls: [{ id: 'tool_1', name: 'filesystem', arguments: { action: 'read' } }] },
-            { text: '综合答案', toolCalls: [] },
+    test('replays direct actions, Ask, and Task only inside this investigation', async () => {
+        const { investigation, calls, seen } = harness([
+            { text: '', toolCalls: [{ id: 'read_1', name: 'filesystem', arguments: { action: 'read' } }] },
+            { text: '', toolCalls: [{ id: 'ask_1', name: 'ask', arguments: { questions: [] } }] },
+            { text: '', toolCalls: [{ id: 'task_1', name: 'task', arguments: { tasks: [] } }] },
+            { text: 'done', toolCalls: [] },
         ]);
 
-        const outcome = await instance.run(messages, { cwd: '/tmp/semantic' });
+        const complete = await investigation.run(messages, request);
 
-        expect(outcome).toMatchObject({ answer: '综合答案', steps: 2, evidence: ['filesystem read /tmp/demo.ts ok'] });
         expect(calls[0]?.arguments.cwd).toBe('/tmp/semantic');
-        expect(events.some((event) => event.type === AgentSignal.Event)).toBe(true);
-        expect(seenMessages[1]?.some((message) => message.role === 'tool')).toBe(true);
+        expect(complete.evidence).toHaveLength(3);
+        expect(seen.at(-1)?.filter((message) => message.role === 'tool')).toHaveLength(3);
+        expect(investigation.memory.snapshot().filter((note) => note.source === 'observation')).toHaveLength(3);
     });
 
-    test('keeps an explicit tool cwd', async () => {
-        const { instance, calls } = harness([
-            { text: '读文件', toolCalls: [{ id: 'tool_1', name: 'filesystem', arguments: { action: 'read', cwd: '/tmp/explicit' } }] },
-            { text: '完成', toolCalls: [] },
-        ]);
+    test('treats rejected confirmation as explicit non-execution', async () => {
+        const { investigation, calls, seen } = harness([
+            { text: '', toolCalls: [{ id: 'write_1', name: 'filesystem', arguments: { action: 'write', path: 'a' } }] },
+            { text: 'not written', toolCalls: [] },
+        ], false);
 
-        await instance.run(messages, { cwd: '/tmp/semantic' });
+        const complete: CompleteSignal = await investigation.run(messages, request);
 
-        expect(calls[0]?.arguments.cwd).toBe('/tmp/explicit');
-    });
-
-    test('continues after a structured ask answer', async () => {
-        const { instance, seenMessages } = harness([
-            { text: '需要回答', toolCalls: [{ id: 'tool_1', name: 'ask', arguments: { questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] } }] },
-            { text: '继续完成', toolCalls: [] },
-        ]);
-
-        const outcome = await instance.run(messages, { turnId: 'turn_1' });
-
-        expect(outcome).toMatchObject({ answer: '继续完成', paused: false, steps: 2 });
-        expect(JSON.stringify(seenMessages.at(-1))).toContain('\\"kind\\":\\"ask\\"');
-    });
-
-    test('denies approval-gated tools for non-interactive workers', async () => {
-        const { instance, calls, seenMessages } = harness([
-            { text: '写文件', toolCalls: [{ id: 'tool_1', name: 'filesystem', arguments: { action: 'write', path: 'a.ts' } }] },
-            { text: '无法执行写入', toolCalls: [] },
-        ], { confirm: true, interaction: false });
-
-        const outcome = await instance.run(messages, { emitReply: false });
-
-        expect(outcome.answer).toBe('无法执行写入');
-        expect(calls).toHaveLength(0);
-        expect(JSON.stringify(seenMessages.at(-1))).toContain('TOOL_APPROVAL_REQUIRED');
+        expect(complete.answer).toBe('not written');
+        expect(calls).toEqual([]);
+        expect(JSON.stringify(seen.at(-1))).toContain('executed');
     });
 });

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import ts from 'typescript';
 
 const roots = ['.', 'docs', 'prompts'];
 const missing: string[] = [];
@@ -56,6 +57,7 @@ checkDirectories();
 checkBarrels();
 checkDependencies();
 checkConstruction();
+checkTypeScript();
 
 if (missing.length > 0) {
     console.error(`Missing zh.cn mirrors:\n${missing.join('\n')}`);
@@ -120,7 +122,8 @@ function checkDependencies(): void {
     };
     const importPattern = /(?:from\s*|import\s*\()['"]@\/([^/'"]+)/g;
     for (const file of filesUnder('src').filter((path) => path.endsWith('.ts'))) {
-        const owner = relative('src', file).split(sep)[0]!;
+        const root = relative('src', file).split(sep)[0]!;
+        const owner = root.endsWith('.ts') ? root.slice(0, -3) : root;
         for (const match of readFileSync(file, 'utf-8').matchAll(importPattern)) {
             const dependency = match[1]!;
             if (!allowed[owner]?.has(dependency)) architectureErrors.push(`${file}: ${owner} must not depend on ${dependency}`);
@@ -130,14 +133,58 @@ function checkDependencies(): void {
 
 function checkConstruction(): void {
     const native = new Set(['Array', 'Buffer', 'Date', 'Error', 'Map', 'Promise', 'ReadableStream', 'Set', 'TextDecoder', 'URL']);
-    const pattern = /\bnew\s+([A-Z][A-Za-z0-9_]*)\s*\(/g;
     for (const file of filesUnder('src').filter((path) => path.endsWith('.ts'))) {
         if (file === join('src', 'core', 'ioc', 'container.ts')) continue;
         const content = readFileSync(file, 'utf-8');
-        const local = new Set([...content.matchAll(/\bclass\s+([A-Z][A-Za-z0-9_]*)/g)].map((match) => match[1]!));
-        for (const match of content.matchAll(pattern)) {
-            if (!native.has(match[1]!) && !local.has(match[1]!)) architectureErrors.push(`${file}: application classes must be constructed by IOC (${match[1]})`);
+        const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
+        const local = new Set(source.statements.filter(ts.isClassDeclaration).map((node) => node.name?.text).filter((name): name is string => name !== undefined));
+        source.forEachChild(function visit(node): void {
+            if (ts.isNewExpression(node) && ts.isIdentifier(node.expression)) {
+                const name = node.expression.text;
+                if (!native.has(name) && !local.has(name)) architectureErrors.push(`${file}: application classes must be constructed by IOC (${name})`);
+            }
+            node.forEachChild(visit);
+        });
+    }
+}
+
+function checkTypeScript(): void {
+    const files = [...filesUnder('src'), ...filesUnder('scripts'), ...filesUnder('web')].filter((file) => file.endsWith('.ts'));
+    for (const file of files) {
+        const source = ts.createSourceFile(file, readFileSync(file, 'utf-8'), ts.ScriptTarget.Latest, true);
+        source.forEachChild(function visit(node): void {
+            if (ts.isCatchClause(node)) architectureErrors.push(`${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: CatchClause is forbidden`);
+            if (ts.isVoidExpression(node)) architectureErrors.push(`${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: discarded async work is forbidden`);
+            if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+                if (node.expression.name.text === 'catch') architectureErrors.push(`${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: .catch() is forbidden`);
+                if (node.expression.name.text === 'then' && node.arguments.length > 1) architectureErrors.push(`${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: rejection fallback handler is forbidden`);
+            }
+            if ((ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) && node.name?.text === 'Session') {
+                architectureErrors.push(`${file}: Session type is forbidden`);
+            }
+            if (!file.endsWith('.test.ts') && file.startsWith(`src${sep}`) && ts.isClassDeclaration(node)) checkClassDocumentation(file, source, node);
+            node.forEachChild(visit);
+        });
+        if (!file.startsWith(join('src', 'agent', 'context'))) {
+            for (const statement of source.statements.filter(ts.isImportDeclaration)) {
+                const path = ts.isStringLiteral(statement.moduleSpecifier) ? statement.moduleSpecifier.text : '';
+                const turnImport = statement.importClause?.namedBindings;
+                if (path.includes('agent/context/entity') || (turnImport && ts.isNamedImports(turnImport) && turnImport.elements.some((element) => element.name.text === 'Turn'))) {
+                    architectureErrors.push(`${file}: Turn must remain private to Context`);
+                }
+            }
         }
+    }
+}
+
+function checkClassDocumentation(file: string, source: ts.SourceFile, node: ts.ClassDeclaration): void {
+    if (ts.getJSDocCommentsAndTags(node).length === 0) architectureErrors.push(`${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: runtime class requires EN/ZH JSDoc`);
+    for (const member of node.members) {
+        if (!ts.isConstructorDeclaration(member) && !ts.isMethodDeclaration(member) && !ts.isGetAccessorDeclaration(member) && !ts.isSetAccessorDeclaration(member)) continue;
+        const line = source.getLineAndCharacterOfPosition(member.getStart()).line + 1;
+        if (ts.getJSDocCommentsAndTags(member).length === 0) architectureErrors.push(`${file}:${line}: runtime method requires EN/ZH JSDoc`);
+        const end = source.getLineAndCharacterOfPosition(member.getEnd()).line + 1;
+        if (end - line + 1 > 500) architectureErrors.push(`${file}:${line}: method exceeds 500 lines`);
     }
 }
 

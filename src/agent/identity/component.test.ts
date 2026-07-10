@@ -2,51 +2,41 @@ import { describe, expect, test } from 'bun:test';
 import { useContainer } from '@/core';
 import { Identity } from './component';
 
+const bus = { fire: async () => undefined };
+
 describe('Identity', () => {
-    test('renders a worker package without turn or tool state', async () => {
+    test('renders one Agent prompt package without Turn state', async () => {
         const identity = await useContainer().getAsync(Identity, {
             name: 'worker',
-            model: '',
-            provider: '',
-            contextLength: 0,
-            maxTokens: 0,
+            model: 'model',
+            provider: 'provider',
+            contextLength: 1,
+            maxTokens: 1,
             promptPackage: './prompts/agents',
             promptSections: ['worker'],
-        }, { emit: () => undefined });
+        }, bus);
 
-        const messages = identity.messages();
-
-        expect(messages).toHaveLength(1);
-        expect(messages[0]?.content).toContain('temporary work unit');
-        expect(messages[0]?.content).not.toContain('tool_call_id');
-        expect(messages[0]?.content).not.toContain('turn_');
+        expect(identity.messages()[0]?.content).toContain('persistent independent person');
+        expect(identity.messages()[0]?.content).not.toContain('turn_');
     });
 
-    test('limits identity writes to the fixed note allowlist', () => {
-        const identity = useContainer().create(Identity, {
+    test('rejects an invalid package write before changing files', async () => {
+        const identity = await useContainer().getAsync(Identity, {
             name: 'flyflor',
-            model: '',
-            provider: '',
-            contextLength: 0,
-            maxTokens: 0,
-        }, { emit: () => undefined });
-        const values: Record<string, string> = { SOUL: 'soul', USER: 'user', EXTENSION: 'extension', AGENTS: 'rules' };
-        identity.prompt = {
-            data: Object.fromEntries(Object.keys(values).map((key) => [key, {
-                data: values[key],
-                set: (content: string) => { values[key] = content; },
-            }])),
-            section: (key: string) => values[key] ?? '',
-        } as never;
+            model: 'model',
+            provider: 'provider',
+            contextLength: 1,
+            maxTokens: 1,
+            promptPackage: './.config/agents/flyflor',
+            promptSections: ['SOUL', 'USER', 'EXTENSION'],
+        }, bus);
 
-        const result = identity.applyWrites([
-            { file: 'SOUL.md', content: 'updated soul' },
-            { file: 'AGENTS.md', content: 'unsafe rules' },
-        ]);
-
-        expect(result).toEqual({ written: ['SOUL.md'], rejected: ['AGENTS.md'] });
-        expect(values.SOUL).toBe('updated soul');
-        expect(values.AGENTS).toBe('rules');
-        expect(identity.snapshot()).not.toContain('AGENTS.md');
+        expect(identity.snapshot()).toContain('<prompt_package');
+        expect(() => identity.applyWrites([{ file: 'AGENTS.md', content: 'unsafe' }])).toThrow('not writable');
+        expect(() => identity.applyWrites([{ file: 'SOUL.md', content: '' }])).toThrow('content is empty');
+        expect(() => identity.applyWrites([
+            { file: 'SOUL.md', content: 'one' },
+            { file: 'SOUL.md', content: 'two' },
+        ])).toThrow('duplicated');
     });
 });

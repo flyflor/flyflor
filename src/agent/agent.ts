@@ -1,23 +1,35 @@
-import { Scope, Provide, FAgent } from '@/core';
 import type { FAgentProfileConfiguration } from '@/config';
-import type { AgentBus, Assignment, Outcome } from './types';
+import { FAgent, Init, Inject, Observable, Provide, Scope } from '@/core';
+import type { AgentBus, AgentStimulus, CompleteSignal } from './types';
 import { Brain } from './brain';
 
+/**
+ * EN: One persistent person with an isolated FIFO and IOC-scoped cognition.
+ * ZH: 一个拥有隔离 FIFO 与 IOC scoped cognition 的持久人物。
+ */
 @Provide()
-export class Agent extends FAgent<string, FAgentProfileConfiguration, AgentBus> {
+export class Agent extends FAgent<AgentStimulus, CompleteSignal, FAgentProfileConfiguration, AgentBus> {
     @Scope()
     public brain!: Brain;
 
-    public override async receive(input: string): Promise<void> {
-        this.log.info('agent received', { input });
-        await this.brain.receive(input);
+    @Inject(function (this: Agent) { return `agent:${this.agentConfig.name}`; })
+    public circuit!: Observable<AgentStimulus>;
+
+    /**
+     * EN: Wires this person's private signal queue to its Brain once.
+     * ZH: 将当前人物的私有信号队列一次性连接到其 Brain。
+     */
+    @Init()
+    public init(): void {
+        this.circuit.pipe((stimulus) => this.brain.receive(stimulus));
     }
 
-    public async work(assignment: Assignment): Promise<Outcome | undefined> {
-        return await this.brain.work(assignment);
-    }
-
-    public async think(system: string, input: string): Promise<string> {
-        return this.brain.think(system, input);
+    /**
+     * EN: Queues one input or cortical task for this Agent.
+     * ZH: 为当前 Agent 排队一个输入或皮层任务。
+     */
+    public override async receive(stimulus: AgentStimulus): Promise<CompleteSignal> {
+        this.log.info('agent.receive', { agent: this.agentConfig.name, type: stimulus.type });
+        return await this.circuit.next(stimulus) as unknown as CompleteSignal;
     }
 }

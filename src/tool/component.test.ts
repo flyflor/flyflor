@@ -35,9 +35,9 @@ describe('Tools', () => {
     test('lists class-owned tool definitions and keeps shell description free of semantic cwd', async () => {
         const definitions = await (await component()).list();
 
-        expect(definitions.map((definition) => definition.name)).toEqual(['ask', 'filesystem', 'shell', 'execute']);
+        expect(definitions.map((definition) => definition.name)).toEqual(['ask', 'filesystem', 'shell', 'execute', 'task']);
         expect(definitions.find((definition) => definition.name === 'filesystem')?.parameters.required).toEqual(['action', 'path']);
-        expect(definitions.find((definition) => definition.name === 'task')).toBeUndefined();
+        expect((await (await component()).list(false)).find((definition) => definition.name === 'task')).toBeUndefined();
         expect(definitions.find((definition) => definition.name === 'ask')?.description).toContain('Ask the user');
         const shell = definitions.find((definition) => definition.name === 'shell');
         expect(shell?.description).toContain('platform=');
@@ -66,25 +66,18 @@ describe('Tools', () => {
         expect(tools.execute).toBeInstanceOf(Execute);
     });
 
-    test('dispatches ask and rejects unknown tool', async () => {
+    test('dispatches Ask and Task with strict success results', async () => {
         const tools = await component();
 
         const ask = await tools.run({ id: 'ask_1', name: 'ask', arguments: { questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] } });
-        const unknown = await tools.run({ id: 'task_1', name: 'task', arguments: {} });
+        const task = await tools.run({ id: 'task_1', name: 'task', arguments: { tasks: [{ agent: 'worker', goal: 'inspect' }] } });
 
-        expect(ask).toEqual({ ok: true, name: 'ask', data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }, { label: 'other', description: '自定义回答，可引用上面的方案', custom: true }] }] } });
-        expect(unknown).toEqual({
-            ok: false,
-            name: 'task',
-            error: { code: 'TOOL_ERROR', message: 'Unknown tool: task' },
-        });
+        expect(ask).toEqual({ ok: true, name: 'ask', data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }, { label: 'other', description: '自定义回答，可引用上面的方案', custom: true }] }] }, effects: [{ type: 'ask' }] });
+        expect(task).toEqual({ ok: true, name: 'task', data: { tasks: [{ agent: 'worker', goal: 'inspect' }] }, effects: [{ type: 'task' }] });
     });
 
-    test('wraps thrown tool errors for invalid input', async () => {
-        const result = await (await component()).run({ id: 'ask_1', name: 'ask', arguments: {} });
-
-        expect(result.ok).toBe(false);
-        expect(result.error?.message).toBe('questions is required');
+    test('propagates invalid tool input unchanged', async () => {
+        await expect((await component()).run({ id: 'ask_1', name: 'ask', arguments: {} })).rejects.toThrow('questions is required');
     });
 
     test('filesystem reads writes edits and deletes using config cwd by default', async () => {
@@ -118,13 +111,8 @@ describe('Tools', () => {
         const tools = await component();
         mkdirSync(join(root, 'dir'), { recursive: true });
 
-        const list = await tools.run({ id: 'list_1', name: 'filesystem', arguments: { action: 'list', path: '.' } });
-        const remove = await tools.run({ id: 'delete_1', name: 'filesystem', arguments: { action: 'delete', path: 'dir' } });
-
-        expect(list.ok).toBe(false);
-        expect(list.error?.message).toBe('action must be read, write, edit, or delete');
-        expect(remove.ok).toBe(false);
-        expect(remove.error?.message).toBe('delete only supports files');
+        await expect(tools.run({ id: 'list_1', name: 'filesystem', arguments: { action: 'list', path: '.' } })).rejects.toThrow('action must be read, write, edit, or delete');
+        await expect(tools.run({ id: 'delete_1', name: 'filesystem', arguments: { action: 'delete', path: 'dir' } })).rejects.toThrow('delete only supports files');
     });
 
     test('shell executes a direct command with args from config cwd', async () => {
@@ -209,6 +197,16 @@ describe('Tools', () => {
         const nested = results.find((item) => item.id === 'nested');
         expect(nested).toMatchObject({ cwd: resolve(root, 'sub'), timedOut: false, ok: true });
         expect(nested?.stdout).toBe(`nested:${realpathSync(nested!.cwd)}\n`);
+    });
+
+    test('execute propagates process spawn errors', async () => {
+        await expect((await component()).run({
+            id: 'execute_spawn',
+            name: 'execute',
+            arguments: {
+                tasks: [{ runtime: 'python', path: 'missing.py', env: { PATH: '' } }],
+            },
+        })).rejects.toThrow();
     });
 
     test('filesystem and execute ignore process cwd changes when config cwd is fixed', async () => {

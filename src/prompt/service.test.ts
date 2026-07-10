@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { useContainer } from '@/core';
 import { PromptService } from './service';
 
 const roots: string[] = [];
@@ -18,21 +19,45 @@ describe('PromptService', () => {
             'USER.md': '  user-body  ',
             'config.jsonc': '{"ignored":true}',
         });
-        const service = new PromptService<'SOUL' | 'USER'>(root);
+        const service = useContainer().create(PromptService, root) as PromptService<'SOUL' | 'USER'>;
 
-        expect(service.render({ sections: ['SOUL', 'USER'] })).toBe('soul-body\n\nuser-body');
+        expect(service.render({ kind: 'sections', sections: ['SOUL', 'USER'] })).toBe('soul-body\n\nuser-body');
         expect(service.section('SOUL')).toBe('soul-body');
         expect(Object.keys(service.data)).toEqual(['SOUL', 'USER']);
     });
 
     test('writes an explicitly selected prompt file', () => {
         const root = packageRoot({ 'SOUL.md': 'before' });
-        const service = new PromptService<'SOUL'>(root);
+        const service = useContainer().create(PromptService, root) as PromptService<'SOUL'>;
         const soul = service.data.SOUL!;
 
         soul.set('after');
 
         expect(soul.data).toBe('after');
+    });
+
+    test('renders inline service XML and splits embedded CDATA terminators', () => {
+        const root = packageRoot({ 'SYSTEM.md': 'system' });
+        const service = useContainer().create(PromptService, root);
+
+        const document = service.render({
+            kind: 'document',
+            root: 'service_context',
+            attributes: { source: 'brain&memory' },
+            blocks: [{ tag: 'input', content: 'a]]>b' }],
+        });
+
+        expect(document).toContain('source="brain&amp;memory"');
+        expect(document).toContain('a]]]]><![CDATA[>b');
+    });
+
+    test('rejects missing document blocks and illegal XML names', () => {
+        const root = packageRoot({ 'SYSTEM.md': 'system' });
+        const service = useContainer().create(PromptService, root);
+
+        expect(() => service.render({ kind: 'document', root: 'context', blocks: [] })).toThrow('requires root and blocks');
+        expect(() => service.render({ kind: 'document', root: 'bad root', blocks: [{ tag: 'input', content: 'value' }] })).toThrow('XML name is invalid');
+        expect(() => service.render({ kind: 'document' })).toThrow('document context is missing');
     });
 });
 

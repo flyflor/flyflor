@@ -5,11 +5,11 @@ import { dirname, isAbsolute, resolve } from 'node:path';
 import type { FilesystemInput, FilesystemInputAction, FilesystemOutput } from './types';
 import { Tool } from './abstracts';
 
-@Provide()
 /**
- * EN: Filesystem class declaration.
- * ZH: Filesystem class 声明。
+ * EN: Owns strict file reads and explicitly approved file mutations.
+ * ZH: 持有严格文件读取与显式批准的文件变更。
  */
+@Provide()
 export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
     public readonly name = 'filesystem';
     public readonly risk = 'destructive';
@@ -33,10 +33,12 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
     @Config()
     public config!: ConfigService;
 
+    /** EN: Requires approval for every mutating file action. ZH: 所有文件变更动作均要求审批。 */
     public override confirm(input: FilesystemInput): boolean {
         return input.action !== 'read';
     }
 
+    /** EN: Routes one validated file action to its owned implementation. ZH: 将一个已验证文件动作路由到自身实现。 */
     public override execute(input: FilesystemInput) {
         const action = this.action(input.action);
         if (action === 'read') return this.read(input);
@@ -45,6 +47,7 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
         return this.remove(input);
     }
 
+    /** EN: Reads one bounded UTF-8 file slice. ZH: 读取一个有界 UTF-8 文件片段。 */
     private read(input: FilesystemInput) {
         const path = this.path(input.path, input.cwd);
         const offsetLines = this.number(input.offsetLines, 'offsetLines', 0);
@@ -66,6 +69,7 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
         } as const;
     }
 
+    /** EN: Replaces one file with explicit complete content. ZH: 使用显式完整内容替换一个文件。 */
     private write(input: FilesystemInput) {
         const path = this.path(input.path, input.cwd);
         const content = this.text(input.content, 'content');
@@ -78,6 +82,7 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
         } as const;
     }
 
+    /** EN: Applies one exact text replacement. ZH: 应用一次精确文本替换。 */
     private edit(input: FilesystemInput) {
         const path = this.path(input.path, input.cwd);
         const oldText = this.text(input.oldText, 'oldText');
@@ -93,6 +98,7 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
         } as const;
     }
 
+    /** EN: Deletes one exact regular file. ZH: 删除一个精确普通文件。 */
     private remove(input: FilesystemInput) {
         const path = this.path(input.path, input.cwd);
         const stat = statSync(path);
@@ -105,6 +111,7 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
         } as const;
     }
 
+    /** EN: Resolves one semantic path against the owned cwd convention. ZH: 按自身 cwd 约定解析语义路径。 */
     private path(value: unknown, cwdValue?: unknown): string {
         const input = this.text(value, 'path');
         if (isAbsolute(input)) return resolve(input);
@@ -116,16 +123,19 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
         return resolve(cwd, input);
     }
 
+    /** EN: Requires one supported filesystem action. ZH: 要求一个受支持的文件系统动作。 */
     private action(value: unknown): FilesystemInputAction {
         if (value === 'read' || value === 'write' || value === 'edit' || value === 'delete') return value;
         throw Error('action must be read, write, edit, or delete');
     }
 
+    /** EN: Requires one non-empty string field. ZH: 要求一个非空字符串字段。 */
     private text(value: unknown, name: string): string {
         if (typeof value !== 'string' || value.length === 0) throw Error(`${name} is required`);
         return value;
     }
 
+    /** EN: Reads one bounded non-negative integer option. ZH: 读取一个有界非负整数选项。 */
     private number(value: unknown, name: string, fallback: number): number {
         if (value === undefined) return fallback;
         if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) throw Error(`${name} must be a non-negative number`);

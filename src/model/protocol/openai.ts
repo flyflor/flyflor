@@ -112,12 +112,9 @@ function finalizeToolCalls(controller: ReadableStreamDefaultController<StreamEve
 function parseArguments(partialArgs: string): Record<string, unknown> {
     const trimmed = partialArgs.trim();
     if (trimmed.length === 0) return {};
-    try {
-        const parsed = JSON.parse(trimmed);
-        return typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : {};
-    } catch {
-        return {};
-    }
+    const parsed: unknown = JSON.parse(trimmed);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw Error('Tool arguments must be a JSON object');
+    return parsed as Record<string, unknown>;
 }
 
 function chatMessages(messages: Message[]): Array<Record<string, unknown>> {

@@ -1247,7 +1247,8 @@
             let interaction = null;
 
             function sendAnswer(response) {
-                if (!ws || ws.readyState !== WebSocket.OPEN || !interaction) return;
+                if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error('WebSocket 未连接');
+                if (!interaction) throw new Error('没有待处理交互');
                 const packet = { action: 'answer', data: { ...interaction, response } };
                 debugIpc('ws.out', { action: packet.action, turnId: interaction.turnId, id: interaction.id });
                 ws.send(JSON.stringify(packet));
@@ -1259,7 +1260,8 @@
 
             function renderAskPrompt(data) {
                 removeEmptyState();
-                const questions = Array.isArray(data?.questions) ? data.questions : [];
+                if (!Array.isArray(data?.questions) || data.questions.length === 0) throw new Error('Ask signal questions 非法');
+                const questions = data.questions;
                 const card = document.createElement('article');
                 card.className = 'message system ask-card';
 
@@ -1349,6 +1351,7 @@
 
             function renderConfirmPrompt(data) {
                 removeEmptyState();
+                if (!data?.call || typeof data.call !== 'object') throw new Error('Confirm signal call 非法');
                 const card = document.createElement('article');
                 card.className = 'message system confirm-card';
 
@@ -1406,6 +1409,13 @@
                     finishAgentStream();
                     return;
                 }
+                if (msg.action === 'complete') {
+                    if (!msg.data || typeof msg.data.answer !== 'string' || !Array.isArray(msg.data.evidence)) {
+                        throw new Error('Complete signal 非法');
+                    }
+                    signalPill.textContent = 'complete';
+                    return;
+                }
                 if (msg.action === 'agent') {
                     renderAgentSignal(msg.data);
                     return;
@@ -1422,6 +1432,14 @@
                     cancelPendingMessage();
                     signalPill.textContent = 'confirm';
                     renderConfirmPrompt(msg.data);
+                    return;
+                }
+                if (msg.action === 'pause') {
+                    signalPill.textContent = 'paused';
+                    return;
+                }
+                if (msg.action === 'resume') {
+                    signalPill.textContent = 'thinking';
                     return;
                 }
                 if (msg.action === 'open') {
@@ -1449,7 +1467,7 @@
                     addMessage(`错误: ${String(msg.data ?? '')}`, 'error');
                     return;
                 }
-                addMessage(`收到: ${JSON.stringify(msg)}`, 'system');
+                throw new Error(`未知 IPC action: ${String(msg.action)}`);
             }
 
             function debugIpc(event, detail) {
@@ -1492,11 +1510,7 @@
             function formatDebugDetail(detail) {
                 if (detail === undefined) return '';
                 if (typeof detail === 'string') return previewText(detail, 800);
-                try {
-                    return previewText(JSON.stringify(detail, null, 2), 1200);
-                } catch (error) {
-                    return previewText(error instanceof Error ? error.message : String(detail), 800);
-                }
+                return previewText(JSON.stringify(detail, null, 2), 1200);
             }
 
             function signalDetail(signal) {
@@ -1531,16 +1545,7 @@
                         preview: previewText(eventData),
                         charCodes: charCodes(eventData),
                     });
-                    try {
-                        return [JSON.parse(eventData)];
-                    } catch (error) {
-                        debugIpc('ws.in.json-error', {
-                            message: error instanceof Error ? error.message : String(error),
-                            preview: previewText(eventData),
-                            charCodes: charCodes(eventData),
-                        });
-                        throw error;
-                    }
+                    return [JSON.parse(eventData)];
                 }
                 debugIpc('ws.in', {
                     type: eventData?.constructor?.name ?? typeof eventData,
@@ -1592,13 +1597,7 @@
                 };
 
                 ws.onmessage = async (event) => {
-                    try {
-                        for (const packet of await readSocketMessage(event.data)) handlePacket(packet);
-                    } catch (error) {
-                        errorTotal += 1;
-                        updateStats();
-                        addMessage(`解析错误: ${error instanceof Error ? error.message : String(error)}`, 'error');
-                    }
+                    for (const packet of await readSocketMessage(event.data)) handlePacket(packet);
                 };
 
                 ws.onclose = () => {

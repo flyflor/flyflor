@@ -1,224 +1,229 @@
-import { Agent, type Assignment } from '@/agent';
-import { Memory } from '@/agent/memory';
-import { Turn } from '@/agent/turn';
-import type { ConfigService } from '@/config';
-import { Config, FCortex, Init, Inject, Module, Prompt, Scope, useContainer } from '@/core';
-import { PromptService } from '@/prompt';
-import { parse } from '@/agent/json';
+import {
+    Agent,
+    Context,
+    type AgentBus,
+    type AgentTask,
+    type AskResponse,
+    type AskSignal,
+    type CompleteSignal,
+    type ConfirmResponse,
+    type ConfirmSignal,
+    type NeuralResponse,
+    type NeuralSignal,
+    type ReplySignal,
+    type TaskSignal,
+} from '@/agent';
+import type { ConfigService, FAgentProfileConfiguration } from '@/config';
+import { Config, FCortex, Init, Inject, Module, Observable, useContainer } from '@/core';
 import { FSocket } from '@/transport';
-import { SynapseSignalType, type CoordinatePlan, type InteractionRequest, type InteractionResponse, type SynapseSignal } from './types';
-
-export interface AgentPool {
-    [name: string]: Agent;
-}
+import type { ExpressionSignal, InteractionResponse, InteractionSignal } from './types';
 
 /**
- * EN: Synapse is the neural cortex. It routes signals, owns the active agent,
- * and dispatches the agent pool when Callosum decides multi-agent coordination
- * is needed to understand the user intent.
- * ZH: Synapse 是神经皮层。它路由信号、持有 active agent，并在 Callosum 判断需要
- * 多 agent 协同理解用户意图时派发 agent pool。
+ * EN: The life form's persistent cortex, owning signal routes and persistent people.
+ * ZH: 智能生命体的持久皮层，持有信号路由与持续存在的人物。
  */
 @Module()
-export class Synapse extends FCortex<SynapseSignal> {
+export class Synapse extends FCortex implements AgentBus {
     @Config()
-    public readonly config!: ConfigService;
+    public config!: ConfigService;
 
-    @Scope()
+    @Inject()
     public socket!: FSocket;
 
     @Inject()
-    public memory!: Memory;
+    public context!: Context;
 
-    @Prompt('prompts/synapse')
-    public prompt!: PromptService;
+    @Inject(() => 'sensory')
+    public sensory!: Observable<string>;
 
-    public agentPool: AgentPool;
-    public active: string;
-    private interaction?: {
-        request: InteractionRequest;
+    @Inject(() => 'interaction')
+    public interaction!: Observable<InteractionSignal>;
+
+    @Inject(() => 'delegation')
+    public delegation!: Observable<TaskSignal>;
+
+    @Inject(() => 'expression')
+    public expression!: Observable<ExpressionSignal>;
+
+    private readonly agents = new Map<string, Agent>();
+    private active = '';
+    private pending?: {
+        signal: InteractionSignal;
         resolve: (response: InteractionResponse) => void;
     };
 
-    public get agent() {
-        return this.agentPool[this.active]!;
-    }
-
-    constructor() {
-        super();
-        this.agentPool = {};
-        this.active = '';
-    }
-
+    /**
+     * EN: Wires independent cortical circuits and creates every configured person once.
+     * ZH: 连接相互独立的皮层回路，并一次性创建全部已配置人物。
+     */
     @Init()
-    public async init() {
-        const active = this.config.agent;
-        this.active = active;
-        await this.spawnAgent(active);
-        this.socket.bind({
-            input: (text) => this.emit(SynapseSignalType.Input, text),
-            answer: (turnId, id, response) => this.answer(turnId, id, response as InteractionResponse),
+    public async init(): Promise<void> {
+        this.active = this.config.agent;
+        for (const name of Object.keys(this.config.agents)) await this.spawnAgent(name);
+        if (!this.agents.has(this.active)) throw Error(`Active Agent is not configured: ${this.active}`);
+
+        this.sensory.pipe((input) => this.agent.receive({ type: 'input', input }));
+        this.interaction.switch<InteractionSignal['type'], InteractionResponse>((signal) => signal.type, {
+            ask: (signal) => this.wait(signal as AskSignal),
+            confirm: (signal) => this.wait(signal as ConfirmSignal),
         });
-        this.on(SynapseSignalType.Input, (signal) => this.input(String(signal.data)));
-        this.on(SynapseSignalType.Reply, (signal) => this.output(signal.data));
-        this.on(SynapseSignalType.Event, (signal) => this.socket.write({ action: 'data', data: signal.data }));
-        this.on(SynapseSignalType.Ask, (signal) => this.socket.write({ action: 'ask', data: signal.data }));
-        this.on(SynapseSignalType.Confirm, (signal) => this.socket.write({ action: 'confirm', data: signal.data }));
-        this.on(SynapseSignalType.Pause, (signal) => this.socket.write({ action: 'pause', data: signal.data }));
-        this.on(SynapseSignalType.Resume, (signal) => this.socket.write({ action: 'resume', data: signal.data }));
-        return true;
+        this.delegation.pipe((signal) => this.delegate(signal));
+        this.expression.switch<ExpressionSignal['type'], ExpressionSignal>((signal) => signal.type, {
+            reply: (signal) => this.reply(signal as ReplySignal),
+            complete: (signal) => this.complete(signal as CompleteSignal),
+        });
+        this.socket.bind({
+            input: async (text) => { await this.sensory.next(text); },
+            answer: (turnId, id, response) => this.answer(turnId, id, response),
+        });
     }
 
-    public async spawnAgent(name: string): Promise<Agent> {
-        const existing = this.agentPool[name];
-        if (existing) return existing;
-        const agentConfig = this.config.agents[name];
-        if (!agentConfig) {
-            throw Object.assign(Error('Default agent profile is missing'), {
-                detail: { active: name, configuredAgents: Object.keys(this.config.agents) },
-            });
-        }
-        agentConfig.model = agentConfig.model || this.config.model.model;
-        agentConfig.provider = agentConfig.provider || this.config.model.provider;
-        agentConfig.contextLength = agentConfig.contextLength || 131072;
-        agentConfig.maxTokens = agentConfig.maxTokens || 8192;
-        const agent = await useContainer().getAsync(Agent, agentConfig, this);
-        this.agentPool[name] = agent;
+    /**
+     * EN: Returns the currently active persistent person.
+     * ZH: 返回当前活跃的持久人物。
+     */
+    public get agent(): Agent {
+        const agent = this.agents.get(this.active);
+        if (!agent) throw Error(`Active Agent is unavailable: ${this.active}`);
         return agent;
     }
 
     /**
-     * EN: Spawns a fresh worker agent for one coordination slice. The worker is
-     * not cached in the agent pool: it is an independent instance with its own
-     * private Memory and does not emit to the socket.
-     * ZH: 为一个协调切片 spawn 一个全新的 worker agent。worker 不缓存在 agent pool
-     * 中：它是独立实例，拥有私有 Memory，不向 socket 广播。
+     * EN: Routes one Agent firing to exactly one independent cortical circuit.
+     * ZH: 将一次 Agent 放电路由到唯一的独立皮层回路。
      */
-    public async spawnWorker(name: string): Promise<Agent> {
-        const agentConfig = this.config.agents[name];
-        if (!agentConfig) {
-            throw Object.assign(Error('Worker agent profile is missing'), {
-                detail: { requested: name, configuredAgents: Object.keys(this.config.agents) },
-            });
+    public async fire<TSignal extends NeuralSignal>(signal: TSignal): Promise<NeuralResponse<TSignal>> {
+        if (signal.type === 'ask' || signal.type === 'confirm') {
+            return await this.interaction.next(signal) as unknown as NeuralResponse<TSignal>;
         }
-        agentConfig.model = agentConfig.model || this.config.model.model;
-        agentConfig.provider = agentConfig.provider || this.config.model.provider;
-        agentConfig.contextLength = agentConfig.contextLength || 131072;
-        agentConfig.maxTokens = agentConfig.maxTokens || 8192;
-        return await useContainer().getAsync(Agent, agentConfig, this);
-    }
-
-    public async input(data: any) {
-        this.log.info('input', data);
-        try {
-            await this.agent.receive(data);
-        } catch (error) {
-            this.log.error('synapse.input', error);
-            this.emit(SynapseSignalType.Reply, '处理这条消息时出错，请重试。');
-            this.emit(SynapseSignalType.Reply, null);
+        if (signal.type === 'task') {
+            return await this.delegation.next(signal) as unknown as NeuralResponse<TSignal>;
         }
-    }
-
-    public async output(data: unknown) {
-        this.socket.write(data === null
-            ? { action: 'streamEnd', data: true }
-            : { action: 'agent', data: String(data) });
-    }
-
-    public async interact(request: InteractionRequest): Promise<InteractionResponse> {
-        if (this.interaction) throw Error('An interaction is already pending');
-        this.memory.pause(request.turnId, { id: request.id, kind: request.kind, prompt: JSON.stringify(request.data) });
-        this.emit(request.kind === 'ask' ? SynapseSignalType.Ask : SynapseSignalType.Confirm, {
-            turnId: request.turnId,
-            id: request.id,
-            ...request.data as object,
-        });
-        this.emit(SynapseSignalType.Pause, request);
-        return await new Promise<InteractionResponse>((resolve) => {
-            this.interaction = { request, resolve };
-        });
-    }
-
-    public answer(turnId: string, id: string, response: InteractionResponse): void {
-        const interaction = this.interaction;
-        if (!interaction || interaction.request.turnId !== turnId || interaction.request.id !== id) {
-            throw Error('Interaction response does not match pending request');
-        }
-        if (interaction.request.kind !== response.kind) throw Error('Interaction response kind does not match request');
-        this.memory.resume(turnId, id);
-        this.interaction = undefined;
-        interaction.resolve(response);
-        this.emit(SynapseSignalType.Resume, { turnId, id });
+        await this.expression.next(signal);
+        return undefined as NeuralResponse<TSignal>;
     }
 
     /**
-     * EN: Cortex dispatch. Callosum decided the user intent needs multi-agent
-     * joint understanding. This single path plans, dispatches the agent pool,
-     * and synthesizes the final reply through Synapse signals.
-     * ZH: 皮层派发。Callosum 已判断用户意图需要多 agent 协同理解。本条路径一次性
-     * 完成计划、派发 agent pool、合成最终回复，并通过 Synapse 信号输出。
+     * EN: Returns an existing person or creates its isolated IOC scope once.
+     * ZH: 返回已有的人物，或一次性创建其隔离 IOC scope。
      */
-    public async coordinate(value: unknown): Promise<void> {
-        if (!(value instanceof Turn)) throw Error('Coordinate turn is invalid');
-        const turn = value;
-        // EN: Ask the cortex plan prompt how to slice the understanding work.
-        // ZH: 询问皮层计划提示词如何切分理解工作。
-        const plan = parse<CoordinatePlan>(await this.agent.think(
-            this.prompt.section('plan'),
-            JSON.stringify(this.memory.context(turn.id)),
-        ));
+    public async spawnAgent(name: string): Promise<Agent> {
+        const existing = this.agents.get(name);
+        if (existing) return existing;
+        const profile = this.profile(name);
+        const agent = await useContainer().getAsync(Agent, profile, this);
+        this.agents.set(name, agent);
+        return agent;
+    }
 
-        // EN: Each slice receives an isolated assignment and runs concurrently.
-        // ZH: 每个切片接收隔离任务并并发执行。
-        const slices = plan.slices.length === 0
-            ? [{ profile: this.active, persona: '', brief: turn.perception.goal, slice: turn.input }]
-            : plan.slices;
-        const outcomes = await Promise.all(slices.map(async (slice) => {
-            const agent = await this.spawnWorker(slice.profile);
-            const outcome = await agent.work(this.workerAssignment(slice, turn));
-            if (!outcome) throw Error(`Worker did not complete: ${slice.profile}`);
-            return { profile: slice.profile, persona: slice.persona, slice: slice.slice, brief: slice.brief, result: outcome.answer, evidence: outcome.evidence };
+    /**
+     * EN: Resolves an exact pending user answer and resumes its Context Turn.
+     * ZH: 解析精确匹配的用户回答，并恢复对应 Context Turn。
+     */
+    public answer(turnId: string, id: string, value: unknown): void {
+        const pending = this.pending;
+        if (!pending || pending.signal.turnId !== turnId || pending.signal.id !== id) {
+            throw Error('Interaction response does not match the pending signal');
+        }
+        const response = this.response(pending.signal, value);
+        this.socket.write({ action: 'resume', data: { turnId, id } });
+        this.context.resume(turnId, id);
+        this.pending = undefined;
+        pending.resolve(response);
+    }
+
+    /**
+     * EN: Waits for one exact Ask or Confirm answer on the serial interaction circuit.
+     * ZH: 在串行交互回路上等待一个精确 Ask 或 Confirm 回答。
+     */
+    private async wait(signal: InteractionSignal): Promise<InteractionResponse> {
+        if (this.pending) throw Error('An interaction is already pending');
+        this.context.pause(signal.turnId, {
+            id: signal.id,
+            kind: signal.type,
+            prompt: JSON.stringify(signal.type === 'ask' ? signal.questions : signal.call),
+        });
+        this.socket.write({ action: signal.type, data: signal });
+        this.socket.write({ action: 'pause', data: { turnId: signal.turnId, id: signal.id, kind: signal.type } });
+        return await new Promise<InteractionResponse>((resolve) => {
+            this.pending = { signal, resolve };
+        });
+    }
+
+    /**
+     * EN: Dispatches validated child goals to persistent Agents and awaits all Completes.
+     * ZH: 将已验证子目标派发给持久 Agents，并等待全部 Complete。
+     */
+    private async delegate(signal: TaskSignal): Promise<CompleteSignal[]> {
+        return await Promise.all(signal.tasks.map(async (item, index) => {
+            if (item.agent === signal.agent) throw Error(`Agent cannot delegate to itself: ${item.agent}`);
+            const agent = await this.spawnAgent(item.agent);
+            const task: AgentTask = {
+                id: `${signal.id}:${index + 1}`,
+                turnId: signal.turnId,
+                agent: item.agent,
+                goal: item.goal,
+                context: this.context.brief(signal.turnId),
+            };
+            return await agent.receive({ type: 'task', task });
         }));
-
-        const reviewer = await this.spawnWorker(plan.review.profile);
-        const review = await reviewer.work(this.reviewAssignment(plan, outcomes, turn));
-        if (!review) throw Error(`Reviewer did not complete: ${plan.review.profile}`);
-
-        // EN: Synthesize worker understandings into one coherent reply.
-        // ZH: 把各 worker 的理解合成一条连贯回复。
-        const answer = await this.agent.think(
-            this.prompt.section('synthesis'),
-            JSON.stringify({ outcomes, review: { profile: plan.review.profile, persona: plan.review.persona, result: review.answer, evidence: review.evidence }, hint: plan.synthesisHint }),
-        );
-
-        this.memory.complete(turn.id, answer, [...outcomes.flatMap((outcome) => outcome.evidence), ...review.evidence]);
-        this.emit(SynapseSignalType.Reply, answer);
-        this.emit(SynapseSignalType.Reply, null);
     }
 
-    private workerAssignment(slice: { profile: string; persona: string; brief: string; slice: string }, turn: Turn): Assignment {
-        return {
-            profile: slice.profile,
-            goal: slice.brief,
-            persona: slice.persona,
-            constraints: [...turn.perception.constraints, slice.slice],
-            cwd: turn.perception.cwd,
-            context: JSON.stringify(this.memory.context(turn.id)),
-        };
+    /**
+     * EN: Emits one ordered user-visible reply chunk.
+     * ZH: 输出一个有序、用户可见的回复片段。
+     */
+    private reply(signal: ReplySignal): ReplySignal {
+        if (signal.chunk.length === 0) throw Error('Reply chunk is empty');
+        this.socket.write({ action: 'agent', data: signal.chunk });
+        return signal;
     }
 
-    private reviewAssignment(
-        plan: CoordinatePlan,
-        outcomes: Array<{ profile: string; persona: string; slice: string; brief: string; result: string; evidence: string[] }>,
-        turn: Turn,
-    ): Assignment {
-        return {
-            profile: plan.review.profile,
-            goal: JSON.stringify({ review: plan.review.brief, focus: plan.review.focus, intent: plan.intent, outcomes }),
-            persona: plan.review.persona,
-            constraints: [...turn.perception.constraints],
-            cwd: turn.perception.cwd,
-            context: JSON.stringify(this.memory.context(turn.id)),
-        };
+    /**
+     * EN: Emits the pure terminal summary before ending the response stream.
+     * ZH: 在结束响应流前输出纯净终态摘要。
+     */
+    private complete(signal: CompleteSignal): CompleteSignal {
+        this.socket.write({ action: 'complete', data: signal });
+        this.socket.write({ action: 'streamEnd', data: true });
+        return signal;
+    }
+
+    /**
+     * EN: Validates one configured Agent profile without mutating shared configuration.
+     * ZH: 验证一个已配置 Agent profile，且不修改共享配置。
+     */
+    private profile(name: string): FAgentProfileConfiguration {
+        const profile = this.config.agents[name];
+        if (!profile) throw Error(`Agent profile is missing: ${name}`);
+        if (profile.name !== name) throw Error(`Agent profile name does not match: ${name}`);
+        if (!profile.model || !profile.provider) throw Error(`Agent model configuration is incomplete: ${name}`);
+        if (!Number.isFinite(profile.contextLength) || profile.contextLength <= 0) throw Error(`Agent context length is invalid: ${name}`);
+        if (!Number.isFinite(profile.maxTokens) || profile.maxTokens <= 0) throw Error(`Agent max tokens is invalid: ${name}`);
+        if (!profile.promptPackage || !profile.promptSections || profile.promptSections.length === 0) {
+            throw Error(`Agent prompt configuration is incomplete: ${name}`);
+        }
+        return { ...profile, promptSections: [...profile.promptSections] };
+    }
+
+    /**
+     * EN: Reads one response according to its exact pending interaction kind.
+     * ZH: 按待处理交互的精确类型读取一次响应。
+     */
+    private response(signal: InteractionSignal, value: unknown): InteractionResponse {
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) throw Error('Interaction response must be an object');
+        const response = value as Record<string, unknown>;
+        if (signal.type === 'confirm') {
+            if (response.kind !== 'confirm' || typeof response.approved !== 'boolean') throw Error('Confirm response is invalid');
+            return { kind: 'confirm', approved: response.approved };
+        }
+        if (response.kind !== 'ask' || !Array.isArray(response.answers)) throw Error('Ask response is invalid');
+        const answers = response.answers.map((answer, index) => {
+            if (typeof answer !== 'object' || answer === null || Array.isArray(answer)) throw Error(`Ask answer is invalid: ${index}`);
+            const item = answer as Record<string, unknown>;
+            if (typeof item.question !== 'string' || typeof item.answer !== 'string') throw Error(`Ask answer is invalid: ${index}`);
+            return { question: item.question, answer: item.answer };
+        });
+        return { kind: 'ask', answers };
     }
 }

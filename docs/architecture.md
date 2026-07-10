@@ -1,163 +1,203 @@
-# Life-Form Architecture
+# Sessionless Life-Form Architecture
 
-## Design Philosophy
+## Purpose
 
-Flyflor treats biological language as domain language, not decoration. Brain owns cognition, Callosum perceives intent, Memory owns Turns, Identity owns durable self-description, and Synapse coordinates the whole life form. Technical facilities use direct names: Model, Tools, Transport, Packet, Controller, Config, and IOC.
+Flyflor is a continuously living intelligent entity. The kernel has one purpose: understand the user's need, investigate reality, summarize what was learned, and complete the task accurately. A transport connection is not a lifecycle boundary and there is no Session object.
 
-The implementation follows four constraints:
+## Ownership
 
-1. One concept has one owner.
-2. Dependencies point from orchestration toward capabilities.
-3. Directory and filename conventions replace registries where possible.
-4. Abstractions exist only when they remove real complexity or protect a runtime boundary.
+| Object | Lifetime | Sole responsibility |
+| --- | --- | --- |
+| `Synapse` | life-form singleton | cortex signal routing, persistent Agent pool, independent circuit discharge |
+| `Context` | life-form singleton | sole creation and mutation of Turns; completed experience |
+| `Agent` | persistent pool person | private FIFO boundary around one person's cognition |
+| `Memory` | one Agent scope | bounded continuous temporary notes; never Turns |
+| `Brain` | one Agent scope | cognitive routing and root completion |
+| `Callosum` | one Agent scope | one strict perception for each root input |
+| `Investigation` | one Agent scope | persistent Ask/Confirm/Task/Complete network and local replay |
+| `Identity` | one Agent scope | durable prompt identity under package policy |
+| `Tools` | life-form singleton | direct concrete actions and their schemas |
+| `Model` | one Agent scope | exact provider request and fully awaited streaming |
+| `FSocket` | life-form singleton | IPC lifecycle and backpressure only |
+
+Context owns the internal `Turn` class. The Context barrel exports immutable briefs and summaries, never Turn. Brain may call `begin()` and `complete()`; Synapse may call `brief()`, `pause()`, and `resume()`. No caller receives mutable Turn state.
 
 ## Dependency Direction
 
 ```mermaid
 flowchart LR
-    App[app] --> Neural[neural]
-    Neural --> Agent[agent]
-    Neural --> Transport[transport]
-    Agent --> Model[model]
-    Agent --> Tool[tool]
+    App["app.ts"] --> Neural["neural / Synapse"]
+    Neural --> Agent["agent"]
+    Neural --> Transport["transport"]
+    Agent --> Model["model"]
+    Agent --> Tool["tool"]
 
-    App --> Core[core]
+    App --> Core["core"]
     Neural --> Core
     Agent --> Core
     Model --> Core
     Tool --> Core
     Transport --> Core
 
-    Neural --> Config[config]
+    Neural --> Config["config"]
     Agent --> Config
     Model --> Config
     Tool --> Config
-    Neural --> Prompt[prompt]
-    Agent --> Prompt
+    Agent --> Prompt["prompt"]
     Tool --> Prompt
 ```
 
-The business path is `app -> neural -> agent -> model/tool`; `neural -> transport` is the only transport edge. Agent does not import Neural. Transport does not import Neural. Model and Tool do not import each other. The static health gate enforces these rules.
+Agent never imports Neural. Their boundary is `AgentBus.fire()` plus the stable discriminated signal structures in `src/agent/types.ts`. Transport never imports cognition or Synapse; it invokes bound callbacks.
 
-## Ownership
+## IOC And Lifecycle
 
-| Object | Owns | Does not own |
+`src/bootstrap.ts` loads `reflect-metadata` before decorated application classes and calls `Factory.create(AppModule)`. AppModule imports Synapse, so one call resolves and initializes the entire life form.
+
+- `@Singleton` and `@Module` are cached only after injection and `@Init` succeed.
+- `@Scope` uses one Agent-local resolution scope.
+- Brain, Callosum, Investigation, Identity, Memory, and Model are created once inside that person's scope and reused there.
+- different people never share scoped cognition or Memory;
+- business code never directly constructs an application class;
+- a failed initialization is not published to the singleton cache.
+
+Synapse creates one person for every complete configured profile and retains it in the Agent pool. It does not mutate shared configuration and it does not create task-level workers.
+
+## Observable Circuits
+
+`Observable<TInput, TOutput>` extends `FlyFlor`. It intentionally exposes only `pipe`, `switch`, `subscribe`, and `next`.
+
+- `next()` returns the full processing Promise;
+- one promise tail gives each circuit FIFO ordering;
+- stages, selected branches, and subscribers are awaited in registration order;
+- an absent switch branch throws;
+- a rejection propagates unchanged and leaves that circuit fail-stopped;
+- separate instances can discharge concurrently.
+
+Synapse owns four independent circuit instances:
+
+| Circuit | Input | Effect |
 | --- | --- | --- |
-| `AppModule` | composition root | business behavior |
-| `Synapse` | input routing, interaction, Agent pool, worker coordination | model protocol details, transport decoding |
-| `Brain` | mode execution and cognitive model calls | socket lifecycle, provider wire formats |
-| `Callosum` | one-pass perception of mode, goal, cwd, constraints, references | a second routing interpretation |
-| `Turn` | one input's perception, state, answer, evidence, interaction, timestamps | cross-turn storage |
-| `Memory` | active Turn and completed Turn continuity | identity notes, provider replay |
-| `Identity` | prompt identity and fixed durable-note write allowlist | Turn state, generic file policy |
-| `Investigation` | model/tool loop, replay, approvals, evidence | durable Turn ownership |
-| `Model` | normalized model request lifecycle | cognition decisions, tool execution |
-| `ProtocolClient` | provider conventions, fetch, timeout, stream decoding | agent state |
-| `Tools` | concrete tool collection and dispatch | model transport |
-| each `Tool` | schema, prompt description, cwd behavior, approval decision, execution | global JSON registry |
-| `FSocket` | socket lifecycle, backpressure, packet callbacks | Synapse reference |
-| `IPCPacket` | framing, buffering, encoding, decoding | action dispatch |
+| sensory | user text | queues the root person's input stimulus |
+| interaction | Ask or Confirm | serializes exact user interaction while other circuits remain live |
+| delegation | Task | builds child tasks from `ContextBrief` and awaits target Completes |
+| expression | Reply or root Complete | orders reply chunks, Complete, then streamEnd |
 
-## Turn Lifecycle
+Each Agent and Brain also owns a private FIFO circuit. Investigation builds its Ask, Confirm, Task, and Complete switch once in `@Init` and reuses the network for later stimuli.
+
+## Root Turn
 
 ```mermaid
-stateDiagram-v2
-    [*] --> active: Memory.begin
-    active --> paused: Turn.pause
-    paused --> active: Turn.resume
-    active --> completed: Turn.complete
-    active --> failed: Turn.fail
-    paused --> failed: Turn.fail
-    completed --> [*]
-    failed --> [*]
+sequenceDiagram
+    participant U as User
+    participant S as Synapse
+    participant A as Root Agent
+    participant C as Callosum
+    participant X as Context
+    participant I as Investigation
+
+    U->>S: input
+    S->>A: input stimulus through FIFO
+    A->>C: perceive once
+    C-->>A: intent, goal, constraints, references, cwd
+    A->>X: begin(input, perception)
+    X-->>A: immutable ContextBrief
+    A->>I: research stimulus
+    I-->>A: pure Complete
+    A->>X: complete(answer, evidence)
+    A->>S: root Complete
+    S-->>U: complete, streamEnd
 ```
 
-There is one active Turn at most. `Memory.begin()` rejects overlapping Turns. Error boundaries call `Memory.fail()` so an exception cannot leave hidden active state. The next user input can then begin a new Turn. Continuous context is formed directly from the latest four completed Turns; there is no summarization or settlement model call.
+The `reply`, `research`, and `soul` routes all end in Complete. Complete is the final summary and Context stores it directly. There is no second settle call and provider replay is never written to Context.
 
-## Perception And Modes
+If cognition rejects, the rejection is not converted to a friendly message. The affected FIFO remains fail-stopped and the active experience is preserved for diagnosis rather than disguised as success.
 
-`Callosum.perceive()` makes one model request and returns:
+## Delegation
 
-- `mode`: `reply`, `research`, `soul`, or `coordinate`;
-- `goal`;
-- optional `cwd`;
-- `constraints`;
-- `references`.
+Investigation exposes Task only for a root-capable run. Task validates `[{ agent, goal }]`; it neither creates people nor performs dispatch.
 
-`Brain` executes the selected mode:
+```mermaid
+sequenceDiagram
+    participant RI as Root Investigation
+    participant S as Synapse delegation
+    participant W as Persistent worker Agent
 
-- `reply`: stream a direct answer and complete the Turn;
-- `research`: run Investigation with Tools, approvals, replay, and evidence;
-- `soul`: ask Model for complete note replacements and delegate fixed allowlist enforcement to Identity;
-- `coordinate`: delegate worker and reviewer orchestration to Synapse.
+    RI->>S: TaskSignal
+    S->>S: Context.brief(turnId)
+    S->>W: AgentTask through worker FIFO
+    W->>W: remember task, investigate
+    W-->>S: Complete summary
+    S-->>RI: Complete[] as local tool result
+```
 
-Workers are fresh IOC-created Agents. They receive an `Assignment`, produce an `Outcome`, do not share the active Turn, and cannot pause for interactive approval. Approval-gated worker calls are returned to the model as structured denials.
+Tasks targeting the same person queue behind that person's current stimulus. Different people can run concurrently. Self-delegation is rejected because waiting on the currently executing FIFO would deadlock. Delegated runs receive `tools.list(false)`, so they cannot recursively emit Task. They may still use the common Ask and Confirm circuit.
 
-## IOC And Decorators
+## Investigation And Tools
 
-IOC is the only application-class constructor. It provides:
+Provider tool calls exist only in the local Investigation message list.
 
-- singleton caching through `@Singleton` and `@Module`;
-- property injection through `@Inject`;
-- host-bound fresh objects through `@Scope`;
-- early instance injection through `@Config` and `@Prompt`;
-- post-injection lifecycle through `@Init`.
+- Ask is validated by its tool, discharged through the interaction circuit, and replayed with structured answers.
+- Confirm is discharged before a concrete dangerous action. Rejection becomes `{ approved: false, executed: false }`; the action is not run.
+- Task is validated, discharged through delegation, and replayed with child Complete summaries.
+- Filesystem, Shell, and Execute run directly through Tools.
+- thrown failures reject unchanged;
+- shell non-zero exit and timeout remain explicit process data;
+- execute spawn errors reject the batch, while completed process exits remain explicit data;
+- valid observations are copied into the current person's bounded Memory.
 
-The complete decorator surface is `Module`, `Provide`, `Singleton`, `Inject`, `Scope`, `Init`, `Config`, and `Prompt`. Base classes carry runtime semantics; decorator aliases do not.
+Memory evicts oldest notes in FIFO order after sixteen notes. It does not reset between tasks and never contains provider messages, Turn status, or a Turn array.
 
-## Model Protocols
+## PromptService And XML
 
-`src/model/types.ts` contains only model-boundary structures: `Message`, `ToolCall`, `ToolDefinition`, `ModelResult`, and `StreamEvent`. Protocol state and wire types stay inside `src/model/protocol`.
+PromptService is the only prompt boundary. It owns:
 
-Provider names select conventions:
+- canonical English Markdown loading and `.zh.cn.md` mirror exclusion;
+- ordered sections declared by package `config.jsonc`;
+- editable, locked, and runtime-ignored identity policy;
+- strict all-before-any validation of identity writes;
+- XML name validation, attribute escaping, CDATA splitting, and stable block order;
+- inline `document` rendering for ContextBrief, user input, task data, and tool results.
 
-| Provider | Adapter and endpoint convention |
+XML exists only at model input boundaries. It is not a storage format for Context, Turn, or Memory. Missing packages, sections, mappings, blocks, and illegal names reject immediately.
+
+## Model Protocol
+
+Each provider resolves to one protocol attempt:
+
+| Provider | Protocol and path |
 | --- | --- |
-| `openai` | Responses first, then Chat Completions |
-| `deepseek` | shared OpenAI Chat Completions adapter with endpoint fallback |
-| `anthropic` | Messages |
+| `openai` | Chat Completions, `/v1/chat/completions` |
+| `responses` | Responses, `/v1/responses` |
+| `deepseek` | OpenAI-compatible Chat Completions, `/chat/completions` |
+| `anthropic` | Messages, `/v1/messages` |
 | `google`, `gemini` | Gemini streaming generate content |
 | `aws`, `bedrock` | Bedrock converse stream |
 | `cohere` | Cohere chat |
-| `ollama` | Ollama chat JSON stream |
-| `huggingface`, `vllm`, `lmstudio`, other compatible providers | shared OpenAI Chat Completions adapter |
+| `ollama` | Ollama JSON stream |
+| `vllm`, `lmstudio` | declared OpenAI-compatible Chat Completions |
 
-Configuration supplies provider, model, base URL, credential environment variable, and timeout. Endpoint path, authentication header, protocol fallback, and wire parser are code conventions. Stream decoding buffers split UTF-8 bytes and line fragments before adapters receive data.
+Unknown providers reject. Failed status codes, wrong response shapes, malformed tool JSON, missing keys, and unterminated streams reject. Streaming text callbacks are awaited, so neural output ordering cannot escape the model Promise.
 
-## Tools And Approval
+## Transport
 
-The model-visible tools are `ask`, `filesystem`, `shell`, and `execute`. There is no standalone confirm tool. Confirmation remains a stable interaction action used when a tool's `confirm()` decision returns true.
+IPC frames contain an eight-byte unsigned big-endian body length followed by UTF-8 JSON. Packet buffering covers split headers, split bodies, split UTF-8 sequences, and coalesced frames. Invalid and oversized frames reject.
 
-`Investigation` injects a perceived cwd only into tools that declare `workingDirectory`. An explicit tool-call cwd always wins. Tool request/result replay exists only in the local model loop. Evidence is normalized and merged into the completed Turn.
+FSocket rejects writes without a live connection. Reconnect resets only transport framing and pending bytes; Context and Agent Memory remain untouched. Input and answer callbacks are awaited. Unknown controller actions reject.
 
-## Prompt Convention
+## Static Red Lines
 
-`PromptService` loads canonical English markdown files from a directory, keyed by filename without `.md`. It sorts names for deterministic discovery, ignores `config.jsonc`, and ignores `.zh.cn.md` mirrors. Callers select ordered sections explicitly.
+`bun run check` combines TypeScript checking with an AST-based architecture gate. It rejects:
 
-Identity is the only durable prompt writer. Its allowlist is fixed in code to:
+- CatchClause, `.catch()`, and rejection fallback handlers;
+- direct application construction outside IOC;
+- missing EN/ZH JSDoc on runtime classes, constructors, methods, and accessors;
+- methods over 500 lines;
+- illegal dependency direction and behavioral barrels;
+- public or externally imported Turn;
+- Session types;
+- missing Chinese documentation mirrors;
+- invalid prompt source constraints.
 
-- `SOUL.md`;
-- `USER.md`;
-- `EXTENSION.md`.
+## Verification Layers
 
-`AGENTS.md`, mirrors, hidden files, arbitrary paths, and unknown files are rejected. No general XML policy or writable-file registry exists.
-
-## Transport Contract
-
-Each IPC packet contains an 8-byte unsigned big-endian JSON body length followed by UTF-8 JSON bytes. `IPCPacket` buffers partial input and returns zero or more complete frames, covering split headers, split bodies, split UTF-8 characters, and coalesced packets. Oversized and malformed packets fail explicitly.
-
-`FSocket` owns partial writes and retries pending buffers on drain. Inbound `user` and `answer` packets are reported through callbacks. Other stable actions are dispatched to `Controller`. Browser behavior and action names remain compatible.
-
-## Enforced Red Lines
-
-`bun run check` verifies:
-
-- the nine allowed source roots;
-- one-word lowercase directory names;
-- dependency direction;
-- barrel-only `index.ts` files;
-- IOC-only application construction;
-- documentation mirrors;
-- prompt source constraints.
-
-The kernel intentionally has no repository placeholder, SQL schema placeholder, plugin registry, generic event framework, Skills/MCP configuration, tool JSON registry, Observable wrapper, or speculative state class family.
+`bun test` provides deterministic coverage for Observable FIFO/fail-stop behavior, IOC scope and publication, Context isolation, Investigation branching, tools, protocol parsing, IPC framing, and Web bridge encoding. `bun run test:live` then drives the actual browser bridge and kernel with the configured DeepSeek model. Its disposable scenarios cover all three cognitive routes, every concrete tool, Ask/Confirm correlation, multi-person Task completion, and reconnect continuity. This separation keeps ordinary tests repeatable while making provider and prompt behavior independently reproducible.

@@ -1,55 +1,23 @@
 import { describe, expect, test } from 'bun:test';
-import { AgentChatRole } from '@/agent/types';
 import { useContainer } from '@/core';
+import { PromptService } from '@/prompt';
 import { Memory } from './component';
 
-function memory(): Memory {
-    return useContainer().create(Memory);
-}
-
 describe('Memory', () => {
-    test('owns one active turn and builds continuity from completed turns', () => {
-        const state = memory();
-        const first = state.begin('first question', {
-            mode: 'reply',
-            goal: 'answer first',
-            constraints: [],
-            references: [],
-        });
-        state.complete(first.id, 'first answer');
-        const second = state.begin('second question', {
-            mode: 'research',
-            goal: 'answer second',
-            constraints: [],
-            references: [],
-        });
+    test('keeps finite continuous notes without owning Turn state', () => {
+        const memory = useContainer().create(Memory, {
+            name: 'worker',
+            model: 'model',
+            provider: 'provider',
+            contextLength: 1,
+            maxTokens: 1,
+        }, { fire: async () => undefined });
+        memory.prompt = useContainer().create(PromptService, 'prompts/memory') as PromptService;
+        for (let index = 0; index < 18; index += 1) memory.remember(`note ${index}`, 'observation');
 
-        expect(state.current()?.id).toBe(second.id);
-        expect(state.messages()).toEqual([
-            { role: AgentChatRole.User, content: 'first question' },
-            { role: AgentChatRole.Assistant, content: 'first answer' },
-        ]);
-        expect(() => state.begin('overlap', second.perception)).toThrow('already active');
-    });
-
-    test('allows the next turn after failure', () => {
-        const state = memory();
-        const failed = state.begin('bad turn', {
-            mode: 'research',
-            goal: 'fail',
-            constraints: [],
-            references: [],
-        });
-        state.fail(failed.id, Error('boom'));
-
-        const next = state.begin('next turn', {
-            mode: 'reply',
-            goal: 'continue',
-            constraints: [],
-            references: [],
-        });
-
-        expect(next.status).toBe('active');
-        expect(state.snapshots()[0]).toMatchObject({ status: 'failed', error: 'boom' });
+        expect(memory.snapshot()).toHaveLength(16);
+        expect(memory.snapshot()[0]?.content).toBe('note 2');
+        expect(JSON.stringify(memory.snapshot())).not.toContain('status');
+        expect(memory.messages()[0]?.content).toContain('<agent_memory');
     });
 });

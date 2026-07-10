@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
-import { BROWSER_JSON_ONLY_MESSAGE, IpcClientBridge, PACKET_JSON_INVALID_MESSAGE, PACKET_PROTOCOL_MISMATCH_MESSAGE } from './client';
+import { BROWSER_JSON_ONLY_MESSAGE, IpcClientBridge, PACKET_PROTOCOL_MISMATCH_MESSAGE } from './client';
 
 /**
  * EN: packet function declaration.
@@ -18,16 +18,12 @@ describe('IpcClientBridge', () => {
         const second = IpcClientBridge.decodePacketTexts(first.pending, source.subarray(6));
 
         expect(first.packets).toEqual([]);
-        expect(second.errors).toEqual([]);
         expect(second.packets).toEqual([JSON.stringify({ action: 'agent', data: '你好\nworld' })]);
     });
 
     test('rejects malformed JSON packet bodies before browser forwarding', () => {
         const bad = packet('{"action":"agent","data":"bad\njson"}');
-        const result = IpcClientBridge.decodePacketTexts(Buffer.alloc(0), bad);
-
-        expect(result.packets).toEqual([]);
-        expect(result.errors[0]).toContain(PACKET_JSON_INVALID_MESSAGE);
+        expect(() => IpcClientBridge.decodePacketTexts(Buffer.alloc(0), bad)).toThrow();
     });
 
     test('decodes coalesced length-prefixed JSON packets', () => {
@@ -35,16 +31,12 @@ describe('IpcClientBridge', () => {
         const second = JSON.stringify({ action: 'streamEnd', data: null });
         const result = IpcClientBridge.decodePacketTexts(Buffer.alloc(0), Buffer.concat([packet(first), packet(second)]));
 
-        expect(result.errors).toEqual([]);
         expect(result.pending.byteLength).toBe(0);
         expect(result.packets).toEqual([first, second]);
     });
 
     test('rejects raw text where a length-prefixed packet is expected', () => {
-        const result = IpcClientBridge.decodePacketTexts(Buffer.alloc(0), Buffer.from('{"action":"agent","data":"raw"}'));
-
-        expect(result.packets).toEqual([]);
-        expect(result.errors[0]).toBe(PACKET_PROTOCOL_MISMATCH_MESSAGE);
+        expect(() => IpcClientBridge.decodePacketTexts(Buffer.alloc(0), Buffer.from('{"action":"agent","data":"raw"}'))).toThrow(PACKET_PROTOCOL_MISMATCH_MESSAGE);
     });
 
     test('encodes browser JSON messages and rejects binary messages', () => {
@@ -61,5 +53,9 @@ describe('IpcClientBridge', () => {
 
         expect(html).not.toMatch(/Flyflor|FlyFlor|FLYFLOR/);
         expect(html).not.toContain('/Users/yihuaqing/');
+        expect(html).toContain("msg.action === 'complete'");
+        expect(html).toContain("msg.action === 'pause'");
+        expect(html).toContain("msg.action === 'resume'");
+        expect(html).not.toMatch(/catch\s*\(/);
     });
 });

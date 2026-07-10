@@ -19,8 +19,10 @@ const ADAPTERS = new Map<ProtocolName, ProtocolAdapter>([
     ['responses', responsesAdapter],
 ]);
 
+/** EN: Maps each provider to one exact wire protocol and endpoint. ZH: 将每个 provider 映射到唯一线协议与 endpoint。 */
 @Provide()
 export class ProtocolClient extends FService {
+    /** EN: Opens one strict provider stream without recovery branches. ZH: 打开一个不含恢复分支的严格 provider stream。 */
     public stream(
         config: ModelOptions,
         messages: Message[],
@@ -29,16 +31,11 @@ export class ProtocolClient extends FService {
     ): ReadableStream<StreamEvent> {
         if (messages.length === 0) throw Error('Model request messages are missing');
         return new ReadableStream<StreamEvent>({
-            start: async (controller) => {
-                try {
-                    await this.request(controller, config, messages, signal, tools);
-                } catch (error) {
-                    controller.error(error);
-                }
-            },
+            start: (controller) => this.request(controller, config, messages, signal, tools),
         });
     }
 
+    /** EN: Executes the single configured provider attempt. ZH: 执行唯一已配置 provider attempt。 */
     private async request(
         controller: ReadableStreamDefaultController<StreamEvent>,
         config: ModelOptions,
@@ -46,81 +43,61 @@ export class ProtocolClient extends FService {
         signal: AbortSignal,
         tools?: ToolDefinition[],
     ): Promise<void> {
-        const errors: Array<Record<string, unknown>> = [];
-        for (const attempt of this.resolve(config.provider)) {
-            const context: ProtocolContext = { config, messages, tools, ...attempt };
-            const url = this.endpoint(config.baseUrl, attempt.spec.path, config.model);
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: this.headers(context),
-                signal,
-                body: JSON.stringify(attempt.adapter.body(context)),
+        const attempt = this.resolve(config.provider);
+        const context: ProtocolContext = { config, messages, tools, ...attempt };
+        const url = this.endpoint(config.baseUrl, attempt.spec.path, config.model);
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: this.headers(context),
+            signal,
+            body: JSON.stringify(attempt.adapter.body(context)),
+        });
+        if (!response.ok) {
+            throw Object.assign(Error('Model provider request failed'), {
+                detail: { provider: config.provider, protocol: attempt.spec.name, url, status: response.status, body: await response.text() },
             });
-            if (!response.ok) {
-                const body = await response.text();
-                if (!this.fallbackStatus(response.status)) {
-                    throw Object.assign(Error('Model provider request failed'), {
-                        detail: { provider: config.provider, protocol: attempt.spec.name, url, status: response.status, body },
-                    });
-                }
-                errors.push({ protocol: attempt.spec.name, url, status: response.status, body });
-                continue;
-            }
-            const contentType = response.headers.get('content-type') ?? '';
-            if (this.jsonResponse(attempt.spec, contentType)) {
-                if (attempt.spec.json !== true) {
-                    errors.push({ protocol: attempt.spec.name, url, status: response.status, contentType });
-                    continue;
-                }
-                const text = this.responseText(await response.json());
-                if (text.length > 0) controller.enqueue({ type: 'text_delta', text });
-                controller.enqueue({ type: 'done', stopReason: 'stop' });
-                controller.close();
-                return;
-            }
-            const reader = response.body?.getReader();
-            if (reader === undefined) {
-                throw Object.assign(Error('Model provider returned no response body'), {
-                    detail: { provider: config.provider, protocol: attempt.spec.name, url },
-                });
-            }
-            await this.read(controller, reader, context);
+        }
+        const contentType = response.headers.get('content-type') ?? '';
+        if (this.jsonResponse(attempt.spec, contentType)) {
+            if (attempt.spec.json !== true) throw Error(`Unexpected JSON response: ${attempt.spec.name}`);
+            const text = this.responseText(await response.json());
+            if (text.length > 0) controller.enqueue({ type: 'text_delta', text });
+            controller.enqueue({ type: 'done', stopReason: 'stop' });
+            controller.close();
             return;
         }
-        throw Object.assign(Error(this.failure(config.provider, errors)), {
-            detail: { provider: config.provider, errors },
-        });
+        const reader = response.body?.getReader();
+        if (reader === undefined) {
+            throw Object.assign(Error('Model provider returned no response body'), {
+                detail: { provider: config.provider, protocol: attempt.spec.name, url },
+            });
+        }
+        await this.read(controller, reader, context);
     }
 
-    public resolve(provider: string): ProtocolAttempt[] {
+    /** EN: Resolves exactly one supported provider convention. ZH: 解析唯一受支持的 provider convention。 */
+    public resolve(provider: string): ProtocolAttempt {
         const key = provider.toLowerCase().replaceAll(/[^a-z0-9]/g, '');
-        if (key === 'anthropic') return [this.attempt({ name: 'anthropic', path: '/v1/messages', auth: 'anthropic', version: '2023-06-01' })];
-        if (key === 'google' || key === 'gemini') return [this.attempt({ name: 'gemini', path: '/v1beta/models/{model}:streamGenerateContent?alt=sse', auth: 'google' })];
-        if (key === 'aws' || key === 'bedrock') return [this.attempt({ name: 'bedrock', path: '/model/{model}/converse-stream', auth: 'bearer', jsonStream: true })];
-        if (key === 'cohere') return [this.attempt({ name: 'cohere', path: '/v2/chat', auth: 'bearer' })];
-        if (key === 'ollama') return [this.attempt({ name: 'ollama', path: '/api/chat', auth: 'optional', jsonStream: true })];
-        if (key === 'openai') {
-            return [
-                this.attempt({ name: 'responses', path: '/v1/responses', auth: 'bearer', json: true }),
-                this.attempt({ name: 'openai', path: '/v1/chat/completions', auth: 'bearer' }),
-            ];
-        }
-        if (key === 'deepseek') {
-            return [
-                this.attempt({ name: 'openai', path: '/chat/completions', auth: 'bearer' }),
-                this.attempt({ name: 'openai', path: '/v1/chat/completions', auth: 'bearer' }),
-            ];
-        }
-        const auth = key === 'vllm' || key === 'lmstudio' ? 'optional' : 'bearer';
-        return [this.attempt({ name: 'openai', path: '/v1/chat/completions', auth })];
+        if (key === 'anthropic') return this.attempt({ name: 'anthropic', path: '/v1/messages', auth: 'anthropic', version: '2023-06-01' });
+        if (key === 'google' || key === 'gemini') return this.attempt({ name: 'gemini', path: '/v1beta/models/{model}:streamGenerateContent?alt=sse', auth: 'google' });
+        if (key === 'aws' || key === 'bedrock') return this.attempt({ name: 'bedrock', path: '/model/{model}/converse-stream', auth: 'bearer', jsonStream: true });
+        if (key === 'cohere') return this.attempt({ name: 'cohere', path: '/v2/chat', auth: 'bearer' });
+        if (key === 'ollama') return this.attempt({ name: 'ollama', path: '/api/chat', auth: 'optional', jsonStream: true });
+        if (key === 'openai') return this.attempt({ name: 'openai', path: '/v1/chat/completions', auth: 'bearer' });
+        if (key === 'responses' || key === 'openairesponses') return this.attempt({ name: 'responses', path: '/v1/responses', auth: 'bearer', json: true });
+        if (key === 'deepseek') return this.attempt({ name: 'openai', path: '/chat/completions', auth: 'bearer' });
+        if (key === 'vllm' || key === 'lmstudio') return this.attempt({ name: 'openai', path: '/v1/chat/completions', auth: 'optional' });
+        throw Error(`Unsupported model provider: ${provider}`);
     }
 
+    /** EN: Binds one protocol spec to its required adapter. ZH: 将一个协议 spec 绑定到必需 adapter。 */
     private attempt(spec: ProtocolSpec): ProtocolAttempt {
         const adapter = ADAPTERS.get(spec.name);
         if (adapter === undefined) throw Error(`Unsupported model protocol: ${spec.name}`);
         return { spec, adapter };
     }
 
+    /** EN: Creates isolated parser state for one response. ZH: 为一次响应创建隔离 parser state。 */
     private state(): ProtocolState {
         return {
             buffer: '',
@@ -131,6 +108,7 @@ export class ProtocolClient extends FService {
         };
     }
 
+    /** EN: Builds exact authentication headers for one convention. ZH: 为一个 convention 构造精确认证 headers。 */
     private headers(context: ProtocolContext): Record<string, string> {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (context.spec.auth === 'none') return headers;
@@ -152,6 +130,7 @@ export class ProtocolClient extends FService {
         return headers;
     }
 
+    /** EN: Resolves the exact configured endpoint. ZH: 解析精确配置的 endpoint。 */
     private endpoint(baseUrl: string, path: string, model: string): string {
         if (/^https?:\/\//.test(path)) return path.replaceAll('{model}', encodeURIComponent(model));
         const base = baseUrl.replace(/\/+$/, '');
@@ -160,14 +139,12 @@ export class ProtocolClient extends FService {
         return base + (resolved.startsWith('/') ? '' : '/') + resolved;
     }
 
-    private fallbackStatus(status: number): boolean {
-        return [400, 404, 405, 415, 422, 501].includes(status);
-    }
-
+    /** EN: Detects a declared non-streaming JSON response. ZH: 检测声明的非流式 JSON 响应。 */
     private jsonResponse(spec: ProtocolSpec, contentType: string): boolean {
         return spec.jsonStream !== true && contentType.toLowerCase().includes('application/json');
     }
 
+    /** EN: Reads text from the declared Responses JSON shape. ZH: 从声明的 Responses JSON 结构读取文本。 */
     private responseText(json: unknown): string {
         const root = json as { output_text?: unknown; output?: unknown };
         if (typeof root.output_text === 'string') return root.output_text;
@@ -186,6 +163,7 @@ export class ProtocolClient extends FService {
         return parts.join('');
     }
 
+    /** EN: Reads response bytes until one protocol terminal event. ZH: 读取响应字节直到协议终态事件。 */
     private async read(
         controller: ReadableStreamDefaultController<StreamEvent>,
         reader: ByteReader,
@@ -208,6 +186,7 @@ export class ProtocolClient extends FService {
         throw Error(context.spec.terminal ?? 'Model provider stream ended without a terminal event');
     }
 
+    /** EN: Parses complete response lines in stable order. ZH: 按稳定顺序解析完整响应行。 */
     private async lines(
         controller: ReadableStreamDefaultController<StreamEvent>,
         reader: ByteReader,
@@ -224,10 +203,5 @@ export class ProtocolClient extends FService {
             await reader.cancel();
             return;
         }
-    }
-
-    private failure(provider: string, errors: Array<Record<string, unknown>>): string {
-        if (errors.length === 0) return 'Model provider protocol matching failed';
-        return `Model provider protocol matching failed (${provider}): ${errors.map((error) => JSON.stringify(error)).join(' | ')}`;
     }
 }

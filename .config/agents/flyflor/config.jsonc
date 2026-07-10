@@ -1,0 +1,29 @@
+{
+    "version": 1,
+    "description": "Long-term identity protocol package for one intelligent life form.",
+    "prompt": {
+        "sections": ["SOUL", "USER", "EXTENSION"]
+    },
+    "protocolPackage": {
+        "editable": ["SOUL.md", "USER.md", "EXTENSION.md"],
+        "locked": ["AGENTS.md"],
+        "runtimeIgnored": [
+            "config.jsonc",
+            "AGENTS.md",
+            "AGENTS.zh.cn.md",
+            "SOUL.zh.cn.md",
+            "USER.zh.cn.md",
+            "EXTENSION.zh.cn.md"
+        ],
+        "context": {
+            "root": "prompt_package",
+            "blocks": [
+                { "key": "config", "tag": "document", "file": "config.jsonc", "role": "policy" },
+                { "key": "AGENTS", "tag": "document", "file": "AGENTS.md", "role": "rules" },
+                { "key": "SOUL", "tag": "document", "file": "SOUL.md", "role": "assistant_notes" },
+                { "key": "USER", "tag": "document", "file": "USER.md", "role": "user_notes" },
+                { "key": "EXTENSION", "tag": "document", "file": "EXTENSION.md", "role": "capabilities" }
+            ]
+        }
+    }
+}

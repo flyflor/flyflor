@@ -1,163 +1,203 @@
-# 生命体架构
+# 无 Session 智能生命体架构
 
-## 设计哲学
+## 目的
 
-Flyflor 把生物学语言当作领域语言，而不是装饰。Brain 持有认知，Callosum 感知意图，Memory 持有 Turn，Identity 持有长期自我描述，Synapse 协调整个生命体。技术设施使用直接名称：Model、Tools、Transport、Packet、Controller、Config、IOC。
+Flyflor 是一个持续存在的智能生命体。内核只有一个目的：理解用户需求、调查现实、摘要所得，并准确完成任务。Transport 连接不是生命周期边界，系统中不存在 Session 对象。
 
-实现遵循四个约束：
+## 所有权
 
-1. 一个概念只有一个所有者。
-2. 依赖从 orchestration 指向 capability。
-3. 能用目录和文件名约定解决时，不建立 registry。
-4. 只有能移除真实复杂度或保护运行时边界时才引入抽象。
+| 对象 | 生命周期 | 唯一职责 |
+| --- | --- | --- |
+| `Synapse` | 生命体 singleton | 皮层信号路由、持久 Agent pool、独立回路放电 |
+| `Context` | 生命体 singleton | 唯一创建和修改 Turn；保存完成经历 |
+| `Agent` | pool 中持久人物 | 用私有 FIFO 包围一个人的认知 |
+| `Memory` | 单个 Agent scope | 有界、连续的临时笔记；绝不保存 Turn |
+| `Brain` | 单个 Agent scope | 认知路由与根任务完成 |
+| `Callosum` | 单个 Agent scope | 对每次根输入进行一次严格感知 |
+| `Investigation` | 单个 Agent scope | 持久 Ask/Confirm/Task/Complete 网络与本地 replay |
+| `Identity` | 单个 Agent scope | 按 package policy 持有持久 prompt 身份 |
+| `Tools` | 生命体 singleton | 直接具体动作及其 schema |
+| `Model` | 单个 Agent scope | 精确 provider 请求与完整等待的 streaming |
+| `FSocket` | 生命体 singleton | 仅负责 IPC 生命周期与 backpressure |
+
+Context 持有内部 `Turn` class。Context barrel 只导出不可变 brief 与 summary，绝不导出 Turn。Brain 可调用 `begin()`、`complete()`；Synapse 可调用 `brief()`、`pause()`、`resume()`。任何调用者都无法取得可变 Turn 状态。
 
 ## 依赖方向
 
 ```mermaid
 flowchart LR
-    App[app] --> Neural[neural]
-    Neural --> Agent[agent]
-    Neural --> Transport[transport]
-    Agent --> Model[model]
-    Agent --> Tool[tool]
+    App["app.ts"] --> Neural["neural / Synapse"]
+    Neural --> Agent["agent"]
+    Neural --> Transport["transport"]
+    Agent --> Model["model"]
+    Agent --> Tool["tool"]
 
-    App --> Core[core]
+    App --> Core["core"]
     Neural --> Core
     Agent --> Core
     Model --> Core
     Tool --> Core
     Transport --> Core
 
-    Neural --> Config[config]
+    Neural --> Config["config"]
     Agent --> Config
     Model --> Config
     Tool --> Config
-    Neural --> Prompt[prompt]
-    Agent --> Prompt
+    Agent --> Prompt["prompt"]
     Tool --> Prompt
 ```
 
-业务路径固定为 `app -> neural -> agent -> model/tool`；`neural -> transport` 是唯一 transport 边。Agent 不 import Neural，Transport 不 import Neural，Model 和 Tool 不互相 import。静态健康门槛会强制这些规则。
+Agent 永不导入 Neural。两者边界是 `AgentBus.fire()` 与 `src/agent/types.ts` 中稳定的判别信号结构。Transport 不导入认知层或 Synapse，只调用已绑定 callback。
 
-## 所有权
+## IOC 与生命周期
 
-| 对象 | 持有 | 不持有 |
+`src/bootstrap.ts` 在 decorated application class 前加载 `reflect-metadata`，再调用 `Factory.create(AppModule)`。AppModule 导入 Synapse，因此一次调用即可解析并初始化整个生命体。
+
+- `@Singleton` 与 `@Module` 只有在注入和 `@Init` 成功后才写入缓存；
+- `@Scope` 使用单个 Agent 本地 resolution scope；
+- Brain、Callosum、Investigation、Identity、Memory、Model 在同一人物 scope 内只创建一次并复用；
+- 不同人物绝不共享 scoped cognition 或 Memory；
+- 业务代码不得直接构造 application class；
+- 初始化失败的对象不会发布到 singleton cache。
+
+Synapse 为每个完整的已配置 profile 创建一个人物并持续保留在 Agent pool 中。它不修改共享配置，也不创建 task-level worker。
+
+## Observable 回路
+
+`Observable<TInput, TOutput>` 继承 `FlyFlor`，只暴露 `pipe`、`switch`、`subscribe`、`next`。
+
+- `next()` 返回完整处理 Promise；
+- 每条回路使用一个 promise tail 保证 FIFO；
+- stages、选中分支、subscribers 按注册顺序完整 await；
+- 缺失 switch 分支直接抛错；
+- rejection 原样传播，并使该回路 fail-stop；
+- 不同 Observable 实例可以并行放电。
+
+Synapse 持有四个独立回路实例：
+
+| 回路 | 输入 | 效果 |
 | --- | --- | --- |
-| `AppModule` | 组合根 | 业务行为 |
-| `Synapse` | 输入路由、交互、Agent pool、worker 协调 | model protocol 细节、transport 解码 |
-| `Brain` | mode 执行和认知模型调用 | socket 生命周期、provider wire format |
-| `Callosum` | 对 mode、goal、cwd、constraints、references 的单次感知 | 第二次路由理解 |
-| `Turn` | 单次输入的感知、状态、回答、证据、交互、时间戳 | 跨 Turn 存储 |
-| `Memory` | active Turn 和 completed Turn 连续上下文 | identity 记录、provider replay |
-| `Identity` | prompt identity 和固定长期记录写入白名单 | Turn 状态、通用文件 policy |
-| `Investigation` | model/tool 循环、replay、审批、证据 | durable Turn 所有权 |
-| `Model` | 标准化模型请求生命周期 | 认知决策、工具执行 |
-| `ProtocolClient` | provider 约定、fetch、timeout、stream 解码 | agent 状态 |
-| `Tools` | 具体工具集合和派发 | model transport |
-| 每个 `Tool` | schema、prompt 描述、cwd 行为、审批决策、执行 | 全局 JSON registry |
-| `FSocket` | socket 生命周期、backpressure、packet callback | Synapse 引用 |
-| `IPCPacket` | framing、buffering、encode、decode | action 派发 |
+| 感觉 | 用户文本 | 将根人物 input stimulus 排入队列 |
+| 交互 | Ask 或 Confirm | 串行化精确用户交互，同时不阻塞其他回路 |
+| 委派 | Task | 从 `ContextBrief` 构建子任务并等待目标 Complete |
+| 表达 | Reply 或根 Complete | 保证 reply chunks、Complete、streamEnd 顺序 |
 
-## Turn 生命周期
+每个 Agent 与 Brain 也拥有私有 FIFO 回路。Investigation 在 `@Init` 中一次性构建 Ask、Confirm、Task、Complete switch，并为后续刺激复用网络。
+
+## 根 Turn
 
 ```mermaid
-stateDiagram-v2
-    [*] --> active: Memory.begin
-    active --> paused: Turn.pause
-    paused --> active: Turn.resume
-    active --> completed: Turn.complete
-    active --> failed: Turn.fail
-    paused --> failed: Turn.fail
-    completed --> [*]
-    failed --> [*]
+sequenceDiagram
+    participant U as 用户
+    participant S as Synapse
+    participant A as 根 Agent
+    participant C as Callosum
+    participant X as Context
+    participant I as Investigation
+
+    U->>S: input
+    S->>A: 通过 FIFO 发送 input stimulus
+    A->>C: 感知一次
+    C-->>A: intent、goal、constraints、references、cwd
+    A->>X: begin(input, perception)
+    X-->>A: 不可变 ContextBrief
+    A->>I: research stimulus
+    I-->>A: 纯净 Complete
+    A->>X: complete(answer, evidence)
+    A->>S: 根 Complete
+    S-->>U: complete、streamEnd
 ```
 
-最多只能有一个 active Turn。`Memory.begin()` 会拒绝重叠 Turn。错误边界调用 `Memory.fail()`，异常不会遗留隐藏 active 状态，下一条用户输入可以开始新 Turn。连续上下文直接来自最近四个 completed Turn，不存在总结或 settle 模型调用。
+`reply`、`research`、`soul` 三条路径都以 Complete 结束。Complete 就是最终摘要，Context 直接保存。不存在第二次 settle 调用，provider replay 永不写入 Context。
 
-## 感知与模式
+如果认知 reject，错误不会被转换为友好消息。受影响 FIFO 保持 fail-stop，活动经历保留用于诊断，而不是伪装成功。
 
-`Callosum.perceive()` 只发起一次模型请求并返回：
+## 委派
 
-- `mode`：`reply`、`research`、`soul`、`coordinate`；
-- `goal`；
-- 可选 `cwd`；
-- `constraints`；
-- `references`。
+Investigation 只在根能力运行中暴露 Task。Task 只验证 `[{ agent, goal }]`；它不创建人物，也不执行派发。
 
-`Brain` 执行选择后的 mode：
+```mermaid
+sequenceDiagram
+    participant RI as 根 Investigation
+    participant S as Synapse 委派回路
+    participant W as 持久 worker Agent
 
-- `reply`：流式回答并完成 Turn；
-- `research`：运行带 Tools、审批、replay、证据的 Investigation；
-- `soul`：让 Model 生成完整记录替换，并由 Identity 执行固定白名单；
-- `coordinate`：把 worker 和 reviewer orchestration 委托给 Synapse。
+    RI->>S: TaskSignal
+    S->>S: Context.brief(turnId)
+    S->>W: 通过 worker FIFO 发送 AgentTask
+    W->>W: 记住任务并调查
+    W-->>S: Complete 摘要
+    S-->>RI: Complete[] 作为本地工具结果
+```
 
-Worker 是 IOC fresh 创建的 Agent。它只接收 `Assignment`、产生 `Outcome`，不共享 active Turn，也不能为交互审批暂停。需要审批的 worker 调用会以结构化拒绝回传给模型。
+发给同一人物的任务排在该人物当前 stimulus 之后；不同人物可以并发。自我委派会被拒绝，因为等待当前正在执行的 FIFO 会死锁。委派运行使用 `tools.list(false)`，因此无法递归触发 Task，但仍可使用统一 Ask 与 Confirm 回路。
 
-## IOC 与 Decorator
+## Investigation 与 Tools
 
-IOC 是应用 class 的唯一构造器，提供：
+Provider tool calls 只存在于本次 Investigation 的本地消息列表。
 
-- `@Singleton`、`@Module` 的 singleton 缓存；
-- `@Inject` 的 property injection；
-- `@Scope` 的 host-bound fresh object；
-- `@Config`、`@Prompt` 的 early instance injection；
-- `@Init` 的 post-injection lifecycle。
+- Ask 由工具验证，通过交互回路放电，并以结构化 answers replay；
+- Confirm 在具体危险动作前放电；拒绝结果为 `{ approved: false, executed: false }`，动作不执行；
+- Task 完成验证后通过委派回路放电，并以子 Complete summaries replay；
+- Filesystem、Shell、Execute 通过 Tools 直接运行；
+- 抛出的失败原样 reject；
+- shell 非零退出与 timeout 保留为显式进程数据；
+- execute spawn 错误使批次 reject，已完成进程的退出仍是显式数据；
+- 有效观察复制到当前人物的有界 Memory。
 
-完整 decorator surface 是 `Module`、`Provide`、`Singleton`、`Inject`、`Scope`、`Init`、`Config`、`Prompt`。运行时语义由基类表达，不使用 decorator alias。
+Memory 在超过十六条 notes 后按 FIFO 淘汰最旧笔记。它不会在任务间清空，也不包含 provider messages、Turn status 或 Turn 数组。
 
-## Model Protocol
+## PromptService 与 XML
 
-`src/model/types.ts` 只包含 model boundary 结构：`Message`、`ToolCall`、`ToolDefinition`、`ModelResult`、`StreamEvent`。Protocol state 和 wire type 留在 `src/model/protocol` 内部。
+PromptService 是唯一 prompt 边界，负责：
 
-Provider 名选择约定：
+- 加载规范英文 Markdown，并忽略 `.zh.cn.md` 镜像；
+- 按 package `config.jsonc` 声明顺序组合 sections；
+- editable、locked、runtime-ignored 身份策略；
+- 身份写入的 all-before-any 严格验证；
+- XML name 验证、attribute escaping、CDATA splitting、稳定 block 顺序；
+- 为 ContextBrief、用户输入、task data、tool results 渲染内联 `document`。
 
-| Provider | Adapter 与 endpoint 约定 |
+XML 只存在于模型输入边界，不是 Context、Turn 或 Memory 的存储格式。缺少 package、section、mapping、block 或非法 name 都立即 reject。
+
+## 模型协议
+
+每个 provider 只解析为一个协议 attempt：
+
+| Provider | 协议与路径 |
 | --- | --- |
-| `openai` | 先 Responses，再 Chat Completions |
-| `deepseek` | 共享 OpenAI Chat Completions adapter，并带 endpoint fallback |
-| `anthropic` | Messages |
+| `openai` | Chat Completions，`/v1/chat/completions` |
+| `responses` | Responses，`/v1/responses` |
+| `deepseek` | OpenAI-compatible Chat Completions，`/chat/completions` |
+| `anthropic` | Messages，`/v1/messages` |
 | `google`、`gemini` | Gemini streaming generate content |
 | `aws`、`bedrock` | Bedrock converse stream |
 | `cohere` | Cohere chat |
-| `ollama` | Ollama chat JSON stream |
-| `huggingface`、`vllm`、`lmstudio` 和其他兼容 provider | 共享 OpenAI Chat Completions adapter |
+| `ollama` | Ollama JSON stream |
+| `vllm`、`lmstudio` | 显式声明的 OpenAI-compatible Chat Completions |
 
-配置只提供 provider、model、base URL、credential 环境变量和 timeout。Endpoint path、auth header、protocol fallback、wire parser 都是代码约定。Stream decoder 会先缓冲 split UTF-8 byte 和 line fragment，再交给 adapter。
+未知 provider 直接 reject。失败状态码、错误响应结构、非法 tool JSON、缺失 key、未终止 stream 都 reject。Streaming 文本 callback 被完整 await，因此神经输出顺序不会逃逸模型 Promise。
 
-## 工具与审批
+## Transport
 
-模型可见工具是 `ask`、`filesystem`、`shell`、`execute`。不存在 standalone confirm tool。工具 `confirm()` 返回 true 时，仍通过稳定的 `confirm` interaction action 完成审批。
+IPC frame 使用八字节 unsigned big-endian body length，随后是 UTF-8 JSON。Packet buffering 覆盖 split header、split body、split UTF-8 sequence 与 coalesced frames。非法或过大 frame 直接 reject。
 
-`Investigation` 只向声明 `workingDirectory` 的工具注入感知 cwd。Tool call 显式 cwd 永远优先。Tool request/result replay 只存在于本地 model loop，证据标准化后合并进 completed Turn。
+FSocket 在无活动连接时拒绝 write。重连只重置 transport framing 与 pending bytes，不触碰 Context 或 Agent Memory。Input 与 answer callback 被完整 await。未知 controller action 直接 reject。
 
-## Prompt 约定
+## 静态红线
 
-`PromptService` 从目录读取 canonical English markdown，以去掉 `.md` 的文件名作为 key。文件名排序保证稳定发现，`config.jsonc` 和 `.zh.cn.md` mirror 都不会加载。调用方显式选择 section 顺序。
+`bun run check` 组合 TypeScript 检查与 AST 架构门，拒绝：
 
-Identity 是唯一 durable prompt writer，代码中的固定白名单是：
+- CatchClause、`.catch()`、rejection fallback handler；
+- IOC 外直接构造 application class；
+- runtime class、constructor、method、accessor 缺少 EN/ZH JSDoc；
+- method 超过 500 行；
+- 非法依赖方向与带行为 barrel；
+- 公开或外部导入 Turn；
+- Session type；
+- 缺少中文文档镜像；
+- 非法 prompt source。
 
-- `SOUL.md`；
-- `USER.md`；
-- `EXTENSION.md`。
+## 验证层次
 
-`AGENTS.md`、mirror、隐藏文件、任意路径和未知文件都会被拒绝。不存在通用 XML policy 或 writable-file registry。
-
-## Transport 契约
-
-每个 IPC packet 包含 8-byte unsigned big-endian JSON body length，后接 UTF-8 JSON bytes。`IPCPacket` 缓冲 partial input 并返回零个或多个完整 frame，覆盖 split header、split body、split UTF-8 character、coalesced packet。Oversized 和 malformed packet 会明确失败。
-
-`FSocket` 持有 partial write，并在 drain 时重试 pending buffer。入站 `user`、`answer` packet 通过 callback 上报，其他稳定 action 派发给 `Controller`。浏览器行为和 action 名保持兼容。
-
-## 强制红线
-
-`bun run check` 验证：
-
-- 九个允许的 source root；
-- 单词小写目录名；
-- 依赖方向；
-- barrel-only `index.ts`；
-- IOC-only 应用构造；
-- 文档镜像；
-- prompt source 约束。
-
-内核刻意不包含 repository 占位、SQL schema 占位、plugin registry、通用 event framework、Skills/MCP 配置、tool JSON registry、Observable wrapper 或推测性 state class family。
+`bun test` 为 Observable FIFO/fail-stop、IOC scope 与发布、Context 隔离、Investigation 分支、tools、协议解析、IPC framing、Web bridge encoding 提供确定性覆盖。随后，`bun run test:live` 使用已配置 DeepSeek 模型驱动真实 browser bridge 与内核。其一次性场景覆盖三条认知路径、全部具体工具、Ask/Confirm 关联、多人物 Task Complete 与重连连续性。这样既保持普通测试可重复，又能独立复现 provider 与 prompt 的真实行为。

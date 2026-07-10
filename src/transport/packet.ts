@@ -14,23 +14,26 @@ export interface SocketPacket<T = unknown> {
     data: T;
 }
 
-@Provide()
 /**
- * EN: IPCPacket class declaration.
- * ZH: IPCPacket class 声明。
+ * EN: Owns strict framing and JSON encoding for one IPC byte stream.
+ * ZH: 持有一条 IPC byte stream 的严格 framing 与 JSON 编解码。
  */
+@Provide()
 export class IPCPacket extends FService {
     public buffer: Buffer;
 
+    /** EN: Creates an empty incremental packet buffer. ZH: 创建空的增量 packet buffer。 */
     constructor() {
         super();
         this.buffer = Buffer.alloc(0);
     }
 
+    /** EN: Clears incremental framing state for a new connection. ZH: 为新连接清空增量 framing 状态。 */
     public reset(): void {
         this.buffer = Buffer.alloc(0);
     }
 
+    /** EN: Accepts arbitrary chunks and returns every complete frame. ZH: 接收任意 chunks 并返回全部完整 frame。 */
     public read(data: Uint8Array): Uint8Array[] {
         this.buffer = Buffer.concat([this.buffer, Buffer.from(data)]);
         const packets: Uint8Array[] = [];
@@ -52,6 +55,7 @@ export class IPCPacket extends FService {
         return packets;
     }
 
+    /** EN: Decodes one exact length-prefixed JSON frame. ZH: 解码一个精确长度前缀 JSON frame。 */
     public decode<T = unknown>(data: Uint8Array): T {
         const buffer = Buffer.from(data);
         if (buffer.byteLength < HEADER_BYTES) throw Error('Incomplete packet header');
@@ -66,6 +70,7 @@ export class IPCPacket extends FService {
         return JSON.parse(body.toString(TEXT_ENCODING)) as T;
     }
 
+    /** EN: Encodes one value as an eight-byte length-prefixed JSON frame. ZH: 将一个值编码为八字节长度前缀 JSON frame。 */
     public encode(packet: unknown): Buffer {
         const content = JSON.stringify(packet);
         if (content === undefined) throw Error('Packet content is not JSON serializable');
@@ -76,6 +81,7 @@ export class IPCPacket extends FService {
         return Buffer.concat([header, body]);
     }
 
+    /** EN: Encodes a synchronous or asynchronous packet sequence. ZH: 编码同步或异步 packet 序列。 */
     public async *encodeStream<T>(packets: Iterable<T> | AsyncIterable<T>): AsyncGenerator<Buffer> {
         for await (const packet of packets) {
             yield this.encode(packet);

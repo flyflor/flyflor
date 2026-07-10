@@ -11,15 +11,15 @@ export enum IdentitySection {
 }
 
 /**
- * EN: Agent identity and prompt-package ownership. Turn state deliberately lives
- * in Memory instead of being mixed into identity notes.
- * ZH: Agent 身份与提示词包的所有者。回合状态只存在于 Memory，不混入身份笔记。
+ * EN: Durable identity and prompt-package ownership for exactly one Agent.
+ * ZH: 一个 Agent 的持久身份与 prompt 协议包所有权。
  */
 @Provide()
 export class Identity extends FComponent {
-    @Prompt((prop: Identity) => prop.agentConfig.promptPackage ?? `.config/agents/${prop.agentConfig.name}`)
+    @Prompt((prop: Identity) => prop.agentConfig.promptPackage as string)
     public prompt!: PromptService<string> & PromptPackageData<string>;
 
+    /** EN: Binds durable identity to one immutable Agent profile. ZH: 将持久身份绑定到一个不可变 Agent profile。 */
     public constructor(
         public readonly agentConfig: FAgentProfileConfiguration,
         public readonly synapse: AgentBus,
@@ -27,38 +27,28 @@ export class Identity extends FComponent {
         super();
     }
 
+    /**
+     * EN: Projects configured identity sections into one system message.
+     * ZH: 将配置的身份 sections 投影为一条 system 消息。
+     */
     public messages(): AgentMemory[] {
-        const content = this.prompt.render({ sections: this.agentConfig.promptSections });
+        const content = this.prompt.render({ kind: 'sections', sections: this.agentConfig.promptSections });
         return content.trim().length === 0 ? [] : [{ role: AgentChatRole.System, content }];
     }
 
+    /**
+     * EN: Renders the complete identity protocol package for a reviewed update.
+     * ZH: 为受审查更新渲染完整身份协议包。
+     */
     public snapshot(): string {
-        return JSON.stringify(Object.fromEntries(this.writable().map(([file, section]) => [file, this.prompt.section(section)])), null, 2);
+        return this.prompt.render({ kind: 'document', attributes: { agent: this.agentConfig.name } });
     }
 
-    public applyWrites(writes: Array<{ file?: string; content?: string }>): { written: string[]; rejected: string[] } {
-        const allowed = new Map(this.writable());
-        const written: string[] = [];
-        const rejected: string[] = [];
-        for (const write of writes) {
-            const file = String(write.file ?? 'unknown');
-            const section = allowed.get(file);
-            const prompt = section ? this.prompt.data[section] : undefined;
-            if (!prompt || typeof write.content !== 'string') {
-                rejected.push(file);
-                continue;
-            }
-            prompt.set(write.content);
-            written.push(file);
-        }
-        return { written, rejected };
-    }
-
-    private writable(): Array<[string, string]> {
-        return [
-            ['SOUL.md', IdentitySection.Soul],
-            ['USER.md', IdentitySection.User],
-            ['EXTENSION.md', IdentitySection.Extension],
-        ];
+    /**
+     * EN: Applies one fully valid identity update through PromptService policy.
+     * ZH: 通过 PromptService 策略应用一份完全合法的身份更新。
+     */
+    public applyWrites(writes: Array<{ file?: string; content?: string }>): string[] {
+        return this.prompt.applyWrites(writes);
     }
 }

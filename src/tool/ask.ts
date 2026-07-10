@@ -2,11 +2,11 @@ import { Provide } from '@/core';
 import { Tool } from './abstracts';
 import type { AskInput, AskOption, AskOutput, AskQuestion } from './types';
 
-@Provide()
 /**
- * EN: Ask class declaration.
- * ZH: Ask class 声明。
+ * EN: Validates structured clarification questions without performing interaction.
+ * ZH: 验证结构化澄清问题，不执行交互。
  */
+@Provide()
 export class Ask extends Tool<AskInput, AskOutput> {
     public readonly name = 'ask';
     public readonly risk = 'interaction';
@@ -39,6 +39,7 @@ export class Ask extends Tool<AskInput, AskOutput> {
         required: ['questions'],
     } as const;
 
+    /** EN: Validates and normalizes one question collection. ZH: 验证并规范化一组问题。 */
     public override execute(input: AskInput) {
         if (!Array.isArray(input.questions) || input.questions.length === 0) throw Error('questions is required');
         const questions = input.questions.map((item) => this.question(item));
@@ -49,6 +50,7 @@ export class Ask extends Tool<AskInput, AskOutput> {
         } as const;
     }
 
+    /** EN: Validates one question and appends the free-input choice. ZH: 验证一个问题并追加自由输入选项。 */
     private question(value: unknown): AskQuestion {
         if (typeof value !== 'object' || value === null) throw Error('question must be an object');
         const raw = value as { question?: unknown; options?: unknown };
@@ -59,6 +61,7 @@ export class Ask extends Tool<AskInput, AskOutput> {
         return { question, options };
     }
 
+    /** EN: Validates one offered answer direction. ZH: 验证一个候选回答方向。 */
     private option(value: unknown): AskOption {
         if (typeof value !== 'object' || value === null) throw Error('option must be an object');
         const raw = value as { label?: unknown; description?: unknown; recommended?: unknown };
@@ -68,6 +71,7 @@ export class Ask extends Tool<AskInput, AskOutput> {
         return option;
     }
 
+    /** EN: Requires one non-empty string field. ZH: 要求一个非空字符串字段。 */
     private text(value: unknown, name: string): string {
         if (typeof value !== 'string' || value.length === 0) throw Error(`${name} is required`);
         return value;

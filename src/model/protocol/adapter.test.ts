@@ -76,10 +76,11 @@ describe('provider adapters', () => {
         expect(events).toEqual([{ type: 'text_delta', text: 'o' }, { type: 'done', stopReason: 'stop' }]);
     });
 
-    test('reuses one OpenAI adapter for compatible providers', () => {
+    test('maps only declared compatible providers to one OpenAI adapter', () => {
         const client = useContainer().create(ProtocolClient);
-        expect(client.resolve('huggingface')[0]?.adapter).toBe(openAIAdapter);
-        expect(client.resolve('vllm')[0]?.adapter).toBe(openAIAdapter);
-        expect(client.resolve('lm-studio')[0]?.adapter).toBe(openAIAdapter);
+        expect(client.resolve('deepseek').adapter).toBe(openAIAdapter);
+        expect(client.resolve('vllm').adapter).toBe(openAIAdapter);
+        expect(client.resolve('lm-studio').adapter).toBe(openAIAdapter);
+        expect(() => client.resolve('huggingface')).toThrow('Unsupported model provider');
     });
 });

@@ -4,11 +4,11 @@ import { spawn } from 'node:child_process';
 import type { ShellInput, ShellOutput } from './types';
 import { Tool } from './abstracts';
 
-@Provide()
 /**
- * EN: Shell class declaration.
- * ZH: Shell class 声明。
+ * EN: Owns one directly spawned external command and its explicit execution data.
+ * ZH: 持有一个直接 spawn 的外部命令及其显式执行数据。
  */
+@Provide()
 export class Shell extends Tool<ShellInput, ShellOutput> {
     public readonly name = 'shell';
     public readonly risk = 'external';
@@ -27,10 +27,12 @@ export class Shell extends Tool<ShellInput, ShellOutput> {
     @Config()
     public config!: ConfigService;
 
+    /** EN: Requires approval for every external command. ZH: 所有外部命令均要求审批。 */
     public override confirm(): boolean {
         return true;
     }
 
+    /** EN: Executes one command and preserves exit and timeout as data. ZH: 执行一个命令，并将退出与超时保留为数据。 */
     public override async execute(input: ShellInput) {
         const cwd = input.cwd === undefined ? this.config.path.cwd : this.text(input.cwd, 'cwd');
         const command = this.text(input.command, 'command');
@@ -65,6 +67,7 @@ export class Shell extends Tool<ShellInput, ShellOutput> {
         }
     }
 
+    /** EN: Adds owned platform facts to the canonical description. ZH: 将自身拥有的平台事实加入规范描述。 */
     protected override describe(base: string): string {
         const lines = [
             base.trim(),
@@ -78,11 +81,13 @@ export class Shell extends Tool<ShellInput, ShellOutput> {
         return lines.join('\n').trim();
     }
 
+    /** EN: Requires one non-empty string field. ZH: 要求一个非空字符串字段。 */
     private text(value: unknown, name: string): string {
         if (typeof value !== 'string' || value.length === 0) throw Error(`${name} is required`);
         return value;
     }
 
+    /** EN: Converts primitive command arguments to strings. ZH: 将基础命令参数转换为字符串。 */
     private args(value: unknown): string[] {
         if (value === undefined) return [];
         if (!Array.isArray(value)) throw Error('args must be an array');
@@ -92,6 +97,7 @@ export class Shell extends Tool<ShellInput, ShellOutput> {
         });
     }
 
+    /** EN: Validates and bounds one command timeout. ZH: 验证并限制一个命令超时。 */
     private timeout(value: unknown): number {
         if (value === undefined) return 30000;
         if (typeof value !== 'number' || !Number.isFinite(value)) throw Error('timeoutMs must be a number');

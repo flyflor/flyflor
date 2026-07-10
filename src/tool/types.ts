@@ -1,4 +1,4 @@
-import type { ToolError } from './result';
+import type { ToolEffect } from './result';
 
 export interface ToolDefinition {
     name: string;
@@ -17,10 +17,10 @@ export interface ToolRequest {
  * ZH: 返回给模型循环的标准化工具调用结果。
  */
 export interface ToolRunResult {
-    ok: boolean;
+    ok: true;
     name: string;
-    data?: unknown;
-    error?: ToolError;
+    data: unknown;
+    effects?: readonly ToolEffect[];
 }
 
 /**
@@ -127,4 +127,17 @@ export interface ExecuteOutput {
     success: number;
     failed: number;
     results: ExecuteTaskResult[];
+}
+
+export interface TaskInput {
+    tasks?: unknown;
+}
+
+export interface TaskItemInput {
+    agent?: unknown;
+    goal?: unknown;
+}
+
+export interface TaskOutput {
+    tasks: Array<{ agent: string; goal: string }>;
 }

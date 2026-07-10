@@ -77,4 +77,21 @@ describe('openAIAdapter', () => {
         expect(bodyJson).toContain('"role":"tool"');
         expect(bodyJson).not.toContain('toolCalls');
     });
+
+    test('rejects malformed streamed tool arguments', () => {
+        const stream = state();
+        const controller = {
+            enqueue: () => undefined,
+            close: () => undefined,
+            error: () => undefined,
+            desiredSize: 1,
+        } as unknown as ReadableStreamDefaultController<StreamEvent>;
+        openAIAdapter.parse(
+            controller,
+            'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_bad","function":{"name":"filesystem","arguments":"{bad"}}]}}]}',
+            stream,
+        );
+
+        expect(() => openAIAdapter.parse(controller, 'data: {"choices":[{"finish_reason":"tool_calls"}]}', stream)).toThrow();
+    });
 });

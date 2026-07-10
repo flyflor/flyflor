@@ -60,7 +60,14 @@ class RecordingController {
 }
 
 describe('FSocket', () => {
-    test('continues partial IPC writes on drain', () => {
+    test('rejects output without a live connection', () => {
+        const socket = useContainer().create(FSocket);
+        socket.packet = useContainer().create(IPCPacket);
+
+        expect(() => socket.write({ action: 'agent', data: 'unconnected' })).toThrow('connection is unavailable');
+    });
+
+    test('continues partial IPC writes on drain', async () => {
         const socket = useContainer().create(FSocket);
         const connection = new PartialSocket();
         const packet = useContainer().create(IPCPacket);
@@ -70,14 +77,14 @@ describe('FSocket', () => {
 
         socket.write(message);
         while (Buffer.concat(connection.chunks).byteLength < packet.encode(message).byteLength) {
-            void socket.drain();
+            await socket.drain();
         }
 
         const decoded = packet.decode(Buffer.concat(connection.chunks));
         expect(decoded).toEqual(message);
     });
 
-    test('keeps pending output when socket write is backpressured', () => {
+    test('keeps pending output when socket write is backpressured', async () => {
         const socket = useContainer().create(FSocket);
         const connection = new PartialSocket();
         const packet = useContainer().create(IPCPacket);
@@ -91,7 +98,7 @@ describe('FSocket', () => {
 
         connection.blocked = false;
         while (Buffer.concat(connection.chunks).byteLength < packet.encode(message).byteLength) {
-            void socket.drain();
+            await socket.drain();
         }
 
         const decoded = packet.decode(Buffer.concat(connection.chunks));
