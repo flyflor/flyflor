@@ -1,10 +1,10 @@
-import { Agent, AgentChatRole } from '@/agent';
-import { Context, type AgentBrief } from '@/agent/context';
+import { Agent, AgentChatRole, type Assignment } from '@/agent';
+import { Memory } from '@/agent/memory';
+import { Turn } from '@/agent/turn';
 import type { ConfigService } from '@/configuration';
 import { Config, FCortex, Init, Inject, Module, Prompt, PromptService, Scope, useContainer } from '@/core';
 import { Intelligence } from '@/agent/brain/intelligence/service';
 import { parse } from '@/agent/json';
-import type { CallosumSignal } from '@/agent/brain/callosum';
 import { FSocket } from './ipc';
 import { SynapseSignalType, type CoordinatePlan, type InteractionRequest, type InteractionResponse, type SynapseSignal } from './types';
 
@@ -28,7 +28,7 @@ export class Synapse extends FCortex<SynapseSignal> {
     public socket!: FSocket;
 
     @Inject()
-    public context!: Context;
+    public memory!: Memory;
 
     @Inject()
     public intelligence!: Intelligence;
@@ -127,7 +127,7 @@ export class Synapse extends FCortex<SynapseSignal> {
 
     public async interact(request: InteractionRequest): Promise<InteractionResponse> {
         if (this.interaction) throw Error('An interaction is already pending');
-        this.context.pause(request.turnId, { id: request.id, kind: request.kind, prompt: JSON.stringify(request.data) });
+        this.memory.pause(request.turnId, { id: request.id, kind: request.kind, prompt: JSON.stringify(request.data) });
         this.emit(request.kind === 'ask' ? SynapseSignalType.Ask : SynapseSignalType.Confirm, {
             turnId: request.turnId,
             id: request.id,
@@ -145,7 +145,7 @@ export class Synapse extends FCortex<SynapseSignal> {
             throw Error('Interaction response does not match pending request');
         }
         if (interaction.request.kind !== response.kind) throw Error('Interaction response kind does not match request');
-        this.context.resume(turnId, id);
+        this.memory.resume(turnId, id);
         this.interaction = undefined;
         interaction.resolve(response);
         this.emit(SynapseSignalType.Resume, { turnId, id });
@@ -158,34 +158,31 @@ export class Synapse extends FCortex<SynapseSignal> {
      * ZH: 皮层派发。Callosum 已判断用户意图需要多 agent 协同理解。本条路径一次性
      * 完成计划、派发 agent pool、合成最终回复，并通过 Synapse 信号输出。
      */
-    public async coordinate(signal: CallosumSignal, turnId: string): Promise<void> {
+    public async coordinate(value: unknown): Promise<void> {
+        if (!(value instanceof Turn)) throw Error('Coordinate turn is invalid');
+        const turn = value;
         // EN: Ask the cortex plan prompt how to slice the understanding work.
         // ZH: 询问皮层计划提示词如何切分理解工作。
-        const brief = this.context.brief(turnId);
         const plan = parse<CoordinatePlan>(await this.intelligence.completeText([
             { role: AgentChatRole.System, content: this.prompt.section('plan') },
-            { role: AgentChatRole.User, content: `${JSON.stringify(brief)}\n<latest_user_message>${signal.chunk}</latest_user_message>` },
+            { role: AgentChatRole.User, content: JSON.stringify(this.memory.context(turn.id)) },
         ]));
 
-        // EN: Dispatch one independent worker per slice. Each worker gets its own
-        // private Memory seeded from the Context brief. If any worker pauses for
-        // ask/confirm, stop and let Synapse resume later.
-        // ZH: 每个切片派发一个独立 worker。每个 worker 都从 Context 简报获得私有记忆
-        // 种子。如果某个 worker 因 ask/confirm 暂停，则停止，稍后再由 Synapse 恢复。
-        const outcomes: Array<{ profile: string; persona: string; slice: string; brief: string; result: string; evidence: string[] }> = [];
+        // EN: Each slice receives an isolated assignment and runs concurrently.
+        // ZH: 每个切片接收隔离任务并并发执行。
         const slices = plan.slices.length === 0
-            ? [{ profile: this.active, persona: '', brief: this.context.brief(turnId).goal, slice: String(signal.chunk) }]
+            ? [{ profile: this.active, persona: '', brief: turn.perception.goal, slice: turn.input }]
             : plan.slices;
-        for (const slice of slices) {
+        const outcomes = await Promise.all(slices.map(async (slice) => {
             const agent = await this.spawnWorker(slice.profile);
-            const outcome = await agent.understand(this.workerBrief(slice, turnId));
-            if (!outcome) return;
-            outcomes.push({ profile: slice.profile, persona: slice.persona, slice: slice.slice, brief: slice.brief, result: outcome.answer, evidence: outcome.evidence });
-        }
+            const outcome = await agent.work(this.workerAssignment(slice, turn));
+            if (!outcome) throw Error(`Worker did not complete: ${slice.profile}`);
+            return { profile: slice.profile, persona: slice.persona, slice: slice.slice, brief: slice.brief, result: outcome.answer, evidence: outcome.evidence };
+        }));
 
         const reviewer = await this.spawnWorker(plan.review.profile);
-        const review = await reviewer.understand(this.reviewBrief(plan, outcomes, turnId));
-        if (!review) return;
+        const review = await reviewer.work(this.reviewAssignment(plan, outcomes, turn));
+        if (!review) throw Error(`Reviewer did not complete: ${plan.review.profile}`);
 
         // EN: Synthesize worker understandings into one coherent reply.
         // ZH: 把各 worker 的理解合成一条连贯回复。
@@ -194,31 +191,34 @@ export class Synapse extends FCortex<SynapseSignal> {
             { role: AgentChatRole.User, content: JSON.stringify({ outcomes, review: { profile: plan.review.profile, persona: plan.review.persona, result: review.answer, evidence: review.evidence }, hint: plan.synthesisHint }) },
         ]);
 
-        await this.context.settle(turnId, { assistant: answer, evidence: [...outcomes.flatMap((outcome) => outcome.evidence), ...review.evidence] });
+        this.memory.complete(turn.id, answer, [...outcomes.flatMap((outcome) => outcome.evidence), ...review.evidence]);
         this.emit(SynapseSignalType.Reply, answer);
         this.emit(SynapseSignalType.Reply, null);
     }
 
-    private workerBrief(slice: { profile: string; persona: string; brief: string; slice: string }, turnId: string): AgentBrief {
-        const brief = this.context.brief(turnId);
+    private workerAssignment(slice: { profile: string; persona: string; brief: string; slice: string }, turn: Turn): Assignment {
         return {
-            ...brief,
+            profile: slice.profile,
             goal: slice.brief,
             persona: slice.persona,
-            constraints: [...brief.constraints, slice.slice],
+            constraints: [...turn.perception.constraints, slice.slice],
+            cwd: turn.perception.cwd,
+            context: JSON.stringify(this.memory.context(turn.id)),
         };
     }
 
-    private reviewBrief(
+    private reviewAssignment(
         plan: CoordinatePlan,
         outcomes: Array<{ profile: string; persona: string; slice: string; brief: string; result: string; evidence: string[] }>,
-        turnId: string,
-    ): AgentBrief {
-        const brief = this.context.brief(turnId);
+        turn: Turn,
+    ): Assignment {
         return {
-            ...brief,
+            profile: plan.review.profile,
             goal: JSON.stringify({ review: plan.review.brief, focus: plan.review.focus, intent: plan.intent, outcomes }),
             persona: plan.review.persona,
+            constraints: [...turn.perception.constraints],
+            cwd: turn.perception.cwd,
+            context: JSON.stringify(this.memory.context(turn.id)),
         };
     }
 }

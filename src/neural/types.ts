@@ -36,7 +36,6 @@ export type InteractionResponse =
  */
 export interface CoordinatePlan {
     intent: string;
-    strategy: 'parallel' | 'sequential';
     slices: Array<{ profile: string; persona: string; brief: string; slice: string }>;
     review: { profile: string; persona: string; brief: string; focus: string };
     synthesisHint: string;

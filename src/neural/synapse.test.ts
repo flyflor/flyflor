@@ -1,142 +1,101 @@
 import { describe, expect, test } from 'bun:test';
-import type { AgentBrief } from '@/agent/context';
+import type { Assignment } from '@/agent';
+import { Memory } from '@/agent/memory';
+import { Turn } from '@/agent/turn';
+import { useContainer } from '@/core';
 import { Synapse } from './synapse';
 import { SynapseSignalType, type CoordinatePlan } from './types';
-import { CallosumSignalType } from '@/agent/brain/callosum';
 
 describe('SynapseSignalType', () => {
-    test('exposes pause and resume as control signals', () => {
+    test('keeps the external interaction signals stable', () => {
         expect(String(SynapseSignalType.Pause)).toBe('pause');
         expect(String(SynapseSignalType.Resume)).toBe('resume');
         expect(String(SynapseSignalType.Ask)).toBe('ask');
         expect(String(SynapseSignalType.Confirm)).toBe('confirm');
     });
-
-    test('exposes coordinate for cortex dispatch', () => {
-        expect(String(SynapseSignalType.Coordinate)).toBe('coordinate');
-    });
 });
 
 describe('Synapse coordinate', () => {
-    test('passes slice briefs and temporary personas to workers, then reviews before synthesis', async () => {
+    test('dispatches isolated workers in parallel, reviews, and completes the same turn', async () => {
         const plan: CoordinatePlan = {
             intent: 'understand the cluster design',
-            strategy: 'parallel',
             slices: [
                 { profile: 'worker', persona: 'intent analyst', brief: 'study intent', slice: 'intent' },
                 { profile: 'worker', persona: 'risk analyst', brief: 'study risk', slice: 'risk' },
             ],
-            review: { profile: 'reviewer', persona: 'strict reviewer', brief: 'review all worker results', focus: 'coverage and contradictions' },
+            review: { profile: 'reviewer', persona: 'strict reviewer', brief: 'review all worker results', focus: 'coverage' },
             synthesisHint: 'merge and respect review',
         };
-        const synapse = coordinateHarness(plan);
-        const replies: unknown[] = [];
-        synapse.on(SynapseSignalType.Reply, (signal: { data: unknown }) => {
-            replies.push(signal.data);
-        });
+        const { synapse, turn, assignments, replies } = coordinateHarness(plan);
 
-        await (synapse as unknown as { coordinate: (signal: { type: CallosumSignalType; chunk: string }) => Promise<void> }).coordinate({
-            type: CallosumSignalType.Coordinate,
-            chunk: 'latest request',
-        });
+        await synapse.coordinate(turn);
 
-        expect(synapse.workerBriefs.map((brief) => brief.goal)).toEqual(['study intent', 'study risk']);
-        expect(synapse.workerBriefs.map((brief) => brief.persona)).toEqual(['intent analyst', 'risk analyst']);
-        expect(synapse.workerBriefs.map((brief) => brief.constraints.at(-1))).toEqual(['intent', 'risk']);
-        expect(synapse.seenReviewBrief?.persona).toBe('strict reviewer');
-        const synthesis = JSON.parse(synapse.synthesisInput) as { outcomes: Array<{ result: string }>; review: { result: string } };
-        expect(synthesis.outcomes.map((outcome) => outcome.result)).toEqual(['worker answer', 'worker answer']);
-        expect(synthesis.review.result).toBe('review answer');
+        expect(assignments.slice(0, 2).map((assignment) => assignment.goal)).toEqual(['study intent', 'study risk']);
+        expect(assignments.slice(0, 2).map((assignment) => assignment.persona)).toEqual(['intent analyst', 'risk analyst']);
+        expect(assignments[2]?.persona).toBe('strict reviewer');
+        expect(synapse.memory.turn(turn.id).snapshot()).toMatchObject({ status: 'completed', answer: 'final answer' });
         expect(replies).toEqual(['final answer', null]);
     });
 
-    test('uses the active profile when the plan has no slices and still runs review', async () => {
+    test('uses the active profile when planning returns no slices', async () => {
         const plan: CoordinatePlan = {
             intent: 'single path',
-            strategy: 'parallel',
             slices: [],
-            review: { profile: 'reviewer', persona: 'single pass reviewer', brief: 'review active result', focus: 'answer quality' },
-            synthesisHint: 'summarize active result',
+            review: { profile: 'reviewer', persona: 'reviewer', brief: 'review result', focus: 'quality' },
+            synthesisHint: 'summarize',
         };
-        const synapse = coordinateHarness(plan);
+        const { synapse, turn, assignments } = coordinateHarness(plan);
 
-        await (synapse as unknown as { coordinate: (signal: { type: CallosumSignalType; chunk: string }) => Promise<void> }).coordinate({
-            type: CallosumSignalType.Coordinate,
-            chunk: 'latest request',
-        });
+        await synapse.coordinate(turn);
 
-        expect(synapse.activeNextCalls).toBe(0);
-        expect(synapse.activeUnderstandCalls).toBe(0);
-        expect(synapse.workerBriefs).toHaveLength(1);
-        expect(synapse.seenReviewBrief?.persona).toBe('single pass reviewer');
+        expect(assignments[0]?.profile).toBe('flyflor');
+        expect(assignments[0]?.goal).toBe('turn goal');
+        expect(assignments[1]?.profile).toBe('reviewer');
     });
 });
 
-function coordinateHarness(plan: CoordinatePlan): Synapse & {
-    workerBriefs: AgentBrief[];
-    seenReviewBrief?: AgentBrief;
-    synthesisInput: string;
-    activeNextCalls: number;
-    activeUnderstandCalls: number;
+function coordinateHarness(plan: CoordinatePlan): {
+    synapse: Synapse;
+    turn: Turn;
+    assignments: Assignment[];
+    replies: unknown[];
 } {
-    const synapse = new Synapse() as Synapse & {
-        workerBriefs: AgentBrief[];
-        seenReviewBrief?: AgentBrief;
-        synthesisInput: string;
-        activeNextCalls: number;
-        activeUnderstandCalls: number;
-    };
-    synapse.workerBriefs = [];
-    synapse.synthesisInput = '';
-    synapse.activeNextCalls = 0;
-    synapse.activeUnderstandCalls = 0;
+    const synapse = useContainer().create(Synapse);
+    const memory = useContainer().create(Memory);
+    const turn = memory.begin('latest request', {
+        mode: 'coordinate',
+        goal: 'turn goal',
+        constraints: ['keep scope'],
+        references: [],
+    });
+    const assignments: Assignment[] = [];
+    const replies: unknown[] = [];
+    synapse.memory = memory;
     synapse.active = 'flyflor';
-    synapse.context = {
-        brief: (turnId?: string) => ({
-            turnId: turnId ?? 'turn_1',
-            intent: 'research',
-            goal: 'turn goal',
-            constraints: [],
-            refs: [],
-            recentSummaries: [],
-        }),
-        settle: async () => undefined,
-    } as never;
+    synapse.agentPool = {};
     synapse.prompt = { section: (name: string) => `${name} prompt` } as never;
-    let call = 0;
+    synapse.on(SynapseSignalType.Reply, (signal) => {
+        replies.push(signal.data);
+    });
+    let modelCall = 0;
     synapse.intelligence = {
-        completeText: async (messages: Array<{ content: string }>) => {
-            call += 1;
-            if (call === 1) return JSON.stringify(plan);
-            synapse.synthesisInput = messages.at(-1)?.content ?? '';
-            return 'final answer';
+        completeText: async () => {
+            modelCall += 1;
+            return modelCall === 1 ? JSON.stringify(plan) : 'final answer';
         },
     } as never;
-    synapse.agentPool = {
-        flyflor: {
-            next: async () => {
-                synapse.activeNextCalls += 1;
-            },
-            understand: async () => {
-                synapse.activeUnderstandCalls += 1;
-                return { answer: 'active answer', steps: 1, completed: true, paused: false, evidence: ['active evidence'] };
-            },
-        } as never,
-    };
-    let spawned = 0;
+    let worker = 0;
     synapse.spawnWorker = async () => {
-        spawned += 1;
-        const index = spawned;
+        worker += 1;
+        const current = worker;
         return {
-            understand: async (brief: AgentBrief) => {
-                if (index > Math.max(plan.slices.length, 1)) {
-                    synapse.seenReviewBrief = brief;
-                    return { answer: 'review answer', steps: 1, completed: true, paused: false, evidence: ['review evidence'] };
-                }
-                synapse.workerBriefs.push(brief);
-                return { answer: 'worker answer', steps: 1, completed: true, paused: false, evidence: ['worker evidence'] };
+            work: async (assignment: Assignment) => {
+                assignments.push(assignment);
+                return current > Math.max(plan.slices.length, 1)
+                    ? { answer: 'review answer', evidence: ['review evidence'] }
+                    : { answer: 'worker answer', evidence: ['worker evidence'] };
             },
         } as never;
     };
-    return synapse;
+    return { synapse, turn, assignments, replies };
 }

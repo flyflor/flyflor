@@ -1,103 +1,117 @@
 import { describe, expect, test } from 'bun:test';
-import { AgentChatRole } from '@/agent/types';
-import { Brain } from './brain';
-import { CallosumSignalType } from './callosum';
+import { AgentChatRole, type Assignment } from '@/agent/types';
+import { Memory } from '@/agent/memory';
+import { Turn } from '@/agent/turn';
+import { useContainer } from '@/core';
 import { SynapseSignalType } from '@/neural/types';
+import { Brain } from './brain';
+
+const profile = { name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 };
 
 describe('Brain', () => {
-    test('awaits coordinate handling at the Synapse boundary', async () => {
-        let coordinated = false;
-        const brain = new Brain({ name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 }, {
-            emit: () => undefined,
-            coordinate: async () => {
-                coordinated = true;
-            },
-        });
-
-        await (brain as unknown as { handle: (signal: { type: CallosumSignalType; chunk: string }, turnId: string) => Promise<void> }).handle({
-            type: CallosumSignalType.Coordinate,
-            chunk: 'compare src/agent and src/neural',
-        }, 'turn_1');
-
-        expect(coordinated).toBe(true);
-    });
-
-    test('passes the latest user message into direct replies', async () => {
-        const emitted: Array<{ type: SynapseSignalType; data: unknown }> = [];
+    test('perceives once, includes completed memory, and completes a direct reply', async () => {
+        const emitted: Array<{ type: string; data: unknown }> = [];
         const seen: unknown[] = [];
-        const brain = new Brain({ name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 }, {
-            emit: (type: string, data: unknown) => {
-                emitted.push({ type: type as SynapseSignalType, data });
-                return undefined;
-            },
+        const memory = useContainer().create(Memory);
+        const previous = memory.begin('previous question', {
+            mode: 'reply',
+            goal: 'answer previous',
+            constraints: [],
+            references: [],
         });
-        brain.memory = { buildMessage: () => [{ role: AgentChatRole.System, content: 'system' }] } as never;
+        memory.complete(previous.id, 'previous answer');
+        let perceptions = 0;
+        const brain = new Brain(profile, {
+            emit: (type, data) => emitted.push({ type, data }),
+        });
+        brain.memory = memory;
+        brain.callosum = {
+            perceive: async () => {
+                perceptions += 1;
+                return { mode: 'reply', goal: 'answer latest', constraints: [], references: [] } as const;
+            },
+        } as never;
+        brain.identity = { messages: () => [{ role: AgentChatRole.System, content: 'identity' }] } as never;
         brain.intelligence = {
             stream: async (messages: unknown, onChunk: (chunk: string) => void) => {
                 seen.push(messages);
                 onChunk('PONG1');
             },
         } as never;
-        brain.context = { settle: async () => undefined, turn: () => ({ cwd: undefined }) } as never;
 
-        await (brain as unknown as { reply: (signal: { type: CallosumSignalType; chunk: string }, turnId: string) => Promise<void> }).reply({
-            type: CallosumSignalType.Reply,
-            chunk: '请只回复这五个字符：PONG1',
-        }, 'turn_1');
+        await brain.onPipe('latest question');
 
-        expect(seen[0]).toContainEqual({ role: AgentChatRole.User, content: '请只回复这五个字符：PONG1' });
+        expect(perceptions).toBe(1);
+        expect(seen[0]).toEqual([
+            { role: AgentChatRole.System, content: 'identity' },
+            { role: AgentChatRole.User, content: 'previous question' },
+            { role: AgentChatRole.Assistant, content: 'previous answer' },
+            { role: AgentChatRole.User, content: 'latest question' },
+        ]);
+        expect(memory.snapshots().at(-1)).toMatchObject({ status: 'completed', answer: 'PONG1' });
         expect(emitted).toContainEqual({ type: SynapseSignalType.Reply, data: 'PONG1' });
     });
 
-    test('passes the latest user message into research turns', async () => {
-        const seen: unknown[] = [];
-        const brain = new Brain({ name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 }, {
+    test('awaits coordinate handling at the cortex boundary', async () => {
+        const memory = useContainer().create(Memory);
+        let coordinated = false;
+        const brain = new Brain(profile, {
             emit: () => undefined,
-        } as never);
-        brain.memory = { buildMessage: () => [{ role: AgentChatRole.System, content: 'system' }] } as never;
-        brain.investigation = {
-            run: async (_signal: unknown, messages: unknown) => {
-                seen.push(messages);
-                return { answer: 'done', steps: 1, completed: true, paused: false, evidence: [] };
+            coordinate: async (value) => {
+                coordinated = value instanceof Turn;
+                memory.complete((value as Turn).id, 'coordinated');
             },
+        });
+        brain.memory = memory;
+        brain.callosum = {
+            perceive: async () => ({ mode: 'coordinate', goal: 'compare layers', constraints: [], references: [] }),
         } as never;
-        brain.context = { settle: async () => undefined, turn: () => ({ cwd: undefined }) } as never;
 
-        await (brain as unknown as { research: (signal: { type: CallosumSignalType; chunk: string }, turnId: string) => Promise<void> }).research({
-            type: CallosumSignalType.Research,
-            chunk: '请读取 package.json',
-        }, 'turn_1');
+        await brain.onPipe('compare src/agent and src/neural');
 
-        expect(seen[0]).toContainEqual({ role: AgentChatRole.User, content: '请读取 package.json' });
+        expect(coordinated).toBe(true);
+        expect(memory.snapshots()[0]).toMatchObject({ status: 'completed', answer: 'coordinated' });
     });
 
-    test('runs worker understanding silently from the assigned brief', async () => {
-        const seen: Array<{ signal: unknown; options: unknown }> = [];
-        const brain = new Brain({ name: 'worker', model: '', provider: '', contextLength: 0, maxTokens: 0 }, {
-            emit: () => undefined,
-        } as never);
-        brain.memory = {
-            ingestBrief: () => undefined,
-            buildMessage: () => [{ role: AgentChatRole.System, content: 'worker base' }],
+    test('marks the active turn failed when cognition throws', async () => {
+        const memory = useContainer().create(Memory);
+        const brain = new Brain(profile, { emit: () => undefined });
+        brain.memory = memory;
+        brain.callosum = {
+            perceive: async () => ({ mode: 'research', goal: 'inspect', constraints: [], references: [] }),
         } as never;
+        brain.identity = { messages: () => [] } as never;
+        brain.investigation = { run: async () => { throw Error('tool loop failed'); } } as never;
+
+        await expect(brain.onPipe('inspect')).rejects.toThrow('tool loop failed');
+
+        expect(memory.current()).toBeUndefined();
+        expect(memory.snapshots()[0]).toMatchObject({ status: 'failed', error: 'tool loop failed' });
+    });
+
+    test('runs an isolated worker assignment without shared turn state', async () => {
+        const seen: unknown[] = [];
+        const brain = new Brain({ ...profile, name: 'worker' }, { emit: () => undefined });
+        brain.identity = { messages: () => [{ role: AgentChatRole.System, content: 'worker identity' }] } as never;
         brain.investigation = {
-            run: async (signal: unknown, _messages: unknown, options: unknown) => {
-                seen.push({ signal, options });
-                return { answer: 'done', steps: 1, completed: true, paused: false, evidence: [] };
+            run: async (messages: unknown, options: unknown) => {
+                seen.push({ messages, options });
+                return { answer: 'worker answer', steps: 1, completed: true, paused: false, evidence: ['worker evidence'] };
             },
         } as never;
-
-        await brain.understand({
-            turnId: 'turn_1',
-            intent: 'research',
+        const assignment: Assignment = {
+            profile: 'worker',
             goal: 'study this slice',
-            persona: 'temporary specialist',
-            constraints: [],
-            refs: [],
-            recentSummaries: [],
-        });
+            persona: 'evidence specialist',
+            constraints: ['read only'],
+            cwd: '/tmp/work',
+            context: 'recent context',
+        };
 
-        expect(seen[0]?.signal).toEqual({ type: CallosumSignalType.Research, chunk: 'study this slice' });
-        expect(seen[0]?.options).toEqual({ emitReply: false, cwd: undefined });
+        const outcome = await brain.work(assignment);
+
+        expect(outcome).toEqual({ answer: 'worker answer', evidence: ['worker evidence'] });
+        expect(seen[0]).toMatchObject({ options: { emitReply: false, cwd: '/tmp/work' } });
+        expect(JSON.stringify(seen[0])).toContain('evidence specialist');
     });
 });

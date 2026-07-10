@@ -1,9 +1,7 @@
-import { AgentChatRole, type AgentMemory } from '@/agent/types';
+import { AgentChatRole, AgentEventType, type AgentMemory } from '@/agent/types';
 import { FAgentAtom, Inject, Provide, Scope } from '@/core';
-import { Context } from '@/agent/context';
 import { SynapseSignalType } from '@/neural/types';
 import { type ActionRequest, ToolComponent } from '@/plugins';
-import { CallosumSignalType, type CallosumSignal } from '../callosum';
 import { Intelligence } from '../intelligence/service';
 import type { ProviderActionRequestMessage, ProviderActionResultMessage, ProviderMessage } from '../intelligence/types';
 import type { InvestigationOutcome, InvestigationRunOptions } from './types';
@@ -18,19 +16,16 @@ export class Investigation extends FAgentAtom {
     public intelligence!: Intelligence;
 
     @Inject()
-    public context!: Context;
-
-    @Inject()
     public tools!: ToolComponent;
 
-    public async run(_signal: CallosumSignal, baseMessages: AgentMemory[], options: InvestigationRunOptions = {}): Promise<InvestigationOutcome> {
+    public async run(baseMessages: AgentMemory[], options: InvestigationRunOptions = {}): Promise<InvestigationOutcome> {
         const messages: ProviderMessage[] = [...baseMessages];
         const evidence: string[] = [];
         const emitReply = options.emitReply !== false;
         let step = 0;
         while (true) {
             step += 1;
-            this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.LlmRequest, chunk: String(step), data: { step } });
+            this.synapse.emit(SynapseSignalType.Event, { type: AgentEventType.ModelRequest, data: { step } });
             const result = await this.intelligence.streamRequest(messages, await this.tools.list(), (chunk) => {
                 if (emitReply) this.synapse.emit(SynapseSignalType.Reply, chunk);
             });
@@ -42,7 +37,12 @@ export class Investigation extends FAgentAtom {
             messages.push(this.actionRequestMessage({ ...result, actionRequests: requests }));
             for (const request of requests) {
                 if (await this.tools.requiresConfirm(request)) {
-                    if (!options.turnId || !this.synapse.interact) throw Error('Confirm boundary is missing');
+                    if (!options.turnId || !this.synapse.interact) {
+                        const denied = { ok: false, name: request.name, error: { code: 'TOOL_APPROVAL_REQUIRED', message: 'Tool call requires an interactive approval boundary' } } as const;
+                        messages.push(this.actionResultMessage(request, denied));
+                        evidence.push(this.evidence(request, denied));
+                        continue;
+                    }
                     const response = await this.synapse.interact({
                         turnId: options.turnId,
                         id: request.id,
@@ -56,9 +56,9 @@ export class Investigation extends FAgentAtom {
                         continue;
                     }
                 }
-                this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.ActionStart, chunk: request.name, data: request.arguments });
+                this.synapse.emit(SynapseSignalType.Event, { type: AgentEventType.ActionStart, name: request.name, data: request.arguments });
                 const actionResult = await this.tools.run(request);
-                this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.ActionResult, chunk: request.name, data: actionResult });
+                this.synapse.emit(SynapseSignalType.Event, { type: AgentEventType.ActionResult, name: request.name, data: actionResult });
                 messages.push(this.actionResultMessage(request, actionResult));
                 evidence.push(this.evidence(request, actionResult));
                 if (actionResult.ok && this.pause(actionResult.data)) {

@@ -9,7 +9,6 @@ Schema:
 ```json
 {
   "intent": "用户意图的简短摘要",
-  "strategy": "parallel",
   "slices": [
     {
       "profile": "worker",
@@ -32,7 +31,6 @@ Schema:
 
 - 根据请求判断共享工作是否有价值。只有工作存在独立部分、视角或证据需求时才使用多个 slices。
 - 如果一个 worker 足够，返回 `"slices": []`；调用方仍会在最终合成前运行 review。
-- `strategy` 目前必须是 `"parallel"`。
 - 只使用已配置的 profile 名称。默认 worker profile 是 `"worker"`，默认 review profile 是 `"reviewer"`。
 - 不要创建静态专家 profile 名称。需要的专长写入 `persona`。
 - 每个 `persona` 只在当前 turn 临时有效，不描述已保存身份。
