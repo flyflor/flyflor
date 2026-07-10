@@ -1,6 +1,6 @@
 # Flyflor
 
-Flyflor 是一个 Bun + TypeScript agent kernel。当前代码围绕 decorated classes、reflect-metadata IOC container、本地 length-prefixed IPC socket、prompt package、provider protocol adapter 和一组本地工具面运行。
+Flyflor 是一个 Bun + TypeScript 生命体内核。领域语言直接表达认知：Synapse 负责协调，Brain 持有认知，Callosum 感知意图，Memory 持有 Turn，Identity 持有长期记录。技术设施使用直接工程命名，例如 Model、Tools、Transport、Packet 和 Controller。
 
 ## 快速开始
 
@@ -11,9 +11,9 @@ bun run dev
 bun run client
 ```
 
-`bun run dev` 启动 `src/bootstrap.ts` 并打开配置中的 IPC socket。`bun run client` 在 `http://127.0.0.1:17878` 启动本地浏览器桥，把浏览器 JSON 消息转发到这个 socket。
+`bun run dev` 启动 `src/app/bootstrap.ts` 并打开配置中的 IPC socket。`bun run client` 在 `http://127.0.0.1:17878` 启动浏览器桥。
 
-改动健康门槛：
+认为改动完成前，运行健康门槛：
 
 ```bash
 bun run check
@@ -21,156 +21,78 @@ bun test
 bun run build:binary
 ```
 
-`bun run check` 会跑 TypeScript 和仓库红线扫描。默认 model/provider 在 `.config/config.jsonc`；secret 只放环境变量。
-
-## 运行时地图
-
-```mermaid
-flowchart TB
-    Bootstrap["src/bootstrap.ts<br/>先加载 reflect-metadata"] --> Factory["Factory.create(AppModule)"]
-    Factory --> Container["Container<br/>构造、注入、运行 @Init"]
-    Container --> AppModule["AppModule<br/>imports Synapse + PluginModule"]
-
-    AppModule --> Synapse["Synapse<br/>信号皮层 + active agent pool"]
-    AppModule --> PluginModule["PluginModule"]
-    PluginModule --> Tools["ToolComponent<br/>ask, confirm, filesystem, shell, execute"]
-
-    Synapse --> Socket["FSocket<br/>Bun IPC listener"]
-    Socket <--> Packet["IPCPacket<br/>8-byte length + JSON"]
-    Socket <--> Client["web/client.ts<br/>browser bridge"]
-
-    Synapse --> Agent["Agent<br/>scoped Brain + Memory"]
-    Agent --> Brain["Brain<br/>turn orchestration"]
-    Brain --> Callosum["Callosum<br/>route classifier"]
-    Brain --> Context["Context<br/>turns + summaries"]
-    Brain --> Memory["Memory<br/>private agent notes"]
-    Brain --> Investigation["Investigation<br/>local action loop"]
-    Brain --> Intelligence["Intelligence<br/>provider stream boundary"]
-    Context --> Intelligence
-    Investigation --> Tools
-    Investigation --> Intelligence
-    Intelligence --> Protocols["Protocol adapters<br/>OpenAI, Anthropic, Gemini, Bedrock,<br/>Cohere, HuggingFace, Ollama, vLLM, LM Studio"]
-```
-
-## 启动生命周期
+## 架构
 
 ```mermaid
 flowchart LR
-    A["bootstrap.ts"] --> B["import reflect-metadata"]
-    B --> C["Factory.create(AppModule)"]
-    C --> D["Container.getAsync(AppModule)"]
-    D --> E["构建 module imports"]
-    E --> F["构造 class"]
-    F --> G["@Config / @Prompt 早期注入"]
-    G --> H["@Inject / @Scope 依赖注入"]
-    H --> I["@Init lifecycle method"]
-    I --> J["Factory.synapse()"]
+    App["app<br/>组合根"] --> Neural["neural<br/>Synapse"]
+    Neural --> Agent["agent<br/>Brain, Callosum, Turn, Memory"]
+    Neural --> Transport["transport<br/>Socket, Packet, Controller"]
+    Agent --> Model["model<br/>provider adapters"]
+    Agent --> Tool["tool<br/>Tools 与策略"]
+    App --> Core["core<br/>IOC、基类、日志"]
+    Neural --> Core
+    Agent --> Core
+    Model --> Core
+    Tool --> Core
+    Transport --> Core
+    Neural --> Config["config"]
+    Model --> Config
+    Tool --> Config
+    Neural --> Prompt["prompt<br/>文件名约定"]
+    Agent --> Prompt
+    Tool --> Prompt
 ```
 
-应用类只应由 IOC container 构造。带 singleton metadata 的 class 会缓存；普通 provider 每次解析时 fresh 创建。
+强制业务依赖为 `app -> neural -> agent -> model/tool`，并保留 `neural -> transport`。`core`、`config`、`prompt` 提供共享设施。`bun run check` 会拒绝非法源码根目录、多单词目录、反向依赖、承载行为的 `index.ts`，以及绕过 IOC 构造应用 class。
 
-## 一次用户回合
+## 一次 Turn
 
 ```mermaid
 flowchart TD
-    User["IPC packet<br/>action=user 或 answer"] --> Decode["FSocket -> IPCPacket.decode"]
-    Decode --> Input["Synapse.emit(input, text)"]
-    Input --> AgentNext["active Agent.next(text)"]
-    AgentNext --> Ingest["Context.ingest()<br/>LLM 提取 intent, goal, cwd, refs"]
-    Ingest --> Route["Callosum.route(text)"]
-
-    Route --> Choice{"route type"}
-    Choice -- reply --> Reply["Brain.reply()<br/>Memory messages 经过 Intelligence stream"]
-    Reply --> ReplyOut["Synapse reply chunks<br/>然后 streamEnd"]
-    ReplyOut --> Settle1["Context.settle()"]
-
-    Choice -- research 或 task --> Research["Investigation.run()"]
-    Research --> LlmTools["Intelligence.streamRequest()<br/>with tool definitions"]
-    LlmTools --> HasAction{"tool calls?"}
-    HasAction -- no --> FinalAnswer["final answer"]
-    HasAction -- yes --> RunTool["ToolComponent.run()"]
-    RunTool --> Pause{"ask / confirm?"}
-    Pause -- yes --> UserPause["emit ask 或 confirm<br/>标记 active turn paused"]
-    Pause -- no --> LlmTools
-    FinalAnswer --> Settle2["Context.settle(evidence)"]
-
-    Choice -- soul --> Soul["render prompt package XML<br/>LLM 规划写入"]
-    Soul --> Apply["PromptService.applyWrites()"]
-    Apply --> Settle3["Context.settle()"]
-
-    Choice -- coordinate --> Coordinate["Synapse.coordinate()<br/>LLM 规划临时 persona"]
-    Coordinate --> Workers["静默 worker understand() 调用"]
-    Workers --> Review["静默 reviewer understand() 调用"]
-    Review --> Synthesis["综合 outcomes + review"]
-    Synthesis --> Settle4["Context.settle(evidence)"]
+    Input["transport callback"] --> Synapse["Synapse input"]
+    Synapse --> Perceive["Callosum.perceive<br/>一次模型调用"]
+    Perceive --> Turn["Memory.begin<br/>唯一 active Turn"]
+    Turn --> Mode{"mode"}
+    Mode -->|reply| Reply["Brain 流式调用 Model"]
+    Mode -->|research| Research["Investigation 运行 Model + Tools"]
+    Mode -->|soul| Identity["Identity 执行固定白名单写入"]
+    Mode -->|coordinate| Coordinate["Synapse 派发隔离 worker + reviewer"]
+    Reply --> Complete["Memory.complete"]
+    Research --> Complete
+    Identity --> Complete
+    Coordinate --> Complete
+    Research -->|ask / approval| Pause["Turn.pause -> answer -> Turn.resume"]
+    Turn -->|error| Fail["Turn.fail；下一条输入仍可继续"]
 ```
 
-`Context` 是 durable turn owner。`Memory` 不是 transcript；它是从 `Context.brief()` 初始化的、有容量上限的 agent 私有笔记缓存。
+`Turn` 是唯一会话实体，持有输入、感知、状态、回答、证据、交互状态和时间戳。`Memory` 是 Turn 的唯一所有者，并把最近四个完成 Turn 作为连续上下文。Worker 只接收 `Assignment` 并返回 `Outcome`，不共享 active Turn。
 
-## IPC 协议
+## 运行时契约
 
-kernel socket 上每个 packet 都是 8-byte unsigned big-endian JSON body length，加 UTF-8 JSON body：
-
-```txt
-+--------------------------+-------------------------------+
-| 8-byte body length (BE)  | JSON body bytes (UTF-8)       |
-+--------------------------+-------------------------------+
-```
-
-入站 `action: "user"` 或 `action: "answer"` 会变成 agent input。其他入站 action 会派发给 `Controller`；当前 controller action 是 `cwd`，用于更新 `ConfigService.path.cwd`。
-
-常见出站 action 是 `open`、`agent`、`streamEnd`、`data`、`ask`、`confirm`、`pause`、`resume`、`error`。
-
-## 模型边界
-
-`Intelligence` 对外只暴露统一 stream contract：
-
-- `text_delta`：可见输出。
-- `reasoning_delta`：需要在 provider 后续调用中回放的 reasoning。
-- `action_start`、`action_delta`、`action_end`：streaming tool call。
-- `done`：结束原因是 `stop`、`length` 或 `toolUse`。
-
-协议选择来自 `.config/config.jsonc` 里的 active provider。provider 级 `protocols` 覆盖 `model.protocols`；每个 protocol adapter 只负责自己的 wire body 和 stream parser。
-
-## 工具面
-
-当前暴露给模型的工具由 `prompts/tools/config.jsonc` 加载，实现在 `src/plugins/tools`：
-
-- `ask`：请用户从选项中选择；工具会自动补一个 `other` 选项。
-- `confirm`：请求 yes/no 风格确认，并携带 recommended boolean。
-- `filesystem`：`read`、`write`、`edit` 或 file-only `delete`，路径来自显式 `cwd` 或 `ConfigService.path.cwd`。
-- `shell`：运行一个 command + args，有有界 timeout。
-- `execute`：串行或并行运行 `python` / `sh` script tasks，可带 per-task cwd、env、timeout。
-
-`Investigation` 拥有 tool loop。tool request/result replay 只留在 provider messages 里，不写入 `Context.turns`。
-
-## Prompt Runtime
-
-`PromptService` 可加载单个 markdown 文件，也可加载带 `config.jsonc` 的 prompt package 目录。package config 定义普通渲染 sections、editable files、locked files、runtime-ignored files，以及 `soul` route 使用的 XML document view。
-
-canonical runtime prompt source 是英文 `.md` 文件。`.zh.cn.md` 是 human mirror，不能成为运行时 source-of-truth。
+- IOC 是应用 class 的唯一构造路径，保留 singleton 缓存、scope 构造参数、property injection 和 `@Init` 生命周期。
+- Decorator 只保留 `Module`、`Provide`、`Singleton`、`Inject`、`Scope`、`Init`、`Config`、`Prompt`。
+- `Model` 暴露 `Message`、`ToolCall`、`ModelResult`、`StreamEvent`。Provider endpoint、auth、path 和 wire parser 都是 `src/model/protocol` 内的协议约定。
+- OpenAI-compatible provider 复用同一个 adapter。继续支持 OpenAI Responses、Anthropic、Gemini、Bedrock、Cohere、Ollama、DeepSeek、Hugging Face、vLLM、LM Studio 路径。
+- `Tools` 显式持有 `ask`、`filesystem`、`shell`、`execute`。每个工具自己持有 schema、描述 prompt、cwd 约定和审批决策。风险调用仍使用 `confirm` 交互 action，但不存在 standalone confirm tool。
+- Canonical prompt 是按目录和文件名加载的英文 `.md`。`.zh.cn.md` 只供人类参考，运行时绝不读取。
+- IPC packet 仍是 8-byte unsigned big-endian body length 加 UTF-8 JSON body。Transport 通过 callback 上报输入，不 import Synapse。
 
 ## 源码布局
 
-```txt
-src/bootstrap.ts                       process entrypoint
-src/app.module.ts                      root @Module
-src/configuration.ts                   ConfigService 和 runtime config types
-src/core/                              decorators、IOC、base classes、prompt、logger、tool contracts
-src/neural/                            Synapse、IPC socket、packet codec、controller
-src/agent/                             Agent、Brain、Callosum、Context、Memory、Investigation、Intelligence
-src/plugins/                           plugin boundary 和 local tools
-src/entities/                          entity/repository classes；MemoryRepo 当前只返回 SQL statements
-web/                                   本地 browser-to-IPC bridge 和测试页
-prompts/                               prompt packages 和 zh.cn mirrors
-.config/                              runtime config 和 active agent prompt package
-sql/                                   schema files
-pakcages/                              bundled sqlite-vec helper/native assets；不在当前 agent turn path
-scripts/check.script.ts                docs mirror 和 prompt-term checks
+```text
+src/
+  app/          组合根
+  core/         IOC、基类、日志
+  config/       运行时配置
+  prompt/       约定式 prompt 加载
+  model/        模型边界和协议 adapter
+  agent/        认知与 Turn 所有权
+  neural/       Synapse 协调
+  tool/         工具和审批策略
+  transport/    socket、packet、controller
 ```
 
-## 当前边界
+所有目录名都是单个小写英文单词。`index.ts` 只能做 barrel。配置位于 `.config/config.jsonc`，secret 位于环境变量。
 
-`MemoryRepo` 和 `sql/001-core-schema.sql` 准备了未来 persistence boundary，但当前 `Agent`、`Context`、`Memory` 路径仍是内存态。config file 也声明了 skills 和 MCP shapes，但当前代码还没有把 runtime MCP client 或 skill loader 接进 turn loop。
-
-项目规则在 `AGENTS.md`；本 README 只做实现总览。
+所有权、生命周期、协议和兼容性细节见 [docs/architecture.zh.cn.md](docs/architecture.zh.cn.md)。项目红线见 [AGENTS.zh.cn.md](AGENTS.zh.cn.md)。
