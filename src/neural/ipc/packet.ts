@@ -2,6 +2,7 @@ import { Service } from '@/core/decorator';
 import { FService, of, type Observable } from '@/core/ioc';
 
 export const HEADER_BYTES = 8;
+export const MAX_BODY_BYTES = 4 * 1024 * 1024;
 export const TEXT_ENCODING = 'utf-8';
 
 /**
@@ -26,6 +27,10 @@ export class IPCPacket extends FService {
         this.buffer = Buffer.alloc(0);
     }
 
+    public reset(): void {
+        this.buffer = Buffer.alloc(0);
+    }
+
     public of(data: Uint8Array): Observable<Uint8Array> {
         return of(...this.read(data));
     }
@@ -36,6 +41,10 @@ export class IPCPacket extends FService {
 
         while (this.buffer.byteLength >= HEADER_BYTES) {
             const bodyBytes = this.buffer.readBigUInt64BE(0);
+            if (bodyBytes > BigInt(MAX_BODY_BYTES)) {
+                this.buffer = Buffer.alloc(0);
+                throw Error('Packet body exceeds limit');
+            }
             const packetBytes = HEADER_BYTES + Number(bodyBytes);
             if (this.buffer.byteLength < packetBytes) break;
 
@@ -52,6 +61,7 @@ export class IPCPacket extends FService {
         if (buffer.byteLength < HEADER_BYTES) throw Error('Incomplete packet header');
 
         const bodyBytes = buffer.readBigUInt64BE(0);
+        if (bodyBytes > BigInt(MAX_BODY_BYTES)) throw Error('Packet body exceeds limit');
         const packetBytes = HEADER_BYTES + Number(bodyBytes);
         if (buffer.byteLength < packetBytes) throw Error('Incomplete packet body');
         if (buffer.byteLength !== packetBytes) throw Error('Packet byte length does not match header');

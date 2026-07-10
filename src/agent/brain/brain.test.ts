@@ -5,22 +5,21 @@ import { CallosumSignalType } from './callosum';
 import { SynapseSignalType } from '@/neural/types';
 
 describe('Brain', () => {
-    test('forwards coordinate signals to Synapse without local handling', async () => {
-        const emitted: Array<{ type: SynapseSignalType; data: unknown }> = [];
+    test('awaits coordinate handling at the Synapse boundary', async () => {
+        let coordinated = false;
         const brain = new Brain({ name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 }, {
-            emit: (type: string, data: unknown) => {
-                emitted.push({ type: type as SynapseSignalType, data });
-                return undefined;
+            emit: () => undefined,
+            coordinate: async () => {
+                coordinated = true;
             },
         });
 
-        await (brain as unknown as { handle: (signal: { type: CallosumSignalType; chunk: string }) => Promise<void> }).handle({
+        await (brain as unknown as { handle: (signal: { type: CallosumSignalType; chunk: string }, turnId: string) => Promise<void> }).handle({
             type: CallosumSignalType.Coordinate,
             chunk: 'compare src/agent and src/neural',
-        });
+        }, 'turn_1');
 
-        expect(emitted).toHaveLength(1);
-        expect(emitted[0]?.type).toBe(SynapseSignalType.Coordinate);
+        expect(coordinated).toBe(true);
     });
 
     test('passes the latest user message into direct replies', async () => {
@@ -39,12 +38,12 @@ describe('Brain', () => {
                 onChunk('PONG1');
             },
         } as never;
-        brain.context = { settle: async () => undefined } as never;
+        brain.context = { settle: async () => undefined, turn: () => ({ cwd: undefined }) } as never;
 
-        await (brain as unknown as { reply: (signal: { type: CallosumSignalType; chunk: string }) => Promise<void> }).reply({
+        await (brain as unknown as { reply: (signal: { type: CallosumSignalType; chunk: string }, turnId: string) => Promise<void> }).reply({
             type: CallosumSignalType.Reply,
             chunk: '请只回复这五个字符：PONG1',
-        });
+        }, 'turn_1');
 
         expect(seen[0]).toContainEqual({ role: AgentChatRole.User, content: '请只回复这五个字符：PONG1' });
         expect(emitted).toContainEqual({ type: SynapseSignalType.Reply, data: 'PONG1' });
@@ -62,12 +61,12 @@ describe('Brain', () => {
                 return { answer: 'done', steps: 1, completed: true, paused: false, evidence: [] };
             },
         } as never;
-        brain.context = { settle: async () => undefined } as never;
+        brain.context = { settle: async () => undefined, turn: () => ({ cwd: undefined }) } as never;
 
-        await (brain as unknown as { research: (signal: { type: CallosumSignalType; chunk: string }) => Promise<void> }).research({
+        await (brain as unknown as { research: (signal: { type: CallosumSignalType; chunk: string }, turnId: string) => Promise<void> }).research({
             type: CallosumSignalType.Research,
             chunk: '请读取 package.json',
-        });
+        }, 'turn_1');
 
         expect(seen[0]).toContainEqual({ role: AgentChatRole.User, content: '请读取 package.json' });
     });
@@ -99,6 +98,6 @@ describe('Brain', () => {
         });
 
         expect(seen[0]?.signal).toEqual({ type: CallosumSignalType.Research, chunk: 'study this slice' });
-        expect(seen[0]?.options).toEqual({ emitReply: false });
+        expect(seen[0]?.options).toEqual({ emitReply: false, cwd: undefined });
     });
 });

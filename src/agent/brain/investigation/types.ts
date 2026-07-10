@@ -12,4 +12,6 @@ export interface InvestigationOutcome {
 
 export interface InvestigationRunOptions {
     emitReply?: boolean;
+    turnId?: string;
+    cwd?: string;
 }

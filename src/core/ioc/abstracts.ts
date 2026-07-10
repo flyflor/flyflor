@@ -362,6 +362,8 @@ export abstract class FCortex<T extends CortexSignal = CortexSignal> extends FMo
 
 export interface FAgentSynapseBus {
     emit(type: string, data: unknown): unknown;
+    coordinate?(signal: unknown, turnId: string): Promise<void>;
+    interact?(request: { turnId: string; id: string; kind: 'ask' | 'confirm'; data: unknown }): Promise<unknown>;
 }
 
 /**
@@ -403,6 +405,10 @@ export abstract class FToolAtom<TInput = unknown, TOutput = unknown> extends Obs
     private promptService?: PromptService<ToolPromptSection>;
 
     public abstract override onPipe(data: TInput): ToolResult<TOutput> | Promise<ToolResult<TOutput>>;
+
+    public confirm(_input: TInput): boolean {
+        return false;
+    }
 
     /**
      * EN: Runs the tool once with explicit input.

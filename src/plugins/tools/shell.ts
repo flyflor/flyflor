@@ -12,6 +12,10 @@ export class Shell extends FToolAtom<ShellInput, ShellOutput> {
     @Config()
     public config!: ConfigService;
 
+    public override confirm(): boolean {
+        return true;
+    }
+
     public override async onPipe(input: ShellInput) {
         const cwd = input.cwd === undefined ? this.config.path.cwd : this.text(input.cwd, 'cwd');
         const command = this.text(input.command, 'command');

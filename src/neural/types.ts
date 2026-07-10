@@ -19,6 +19,17 @@ export interface SynapseSignal extends CortexSignal {
     type: SynapseSignalType;
 }
 
+export interface InteractionRequest {
+    turnId: string;
+    id: string;
+    kind: 'ask' | 'confirm';
+    data: unknown;
+}
+
+export type InteractionResponse =
+    | { kind: 'ask'; answers: Array<{ question: string; answer: string }> }
+    | { kind: 'confirm'; approved: boolean };
+
 /**
  * EN: Plan produced by the cortex for multi-agent understanding.
  * ZH: 皮层为多 agent 理解生成的计划。

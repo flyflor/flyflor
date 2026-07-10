@@ -123,8 +123,9 @@ describe('FSocket', () => {
         const synapse = new RecordingSynapse();
         socket.packet = packet;
         socket.synapse = synapse as unknown as Synapse;
+        socket.connection = {} as Socket<SocketConnectionData>;
 
-        await socket.data({} as Socket<SocketConnectionData>, packet.encode({ action: SocketEvent.User, data: { text: 'hello' } }));
+        await socket.data(socket.connection, packet.encode({ action: SocketEvent.User, data: { text: 'hello' } }));
         await tick();
 
         expect(synapse.signals).toEqual([{ type: 'input', data: 'hello' }]);
@@ -137,8 +138,9 @@ describe('FSocket', () => {
         const data = { path: '/tmp/flyflor' };
         socket.packet = packet;
         socket.controller = controller as unknown as Controller;
+        socket.connection = {} as Socket<SocketConnectionData>;
 
-        await socket.data({} as Socket<SocketConnectionData>, packet.encode({ action: 'cwd', data }));
+        await socket.data(socket.connection, packet.encode({ action: 'cwd', data }));
         await tick();
 
         expect(controller.cwdCalls).toEqual([data]);

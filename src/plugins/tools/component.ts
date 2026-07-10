@@ -1,7 +1,6 @@
 import { FTool, FToolAtom, Inject, Singleton, type ToolError } from '@/core';
 import type { IntelligenceToolDefinition } from '@/agent/brain/intelligence/types';
 import { Ask } from './ask';
-import { Confirm } from './confirm';
 import { Execute } from './execute';
 import { Filesystem } from './filesystem';
 import { Shell } from './shell';
@@ -15,9 +14,6 @@ import type { ActionRequest, ToolPromptConfig, ToolProtocol, ToolRunResult } fro
 export class ToolComponent extends FTool {
     @Inject()
     public ask!: Ask;
-
-    @Inject()
-    public confirm!: Confirm;
 
     @Inject()
     public filesystem!: Filesystem;
@@ -35,6 +31,17 @@ export class ToolComponent extends FTool {
             description,
             parameters: protocol.parameters,
         }));
+    }
+
+    public async requiresConfirm(call: ActionRequest): Promise<boolean> {
+        const record = (await this.records()).find(({ protocol }) => protocol.name === call.name);
+        if (!record) throw Error(`Unknown tool: ${call.name}`);
+        return record.atom.confirm(call.arguments);
+    }
+
+    public async cwd(name: string): Promise<boolean> {
+        const record = (await this.records()).find(({ protocol }) => protocol.name === name);
+        return record?.protocol.cwd === 'inject';
     }
 
     public async run(call: ActionRequest): Promise<ToolRunResult> {
@@ -63,7 +70,7 @@ export class ToolComponent extends FTool {
     }
 
     private atoms(): Array<FToolAtom<any, any>> {
-        return [this.ask, this.confirm, this.filesystem, this.shell, this.execute];
+        return [this.ask, this.filesystem, this.shell, this.execute];
     }
 
     private error(error: unknown): ToolError {

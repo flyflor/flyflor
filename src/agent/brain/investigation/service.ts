@@ -1,5 +1,5 @@
 import { AgentChatRole, type AgentMemory } from '@/agent/types';
-import { FAgentAtom, Inject, Provide } from '@/core';
+import { FAgentAtom, Inject, Provide, Scope } from '@/core';
 import { Context } from '@/agent/context';
 import { SynapseSignalType } from '@/neural/types';
 import { type ActionRequest, ToolComponent } from '@/plugins';
@@ -14,7 +14,7 @@ import type { InvestigationOutcome, InvestigationRunOptions } from './types';
  * ZH: Investigation class 声明。
  */
 export class Investigation extends FAgentAtom {
-    @Inject()
+    @Scope()
     public intelligence!: Intelligence;
 
     @Inject()
@@ -23,7 +23,7 @@ export class Investigation extends FAgentAtom {
     @Inject()
     public tools!: ToolComponent;
 
-    public async run(signal: CallosumSignal, baseMessages: AgentMemory[], options: InvestigationRunOptions = {}): Promise<InvestigationOutcome> {
+    public async run(_signal: CallosumSignal, baseMessages: AgentMemory[], options: InvestigationRunOptions = {}): Promise<InvestigationOutcome> {
         const messages: ProviderMessage[] = [...baseMessages];
         const evidence: string[] = [];
         const emitReply = options.emitReply !== false;
@@ -38,19 +38,42 @@ export class Investigation extends FAgentAtom {
                 return { answer: result.text, steps: step, completed: true, paused: false, evidence };
             }
 
-            const requests = result.actionRequests.map((request) => this.withWorkingDirectory(request));
+            const requests = await Promise.all(result.actionRequests.map((request) => this.withWorkingDirectory(request, options.cwd)));
             messages.push(this.actionRequestMessage({ ...result, actionRequests: requests }));
             for (const request of requests) {
+                if (await this.tools.requiresConfirm(request)) {
+                    if (!options.turnId || !this.synapse.interact) throw Error('Confirm boundary is missing');
+                    const response = await this.synapse.interact({
+                        turnId: options.turnId,
+                        id: request.id,
+                        kind: 'confirm',
+                        data: { call: request },
+                    }) as { kind: 'confirm'; approved: boolean };
+                    if (!response.approved) {
+                        const denied = { ok: false, name: request.name, error: { code: 'TOOL_REJECTED', message: 'User rejected tool call' } } as const;
+                        messages.push(this.actionResultMessage(request, denied));
+                        evidence.push(this.evidence(request, denied));
+                        continue;
+                    }
+                }
                 this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.ActionStart, chunk: request.name, data: request.arguments });
                 const actionResult = await this.tools.run(request);
                 this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.ActionResult, chunk: request.name, data: actionResult });
                 messages.push(this.actionResultMessage(request, actionResult));
                 evidence.push(this.evidence(request, actionResult));
                 if (actionResult.ok && this.pause(actionResult.data)) {
-                    this.context.pause({ kind: actionResult.data.kind, prompt: this.pausePrompt(actionResult.data) });
-                    this.synapse.emit(actionResult.data.kind === 'ask' ? SynapseSignalType.Ask : SynapseSignalType.Confirm, actionResult.data);
-                    this.synapse.emit(SynapseSignalType.Pause, { signal, action: request.name, data: actionResult.data });
-                    return { answer: '', steps: step, completed: false, paused: true, evidence };
+                    if (!options.turnId || !this.synapse.interact) {
+                        return { answer: '', steps: step, completed: false, paused: true, evidence };
+                    }
+                    const response = await this.synapse.interact({
+                        turnId: options.turnId,
+                        id: request.id,
+                        kind: actionResult.data.kind,
+                        data: actionResult.data,
+                    });
+                    const resumed = { ok: true, name: request.name, data: response } as const;
+                    messages[messages.length - 1] = this.actionResultMessage(request, resumed);
+                    evidence[evidence.length - 1] = this.evidence(request, resumed);
                 }
             }
         }
@@ -65,10 +88,9 @@ export class Investigation extends FAgentAtom {
         };
     }
 
-    private withWorkingDirectory(request: ActionRequest): ActionRequest {
-        const cwd = this.context.current?.cwd;
+    private async withWorkingDirectory(request: ActionRequest, cwd?: string): Promise<ActionRequest> {
         if (typeof cwd !== 'string' || cwd.length === 0) return request;
-        if (request.name !== 'filesystem' && request.name !== 'execute' && request.name !== 'shell') return request;
+        if (!await this.tools.cwd(request.name)) return request;
         if ('cwd' in request.arguments) return request;
         return { ...request, arguments: { ...request.arguments, cwd } };
     }
@@ -110,8 +132,4 @@ export class Investigation extends FAgentAtom {
         return typeof data === 'object' && data !== null && ((data as { kind?: unknown }).kind === 'ask' || (data as { kind?: unknown }).kind === 'confirm');
     }
 
-    private pausePrompt(data: { question?: string; questions?: Array<{ question?: string }> }): string {
-        if (typeof data.question === 'string') return data.question;
-        return (data.questions ?? []).map((item) => item.question).filter((question): question is string => typeof question === 'string' && question.length > 0).join('\n');
-    }
 }

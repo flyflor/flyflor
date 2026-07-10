@@ -11,20 +11,34 @@ describe('Context', () => {
     test('lands one user message, lets the LLM settle a summary in its own words, and marks the turn complete', async () => {
         const context = new Context();
         context.prompt = { section: () => 'settle prompt' } as never;
+        let request = 0;
         context.intelligence = {
-            completeText: async () => JSON.stringify({
-                goal: 'flatten the turn shape',
-                result: 'context keeps one truth',
-                changedFiles: ['src/agent/context/component.ts'],
-                decisions: ['turn owns summary'],
-                evidence: ['ingest kept user text verbatim'],
-                remaining: ['no parallel completed array'],
-            }),
+            completeText: async () => {
+                request += 1;
+                return request === 1
+                    ? JSON.stringify({
+                        intent: 'research',
+                        goal: 'flatten the turn shape',
+                        constraints: [],
+                        refs: [],
+                        done: [],
+                        open: [],
+                        investigate: true,
+                    })
+                    : JSON.stringify({
+                        goal: 'flatten the turn shape',
+                        result: 'context keeps one truth',
+                        changedFiles: ['src/agent/context/component.ts'],
+                        decisions: ['turn owns summary'],
+                        evidence: ['ingest kept user text verbatim'],
+                        remaining: ['no parallel completed array'],
+                    });
+            },
         } as never;
 
         const userMessage = '简化 Context';
         const settled = await context.ingest({ text: userMessage });
-        const summary = await context.settle({ assistant: '已把 turn 拍平' });
+        const summary = await context.settle(settled.id, { assistant: '已把 turn 拍平' });
 
         expect(context.turns.length).toBeGreaterThan(0);
         expect(settled.user).toBe(userMessage);
@@ -52,7 +66,7 @@ describe('Context', () => {
         } as never;
 
         await context.ingest({ text: '简化 Context' });
-        const brief = context.brief('worker');
+        const brief = context.brief();
 
         expect(brief.intent).toBe('research');
         expect(brief.goal).toContain('flatten');

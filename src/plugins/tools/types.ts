@@ -5,6 +5,7 @@ export interface ToolProtocol {
     name: string;
     file: string;
     risk: ToolRisk;
+    cwd?: 'inject';
     parameters: Record<string, unknown>;
 }
 
@@ -48,6 +49,7 @@ export interface AskOption {
     label: string;
     description?: string;
     recommended?: boolean;
+    custom?: boolean;
 }
 
 export interface AskQuestion {

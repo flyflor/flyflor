@@ -12,6 +12,7 @@ export type PauseKind = 'ask' | 'confirm';
 export type TurnStatus = 'working' | 'completed';
 
 export interface Pause {
+    id: string;
     kind: PauseKind;
     prompt: string;
 }
@@ -70,13 +71,7 @@ export interface MemoryNote {
     ts: number;
 }
 
-/**
- * EN: One tracked user turn. Acts as both the in-flight understanding and the
- * durable record after settlement, decided by `status`.
- * ZH: 一条被跟踪的用户 turn。既是进行中的理解视图,也靠 status 成为落地后的持久记录。
- */
-export interface Turn {
-    id: string;
+export interface TurnDraft {
     user: string;
     intent: Intent;
     goal: string;
@@ -87,6 +82,15 @@ export interface Turn {
     done: string[];
     open: string[];
     investigate: boolean;
+}
+
+/**
+ * EN: One tracked user turn. Acts as both the in-flight understanding and the
+ * durable record after settlement, decided by `status`.
+ * ZH: 一条被跟踪的用户 turn。既是进行中的理解视图,也靠 status 成为落地后的持久记录。
+ */
+export interface Turn extends TurnDraft {
+    id: string;
     status: TurnStatus;
     summary?: Summary;
     assistant?: string;

@@ -1,5 +1,5 @@
-import type { FModelConfiguration } from '@/configuration';
-import { Config, FService, Singleton } from '@/core';
+import type { ConfigService, FAgentProfileConfiguration, FModelConfiguration } from '@/configuration';
+import { Config, FService, Init, Provide } from '@/core';
 import { createIntelligenceRequestStream } from './factory';
 import type { ActionRequest } from '@/plugins';
 import type { IntelligenceEvent, IntelligenceStopReason, IntelligenceToolDefinition, ProviderMessage } from './types';
@@ -17,28 +17,44 @@ export interface IntelligenceResult {
     stopReason: IntelligenceStopReason;
 }
 
-@Singleton()
+@Provide()
 /**
  * EN: Intelligence class declaration.
  * ZH: Intelligence class 声明。
  */
 export class Intelligence extends FService {
-    @Config('model')
-    public config!: FModelConfiguration;
+    @Config()
+    public root!: ConfigService;
 
-    /**
-     * The active provider call for this service instance.
-     * `Intelligence` owns cancellation because it is the LLM communication boundary.
-     */
-    private abortController?: AbortController;
+    public config: FModelConfiguration;
+
+    constructor(private readonly profile?: FAgentProfileConfiguration) {
+        super();
+        this.config = {} as FModelConfiguration;
+    }
+
+    @Init()
+    public initProfile(): void {
+        const profile = this.profile ?? { name: 'cortex', model: '', provider: '', contextLength: 0, maxTokens: 0 };
+        const config = this.root.model;
+        const provider = profile.provider || config.provider;
+        this.config = {
+            ...config,
+            model: profile.model || config.model || config.default,
+            provider,
+            contextLength: profile.contextLength || config.contextLength,
+            maxTokens: profile.maxTokens || config.maxTokens,
+            protocols: this.root.providers[provider]?.protocols ?? config.protocols,
+        };
+    }
 
     /**
      * Opens one streaming provider request.
      * Callers receive structured provider events and do not need to know protocol details.
      */
     public reader(messages: ProviderMessage[], tools?: IntelligenceToolDefinition[]) {
-        this.abortController = new AbortController();
-        return createIntelligenceRequestStream(this.config, messages, this.abortController.signal, tools).getReader();
+        const abortController = new AbortController();
+        return createIntelligenceRequestStream(this.config, messages, abortController.signal, tools).getReader();
     }
 
     /**
@@ -56,13 +72,6 @@ export class Intelligence extends FService {
         } finally {
             reader.releaseLock();
         }
-    }
-
-    /**
-     * Cancels the active LLM request, if one is still running.
-     */
-    public cancel(reason?: unknown): void {
-        this.abortController?.abort(reason);
     }
 
     /**

@@ -1244,12 +1244,14 @@
                 errorCount.textContent = String(errorTotal);
             }
 
-            function sendAnswer(text) {
-                if (!ws || ws.readyState !== WebSocket.OPEN) return;
-                const packet = { action: 'answer', data: { text } };
-                debugIpc('ws.out', { action: packet.action, textLength: text.length });
+            let interaction = null;
+
+            function sendAnswer(response) {
+                if (!ws || ws.readyState !== WebSocket.OPEN || !interaction) return;
+                const packet = { action: 'answer', data: { ...interaction, response } };
+                debugIpc('ws.out', { action: packet.action, turnId: interaction.turnId, id: interaction.id });
                 ws.send(JSON.stringify(packet));
-                addMessage(text, 'user');
+                interaction = null;
                 pending = true;
                 setInputEnabled();
                 createPendingAgentMessage();
@@ -1279,7 +1281,7 @@
 
                     const options = Array.isArray(item?.options) ? item.options : [];
                     options.forEach((option) => {
-                        const isOther = option?.label === 'other';
+                        const isOther = option?.custom === true;
                         const row = document.createElement('div');
                         row.className = 'ask-option';
 
@@ -1329,14 +1331,15 @@
                 submit.className = 'primary ask-submit';
                 submit.textContent = '提交回答';
                 submit.addEventListener('click', () => {
-                    const lines = questions.map((item, qIndex) => {
+                    const answers = questions.map((item, qIndex) => {
                         const pick = picks[qIndex];
-                        const question = String(item?.question ?? '');
-                        if (pick.label === 'other') return `${question} -> ${pick.custom || '(空)'}`;
-                        return `${question} -> ${pick.label ?? '(未选)'}`;
+                        return {
+                            question: String(item?.question ?? ''),
+                            answer: pick.custom || pick.label || '',
+                        };
                     });
                     card.querySelectorAll('button, input').forEach((el) => { el.disabled = true; });
-                    sendAnswer(lines.join('\n'));
+                    sendAnswer({ kind: 'ask', answers });
                 });
                 card.appendChild(submit);
 
@@ -1356,7 +1359,9 @@
 
                 const title = document.createElement('div');
                 title.className = 'ask-question-title';
-                title.textContent = String(data?.question ?? '');
+                title.textContent = data?.call
+                    ? `${String(data.call.name)} ${JSON.stringify(data.call.arguments ?? {})}`
+                    : String(data?.question ?? '');
                 card.appendChild(title);
 
                 const actions = document.createElement('div');
@@ -1375,12 +1380,12 @@
                 if (data?.recommended === true) approve.classList.add('recommended');
                 if (data?.recommended === false) reject.classList.add('recommended');
 
-                const finish = (text) => {
+                const finish = (approved) => {
                     card.querySelectorAll('button').forEach((el) => { el.disabled = true; });
-                    sendAnswer(text);
+                    sendAnswer({ kind: 'confirm', approved });
                 };
-                approve.addEventListener('click', () => finish('approve'));
-                reject.addEventListener('click', () => finish('reject'));
+                approve.addEventListener('click', () => finish(true));
+                reject.addEventListener('click', () => finish(false));
 
                 actions.append(approve, reject);
                 card.appendChild(actions);
@@ -1406,12 +1411,14 @@
                     return;
                 }
                 if (msg.action === 'ask') {
+                    interaction = { turnId: msg.data?.turnId, id: msg.data?.id };
                     cancelPendingMessage();
                     signalPill.textContent = 'ask';
                     renderAskPrompt(msg.data);
                     return;
                 }
                 if (msg.action === 'confirm') {
+                    interaction = { turnId: msg.data?.turnId, id: msg.data?.id };
                     cancelPendingMessage();
                     signalPill.textContent = 'confirm';
                     renderConfirmPrompt(msg.data);

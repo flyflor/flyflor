@@ -23,7 +23,7 @@ export class Ask extends FToolAtom<AskInput, AskOutput> {
         const question = this.text(raw.question, 'question');
         if (!Array.isArray(raw.options) || raw.options.length === 0) throw Error('options is required');
         const options = raw.options.map((option) => this.option(option));
-        options.push({ label: 'other', description: '自定义回答，可引用上面的方案' });
+        options.push({ label: 'other', description: '自定义回答，可引用上面的方案', custom: true });
         return { question, options };
     }
 

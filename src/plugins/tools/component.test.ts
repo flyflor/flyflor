@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { ConfigService } from '@/configuration';
 import { FToolAtom, useContainer } from '@/core';
 import { Context } from '@/agent/context';
-import { Ask, Confirm, Execute, Filesystem, Shell, ToolComponent } from '@/plugins';
+import { Ask, Execute, Filesystem, Shell, ToolComponent } from '@/plugins';
 
 async function component(): Promise<ToolComponent> {
     return await useContainer().getAsync(ToolComponent);
@@ -55,7 +55,7 @@ describe('ToolComponent', () => {
     test('lists tool definitions from prompt config and keeps shell description free of semantic cwd', async () => {
         const definitions = await (await component()).list();
 
-        expect(definitions.map((definition) => definition.name)).toEqual(['ask', 'confirm', 'filesystem', 'shell', 'execute']);
+        expect(definitions.map((definition) => definition.name)).toEqual(['ask', 'filesystem', 'shell', 'execute']);
         expect(definitions.find((definition) => definition.name === 'filesystem')?.parameters.required).toEqual(['action', 'path']);
         expect(definitions.find((definition) => definition.name === 'task')).toBeUndefined();
         expect(definitions.find((definition) => definition.name === 'ask')?.description).toContain('Ask the user');
@@ -77,26 +77,22 @@ describe('ToolComponent', () => {
         const tools = await component();
 
         expect(tools.ask).toBeInstanceOf(FToolAtom);
-        expect(tools.confirm).toBeInstanceOf(FToolAtom);
         expect(tools.filesystem).toBeInstanceOf(FToolAtom);
         expect(tools.shell).toBeInstanceOf(FToolAtom);
         expect(tools.execute).toBeInstanceOf(FToolAtom);
         expect(tools.ask).toBeInstanceOf(Ask);
-        expect(tools.confirm).toBeInstanceOf(Confirm);
         expect(tools.filesystem).toBeInstanceOf(Filesystem);
         expect(tools.shell).toBeInstanceOf(Shell);
         expect(tools.execute).toBeInstanceOf(Execute);
     });
 
-    test('dispatches ask and confirm tools and rejects unknown task', async () => {
+    test('dispatches ask and rejects unknown tool', async () => {
         const tools = await component();
 
         const ask = await tools.run({ id: 'ask_1', name: 'ask', arguments: { questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] } });
-        const confirm = await tools.run({ id: 'confirm_1', name: 'confirm', arguments: { question: 'Proceed?', recommended: true } });
         const unknown = await tools.run({ id: 'task_1', name: 'task', arguments: {} });
 
-        expect(ask).toEqual({ ok: true, name: 'ask', data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }, { label: 'other', description: '自定义回答，可引用上面的方案' }] }] } });
-        expect(confirm).toEqual({ ok: true, name: 'confirm', data: { kind: 'confirm', question: 'Proceed?', recommended: true } });
+        expect(ask).toEqual({ ok: true, name: 'ask', data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }, { label: 'other', description: '自定义回答，可引用上面的方案', custom: true }] }] } });
         expect(unknown).toEqual({
             ok: false,
             name: 'task',
@@ -104,11 +100,11 @@ describe('ToolComponent', () => {
         });
     });
 
-    test('wraps thrown tool errors', async () => {
-        const result = await (await component()).run({ id: 'confirm_1', name: 'confirm', arguments: { question: 'Proceed?' } });
+    test('wraps thrown tool errors for invalid input', async () => {
+        const result = await (await component()).run({ id: 'ask_1', name: 'ask', arguments: {} });
 
         expect(result.ok).toBe(false);
-        expect(result.error?.message).toBe('recommended is required');
+        expect(result.error?.message).toBe('questions is required');
     });
 
     test('filesystem reads writes edits and deletes using config cwd by default', async () => {

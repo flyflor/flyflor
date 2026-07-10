@@ -13,6 +13,10 @@ export class Filesystem extends FToolAtom<FilesystemInput, FilesystemOutput> {
     @Config()
     public config!: ConfigService;
 
+    public override confirm(input: FilesystemInput): boolean {
+        return input.action !== 'read';
+    }
+
     public override onPipe(input: FilesystemInput) {
         const action = this.action(input.action);
         if (action === 'read') return this.read(input);

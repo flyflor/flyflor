@@ -1,5 +1,5 @@
 import { AgentChatRole } from '@/agent/types';
-import { Context, type Summary } from '@/agent/context';
+import { Context } from '@/agent/context';
 import { SynapseSignalType } from '@/neural/types';
 import { FAgentAtom, Inject, Prompt, PromptService, Provide, Scope, type IObservable } from '@/core';
 import { parse } from '@/agent/json';
@@ -31,7 +31,7 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
     @Prompt('prompts/callosum')
     public prompt!: PromptService<BrainPrompt>;
 
-    @Inject()
+    @Scope()
     public intelligence!: Intelligence;
 
     @Inject()
@@ -54,42 +54,41 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
      * (调 `agent.next` 的地方),由它接住拒绝并决定给用户看什么。`Brain` 不做 catch。
      */
     public override async onPipe(data: string) {
-        await this.context.ingest({ text: data });
-        await this.handle(await this.callosum.route(data));
+        const turn = await this.context.ingest({ text: data });
+        await this.handle(await this.callosum.route(data), turn.id);
     }
 
-    private handle(signal: CallosumSignal): Promise<void> {
-        if (signal.type === CallosumSignalType.Reply) return this.reply(signal);
-        if (signal.type === CallosumSignalType.Soul) return this.soul(signal);
+    private handle(signal: CallosumSignal, turnId: string): Promise<void> {
+        if (signal.type === CallosumSignalType.Reply) return this.reply(signal, turnId);
+        if (signal.type === CallosumSignalType.Soul) return this.soul(signal, turnId);
         if (signal.type === CallosumSignalType.Coordinate) {
-            // EN: The cortex (Synapse) owns agent-pool dispatch, not the local Brain.
-            // ZH: 皮层（Synapse）负责 agent pool 派发，本地 Brain 只转发信号。
-            this.synapse.emit(SynapseSignalType.Coordinate, signal);
-            return Promise.resolve();
+            if (!this.synapse.coordinate) throw Error('Coordinate boundary is missing');
+            return this.synapse.coordinate(signal, turnId);
         }
-        return this.research(signal);
+        return this.research(signal, turnId);
     }
 
-    private async reply(signal: CallosumSignal): Promise<void> {
+    private async reply(signal: CallosumSignal, turnId: string): Promise<void> {
         let assistant = '';
         const messages = [...this.memory.buildMessage(), { role: AgentChatRole.User, content: String(signal.chunk) }];
         await this.intelligence.stream(messages, (chunk) => {
             assistant += chunk;
             this.synapse.emit(SynapseSignalType.Reply, chunk);
         });
+        await this.context.settle(turnId, { assistant });
         this.synapse.emit(SynapseSignalType.Reply, null);
-        await this.context.settle({ assistant });
     }
 
-    private async research(signal: CallosumSignal): Promise<void> {
+    private async research(signal: CallosumSignal, turnId: string): Promise<void> {
         const messages = [...this.memory.buildMessage(), { role: AgentChatRole.User, content: String(signal.chunk) }];
-        const outcome = await this.investigation.run(signal, messages);
+        const turn = this.context.turn(turnId);
+        const outcome = await this.investigation.run(signal, messages, { turnId, cwd: turn.cwd });
         if (outcome.paused) return;
+        await this.context.settle(turnId, { assistant: outcome.answer, evidence: outcome.evidence });
         this.synapse.emit(SynapseSignalType.Reply, null);
-        await this.context.settle({ assistant: outcome.answer, evidence: outcome.evidence });
     }
 
-    private async soul(signal: CallosumSignal): Promise<void> {
+    private async soul(signal: CallosumSignal, turnId: string): Promise<void> {
         const pkg = this.memory.prompt;
         const raw = await this.intelligence.completeText([
             { role: AgentChatRole.System, content: this.prompt.section(BrainPrompt.Soul) },
@@ -99,8 +98,8 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
         const { written, rejected } = pkg.applyWrites(plan.writes ?? []);
         const assistant = `协议包已更新: ${written.join(', ') || '无'}${rejected.length ? `；已拒绝: ${rejected.join(', ')}` : ''}`;
         this.synapse.emit(SynapseSignalType.Reply, assistant);
+        await this.context.settle(turnId, { assistant });
         this.synapse.emit(SynapseSignalType.Reply, null);
-        await this.context.settle({ assistant });
     }
 
     /**
@@ -112,7 +111,11 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
     public async understand(brief: AgentBrief): Promise<InvestigationOutcome | undefined> {
         this.memory.ingestBrief(brief);
         const messages = this.memory.buildMessage();
-        const outcome = await this.investigation.run({ type: CallosumSignalType.Research, chunk: brief.goal }, messages, { emitReply: false });
+        const outcome = await this.investigation.run(
+            { type: CallosumSignalType.Research, chunk: brief.goal },
+            messages,
+            { emitReply: false, cwd: brief.cwd },
+        );
         if (outcome.paused) return undefined;
         return outcome;
     }

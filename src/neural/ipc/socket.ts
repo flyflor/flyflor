@@ -5,6 +5,7 @@ import type { Socket, UnixSocketListener } from 'bun';
 import { IPCPacket, type SocketPacket } from './packet';
 import { Controller } from './controller';
 import type { Synapse } from '../synapse';
+import type { InteractionResponse } from '../types';
 
 export enum SocketEvent {
     Constructor = 'constructor',
@@ -84,6 +85,8 @@ export class FSocket extends FlyFlor {
     }
 
     public async open(socket: Socket<SocketConnectionData>) {
+        this.pending = [];
+        this.packet.reset();
         this.connection = socket;
         this.log.info(SocketEvent.Open);
         this.write({ action: SocketEvent.Open, data: true });
@@ -94,6 +97,7 @@ export class FSocket extends FlyFlor {
         if (this.connection === socket) {
             this.connection = undefined;
             this.pending = [];
+            this.packet.reset();
         }
     }
 
@@ -107,6 +111,7 @@ export class FSocket extends FlyFlor {
     }
 
     public async data(socket: Socket<SocketConnectionData>, data: Uint8Array) {
+        if (socket !== this.connection) return;
         // this.log.info('data', data);
         this.packet
             .of(data)
@@ -117,7 +122,9 @@ export class FSocket extends FlyFlor {
                     return undefined;
                 },
                 [SocketEvent.Answer]: (packet) => {
-                    this.synapse.emit(SYNAPSE_INPUT, this.readUserText((packet as unknown as SocketPacket).data));
+                    const data = (packet as unknown as SocketPacket).data as { turnId?: unknown; id?: unknown; response?: unknown };
+                    if (typeof data?.turnId !== 'string' || typeof data.id !== 'string') throw Error('Invalid interaction IPC packet');
+                    this.synapse.answer(data.turnId, data.id, data.response as InteractionResponse);
                     return undefined;
                 },
             })

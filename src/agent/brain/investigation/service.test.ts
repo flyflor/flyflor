@@ -21,12 +21,24 @@ function mockInvestigation(context: Context, responses: Array<{ text: string; ac
     const calls: ActionRequest[] = [];
     const instance = new Investigation(
         { name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 },
-        { emit: (type: SynapseSignalType, data: unknown) => { events.push({ type, data }); } } as never,
+        {
+            emit: (type: SynapseSignalType, data: unknown) => { events.push({ type, data }); },
+            interact: async (request: { turnId: string; id: string; kind: 'ask' | 'confirm'; data: unknown }) => {
+                context.pause(request.turnId, { id: request.id, kind: request.kind, prompt: JSON.stringify(request.data) });
+                events.push({ type: request.kind === 'ask' ? SynapseSignalType.Ask : SynapseSignalType.Confirm, data: request.data });
+                context.resume(request.turnId, request.id);
+                return request.kind === 'ask'
+                    ? { kind: 'ask', answers: [{ question: 'Pick?', answer: 'a' }] }
+                    : { kind: 'confirm', approved: true };
+            },
+        } as never,
     );
     let index = 0;
     instance.context = context;
     instance.tools = {
         list: async () => [{ name: 'filesystem', description: 'filesystem', parameters: {} }, { name: 'ask', description: 'ask', parameters: {} }] as IntelligenceToolDefinition[],
+        cwd: async (name: string) => name !== 'ask',
+        requiresConfirm: async () => false,
         run: async (call: ActionRequest) => {
             calls.push(call);
             return call.name === 'ask'
@@ -49,11 +61,10 @@ function ingestMock() {
     return {
         completeText: async (messages: Array<{ role: string; content: string }>) => {
             const user = messages.find((m) => m.role === 'user')?.content ?? '';
-            const match = /cwd=([^\s,"}]+)/.exec(user);
             return JSON.stringify({
                 intent: 'research',
                 goal: user,
-                cwd: match?.[1],
+                cwd: '/tmp/semantic',
                 constraints: [],
                 refs: [],
                 done: [],
@@ -71,7 +82,7 @@ describe('Investigation', () => {
         context = new Context();
         context.prompt = { section: () => 'system placeholder' } as never;
         context.intelligence = ingestMock() as never;
-        await context.ingest({ text: '调查工具层' });
+        await context.ingest({ text: '调查工具层 cwd=/tmp/semantic' });
     });
 
     test('returns a final answer when the local loop ends without further action requests', async () => {
@@ -137,7 +148,7 @@ describe('Investigation', () => {
 
     test('injects the active turn cwd into shell and execute requests that do not carry one', async () => {
         const cwd = '/tmp/semantic';
-        await context.ingest({ text: `调查工具层 cwd=${cwd}` });
+        const turn = context.working()!;
         const { instance, calls } = mockInvestigation(context, [
             {
                 text: '跑工具',
@@ -152,28 +163,31 @@ describe('Investigation', () => {
         await instance.run(
             { type: CallosumSignalType.Research, chunk: '调查工具层' },
             [{ role: AgentChatRole.User, content: '调查工具层' }],
+            { cwd: turn.cwd },
         );
 
         expect(calls.map((call) => call.arguments.cwd)).toEqual([cwd, cwd]);
     });
 
-    test('ask action asks for input, pauses the turn, and keeps pause metadata on the active turn only', async () => {
-        const { instance, events } = mockInvestigation(context, [
+    test('ask action resumes the same investigation with a structured answer', async () => {
+        const { instance, events, seenMessages } = mockInvestigation(context, [
             { text: '需要确认', actionRequests: [{ id: 'tool_1', name: 'ask', arguments: { questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] } }] },
+            { text: '继续完成', actionRequests: [] },
         ]);
 
+        const turn = context.working()!;
         const outcome = await instance.run(
             { type: CallosumSignalType.Research, chunk: '调查工具层' },
             [{ role: AgentChatRole.User, content: '调查工具层' }],
+            { turnId: turn.id, cwd: turn.cwd },
         );
-
-        expect(outcome).toMatchObject({ completed: false, paused: true, steps: 1 });
+        expect(outcome).toMatchObject({ answer: '继续完成', completed: true, paused: false, steps: 2 });
         expect(events).toContainEqual({
             type: SynapseSignalType.Ask,
             data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] },
         });
-        expect(events.some((event) => event.type === SynapseSignalType.Pause)).toBe(true);
-        expect(JSON.stringify(context.turns)).toContain('"pause"');
+        expect(JSON.stringify(seenMessages.at(-1))).toContain('\\"kind\\":\\"ask\\"');
+        expect(JSON.stringify(context.turns)).not.toContain('"pause"');
         expect(JSON.stringify(context)).not.toContain('pending');
         expect(JSON.stringify(context.turns)).not.toContain('tool_call_id');
     });

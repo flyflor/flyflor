@@ -9,7 +9,11 @@
  */
 export function parse<T>(raw: string | unknown): T {
     if (typeof raw === 'string') {
-        return JSON.parse(raw.replace(/^```json\s*|\s*```$/g, '')) as T;
+        const value = raw.trim();
+        if (value.startsWith('```json') && value.endsWith('```')) {
+            return JSON.parse(value.slice(7, -3).trim()) as T;
+        }
+        return JSON.parse(value) as T;
     }
     return raw as T;
 }

@@ -2,7 +2,6 @@ import { Scope, Provide, FAgent, type IObservable } from '@/core';
 import type { AgentBrief } from '@/agent/context/types';
 import type { InvestigationOutcome } from './brain/investigation/types';
 import { Brain } from './brain';
-import { Memory } from './memory';
 
 /**
  * EN: One autonomous agent profile. It owns a scoped `Brain` and `Memory`.
@@ -16,9 +15,6 @@ import { Memory } from './memory';
  */
 @Provide()
 export class Agent extends FAgent<string, string> implements IObservable<string, string> {
-    @Scope()
-    public memory!: Memory;
-
     @Scope()
     public brain!: Brain;
 

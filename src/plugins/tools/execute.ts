@@ -23,6 +23,10 @@ export class Execute extends FToolAtom<ExecuteInput, ExecuteOutput> {
     @Config()
     public config!: ConfigService;
 
+    public override confirm(): boolean {
+        return true;
+    }
+
     public override async onPipe(input: ExecuteInput) {
         const cwd = this.cwd(input.cwd, this.config.path.cwd);
         const mode = this.mode(input.mode);

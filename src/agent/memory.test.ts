@@ -35,7 +35,7 @@ describe('Memory', () => {
 
         // EN: Seed the agent's private memory cache from the Context brief.
         // ZH: 用 Context 简报初始化 agent 的私有记忆缓存。
-        memory.ingestBrief(context.brief('flyflor'));
+        memory.ingestBrief(context.brief());
 
         const messages = memory.buildMessage();
         const system = messages[0]?.content ?? '';

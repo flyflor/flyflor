@@ -1,5 +1,5 @@
 import { AgentChatRole } from '@/agent/types';
-import { FAgentAtom, Inject, Prompt, PromptService, Provide } from '@/core';
+import { FAgentAtom, Prompt, PromptService, Provide, Scope } from '@/core';
 import { parse } from '@/agent/json';
 import { Intelligence } from './intelligence/service';
 
@@ -43,7 +43,7 @@ export class Callosum extends FAgentAtom<string, CallosumSignal> {
     @Prompt('prompts/callosum')
     public prompt!: PromptService<CallosumPrompt>;
 
-    @Inject()
+    @Scope()
     public intelligence!: Intelligence;
 
     /**

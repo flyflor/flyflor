@@ -66,7 +66,8 @@ describe('Synapse coordinate', () => {
         });
 
         expect(synapse.activeNextCalls).toBe(0);
-        expect(synapse.activeUnderstandCalls).toBe(1);
+        expect(synapse.activeUnderstandCalls).toBe(0);
+        expect(synapse.workerBriefs).toHaveLength(1);
         expect(synapse.seenReviewBrief?.persona).toBe('single pass reviewer');
     });
 });
@@ -91,10 +92,10 @@ function coordinateHarness(plan: CoordinatePlan): Synapse & {
     synapse.activeUnderstandCalls = 0;
     synapse.active = 'flyflor';
     synapse.context = {
-        brief: (profile: string) => ({
-            turnId: 'turn_1',
+        brief: (turnId?: string) => ({
+            turnId: turnId ?? 'turn_1',
             intent: 'research',
-            goal: `${profile} goal`,
+            goal: 'turn goal',
             constraints: [],
             refs: [],
             recentSummaries: [],
@@ -129,7 +130,7 @@ function coordinateHarness(plan: CoordinatePlan): Synapse & {
         const index = spawned;
         return {
             understand: async (brief: AgentBrief) => {
-                if (index > plan.slices.length) {
+                if (index > Math.max(plan.slices.length, 1)) {
                     synapse.seenReviewBrief = brief;
                     return { answer: 'review answer', steps: 1, completed: true, paused: false, evidence: ['review evidence'] };
                 }
