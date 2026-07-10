@@ -78,7 +78,7 @@ function coordinateHarness(plan: CoordinatePlan): {
         replies.push(signal.data);
     });
     let modelCall = 0;
-    synapse.intelligence = {
+    synapse.model = {
         completeText: async () => {
             modelCall += 1;
             return modelCall === 1 ? JSON.stringify(plan) : 'final answer';

@@ -32,7 +32,7 @@ describe('Brain', () => {
             },
         } as never;
         brain.identity = { messages: () => [{ role: AgentChatRole.System, content: 'identity' }] } as never;
-        brain.intelligence = {
+        brain.model = {
             stream: async (messages: unknown, onChunk: (chunk: string) => void) => {
                 seen.push(messages);
                 onChunk('PONG1');

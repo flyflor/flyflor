@@ -1,10 +1,9 @@
-import { AgentChatRole, AgentEventType, type AgentMemory } from '@/agent/types';
+import { AgentEventType } from '@/agent/types';
 import type { FAgentProfileConfiguration } from '@/configuration';
 import { FComponent, Inject, Provide, Scope, type FAgentSynapseBus } from '@/core';
+import { Model, type AssistantMessage, type Message, type ModelResult, type ToolCall, type ToolMessage } from '@/model';
 import { SynapseSignalType } from '@/neural/types';
-import { type ActionRequest, ToolComponent } from '@/plugins';
-import { Intelligence } from '../intelligence/service';
-import type { ProviderActionRequestMessage, ProviderActionResultMessage, ProviderMessage } from '../intelligence/types';
+import { ToolComponent } from '@/plugins';
 import type { InvestigationOutcome, InvestigationRunOptions } from './types';
 
 @Provide()
@@ -14,7 +13,7 @@ import type { InvestigationOutcome, InvestigationRunOptions } from './types';
  */
 export class Investigation extends FComponent {
     @Scope()
-    public intelligence!: Intelligence;
+    public model!: Model;
 
     @Inject()
     public tools!: ToolComponent;
@@ -26,28 +25,28 @@ export class Investigation extends FComponent {
         super();
     }
 
-    public async run(baseMessages: AgentMemory[], options: InvestigationRunOptions = {}): Promise<InvestigationOutcome> {
-        const messages: ProviderMessage[] = [...baseMessages];
+    public async run(baseMessages: Message[], options: InvestigationRunOptions = {}): Promise<InvestigationOutcome> {
+        const messages: Message[] = [...baseMessages];
         const evidence: string[] = [];
         const emitReply = options.emitReply !== false;
         let step = 0;
         while (true) {
             step += 1;
             this.synapse.emit(SynapseSignalType.Event, { type: AgentEventType.ModelRequest, data: { step } });
-            const result = await this.intelligence.streamRequest(messages, await this.tools.list(), (chunk) => {
+            const result = await this.model.streamRun(messages, await this.tools.list(), (chunk) => {
                 if (emitReply) this.synapse.emit(SynapseSignalType.Reply, chunk);
             });
-            if (result.actionRequests.length === 0) {
+            if (result.toolCalls.length === 0) {
                 return { answer: result.text, steps: step, completed: true, paused: false, evidence };
             }
 
-            const requests = await Promise.all(result.actionRequests.map((request) => this.withWorkingDirectory(request, options.cwd)));
-            messages.push(this.actionRequestMessage({ ...result, actionRequests: requests }));
+            const requests = await Promise.all(result.toolCalls.map((request) => this.withWorkingDirectory(request, options.cwd)));
+            messages.push(this.toolCallMessage({ ...result, toolCalls: requests }));
             for (const request of requests) {
                 if (await this.tools.requiresConfirm(request)) {
                     if (!options.turnId || !this.synapse.interact) {
                         const denied = { ok: false, name: request.name, error: { code: 'TOOL_APPROVAL_REQUIRED', message: 'Tool call requires an interactive approval boundary' } } as const;
-                        messages.push(this.actionResultMessage(request, denied));
+                        messages.push(this.toolResultMessage(request, denied));
                         evidence.push(this.evidence(request, denied));
                         continue;
                     }
@@ -59,7 +58,7 @@ export class Investigation extends FComponent {
                     }) as { kind: 'confirm'; approved: boolean };
                     if (!response.approved) {
                         const denied = { ok: false, name: request.name, error: { code: 'TOOL_REJECTED', message: 'User rejected tool call' } } as const;
-                        messages.push(this.actionResultMessage(request, denied));
+                        messages.push(this.toolResultMessage(request, denied));
                         evidence.push(this.evidence(request, denied));
                         continue;
                     }
@@ -67,7 +66,7 @@ export class Investigation extends FComponent {
                 this.synapse.emit(SynapseSignalType.Event, { type: AgentEventType.ActionStart, name: request.name, data: request.arguments });
                 const actionResult = await this.tools.run(request);
                 this.synapse.emit(SynapseSignalType.Event, { type: AgentEventType.ActionResult, name: request.name, data: actionResult });
-                messages.push(this.actionResultMessage(request, actionResult));
+                messages.push(this.toolResultMessage(request, actionResult));
                 evidence.push(this.evidence(request, actionResult));
                 if (actionResult.ok && this.pause(actionResult.data)) {
                     if (!options.turnId || !this.synapse.interact) {
@@ -80,40 +79,40 @@ export class Investigation extends FComponent {
                         data: actionResult.data,
                     });
                     const resumed = { ok: true, name: request.name, data: response } as const;
-                    messages[messages.length - 1] = this.actionResultMessage(request, resumed);
+                    messages[messages.length - 1] = this.toolResultMessage(request, resumed);
                     evidence[evidence.length - 1] = this.evidence(request, resumed);
                 }
             }
         }
     }
 
-    private actionRequestMessage(result: Awaited<ReturnType<Intelligence['runRequest']>>): ProviderActionRequestMessage {
+    private toolCallMessage(result: ModelResult): AssistantMessage {
         return {
-            role: AgentChatRole.Assistant,
+            role: 'assistant',
             content: result.text,
-            actionRequests: result.actionRequests,
+            toolCalls: result.toolCalls,
             reasoning: result.reasoning,
         };
     }
 
-    private async withWorkingDirectory(request: ActionRequest, cwd?: string): Promise<ActionRequest> {
+    private async withWorkingDirectory(request: ToolCall, cwd?: string): Promise<ToolCall> {
         if (typeof cwd !== 'string' || cwd.length === 0) return request;
         if (!await this.tools.cwd(request.name)) return request;
         if ('cwd' in request.arguments) return request;
         return { ...request, arguments: { ...request.arguments, cwd } };
     }
 
-    private actionResultMessage(request: ActionRequest, result: Awaited<ReturnType<ToolComponent['run']>>): ProviderActionResultMessage {
+    private toolResultMessage(request: ToolCall, result: Awaited<ReturnType<ToolComponent['run']>>): ToolMessage {
         return {
-            role: 'action',
+            role: 'tool',
             content: JSON.stringify(result),
-            actionRequestId: request.id,
-            actionName: request.name,
+            toolCallId: request.id,
+            toolName: request.name,
             isError: !result.ok,
         };
     }
 
-    private evidence(request: ActionRequest, result: Awaited<ReturnType<ToolComponent['run']>>): string {
+    private evidence(request: ToolCall, result: Awaited<ReturnType<ToolComponent['run']>>): string {
         if (result.ok) {
             if (request.name === 'filesystem') {
                 const data = result.data as { action?: unknown; path?: unknown };

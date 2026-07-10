@@ -1,298 +1,28 @@
 {
-    // Flyflor 单一运行时配置文件。
-    // 约定：
-    // - 密钥只放环境变量，不写入本文件。
-    // - 代码已有默认值、通常不需要改的配置项保留为注释示例。
-    // - 需要运行时明确选择的模型与 provider 保持启用。
-    // 当前默认模型配置。
-    // default: 对外语义上的默认模型名。
-    // model: 当前实际调用的模型名。
-    // provider: providers 中的 provider key。
-    // apiKeyEnv: 读取 API key 的环境变量名。
-    // baseUrl: OpenAI-compatible 接口根地址。
-    // protocols: 当前模型按顺序尝试的协议数组。
-    //   - name: 协议名。
-    //   - enabled: false 时跳过该协议。
-    //   - baseUrl: 覆盖 model.baseUrl。
-    //   - apiKeyEnv: 覆盖 model.apiKeyEnv。
-    //   - path: 协议 endpoint path，支持 {model} 模板。
-    //   - auth: 鉴权模式，支持 bearer / optionalBearer / anthropic / google / none。
-    //   - version: 某些协议需要的显式版本号，例如 Anthropic Messages。
-    //   - usesV1Fallback: true 时额外尝试 baseUrl + /v1。
-    //   - acceptsJsonStream: true 时把 application/json 响应当作流式 JSON 行处理。
-    //   - acceptsJsonResponse: true 时允许 application/json 非流式响应折叠为文本流。
-    //   - missingTerminalMessage: 流结束但没有协议终止事件时的错误信息。
-    // 默认注册表支持：
-    //   - anthropicMessages
-    //   - openaiResponses
-    //   - googleGeminiGenerateContent
-    //   - awsBedrockConverse
-    //   - cohereChat
-    //   - huggingFace
-    //   - ollama
-    //   - vllm
-    //   - lmStudio
-    //   - openaiChatCompletions
-    // entra: Entra ID 鉴权参数；authMode=entraId 时使用。
-    // contextLength: 模型上下文窗口长度。
-    // maxTokens: 单次生成最大 token 数。
+    // Protocol, path, authentication, and wire parsing are provider conventions
+    // under src/model/protocol. Secrets stay in environment variables.
     "model": {
-        "default": "deepseek-v4-flash",
         "model": "deepseek-v4-flash",
         "provider": "deepseek",
-        "apiKeyEnv": "DEEPSEEK_API_KEY",
         "baseUrl": "https://api.deepseek.com",
-        "protocols": [
-            {
-                "name": "openaiChatCompletions",
-                "path": "/chat/completions",
-                "auth": "bearer",
-                "usesV1Fallback": true,
-                "missingTerminalMessage": "LLM provider stream ended without a structured finish_reason"
-            },
-            {
-                "name": "openaiResponses",
-                "path": "/responses",
-                "auth": "bearer",
-                "usesV1Fallback": true,
-                "acceptsJsonResponse": true,
-                "missingTerminalMessage": "LLM provider stream ended without a structured response terminal event"
-            },
-        ],
-        "entra": {},
-        "contextLength": 131072,
-        "maxTokens": 8192,
+        "apiKeyEnv": "DEEPSEEK_API_KEY",
+        "timeoutSeconds": 60,
     },
-    // 常见协议数组写法示例：
-    // "model": {
-    //     "default": "claude-sonnet-4-5",
-    //     "model": "claude-sonnet-4-5",
-    //     "provider": "anthropic",
-    //     "apiKeyEnv": "ANTHROPIC_API_KEY",
-    //     "baseUrl": "https://api.anthropic.com",
-    //     "protocols": [
-    //         { "name": "anthropicMessages", "path": "/v1/messages", "auth": "anthropic", "version": "2023-06-01", "missingTerminalMessage": "LLM provider stream ended without a structured Anthropic terminal event" },
-    //     ],
-    //     "entra": {},
-    //     "contextLength": 200000,
-    //     "maxTokens": 8192,
-    // },
-    // "model": {
-    //     "default": "gpt-5",
-    //     "model": "gpt-5",
-    //     "provider": "openai",
-    //     "apiKeyEnv": "OPENAI_API_KEY",
-    //     "baseUrl": "https://api.openai.com",
-    //     "protocols": [
-    //         { "name": "openaiResponses", "path": "/responses", "auth": "bearer", "usesV1Fallback": true, "acceptsJsonResponse": true, "missingTerminalMessage": "LLM provider stream ended without a structured response terminal event" },
-    //         { "name": "openaiChatCompletions", "path": "/chat/completions", "auth": "bearer", "usesV1Fallback": true, "missingTerminalMessage": "LLM provider stream ended without a structured finish_reason" },
-    //     ],
-    //     "entra": {},
-    //     "contextLength": 200000,
-    //     "maxTokens": 8192,
-    // },
-    // "model": {
-    //     "default": "gemini-2.5-pro",
-    //     "model": "gemini-2.5-pro",
-    //     "provider": "google",
-    //     "apiKeyEnv": "GOOGLE_API_KEY",
-    //     "baseUrl": "https://generativelanguage.googleapis.com",
-    //     "protocols": [
-    //         { "name": "googleGeminiGenerateContent", "path": "/v1beta/models/{model}:streamGenerateContent?alt=sse", "auth": "google", "missingTerminalMessage": "LLM provider stream ended without a structured Gemini finishReason" },
-    //     ],
-    //     "entra": {},
-    //     "contextLength": 1048576,
-    //     "maxTokens": 8192,
-    // },
-    // "model": {
-    //     "default": "command-r-plus",
-    //     "model": "command-r-plus",
-    //     "provider": "cohere",
-    //     "apiKeyEnv": "COHERE_API_KEY",
-    //     "baseUrl": "https://api.cohere.com",
-    //     "protocols": [
-    //         { "name": "cohereChat", "path": "/v2/chat", "auth": "bearer", "missingTerminalMessage": "LLM provider stream ended without a structured Cohere terminal event" },
-    //     ],
-    //     "entra": {},
-    //     "contextLength": 128000,
-    //     "maxTokens": 4096,
-    // },
-    // "model": {
-    //     "default": "llama3.1:8b",
-    //     "model": "llama3.1:8b",
-    //     "provider": "ollama",
-    //     "apiKeyEnv": "",
-    //     "baseUrl": "http://127.0.0.1:11434",
-    //     "protocols": [
-    //         { "name": "ollama", "path": "/api/chat", "auth": "optionalBearer", "missingTerminalMessage": "LLM provider stream ended without a structured Ollama done event" },
-    //     ],
-    //     "entra": {},
-    //     "contextLength": 32768,
-    //     "maxTokens": 4096,
-    // },
-    // "model": {
-    //     "default": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
-    //     "model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
-    //     "provider": "vllm",
-    //     "apiKeyEnv": "",
-    //     "baseUrl": "http://127.0.0.1:8000",
-    //     "protocols": [
-    //         { "name": "vllm", "path": "/v1/chat/completions", "auth": "optionalBearer", "missingTerminalMessage": "LLM provider stream ended without a structured finish_reason" },
-    //         { "name": "openaiResponses", "enabled": false, "path": "/responses", "auth": "bearer", "acceptsJsonResponse": true },
-    //     ],
-    //     "entra": {},
-    //     "contextLength": 32768,
-    //     "maxTokens": 4096,
-    // },
-    // Provider 列表，key 必须能被 model.provider 引用。
-    // requestTimeoutSeconds: provider 默认请求超时秒数。
-    // staleTimeoutSeconds: provider 默认空闲/卡住判定秒数。
-    // models: provider 下每个模型的细粒度覆盖配置。
-    // protocols: provider 级协议数组；配置后覆盖 model.protocols。
-    // timeoutSeconds: 单模型请求超时秒数。
-    // staleTimeoutSeconds: 单模型空闲/卡住判定秒数。
-    "providers": {
-        "deepseek": {
-            "requestTimeoutSeconds": 60,
-            "staleTimeoutSeconds": 30,
-            "models": {
-                "deepseek-v4-flash": {
-                    "timeoutSeconds": 60,
-                    "staleTimeoutSeconds": 30,
-                },
-            },
-        },
-    },
-    // Provider 协议覆盖示例：
-    // "providers": {
-    //     "anthropic": {
-    //         "requestTimeoutSeconds": 60,
-    //         "staleTimeoutSeconds": 30,
-    //         "protocols": [
-    //             { "name": "anthropicMessages", "path": "/v1/messages", "auth": "anthropic", "version": "2023-06-01", "missingTerminalMessage": "LLM provider stream ended without a structured Anthropic terminal event" },
-    //         ],
-    //         "models": {
-    //             "claude-sonnet-4-5": {
-    //                 "timeoutSeconds": 60,
-    //                 "staleTimeoutSeconds": 30,
-    //             },
-    //         },
-    //     },
-    //     "openai": {
-    //         "requestTimeoutSeconds": 60,
-    //         "staleTimeoutSeconds": 30,
-    //         "protocols": [
-    //             { "name": "openaiResponses", "path": "/responses", "auth": "bearer", "usesV1Fallback": true, "acceptsJsonResponse": true, "missingTerminalMessage": "LLM provider stream ended without a structured response terminal event" },
-    //             { "name": "openaiChatCompletions", "path": "/chat/completions", "auth": "bearer", "usesV1Fallback": true, "missingTerminalMessage": "LLM provider stream ended without a structured finish_reason" },
-    //         ],
-    //         "models": {
-    //             "gpt-5": {
-    //                 "timeoutSeconds": 60,
-    //                 "staleTimeoutSeconds": 30,
-    //             },
-    //         },
-    //     },
-    //     "google": {
-    //         "requestTimeoutSeconds": 60,
-    //         "staleTimeoutSeconds": 30,
-    //         "protocols": [
-    //             { "name": "googleGeminiGenerateContent", "path": "/v1beta/models/{model}:streamGenerateContent?alt=sse", "auth": "google", "missingTerminalMessage": "LLM provider stream ended without a structured Gemini finishReason" },
-    //         ],
-    //         "models": {
-    //             "gemini-2.5-pro": {
-    //                 "timeoutSeconds": 60,
-    //                 "staleTimeoutSeconds": 30,
-    //             },
-    //         },
-    //     },
-    //     "bedrock": {
-    //         "requestTimeoutSeconds": 60,
-    //         "staleTimeoutSeconds": 30,
-    //         "protocols": [
-    //             { "name": "awsBedrockConverse", "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com", "path": "/model/{model}/converse-stream", "auth": "bearer", "acceptsJsonStream": true, "missingTerminalMessage": "LLM provider stream ended without a structured Bedrock messageStop event" },
-    //         ],
-    //         "models": {
-    //             "anthropic.claude-sonnet-4-5-20250929-v1:0": {
-    //                 "timeoutSeconds": 60,
-    //                 "staleTimeoutSeconds": 30,
-    //             },
-    //         },
-    //     },
-    //     "cohere": {
-    //         "requestTimeoutSeconds": 60,
-    //         "staleTimeoutSeconds": 30,
-    //         "protocols": [
-    //             { "name": "cohereChat", "path": "/v2/chat", "auth": "bearer", "missingTerminalMessage": "LLM provider stream ended without a structured Cohere terminal event" },
-    //         ],
-    //         "models": {
-    //             "command-r-plus": {
-    //                 "timeoutSeconds": 60,
-    //                 "staleTimeoutSeconds": 30,
-    //             },
-    //         },
-    //     },
-    //     "ollama": {
-    //         "requestTimeoutSeconds": 60,
-    //         "staleTimeoutSeconds": 30,
-    //         "protocols": [
-    //             { "name": "ollama", "path": "/api/chat", "auth": "optionalBearer", "missingTerminalMessage": "LLM provider stream ended without a structured Ollama done event" },
-    //         ],
-    //         "models": {
-    //             "llama3.1:8b": {
-    //                 "timeoutSeconds": 60,
-    //                 "staleTimeoutSeconds": 30,
-    //             },
-    //         },
-    //     },
-    // },
-    // Canonical repo-relative locations Flyflor reads/writes at runtime.
-    // All paths are relative (rule 7) and resolved against `rootPath` via `resolveFromRoot()` in `paths.ts`.
-    // - `configFile`: the single JSONC config file, needed to bootstrap config loading before config is known.
-    // - `promptsDir`: directory holding canonical `<name>.md` prompt sources.
-    // - `sqlDir`: directory holding `NNN-*.sql` schema-init scripts.
-    "promptsDir": "./prompts",
-    "sqlDir": "./sql",
-    // 记忆系统配置。
-    // 这些值在 ConfigService 中已有默认值，通常不需要配置；需要覆盖时取消注释。
-    // memoryEnabled: 是否启用长期记忆。
-    // userProfileEnabled: 是否启用用户画像记忆。
-    // memoryCharLimit: 单次记忆内容字符预算。
-    // userCharLimit: 用户画像内容字符预算。
-    // nudgeInterval: 记忆写入/整理提示间隔。
-    // flushMinTurns: 触发记忆 flush 的最少对话轮数。
-    // "memory": {
-    //     "memoryEnabled": true,
-    //     "userProfileEnabled": true,
-    //     "memoryCharLimit": 2200,
-    //     "userCharLimit": 1375,
-    //     "nudgeInterval": 10,
-    //     "flushMinTurns": 6,
-    // },
-    // 当前启用的 agent profile 名称。
-    // ConfigService 默认值为 main；需要切换多 agent profile 时取消注释。
-    // "agent": "main",
-    // Agent profile 列表。
-    // name: profile 名称。
-    // model: profile 使用的模型名。
-    // provider: profile 使用的 provider key。
-    // ConfigService 已有 main 占位默认值；需要多 agent 或覆盖模型时取消注释。
-    // "agents": {
-    //     "flyflor": {
-    //         "name": "flyflor",
-    //         "model": "deepseek-v4-flash",
-    //         "provider": "deepseek",
-    //     },
-    // },
+    "agent": "flyflor",
     "agents": {
         "flyflor": {
             "name": "flyflor",
             "model": "deepseek-v4-flash",
             "provider": "deepseek",
+            "contextLength": 131072,
+            "maxTokens": 8192,
         },
         "worker": {
             "name": "worker",
             "model": "deepseek-v4-flash",
             "provider": "deepseek",
+            "contextLength": 131072,
+            "maxTokens": 8192,
             "promptPackage": "./prompts/agents",
             "promptSections": ["worker"],
         },
@@ -300,39 +30,11 @@
             "name": "reviewer",
             "model": "deepseek-v4-flash",
             "provider": "deepseek",
+            "contextLength": 131072,
+            "maxTokens": 8192,
             "promptPackage": "./prompts/agents",
             "promptSections": ["reviewer"],
         },
     },
-    // IPC socket 路径。
-    // 默认值为 ./flyflor.sock；通常不需要配置。
-    // Windows 运行时内部会转换为命名管道。
     "socket": "./flyflor.sock",
-    // Skill 插件目录配置。
-    // directory: skill 根目录。
-    // creationNudgeInterval: skill 创建提示间隔。
-    // externalDirs: 额外 skill 搜索目录。
-    // ConfigService 中已有默认值；需要自定义 skill 目录时取消注释。
-    // "skills": {
-    //     "directory": "./.config/skills",
-    //     "creationNudgeInterval": 15,
-    //     "externalDirs": [],
-    // },
-    // MCP server 配置。
-    // servers: MCP server 列表，key 为 server 名称。
-    // command: stdio server 启动命令。
-    // args: stdio server 启动参数。
-    // env: 传给 server 进程的环境变量覆盖。
-    // url: 预留给 http/sse transport。
-    // 当前没有 MCP server 时不需要启用。
-    // "mcp": {
-    //     "servers": {
-    //         "example": {
-    //             "command": "node",
-    //             "args": ["./server.js"],
-    //             "env": {},
-    //             "url": "",
-    //         },
-    //     },
-    // },
 }

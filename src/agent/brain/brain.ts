@@ -5,9 +5,9 @@ import { Turn } from '@/agent/turn';
 import type { FAgentProfileConfiguration } from '@/configuration';
 import { SynapseSignalType } from '@/neural/types';
 import { FComponent, Inject, Prompt, PromptService, Provide, Scope, type FAgentSynapseBus } from '@/core';
+import { Model } from '@/model';
 import { parse } from '@/agent/json';
 import { Callosum } from './callosum';
-import { Intelligence } from './intelligence/service';
 import { Investigation } from './investigation';
 
 export enum BrainPrompt {
@@ -23,7 +23,7 @@ export class Brain extends FComponent {
     public prompt!: PromptService<BrainPrompt>;
 
     @Scope()
-    public intelligence!: Intelligence;
+    public model!: Model;
 
     @Inject()
     public memory!: Memory;
@@ -66,7 +66,7 @@ export class Brain extends FComponent {
 
     private async reply(turn: Turn): Promise<void> {
         let answer = '';
-        await this.intelligence.stream(this.messages(turn.input), (chunk) => {
+        await this.model.stream(this.messages(turn.input), (chunk) => {
             answer += chunk;
             this.synapse.emit(SynapseSignalType.Reply, chunk);
         });
@@ -86,7 +86,7 @@ export class Brain extends FComponent {
 
     private async soul(turn: Turn): Promise<void> {
         const pkg = this.identity.prompt;
-        const raw = await this.intelligence.completeText([
+        const raw = await this.model.completeText([
             { role: AgentChatRole.System, content: this.prompt.section(BrainPrompt.Soul) },
             { role: AgentChatRole.User, content: `${pkg.render({ kind: 'document' })}\n<latest_user_message>${turn.input}</latest_user_message>` },
         ]);

@@ -1,5 +1,5 @@
 import { FComponent, FTool, Inject, Singleton, type ToolError } from '@/core';
-import type { IntelligenceToolDefinition } from '@/agent/brain/intelligence/types';
+import type { ToolDefinition } from '@/model';
 import { Ask } from './ask';
 import { Execute } from './execute';
 import { Filesystem } from './filesystem';
@@ -24,7 +24,7 @@ export class ToolComponent extends FComponent {
     @Inject()
     public execute!: Execute;
 
-    public async list(): Promise<IntelligenceToolDefinition[]> {
+    public async list(): Promise<ToolDefinition[]> {
         const records = await this.records();
         return records.map(({ description, protocol }) => ({
             name: protocol.name,

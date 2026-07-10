@@ -3,7 +3,7 @@ import { Memory } from '@/agent/memory';
 import { Turn } from '@/agent/turn';
 import type { ConfigService } from '@/configuration';
 import { Config, FCortex, Init, Inject, Module, Prompt, PromptService, Scope, useContainer } from '@/core';
-import { Intelligence } from '@/agent/brain/intelligence/service';
+import { Model } from '@/model';
 import { parse } from '@/agent/json';
 import { FSocket } from './ipc';
 import { SynapseSignalType, type CoordinatePlan, type InteractionRequest, type InteractionResponse, type SynapseSignal } from './types';
@@ -31,7 +31,7 @@ export class Synapse extends FCortex<SynapseSignal> {
     public memory!: Memory;
 
     @Inject()
-    public intelligence!: Intelligence;
+    public model!: Model;
 
     @Prompt('prompts/synapse')
     public prompt!: PromptService;
@@ -78,10 +78,10 @@ export class Synapse extends FCortex<SynapseSignal> {
                 detail: { active: name, configuredAgents: Object.keys(this.config.agents) },
             });
         }
-        agentConfig.model = agentConfig.model || this.config.model.model || this.config.model.default;
+        agentConfig.model = agentConfig.model || this.config.model.model;
         agentConfig.provider = agentConfig.provider || this.config.model.provider;
-        agentConfig.contextLength = agentConfig.contextLength || this.config.model.contextLength;
-        agentConfig.maxTokens = agentConfig.maxTokens || this.config.model.maxTokens;
+        agentConfig.contextLength = agentConfig.contextLength || 131072;
+        agentConfig.maxTokens = agentConfig.maxTokens || 8192;
         const agent = await useContainer().getAsync(Agent, agentConfig, this);
         this.agentPool[name] = agent;
         return agent;
@@ -101,10 +101,10 @@ export class Synapse extends FCortex<SynapseSignal> {
                 detail: { requested: name, configuredAgents: Object.keys(this.config.agents) },
             });
         }
-        agentConfig.model = agentConfig.model || this.config.model.model || this.config.model.default;
+        agentConfig.model = agentConfig.model || this.config.model.model;
         agentConfig.provider = agentConfig.provider || this.config.model.provider;
-        agentConfig.contextLength = agentConfig.contextLength || this.config.model.contextLength;
-        agentConfig.maxTokens = agentConfig.maxTokens || this.config.model.maxTokens;
+        agentConfig.contextLength = agentConfig.contextLength || 131072;
+        agentConfig.maxTokens = agentConfig.maxTokens || 8192;
         return await useContainer().getAsync(Agent, agentConfig, this);
     }
 
@@ -163,7 +163,7 @@ export class Synapse extends FCortex<SynapseSignal> {
         const turn = value;
         // EN: Ask the cortex plan prompt how to slice the understanding work.
         // ZH: 询问皮层计划提示词如何切分理解工作。
-        const plan = parse<CoordinatePlan>(await this.intelligence.completeText([
+        const plan = parse<CoordinatePlan>(await this.model.completeText([
             { role: AgentChatRole.System, content: this.prompt.section('plan') },
             { role: AgentChatRole.User, content: JSON.stringify(this.memory.context(turn.id)) },
         ]));
@@ -186,7 +186,7 @@ export class Synapse extends FCortex<SynapseSignal> {
 
         // EN: Synthesize worker understandings into one coherent reply.
         // ZH: 把各 worker 的理解合成一条连贯回复。
-        const answer = await this.intelligence.completeText([
+        const answer = await this.model.completeText([
             { role: AgentChatRole.System, content: this.prompt.section('synthesis') },
             { role: AgentChatRole.User, content: JSON.stringify({ outcomes, review: { profile: plan.review.profile, persona: plan.review.persona, result: review.answer, evidence: review.evidence }, hint: plan.synthesisHint }) },
         ]);

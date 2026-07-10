@@ -2,8 +2,8 @@ import { AgentChatRole } from '@/agent/types';
 import type { Perception, Reference, TurnMode, TurnSnapshot } from '@/agent/turn';
 import type { FAgentProfileConfiguration } from '@/configuration';
 import { FComponent, Prompt, PromptService, Provide, Scope, type FAgentSynapseBus } from '@/core';
+import { Model } from '@/model';
 import { parse } from '@/agent/json';
-import { Intelligence } from './intelligence/service';
 
 export enum CallosumPrompt {
     Perceive = 'PERCEIVE',
@@ -15,7 +15,7 @@ export class Callosum extends FComponent {
     public prompt!: PromptService<CallosumPrompt>;
 
     @Scope()
-    public intelligence!: Intelligence;
+    public model!: Model;
 
     public constructor(
         public readonly agentConfig: FAgentProfileConfiguration,
@@ -29,7 +29,7 @@ export class Callosum extends FComponent {
      * ZH: 在一次模型请求中同时完成输入理解与路由。
      */
     public async perceive(input: string, recent: TurnSnapshot[]): Promise<Perception> {
-        const raw = await this.intelligence.completeText([
+        const raw = await this.model.completeText([
             { role: AgentChatRole.System, content: this.prompt.section(CallosumPrompt.Perceive) },
             { role: AgentChatRole.User, content: JSON.stringify({ latest: input, recent }) },
         ]);
