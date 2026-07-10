@@ -1,11 +1,11 @@
-import { Agent, AgentChatRole, type Assignment } from '@/agent';
+import { Agent, type Assignment } from '@/agent';
 import { Memory } from '@/agent/memory';
 import { Turn } from '@/agent/turn';
-import type { ConfigService } from '@/configuration';
-import { Config, FCortex, Init, Inject, Module, Prompt, PromptService, Scope, useContainer } from '@/core';
-import { Model } from '@/model';
+import type { ConfigService } from '@/config';
+import { Config, FCortex, Init, Inject, Module, Prompt, Scope, useContainer } from '@/core';
+import { PromptService } from '@/prompt';
 import { parse } from '@/agent/json';
-import { FSocket } from './ipc';
+import { FSocket } from '@/transport';
 import { SynapseSignalType, type CoordinatePlan, type InteractionRequest, type InteractionResponse, type SynapseSignal } from './types';
 
 export interface AgentPool {
@@ -29,9 +29,6 @@ export class Synapse extends FCortex<SynapseSignal> {
 
     @Inject()
     public memory!: Memory;
-
-    @Inject()
-    public model!: Model;
 
     @Prompt('prompts/synapse')
     public prompt!: PromptService;
@@ -58,7 +55,10 @@ export class Synapse extends FCortex<SynapseSignal> {
         const active = this.config.agent;
         this.active = active;
         await this.spawnAgent(active);
-        this.socket.synapse = this;
+        this.socket.bind({
+            input: (text) => this.emit(SynapseSignalType.Input, text),
+            answer: (turnId, id, response) => this.answer(turnId, id, response as InteractionResponse),
+        });
         this.on(SynapseSignalType.Input, (signal) => this.input(String(signal.data)));
         this.on(SynapseSignalType.Reply, (signal) => this.output(signal.data));
         this.on(SynapseSignalType.Event, (signal) => this.socket.write({ action: 'data', data: signal.data }));
@@ -163,10 +163,10 @@ export class Synapse extends FCortex<SynapseSignal> {
         const turn = value;
         // EN: Ask the cortex plan prompt how to slice the understanding work.
         // ZH: 询问皮层计划提示词如何切分理解工作。
-        const plan = parse<CoordinatePlan>(await this.model.completeText([
-            { role: AgentChatRole.System, content: this.prompt.section('plan') },
-            { role: AgentChatRole.User, content: JSON.stringify(this.memory.context(turn.id)) },
-        ]));
+        const plan = parse<CoordinatePlan>(await this.agent.think(
+            this.prompt.section('plan'),
+            JSON.stringify(this.memory.context(turn.id)),
+        ));
 
         // EN: Each slice receives an isolated assignment and runs concurrently.
         // ZH: 每个切片接收隔离任务并并发执行。
@@ -186,10 +186,10 @@ export class Synapse extends FCortex<SynapseSignal> {
 
         // EN: Synthesize worker understandings into one coherent reply.
         // ZH: 把各 worker 的理解合成一条连贯回复。
-        const answer = await this.model.completeText([
-            { role: AgentChatRole.System, content: this.prompt.section('synthesis') },
-            { role: AgentChatRole.User, content: JSON.stringify({ outcomes, review: { profile: plan.review.profile, persona: plan.review.persona, result: review.answer, evidence: review.evidence }, hint: plan.synthesisHint }) },
-        ]);
+        const answer = await this.agent.think(
+            this.prompt.section('synthesis'),
+            JSON.stringify({ outcomes, review: { profile: plan.review.profile, persona: plan.review.persona, result: review.answer, evidence: review.evidence }, hint: plan.synthesisHint }),
+        );
 
         this.memory.complete(turn.id, answer, [...outcomes.flatMap((outcome) => outcome.evidence), ...review.evidence]);
         this.emit(SynapseSignalType.Reply, answer);

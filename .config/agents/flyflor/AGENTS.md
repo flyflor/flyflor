@@ -8,7 +8,6 @@ This file explains how to update the long-term note files. It is read-only and m
 - `USER.md`: stable notes about the user.
 - `EXTENSION.md`: stable notes about available abilities and reusable workflows.
 - `AGENTS.md`: read-only update rules.
-- `config.jsonc`: read-only file list and write limits.
 
 ## What To Save
 
@@ -76,7 +75,6 @@ Only these files may be rewritten:
 Never write:
 
 - `AGENTS.md`
-- `config.jsonc`
 - mirror files such as `*.zh.cn.md`
 - hidden files
 - arbitrary paths

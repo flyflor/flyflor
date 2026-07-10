@@ -1,8 +1,9 @@
-import { AgentChatRole } from '@/agent/types';
+import { AgentChatRole, type AgentBus } from '@/agent/types';
 import type { Perception, Reference, TurnMode, TurnSnapshot } from '@/agent/turn';
-import type { FAgentProfileConfiguration } from '@/configuration';
-import { FComponent, Prompt, PromptService, Provide, Scope, type FAgentSynapseBus } from '@/core';
+import type { FAgentProfileConfiguration } from '@/config';
+import { FComponent, Prompt, Provide, Scope } from '@/core';
 import { Model } from '@/model';
+import { PromptService } from '@/prompt';
 import { parse } from '@/agent/json';
 
 export enum CallosumPrompt {
@@ -19,7 +20,7 @@ export class Callosum extends FComponent {
 
     public constructor(
         public readonly agentConfig: FAgentProfileConfiguration,
-        public readonly synapse: FAgentSynapseBus,
+        public readonly synapse: AgentBus,
     ) {
         super();
     }

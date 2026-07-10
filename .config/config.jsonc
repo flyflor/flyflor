@@ -16,6 +16,8 @@
             "provider": "deepseek",
             "contextLength": 131072,
             "maxTokens": 8192,
+            "promptPackage": "./.config/agents/flyflor",
+            "promptSections": ["SOUL", "USER", "EXTENSION"],
         },
         "worker": {
             "name": "worker",

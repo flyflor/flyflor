@@ -1,4 +1,4 @@
-import type { FModelConfiguration } from '@/configuration';
+import type { FModelConfiguration } from '@/config';
 import type { Message, StreamEvent, ToolCall, ToolDefinition } from '../types';
 
 export type ProtocolName = 'anthropic' | 'bedrock' | 'cohere' | 'gemini' | 'ollama' | 'openai' | 'responses';

@@ -11,6 +11,7 @@ import {
 import { defineMetadata, getMetadata, useContainer } from './ioc/container';
 import type { FModule } from './ioc/abstracts';
 import { get } from 'lodash-es';
+import { join } from 'node:path';
 
 /**
  * EN: Concrete constructor accepted by decorators and factory helpers.
@@ -58,38 +59,6 @@ export function Singleton(): ClassDecorator {
 }
 
 /**
- * EN: Provider alias for behavior-owning service classes.
- * ZH: 面向持有业务行为的 service 类的 provider 别名。
- */
-export function Service(): ClassDecorator {
-    return (target) => Provide()(target);
-}
-
-/**
- * EN: Provider alias for stateful component classes.
- * ZH: 面向有状态 component 类的 provider 别名。
- */
-export function Component(): ClassDecorator {
-    return (target) => Provide()(target);
-}
-
-/**
- * EN: Marks a class as a tool provider.
- * ZH: 将类标记为工具 provider。
- */
-export function Tool(): ClassDecorator {
-    return (target) => Provide()(target);
-}
-
-/**
- * EN: Marks a repository class as a singleton provider.
- * ZH: 将 repository 类标记为 singleton provider。
- */
-export function Repo(): ClassDecorator {
-    return (target) => Singleton()(target);
-}
-
-/**
  * EN: Marks a module boundary and records its import graph.
  * ZH: 标记 module 边界并记录它的 import graph。
  */
@@ -97,16 +66,6 @@ export function Module<T extends FModule>(metadata: ModuleMetadata = {}): ClassD
     return (target) => {
         Singleton()(target);
         defineMetadata(MODULE_METADATA_KEY, metadata, target);
-    };
-}
-
-/**
- * EN: Marks a controller-style class as a singleton provider.
- * ZH: 将 controller 风格的类标记为 singleton provider。
- */
-export function Controller() {
-    return <T extends Ctor>(target: T) => {
-        Singleton()(target as unknown as Function);
     };
 }
 
@@ -201,26 +160,6 @@ export function Init(): MethodDecorator {
 }
 
 /**
- * EN: Marks a class as a singleton policy/guard provider.
- * ZH: 将类标记为 singleton policy/guard provider。
- */
-export function Guard(): ClassDecorator {
-    return (target) => {
-        Singleton()(target);
-    };
-}
-
-/**
- * EN: Marks a class as a singleton sandbox policy provider.
- * ZH: 将类标记为 singleton sandbox policy provider。
- */
-export function SandBox(): ClassDecorator {
-    return (target) => {
-        Guard()(target);
-    };
-}
-
-/**
  * EN: Injects `ConfigService`, optionally exposing one nested config key.
  * ZH: 注入 `ConfigService`，并可选择暴露一个嵌套配置键。
  */
@@ -231,7 +170,7 @@ export function Config(key?: string): PropertyDecorator {
         data.push({
             propertyKey,
             instance: async () => {
-                const { ConfigService } = await import('@/configuration');
+                const { ConfigService } = await import('@/config');
                 return useContainer().getAsync(ConfigService);
             },
         });
@@ -249,4 +188,37 @@ export function Config(key?: string): PropertyDecorator {
             },
         });
     }
+}
+
+/**
+ * EN: Injects a canonical prompt file or directory resolved from the repository root.
+ * ZH: 从仓库根目录按约定解析并注入 prompt 文件或目录。
+ */
+export function Prompt<TThis = object>(path: string | ((this: TThis, prop: TThis) => string)): PropertyDecorator {
+    return (target, propertyKey) => {
+        const promptStorageKey = Symbol(String(propertyKey));
+        const data: InjectInstanceMetadata[] = getMetadata(INJECT_METADATA_INSTANCE_KEY, target.constructor) || [];
+        data.push({
+            propertyKey,
+            instance: async function (this: TThis) {
+                const [{ useRootPath }, { PromptService }] = await Promise.all([
+                    import('@/config'),
+                    import('@/prompt/service'),
+                ]);
+                const promptPath = join(useRootPath(), typeof path === 'function' ? path.call(this, this) : path);
+                return useContainer().getAsync(PromptService, promptPath);
+            },
+        });
+        defineMetadata(INJECT_METADATA_INSTANCE_KEY, data, target.constructor);
+        Object.defineProperty(target, propertyKey, {
+            configurable: true,
+            enumerable: true,
+            get() {
+                return this[promptStorageKey];
+            },
+            set(value) {
+                this[promptStorageKey] = value;
+            },
+        });
+    };
 }

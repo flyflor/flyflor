@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { AgentChatRole } from '@/agent/types';
+import { AgentChatRole, AgentSignal } from '@/agent/types';
+import { useContainer } from '@/core';
 import type { Message, ToolCall, ToolDefinition } from '@/model';
-import { SynapseSignalType } from '@/neural/types';
 import { Investigation } from './service';
 
 interface HarnessOptions {
@@ -21,7 +21,8 @@ function harness(responses: Array<{ text: string; toolCalls: ToolCall[] }>, opti
                 ? { kind: 'ask', answers: [{ question: 'Pick?', answer: 'a' }] }
                 : { kind: 'confirm', approved: true },
     };
-    const instance = new Investigation(
+    const instance = useContainer().create(
+        Investigation,
         { name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 },
         bus as never,
     );
@@ -57,7 +58,7 @@ describe('Investigation', () => {
         const outcome = await instance.run(messages);
 
         expect(outcome).toMatchObject({ answer: '直接答案', completed: true, paused: false, steps: 1, evidence: [] });
-        expect(events).toContainEqual({ type: SynapseSignalType.Reply, data: '直接答案' });
+        expect(events).toContainEqual({ type: AgentSignal.Reply, data: '直接答案' });
     });
 
     test('can finish silently for coordinated work', async () => {
@@ -66,7 +67,7 @@ describe('Investigation', () => {
         const outcome = await instance.run(messages, { emitReply: false });
 
         expect(outcome.answer).toBe('静默答案');
-        expect(events.some((event) => event.type === SynapseSignalType.Reply)).toBe(false);
+        expect(events.some((event) => event.type === AgentSignal.Reply)).toBe(false);
     });
 
     test('replays tool requests and results without leaking them into turn state', async () => {
@@ -79,7 +80,7 @@ describe('Investigation', () => {
 
         expect(outcome).toMatchObject({ answer: '综合答案', steps: 2, evidence: ['filesystem read /tmp/demo.ts ok'] });
         expect(calls[0]?.arguments.cwd).toBe('/tmp/semantic');
-        expect(events.some((event) => event.type === SynapseSignalType.Event)).toBe(true);
+        expect(events.some((event) => event.type === AgentSignal.Event)).toBe(true);
         expect(seenMessages[1]?.some((message) => message.role === 'tool')).toBe(true);
     });
 

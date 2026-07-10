@@ -31,8 +31,19 @@ export interface Outcome {
     evidence: string[];
 }
 
+export interface AgentBus {
+    emit(type: string, data: unknown): unknown;
+    coordinate?(turn: unknown): Promise<void>;
+    interact?(request: { turnId: string; id: string; kind: 'ask' | 'confirm'; data: unknown }): Promise<unknown>;
+}
+
 export enum AgentEventType {
     ModelRequest = 'model_request',
     ActionStart = 'action_start',
     ActionResult = 'action_result',
+}
+
+export enum AgentSignal {
+    Reply = 'reply',
+    Event = 'event',
 }

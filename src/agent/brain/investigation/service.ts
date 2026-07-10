@@ -1,9 +1,8 @@
-import { AgentEventType } from '@/agent/types';
-import type { FAgentProfileConfiguration } from '@/configuration';
-import { FComponent, Inject, Provide, Scope, type FAgentSynapseBus } from '@/core';
+import { AgentEventType, AgentSignal, type AgentBus } from '@/agent/types';
+import type { FAgentProfileConfiguration } from '@/config';
+import { FComponent, Inject, Provide, Scope } from '@/core';
 import { Model, type AssistantMessage, type Message, type ModelResult, type ToolCall, type ToolMessage } from '@/model';
-import { SynapseSignalType } from '@/neural/types';
-import { ToolComponent } from '@/plugins';
+import { Tools } from '@/tool';
 import type { InvestigationOutcome, InvestigationRunOptions } from './types';
 
 @Provide()
@@ -16,11 +15,11 @@ export class Investigation extends FComponent {
     public model!: Model;
 
     @Inject()
-    public tools!: ToolComponent;
+    public tools!: Tools;
 
     public constructor(
         public readonly agentConfig: FAgentProfileConfiguration,
-        public readonly synapse: FAgentSynapseBus,
+        public readonly synapse: AgentBus,
     ) {
         super();
     }
@@ -32,9 +31,9 @@ export class Investigation extends FComponent {
         let step = 0;
         while (true) {
             step += 1;
-            this.synapse.emit(SynapseSignalType.Event, { type: AgentEventType.ModelRequest, data: { step } });
+            this.synapse.emit(AgentSignal.Event, { type: AgentEventType.ModelRequest, data: { step } });
             const result = await this.model.streamRun(messages, await this.tools.list(), (chunk) => {
-                if (emitReply) this.synapse.emit(SynapseSignalType.Reply, chunk);
+                if (emitReply) this.synapse.emit(AgentSignal.Reply, chunk);
             });
             if (result.toolCalls.length === 0) {
                 return { answer: result.text, steps: step, completed: true, paused: false, evidence };
@@ -63,9 +62,9 @@ export class Investigation extends FComponent {
                         continue;
                     }
                 }
-                this.synapse.emit(SynapseSignalType.Event, { type: AgentEventType.ActionStart, name: request.name, data: request.arguments });
+                this.synapse.emit(AgentSignal.Event, { type: AgentEventType.ActionStart, name: request.name, data: request.arguments });
                 const actionResult = await this.tools.run(request);
-                this.synapse.emit(SynapseSignalType.Event, { type: AgentEventType.ActionResult, name: request.name, data: actionResult });
+                this.synapse.emit(AgentSignal.Event, { type: AgentEventType.ActionResult, name: request.name, data: actionResult });
                 messages.push(this.toolResultMessage(request, actionResult));
                 evidence.push(this.evidence(request, actionResult));
                 if (actionResult.ok && this.pause(actionResult.data)) {
@@ -102,7 +101,7 @@ export class Investigation extends FComponent {
         return { ...request, arguments: { ...request.arguments, cwd } };
     }
 
-    private toolResultMessage(request: ToolCall, result: Awaited<ReturnType<ToolComponent['run']>>): ToolMessage {
+    private toolResultMessage(request: ToolCall, result: Awaited<ReturnType<Tools['run']>>): ToolMessage {
         return {
             role: 'tool',
             content: JSON.stringify(result),
@@ -112,7 +111,7 @@ export class Investigation extends FComponent {
         };
     }
 
-    private evidence(request: ToolCall, result: Awaited<ReturnType<ToolComponent['run']>>): string {
+    private evidence(request: ToolCall, result: Awaited<ReturnType<Tools['run']>>): string {
         if (result.ok) {
             if (request.name === 'filesystem') {
                 const data = result.data as { action?: unknown; path?: unknown };

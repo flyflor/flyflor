@@ -7,9 +7,9 @@ Return ONLY compact JSON. Do not use markdown fences. Do not write prose outside
 Inputs:
 
 - Latest user message: the only source for new long-term information.
-- XML documents: current note files and write limits.
+- Identity snapshot: current contents of the three writable note files.
 
-The XML documents contain:
+The identity snapshot contains:
 
 - `SOUL.md`: long-term notes about the assistant's identity, values, speaking style, boundaries, and mission.
 - `USER.md`: long-term notes about the user, preferences, expertise, goals, and communication expectations.
@@ -51,15 +51,15 @@ If writes are justified, return:
 
 Rules:
 
-- Follow the file meanings and write limits in the XML documents.
+- Follow the fixed file meanings and write allowlist below.
 - Only write `SOUL.md`, `USER.md`, or `EXTENSION.md`.
 - One user message may update multiple files.
 - Do not include a `reply` field.
-- Never write `AGENTS.md`, `config.jsonc`, mirror files, hidden files, or arbitrary paths.
+- Never write `AGENTS.md`, mirror files, hidden files, or arbitrary paths.
 - Every `content` value must be the complete replacement markdown for that file.
 - Do not return diffs, patches, partial snippets, or commentary.
 - Preserve correct existing content and make the smallest accurate update.
-- The XML documents already contain each editable file's current content. Start from it: copy every existing stable fact forward verbatim, then add or amend only what the latest user message changes. A replacement that drops an existing fact you were not asked to remove is a data-loss bug, not an edit.
+- The identity snapshot already contains each editable file's current content. Start from it: copy every existing stable fact forward verbatim, then add or amend only what the latest user message changes. A replacement that drops an existing fact you were not asked to remove is a data-loss bug, not an edit.
 - Write stable facts as declarative statements, not standing commands. Prefer "User prefers concise answers" over "Always answer concisely" because commands can override the user's later request.
 - Keep each file focused and small; a section is injected into every future prompt, so do not let it accumulate restated or low-value lines.
 - Update only from explicit user instruction or stable evidence in the latest user message.

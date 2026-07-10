@@ -8,7 +8,6 @@
 - `USER.md`：关于用户的稳定记录。
 - `EXTENSION.md`：关于可用能力和可复用流程的稳定记录。
 - `AGENTS.md`：只读更新规则。
-- `config.jsonc`：只读文件列表和写入限制。
 
 ## 保存什么
 
@@ -76,7 +75,6 @@
 永远不要写入：
 
 - `AGENTS.md`
-- `config.jsonc`
 - `*.zh.cn.md` 这类镜像文件
 - 隐藏文件
 - 任意路径

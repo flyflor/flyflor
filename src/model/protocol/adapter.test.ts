@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { useContainer } from '@/core';
 import type { StreamEvent } from '../types';
 import { anthropicAdapter } from './anthropic';
 import { bedrockAdapter } from './bedrock';
@@ -76,7 +77,7 @@ describe('provider adapters', () => {
     });
 
     test('reuses one OpenAI adapter for compatible providers', () => {
-        const client = new ProtocolClient();
+        const client = useContainer().create(ProtocolClient);
         expect(client.resolve('huggingface')[0]?.adapter).toBe(openAIAdapter);
         expect(client.resolve('vllm')[0]?.adapter).toBe(openAIAdapter);
         expect(client.resolve('lm-studio')[0]?.adapter).toBe(openAIAdapter);

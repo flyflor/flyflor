@@ -1,4 +1,4 @@
-import type { ConfigService, FAgentProfileConfiguration } from '@/configuration';
+import type { ConfigService, FAgentProfileConfiguration } from '@/config';
 import { Config, FService, Init, Inject, Provide } from '@/core';
 import { ProtocolClient } from './protocol/client';
 import type { ModelOptions } from './protocol/types';

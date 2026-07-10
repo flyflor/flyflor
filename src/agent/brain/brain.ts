@@ -1,11 +1,11 @@
-import { AgentChatRole, type Assignment, type Outcome } from '@/agent/types';
+import { AgentChatRole, AgentSignal, type AgentBus, type Assignment, type Outcome } from '@/agent/types';
 import { Identity } from '@/agent/identity';
 import { Memory } from '@/agent/memory';
 import { Turn } from '@/agent/turn';
-import type { FAgentProfileConfiguration } from '@/configuration';
-import { SynapseSignalType } from '@/neural/types';
-import { FComponent, Inject, Prompt, PromptService, Provide, Scope, type FAgentSynapseBus } from '@/core';
+import type { FAgentProfileConfiguration } from '@/config';
+import { FComponent, Inject, Prompt, Provide, Scope } from '@/core';
 import { Model } from '@/model';
+import { PromptService } from '@/prompt';
 import { parse } from '@/agent/json';
 import { Callosum } from './callosum';
 import { Investigation } from './investigation';
@@ -36,7 +36,7 @@ export class Brain extends FComponent {
 
     public constructor(
         public readonly agentConfig: FAgentProfileConfiguration,
-        public readonly synapse: FAgentSynapseBus,
+        public readonly synapse: AgentBus,
     ) {
         super();
     }
@@ -68,10 +68,10 @@ export class Brain extends FComponent {
         let answer = '';
         await this.model.stream(this.messages(turn.input), (chunk) => {
             answer += chunk;
-            this.synapse.emit(SynapseSignalType.Reply, chunk);
+            this.synapse.emit(AgentSignal.Reply, chunk);
         });
         this.memory.complete(turn.id, answer);
-        this.synapse.emit(SynapseSignalType.Reply, null);
+        this.synapse.emit(AgentSignal.Reply, null);
     }
 
     private async research(turn: Turn): Promise<void> {
@@ -81,21 +81,20 @@ export class Brain extends FComponent {
         });
         if (outcome.paused) return;
         this.memory.complete(turn.id, outcome.answer, outcome.evidence);
-        this.synapse.emit(SynapseSignalType.Reply, null);
+        this.synapse.emit(AgentSignal.Reply, null);
     }
 
     private async soul(turn: Turn): Promise<void> {
-        const pkg = this.identity.prompt;
         const raw = await this.model.completeText([
             { role: AgentChatRole.System, content: this.prompt.section(BrainPrompt.Soul) },
-            { role: AgentChatRole.User, content: `${pkg.render({ kind: 'document' })}\n<latest_user_message>${turn.input}</latest_user_message>` },
+            { role: AgentChatRole.User, content: `${this.identity.snapshot()}\n<latest_user_message>${turn.input}</latest_user_message>` },
         ]);
         const plan = parse<{ writes?: Array<{ file?: string; content?: string }> }>(raw);
-        const { written, rejected } = pkg.applyWrites(plan.writes ?? []);
+        const { written, rejected } = this.identity.applyWrites(plan.writes ?? []);
         const answer = `协议包已更新: ${written.join(', ') || '无'}${rejected.length ? `；已拒绝: ${rejected.join(', ')}` : ''}`;
-        this.synapse.emit(SynapseSignalType.Reply, answer);
+        this.synapse.emit(AgentSignal.Reply, answer);
         this.memory.complete(turn.id, answer);
-        this.synapse.emit(SynapseSignalType.Reply, null);
+        this.synapse.emit(AgentSignal.Reply, null);
     }
 
     public async work(assignment: Assignment): Promise<Outcome | undefined> {
@@ -113,6 +112,13 @@ export class Brain extends FComponent {
         ];
         const outcome = await this.investigation.run(messages, { emitReply: false, cwd: assignment.cwd });
         return outcome.paused ? undefined : { answer: outcome.answer, evidence: outcome.evidence };
+    }
+
+    public async think(system: string, input: string): Promise<string> {
+        return this.model.completeText([
+            { role: AgentChatRole.System, content: system },
+            { role: AgentChatRole.User, content: input },
+        ]);
     }
 
     private messages(input: string) {

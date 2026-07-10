@@ -31,11 +31,9 @@
         "noUnusedParameters": false,
         "noPropertyAccessFromIndexSignature": false,
         "paths": {
-            "@/*": ["./src/*"],
-            "@plugins/*": ["./plugins/*"],
-            "@pakcages/*": ["./pakcages/*"]
+            "@/*": ["./src/*"]
         },
     },
-    "include": ["pakcages/**/*.ts", "plugins/**/*.ts", "src/**/*.ts", "scripts/**/*.ts"],
-    "exclude": ["node_modules", "dist", "plugins", ".agents"],
+    "include": ["src/**/*.ts", "scripts/**/*.ts"],
+    "exclude": ["node_modules", "dist", ".agents"],
 }

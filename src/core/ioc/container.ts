@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { INIT_METADATA_KEY, INJECT_METADATA_INSTANCE_KEY, INJECT_METADATA_KEY, MODULE_METADATA_KEY, PROVIDER_SINGLETON_KEY, type ClassType, type InjectInstanceMetadata, type InjectMetadata } from './types';
 
 const CONSTRUCTOR_PARAM_METADATA_KEY = 'design:paramtypes';

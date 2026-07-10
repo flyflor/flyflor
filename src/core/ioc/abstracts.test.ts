@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { FCortex, FTool, type CortexSignal } from './abstracts';
 
-class TestTool extends FTool<{ value: number }, { value: number }> {
+class TestTool extends FTool<{ value: number }, { ok: true; data: { value: number } }> {
     public override execute(input: { value: number }) {
         return { ok: true, data: { value: input.value + 1 } } as const;
     }

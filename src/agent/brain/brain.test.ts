@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { AgentChatRole, type Assignment } from '@/agent/types';
+import { AgentChatRole, AgentSignal, type Assignment } from '@/agent/types';
 import { Memory } from '@/agent/memory';
 import { Turn } from '@/agent/turn';
 import { useContainer } from '@/core';
-import { SynapseSignalType } from '@/neural/types';
 import { Brain } from './brain';
 
 const profile = { name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 };
@@ -21,8 +20,8 @@ describe('Brain', () => {
         });
         memory.complete(previous.id, 'previous answer');
         let perceptions = 0;
-        const brain = new Brain(profile, {
-            emit: (type, data) => emitted.push({ type, data }),
+        const brain = useContainer().create(Brain, profile, {
+            emit: (type: string, data: unknown) => emitted.push({ type, data }),
         });
         brain.memory = memory;
         brain.callosum = {
@@ -49,15 +48,15 @@ describe('Brain', () => {
             { role: AgentChatRole.User, content: 'latest question' },
         ]);
         expect(memory.snapshots().at(-1)).toMatchObject({ status: 'completed', answer: 'PONG1' });
-        expect(emitted).toContainEqual({ type: SynapseSignalType.Reply, data: 'PONG1' });
+        expect(emitted).toContainEqual({ type: AgentSignal.Reply, data: 'PONG1' });
     });
 
     test('awaits coordinate handling at the cortex boundary', async () => {
         const memory = useContainer().create(Memory);
         let coordinated = false;
-        const brain = new Brain(profile, {
+        const brain = useContainer().create(Brain, profile, {
             emit: () => undefined,
-            coordinate: async (value) => {
+            coordinate: async (value: unknown) => {
                 coordinated = value instanceof Turn;
                 memory.complete((value as Turn).id, 'coordinated');
             },
@@ -75,7 +74,7 @@ describe('Brain', () => {
 
     test('marks the active turn failed when cognition throws', async () => {
         const memory = useContainer().create(Memory);
-        const brain = new Brain(profile, { emit: () => undefined });
+        const brain = useContainer().create(Brain, profile, { emit: () => undefined });
         brain.memory = memory;
         brain.callosum = {
             perceive: async () => ({ mode: 'research', goal: 'inspect', constraints: [], references: [] }),
@@ -91,7 +90,7 @@ describe('Brain', () => {
 
     test('runs an isolated worker assignment without shared turn state', async () => {
         const seen: unknown[] = [];
-        const brain = new Brain({ ...profile, name: 'worker' }, { emit: () => undefined });
+        const brain = useContainer().create(Brain, { ...profile, name: 'worker' }, { emit: () => undefined });
         brain.identity = { messages: () => [{ role: AgentChatRole.System, content: 'worker identity' }] } as never;
         brain.investigation = {
             run: async (messages: unknown, options: unknown) => {

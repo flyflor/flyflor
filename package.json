@@ -1,12 +1,12 @@
 {
     "name": "flyflor",
-    "module": "src/bootstrap.ts",
+    "module": "src/app/bootstrap.ts",
     "type": "module",
     "scripts": {
-        "dev": "bun run --watch src/bootstrap.ts",
+        "dev": "bun run --watch src/app/bootstrap.ts",
         "client": "bun run --watch web/client.ts",
         "check": "bunx tsc --noEmit && bun run scripts/check.script.ts",
-        "build:binary": "bun build --compile --outfile dist/flyflor src/bootstrap.ts"
+        "build:binary": "bun build --compile --outfile dist/flyflor src/app/bootstrap.ts"
     },
     "devDependencies": {
         "@types/bun": "latest"

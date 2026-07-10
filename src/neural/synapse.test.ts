@@ -72,18 +72,19 @@ function coordinateHarness(plan: CoordinatePlan): {
     const replies: unknown[] = [];
     synapse.memory = memory;
     synapse.active = 'flyflor';
-    synapse.agentPool = {};
     synapse.prompt = { section: (name: string) => `${name} prompt` } as never;
     synapse.on(SynapseSignalType.Reply, (signal) => {
         replies.push(signal.data);
     });
     let modelCall = 0;
-    synapse.model = {
-        completeText: async () => {
+    synapse.agentPool = {
+        flyflor: {
+            think: async () => {
             modelCall += 1;
             return modelCall === 1 ? JSON.stringify(plan) : 'final answer';
-        },
-    } as never;
+            },
+        } as never,
+    };
     let worker = 0;
     synapse.spawnWorker = async () => {
         worker += 1;
