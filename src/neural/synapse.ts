@@ -45,12 +45,19 @@ export class Synapse extends FCortex implements AgentBus {
     @Inject(() => 'expression')
     public expression!: Observable<ExpressionSignal>;
 
-    private readonly agents = new Map<string, Agent>();
-    private active = '';
+    private readonly agents: Map<string, Agent>;
+    private active: string;
     private pending?: {
         signal: InteractionSignal;
         resolve: (response: InteractionResponse) => void;
     };
+
+    /** EN: Creates empty cortical ownership before IOC wiring. ZH: 在 IOC wiring 前创建空的皮层所有权状态。 */
+    public constructor() {
+        super();
+        this.agents = new Map();
+        this.active = '';
+    }
 
     /**
      * EN: Wires independent cortical circuits and creates every configured person once.

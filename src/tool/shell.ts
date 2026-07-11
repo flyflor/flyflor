@@ -10,22 +10,31 @@ import { Tool } from './abstracts';
  */
 @Provide()
 export class Shell extends Tool<ShellInput, ShellOutput> {
-    public readonly name = 'shell';
-    public readonly risk = 'external';
-    public override readonly workingDirectory = true;
-    public readonly parameters = {
-        type: 'object',
-        properties: {
-            command: { type: 'string' },
-            args: { type: 'array', items: { type: ['string', 'number', 'boolean'] } },
-            cwd: { type: 'string' },
-            timeoutMs: { type: 'number' },
-        },
-        required: ['command'],
-    } as const;
+    public readonly name: string;
+    public readonly risk: 'external';
+    public override readonly workingDirectory: boolean;
+    public readonly parameters: Record<string, unknown>;
 
     @Config()
     public config!: ConfigService;
+
+    /** EN: Initializes command capability metadata and its cwd-aware model schema. ZH: 初始化命令能力元数据及其 cwd 感知模型 schema。 */
+    public constructor() {
+        super();
+        this.name = 'shell';
+        this.risk = 'external';
+        this.workingDirectory = true;
+        this.parameters = {
+            type: 'object',
+            properties: {
+                command: { type: 'string' },
+                args: { type: 'array', items: { type: ['string', 'number', 'boolean'] } },
+                cwd: { type: 'string' },
+                timeoutMs: { type: 'number' },
+            },
+            required: ['command'],
+        };
+    }
 
     /** EN: Requires approval for every external command. ZH: 所有外部命令均要求审批。 */
     public override confirm(): boolean {

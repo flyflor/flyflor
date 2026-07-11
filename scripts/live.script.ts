@@ -27,12 +27,13 @@ interface TurnOptions {
  */
 class BrowserProbe extends FService {
     private socket?: WebSocket;
-    private readonly inbox: BridgePacket[] = [];
+    private readonly inbox: BridgePacket[];
     private waiting?: (packet: BridgePacket) => void;
 
     /** EN: Binds this probe to one live WebSocket endpoint. ZH: 将 probe 绑定到一个真实 WebSocket endpoint。 */
     public constructor(private readonly endpoint: string) {
         super();
+        this.inbox = [];
     }
 
     /** EN: Connects to the bridge and waits for the kernel open packet. ZH: 连接 bridge 并等待 kernel open packet。 */
@@ -115,8 +116,15 @@ class LiveScenarios extends FService {
     private synapse?: Synapse;
     private bridge?: ReturnType<typeof IpcClientBridge.start>;
     private probe?: BrowserProbe;
-    private workspace = '';
-    private readonly passed: string[] = [];
+    private workspace: string;
+    private readonly passed: string[];
+
+    /** EN: Creates empty ownership for one disposable live-suite run. ZH: 为一次性 live suite 创建空所有权状态。 */
+    public constructor() {
+        super();
+        this.workspace = '';
+        this.passed = [];
+    }
 
     /** EN: Runs the complete live suite and releases only test-owned resources. ZH: 运行完整 live suite，并只释放测试拥有的资源。 */
     public async run(): Promise<void> {

@@ -21,37 +21,46 @@ interface ExecuteTask {
  */
 @Provide()
 export class Execute extends Tool<ExecuteInput, ExecuteOutput> {
-    public readonly name = 'execute';
-    public readonly risk = 'external';
-    public override readonly workingDirectory = true;
-    public readonly parameters = {
-        type: 'object',
-        properties: {
-            cwd: { type: 'string' },
-            mode: { type: 'string', enum: ['serial', 'parallel'] },
-            maxConcurrency: { type: 'number' },
-            tasks: {
-                type: 'array',
-                items: {
-                    type: 'object',
-                    properties: {
-                        id: { type: 'string' },
-                        runtime: { type: 'string', enum: ['python', 'sh'] },
-                        path: { type: 'string' },
-                        args: { type: 'array', items: { type: ['string', 'number', 'boolean'] } },
-                        cwd: { type: 'string' },
-                        env: { type: 'object' },
-                        timeoutMs: { type: 'number' },
-                    },
-                    required: ['runtime', 'path'],
-                },
-            },
-        },
-        required: ['tasks'],
-    } as const;
+    public readonly name: string;
+    public readonly risk: 'external';
+    public override readonly workingDirectory: boolean;
+    public readonly parameters: Record<string, unknown>;
 
     @Config()
     public config!: ConfigService;
+
+    /** EN: Initializes script capability metadata and its cwd-aware model schema. ZH: 初始化脚本能力元数据及其 cwd 感知模型 schema。 */
+    public constructor() {
+        super();
+        this.name = 'execute';
+        this.risk = 'external';
+        this.workingDirectory = true;
+        this.parameters = {
+            type: 'object',
+            properties: {
+                cwd: { type: 'string' },
+                mode: { type: 'string', enum: ['serial', 'parallel'] },
+                maxConcurrency: { type: 'number' },
+                tasks: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            id: { type: 'string' },
+                            runtime: { type: 'string', enum: ['python', 'sh'] },
+                            path: { type: 'string' },
+                            args: { type: 'array', items: { type: ['string', 'number', 'boolean'] } },
+                            cwd: { type: 'string' },
+                            env: { type: 'object' },
+                            timeoutMs: { type: 'number' },
+                        },
+                        required: ['runtime', 'path'],
+                    },
+                },
+            },
+            required: ['tasks'],
+        };
+    }
 
     /** EN: Requires approval for every script batch. ZH: 每个脚本批次均要求审批。 */
     public override confirm(): boolean {

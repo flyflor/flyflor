@@ -23,6 +23,7 @@ Flyflor 是持续存在、无 Session 的智能生命体。所有设计只服务
 7. 禁止新增通用 utils、manager、parser、compiler、diagnostic、event framework、XML service 或 session directory。
 8. 跨 domain 使用 `@/*` import；同一 directory boundary 内使用相对 import。
 9. 每个 runtime class、constructor、method、accessor 都有简洁 EN/ZH JSDoc，说明所有权、生命周期或输入输出。
+10. 非 static instance property 禁止使用声明初始化器；对象拥有的全部 instance state 必须在 constructor 中初始化。
 
 ## 严格失败规则
 
@@ -86,7 +87,7 @@ Flyflor 是持续存在、无 Session 的智能生命体。所有设计只服务
 
 ## 健康门
 
-`bun run check` 是最低健康门，并包含 failure rule、IOC-only construction、JSDoc、method limit、private Turn、forbidden Session type 的 AST 检查。聚焦变更运行相关测试。完成内核级重构前必须运行 `bun test` 与 `bun run build:binary`。
+`bun run check` 是最低健康门，并包含 failure rule、constructor-owned instance initialization、IOC-only construction、JSDoc、method limit、private Turn、forbidden Session type 的 AST 检查。聚焦变更运行相关测试。完成内核级重构前必须运行 `bun test` 与 `bun run build:binary`。
 
 当真实模型 credential 可用时，完成 cognition prompt、provider protocol、neural routing、具体 tool 或 Web/IPC boundary 变更前必须运行 `bun run test:live`。Live suite 必须使用一次性文件，不得修改持久 identity 或用户日志。
 

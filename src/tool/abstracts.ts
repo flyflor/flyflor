@@ -8,10 +8,16 @@ export abstract class Tool<TInput = unknown, TOutput = unknown> extends FTool<TI
     public abstract readonly name: string;
     public abstract readonly risk: ToolRisk;
     public abstract readonly parameters: Record<string, unknown>;
-    public readonly workingDirectory: boolean = false;
+    public readonly workingDirectory: boolean;
 
     @Prompt((tool: Tool) => `prompts/tools/${tool.name}.md`)
     public prompt!: PromptService<string, string>;
+
+    /** EN: Initializes the shared capability contract before IOC injection. ZH: 在 IOC 注入前初始化共享能力契约。 */
+    public constructor() {
+        super();
+        this.workingDirectory = false;
+    }
 
     /** EN: Projects this concrete capability into a model tool definition. ZH: 将具体能力投影为模型工具定义。 */
     public definition(): ToolDefinition {

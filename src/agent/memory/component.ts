@@ -24,9 +24,9 @@ export class Memory extends FComponent {
     @Prompt('prompts/memory')
     public prompt!: PromptService;
 
-    private sequence = 0;
-    private readonly capacity = 16;
-    private notes: MemoryNote[] = [];
+    private sequence: number;
+    private readonly capacity: number;
+    private notes: MemoryNote[];
 
     /**
      * EN: Binds this Memory to one Agent identity and its cortical bus.
@@ -37,6 +37,9 @@ export class Memory extends FComponent {
         public readonly synapse: AgentBus,
     ) {
         super();
+        this.sequence = 0;
+        this.capacity = 16;
+        this.notes = [];
     }
 
     /**

@@ -63,7 +63,7 @@ export type PromptPackageData<TSection extends string> = Partial<Record<TSection
 export class PromptService<TSection extends string = string, TData = PromptPackageData<TSection>> extends FService {
     public config?: PromptConfig<TSection>;
     public data!: TData;
-    public writable = true;
+    public writable: boolean;
 
     /**
      * EN: Loads one canonical prompt file or one complete prompt package directory.
@@ -71,6 +71,7 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
      */
     public constructor(public readonly path: string) {
         super();
+        this.writable = true;
         if (!statSync(path).isDirectory()) {
             this.data = readFileSync(path, 'utf-8') as TData;
             return;

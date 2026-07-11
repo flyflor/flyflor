@@ -8,9 +8,9 @@ import { FlyFlor } from '@/core/ioc/abstracts';
  */
 @Provide()
 export class Observable<TInput = unknown, TOutput = TInput> extends FlyFlor {
-    private readonly stages: Array<(value: unknown) => unknown | Promise<unknown>> = [];
-    private readonly subscribers: Array<(value: unknown) => void | Promise<void>> = [];
-    private tail: Promise<unknown> = Promise.resolve();
+    private readonly stages: Array<(value: unknown) => unknown | Promise<unknown>>;
+    private readonly subscribers: Array<(value: unknown) => void | Promise<void>>;
+    private tail: Promise<unknown>;
 
     /**
      * EN: Names the circuit for diagnostics without changing its signal contract.
@@ -18,6 +18,9 @@ export class Observable<TInput = unknown, TOutput = TInput> extends FlyFlor {
      */
     public constructor(public readonly name: string) {
         super();
+        this.stages = [];
+        this.subscribers = [];
+        this.tail = Promise.resolve();
     }
 
     /**

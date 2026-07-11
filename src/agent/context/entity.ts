@@ -7,10 +7,10 @@ type TurnStatus = 'active' | 'paused' | 'completed';
  * ZH: 只能通过 Context 访问的内部对话实体。
  */
 export class Turn {
-    private status: TurnStatus = 'active';
+    private status: TurnStatus;
     private interaction?: TurnInteraction;
     private answer?: string;
-    private evidence: string[] = [];
+    private evidence: string[];
 
     /**
      * EN: Creates one active experience from raw input and one perception.
@@ -21,7 +21,10 @@ export class Turn {
         public readonly input: string,
         public readonly perception: Perception,
         public readonly createdAt: number,
-    ) {}
+    ) {
+        this.status = 'active';
+        this.evidence = [];
+    }
 
     /**
      * EN: Marks this Turn as waiting for one exact interaction.

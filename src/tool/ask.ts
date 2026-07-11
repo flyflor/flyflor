@@ -8,36 +8,44 @@ import type { AskInput, AskOption, AskOutput, AskQuestion } from './types';
  */
 @Provide()
 export class Ask extends Tool<AskInput, AskOutput> {
-    public readonly name = 'ask';
-    public readonly risk = 'interaction';
-    public readonly parameters = {
-        type: 'object',
-        properties: {
-            questions: {
-                type: 'array',
-                items: {
-                    type: 'object',
-                    properties: {
-                        question: { type: 'string' },
-                        options: {
-                            type: 'array',
-                            items: {
-                                type: 'object',
-                                properties: {
-                                    label: { type: 'string' },
-                                    description: { type: 'string' },
-                                    recommended: { type: 'boolean' },
+    public readonly name: string;
+    public readonly risk: 'interaction';
+    public readonly parameters: Record<string, unknown>;
+
+    /** EN: Initializes the clarification capability and its strict model schema. ZH: 初始化澄清能力及其严格模型 schema。 */
+    public constructor() {
+        super();
+        this.name = 'ask';
+        this.risk = 'interaction';
+        this.parameters = {
+            type: 'object',
+            properties: {
+                questions: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            question: { type: 'string' },
+                            options: {
+                                type: 'array',
+                                items: {
+                                    type: 'object',
+                                    properties: {
+                                        label: { type: 'string' },
+                                        description: { type: 'string' },
+                                        recommended: { type: 'boolean' },
+                                    },
+                                    required: ['label'],
                                 },
-                                required: ['label'],
                             },
                         },
+                        required: ['question', 'options'],
                     },
-                    required: ['question', 'options'],
                 },
             },
-        },
-        required: ['questions'],
-    } as const;
+            required: ['questions'],
+        };
+    }
 
     /** EN: Validates and normalizes one question collection. ZH: 验证并规范化一组问题。 */
     public override execute(input: AskInput) {

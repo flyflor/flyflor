@@ -11,27 +11,36 @@ import { Tool } from './abstracts';
  */
 @Provide()
 export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
-    public readonly name = 'filesystem';
-    public readonly risk = 'destructive';
-    public override readonly workingDirectory = true;
-    public readonly parameters = {
-        type: 'object',
-        properties: {
-            action: { type: 'string', enum: ['read', 'write', 'edit', 'delete'] },
-            cwd: { type: 'string' },
-            path: { type: 'string' },
-            offsetLines: { type: 'number' },
-            limitLines: { type: 'number' },
-            limitBytes: { type: 'number' },
-            content: { type: 'string' },
-            oldText: { type: 'string' },
-            newText: { type: 'string' },
-        },
-        required: ['action', 'path'],
-    } as const;
+    public readonly name: string;
+    public readonly risk: 'destructive';
+    public override readonly workingDirectory: boolean;
+    public readonly parameters: Record<string, unknown>;
 
     @Config()
     public config!: ConfigService;
+
+    /** EN: Initializes file capability metadata and its cwd-aware model schema. ZH: 初始化文件能力元数据及其 cwd 感知模型 schema。 */
+    public constructor() {
+        super();
+        this.name = 'filesystem';
+        this.risk = 'destructive';
+        this.workingDirectory = true;
+        this.parameters = {
+            type: 'object',
+            properties: {
+                action: { type: 'string', enum: ['read', 'write', 'edit', 'delete'] },
+                cwd: { type: 'string' },
+                path: { type: 'string' },
+                offsetLines: { type: 'number' },
+                limitLines: { type: 'number' },
+                limitBytes: { type: 'number' },
+                content: { type: 'string' },
+                oldText: { type: 'string' },
+                newText: { type: 'string' },
+            },
+            required: ['action', 'path'],
+        };
+    }
 
     /** EN: Requires approval for every mutating file action. ZH: 所有文件变更动作均要求审批。 */
     public override confirm(input: FilesystemInput): boolean {

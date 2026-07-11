@@ -153,6 +153,9 @@ function checkTypeScript(): void {
     for (const file of files) {
         const source = ts.createSourceFile(file, readFileSync(file, 'utf-8'), ts.ScriptTarget.Latest, true);
         source.forEachChild(function visit(node): void {
+            if (ts.isPropertyDeclaration(node) && node.initializer && !node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword)) {
+                architectureErrors.push(`${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: instance properties must initialize in constructor`);
+            }
             if (ts.isCatchClause(node)) architectureErrors.push(`${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: CatchClause is forbidden`);
             if (ts.isVoidExpression(node)) architectureErrors.push(`${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: discarded async work is forbidden`);
             if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {

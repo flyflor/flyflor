@@ -23,6 +23,7 @@ Flyflor is a continuously living, sessionless intelligent entity. Every design m
 7. Do not add generic utils, manager, parser, compiler, diagnostic, event framework, XML service, or session directory.
 8. Use `@/*` imports across domains and relative imports inside one directory boundary.
 9. Every runtime class, constructor, method, and accessor has concise EN/ZH JSDoc explaining ownership, lifecycle, or input/output.
+10. Non-static instance properties never use declaration initializers; each object's constructor initializes all owned instance state.
 
 ## Strict Failure Rules
 
@@ -86,7 +87,7 @@ Flyflor is a continuously living, sessionless intelligent entity. Every design m
 
 ## Health Gate
 
-`bun run check` is the minimum gate and includes AST checks for failure rules, IOC-only construction, JSDoc, method limits, private Turn, and forbidden Session types. Run relevant tests for focused changes. Run `bun test` and `bun run build:binary` before completing a kernel-wide refactor.
+`bun run check` is the minimum gate and includes AST checks for failure rules, constructor-owned instance initialization, IOC-only construction, JSDoc, method limits, private Turn, and forbidden Session types. Run relevant tests for focused changes. Run `bun test` and `bun run build:binary` before completing a kernel-wide refactor.
 
 Run `bun run test:live` before completing changes to cognition prompts, provider protocols, neural routing, concrete tools, or the Web/IPC boundary when the configured real-model credential is available. The live suite must use disposable files and must not modify durable identity or user logs.
 

@@ -8,25 +8,33 @@ import type { TaskInput, TaskItemInput, TaskOutput } from './types';
  */
 @Provide()
 export class Task extends Tool<TaskInput, TaskOutput> {
-    public readonly name = 'task';
-    public readonly risk = 'interaction';
-    public readonly parameters = {
-        type: 'object',
-        properties: {
-            tasks: {
-                type: 'array',
-                items: {
-                    type: 'object',
-                    properties: {
-                        agent: { type: 'string' },
-                        goal: { type: 'string' },
+    public readonly name: string;
+    public readonly risk: 'interaction';
+    public readonly parameters: Record<string, unknown>;
+
+    /** EN: Initializes pure delegation metadata and its strict model schema. ZH: 初始化纯委派元数据及其严格模型 schema。 */
+    public constructor() {
+        super();
+        this.name = 'task';
+        this.risk = 'interaction';
+        this.parameters = {
+            type: 'object',
+            properties: {
+                tasks: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            agent: { type: 'string' },
+                            goal: { type: 'string' },
+                        },
+                        required: ['agent', 'goal'],
                     },
-                    required: ['agent', 'goal'],
                 },
             },
-        },
-        required: ['tasks'],
-    } as const;
+            required: ['tasks'],
+        };
+    }
 
     /**
      * EN: Returns one strictly validated delegation payload for Synapse.

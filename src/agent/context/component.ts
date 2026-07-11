@@ -8,9 +8,16 @@ import type { ContextBrief, Perception, TurnInteraction, TurnSummary } from './t
  */
 @Singleton()
 export class Context extends FComponent {
-    private sequence = 0;
-    private readonly turns: Turn[] = [];
+    private sequence: number;
+    private readonly turns: Turn[];
     private active?: Turn;
+
+    /** EN: Creates empty life-form experience state once. ZH: 一次性创建空的生命体经历状态。 */
+    public constructor() {
+        super();
+        this.sequence = 0;
+        this.turns = [];
+    }
 
     /**
      * EN: Begins one Turn and returns its immutable Agent-facing brief.

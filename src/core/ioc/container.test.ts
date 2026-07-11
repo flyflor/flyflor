@@ -105,9 +105,16 @@ class ScopedHost extends ScopedAtom {
  * ZH: ObjectMetadataHost class 声明。
  */
 class ObjectMetadataHost extends ScopedAtom {
-    public filters = new Set();
+    public filters: Set<unknown>;
 
-    public values: unknown[] = [];
+    public values: unknown[];
+
+    /** EN: Initializes test-owned collections with the scoped host. ZH: 随 scoped host 初始化测试集合。 */
+    public constructor(config: ScopedConfig, synapse: ScopedSynapse) {
+        super(config, synapse);
+        this.filters = new Set();
+        this.values = [];
+    }
 
     @Scope()
     public memory!: ScopedMemory;
