@@ -5,7 +5,7 @@ import { AgentPool } from './pool';
 
 /** EN: Independent cortical task circuit dispatching persistent people concurrently. ZH: 并发派发持久人物的独立皮层任务回路。 */
 @Provide()
-export class Delegation extends Observable<TaskSignal> {
+export class Delegation extends Observable<TaskSignal, CompleteSignal[]> {
     @Inject()
     public context!: Context;
 
@@ -31,7 +31,6 @@ export class Delegation extends Observable<TaskSignal> {
             const agent = await pool.spawn(item.agent);
             const task: AgentTask = {
                 id: `${signal.id}:${index + 1}`,
-                turnId: signal.turnId,
                 agent: item.agent,
                 goal: item.goal,
                 context: this.context.brief(signal.turnId),

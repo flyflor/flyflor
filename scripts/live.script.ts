@@ -20,6 +20,7 @@ interface BridgePacket {
 interface TurnOptions {
     askAnswer?: string;
     approved?: boolean;
+    reconnect?: 'ask' | 'confirm';
 }
 
 /**
@@ -110,8 +111,8 @@ class BrowserProbe extends FService {
 }
 
 /**
- * EN: Exercises every cognitive route and concrete tool through real DeepSeek requests.
- * ZH: 通过真实 DeepSeek 请求验收全部认知路径与具体工具。
+ * EN: Exercises every cognitive route and concrete tool through the configured real provider.
+ * ZH: 通过已配置真实 provider 验收全部认知路径与具体工具。
  */
 class LiveScenarios extends FService {
     private synapse?: Synapse;
@@ -183,7 +184,7 @@ class LiveScenarios extends FService {
 
     /** EN: Verifies structured Ask, pause, answer, and resume. ZH: 验证结构化 Ask、pause、answer 与 resume。 */
     private async askScenario(): Promise<void> {
-        const packets = await this.turn('You must use the ask tool to ask whether the target environment is staging or production. Do not guess. After the answer, reply with the selected environment.', { askAnswer: 'staging', approved: false });
+        const packets = await this.turn('You must use the ask tool to ask whether the target environment is staging or production. Do not guess. After the answer, reply with the selected environment.', { askAnswer: 'staging', approved: false, reconnect: 'ask' });
         assert.ok(packets.some((packet) => packet.action === 'ask'));
         assert.ok(packets.some((packet) => packet.action === 'pause'));
         assert.ok(packets.some((packet) => packet.action === 'resume'));
@@ -208,7 +209,7 @@ class LiveScenarios extends FService {
     private async approvedWriteScenario(): Promise<void> {
         const path = join(this.workspace, 'approved.txt');
         writeFileSync(path, 'ORIGINAL', 'utf8');
-        const packets = await this.turn(`Use the filesystem write action to replace ${path} with exactly APPROVED_WRITE.`, { approved: true });
+        const packets = await this.turn(`Use the filesystem write action to replace ${path} with exactly APPROVED_WRITE.`, { approved: true, reconnect: 'confirm' });
         assert.ok(packets.some((packet) => packet.action === 'confirm'));
         assert.equal(readFileSync(path, 'utf8'), 'APPROVED_WRITE');
         this.passed.push('filesystem-write');
@@ -302,16 +303,52 @@ class LiveScenarios extends FService {
         if (!this.probe) throw Error('Live browser probe is not connected');
         this.probe.send({ action: 'user', data: { text: input } });
         const packets: BridgePacket[] = [];
+        let reconnected = false;
         while (true) {
             const packet = await this.probe.next();
             packets.push(packet);
             if (packet.action === 'error') throw Error(`Kernel returned an error packet: ${String(packet.data)}`);
-            if (packet.action === 'ask') this.answerAsk(packet, options.askAnswer);
-            if (packet.action === 'confirm') this.answerConfirm(packet, options.approved);
+            if (!reconnected && packet.action === options.reconnect) {
+                const replay = await this.reconnectInteraction(packet, packets);
+                reconnected = true;
+                if (replay.action === 'ask') this.answerAsk(replay, options.askAnswer);
+                else this.answerConfirm(replay, options.approved);
+            } else {
+                if (packet.action === 'ask') this.answerAsk(packet, options.askAnswer);
+                if (packet.action === 'confirm') this.answerConfirm(packet, options.approved);
+            }
             if (packet.action === 'streamEnd') break;
         }
         this.complete(packets);
         return packets;
+    }
+
+    /** EN: Refreshes during one pending interaction and validates its exact replay order. ZH: 在一次 pending interaction 期间刷新，并验证其精确重放顺序。 */
+    private async reconnectInteraction(original: BridgePacket, packets: BridgePacket[]): Promise<BridgePacket> {
+        if (!this.probe || !this.bridge || (original.action !== 'ask' && original.action !== 'confirm')) throw Error('Live reconnect interaction is invalid');
+        await this.probe.disconnect();
+        this.probe = useContainer().create(BrowserProbe, `ws://${this.bridge.hostname}:${this.bridge.port}`);
+        await this.probe.connect();
+        const replay = await this.probe.next();
+        const pause = await this.probe.next();
+        packets.push(replay, pause);
+        assert.equal(replay.action, original.action);
+        assert.equal(pause.action, 'pause');
+        const originalCorrelation = this.correlation(original);
+        const replayCorrelation = this.correlation(replay);
+        assert.deepEqual(replayCorrelation, originalCorrelation);
+        assert.deepEqual(this.correlation(pause), originalCorrelation);
+        return replay;
+    }
+
+    /** EN: Reads exact Turn and interaction ids from one replay packet. ZH: 从一个重放 packet 读取精确 Turn 与 interaction id。 */
+    private correlation(packet: BridgePacket): { turnId: string; id: string } {
+        if (typeof packet.data !== 'object' || packet.data === null || Array.isArray(packet.data)) throw Error('Live interaction correlation is invalid');
+        const data = packet.data as { turnId?: unknown; id?: unknown };
+        if (typeof data.turnId !== 'string' || data.turnId.length === 0 || typeof data.id !== 'string' || data.id.length === 0) {
+            throw Error('Live interaction correlation is invalid');
+        }
+        return { turnId: data.turnId, id: data.id };
     }
 
     /** EN: Answers every strict Ask question with the scenario value. ZH: 使用场景值回答每个严格 Ask question。 */
@@ -354,7 +391,7 @@ class LiveScenarios extends FService {
     private async stop(): Promise<void> {
         if (this.probe) await this.probe.disconnect();
         if (this.bridge) await this.bridge.stop(true);
-        if (this.synapse) (await useContainer().getAsync(FSocket)).service?.stop(true);
+        if (this.synapse) (await useContainer().getAsync(FSocket)).stop();
         if (this.synapse) rmSync(this.synapse.config.socket, { force: true });
     }
 }

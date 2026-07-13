@@ -1,5 +1,5 @@
 import type { FModelConfiguration } from '@/config';
-import type { Message, StreamEvent, ToolCall, ToolDefinition } from '../types';
+import type { Message, StopReason, StreamEvent, ToolCall, ToolDefinition } from '../types';
 
 export type ProtocolName = 'anthropic' | 'bedrock' | 'cohere' | 'gemini' | 'ollama' | 'openai' | 'responses';
 export type ProtocolAuth = 'bearer' | 'optional' | 'anthropic' | 'google' | 'none';
@@ -16,7 +16,6 @@ export interface ProtocolSpec {
     version?: string;
     json?: boolean;
     jsonStream?: boolean;
-    terminal?: string;
 }
 
 export interface ProviderError {
@@ -43,7 +42,9 @@ export interface ProtocolState {
 
 export interface ProtocolAdapter {
     readonly name: ProtocolName;
+    readonly tools: boolean;
     body(context: ProtocolContext): Record<string, unknown>;
+    parseJson?(body: unknown): { text: string; stopReason: StopReason };
     parse(controller: ReadableStreamDefaultController<StreamEvent>, line: string, state: ProtocolState): boolean;
 }
 

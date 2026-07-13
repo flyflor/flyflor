@@ -7,71 +7,31 @@ import { Factory } from './factory';
 import { INJECT_METADATA_KEY, type InjectMetadata } from './types';
 
 /**
- * EN: ScopedConfig interface declaration.
- * ZH: ScopedConfig interface 声明。
- */
-interface ScopedConfig {
-    name: string;
-}
-
-/**
  * EN: ScopedSynapse class declaration.
  * ZH: ScopedSynapse class 声明。
  */
 class ScopedSynapse {}
 
-/**
- * EN: ScopedAtom class declaration.
- * ZH: ScopedAtom class 声明。
- */
-class ScopedAtom {
-    constructor(
-        public config: ScopedConfig,
-        public synapse: ScopedSynapse,
-    ) {}
+@Provide()
+/** EN: Scoped child bound directly to its concrete host. ZH: 直接绑定到具体 host 的 scoped child。 */
+class ScopedMemory {
+    /** EN: Retains its exact scope host. ZH: 保留其精确 scope host。 */
+    public constructor(public host: ScopedSynapse) {}
 }
 
 @Provide()
-/**
- * EN: ScopedMemory class declaration.
- * ZH: ScopedMemory class 声明。
- */
-class ScopedMemory extends ScopedAtom {}
-
-@Provide()
-/**
- * EN: ScopedBrain class declaration.
- * ZH: ScopedBrain class 声明。
- */
-class ScopedBrain extends ScopedAtom {
-    constructor(
-        public override config: ScopedConfig,
-        public override synapse: ScopedSynapse,
+/** EN: Scoped child composed from its host and an already resolved child. ZH: 由 host 与已解析 child 组合的 scoped child。 */
+class ScopedBrain {
+    /** EN: Retains only concrete scoped constructor dependencies. ZH: 只保留具体 scoped constructor 依赖。 */
+    public constructor(
+        public host: ScopedSynapse,
         public memory: ScopedMemory,
-    ) {
-        super(config, synapse);
-    }
-}
-
-@Provide()
-/**
- * EN: ObjectMetadataBrain class declaration.
- * ZH: ObjectMetadataBrain class 声明。
- */
-class ObjectMetadataBrain {
-    constructor(
-        public config: object,
-        public synapse: object,
-        public memory: object,
     ) {}
 }
 
 @Provide()
-/**
- * EN: ScopedHost class declaration.
- * ZH: ScopedHost class 声明。
- */
-class ScopedHost extends ScopedAtom {
+/** EN: Concrete host exposing two isolated scoped children. ZH: 暴露两个隔离 scoped child 的具体 host。 */
+class ScopedHost extends ScopedSynapse {
     @Scope()
     public memory!: ScopedMemory;
 
@@ -80,46 +40,17 @@ class ScopedHost extends ScopedAtom {
 }
 
 @Provide()
-/**
- * EN: ObjectMetadataHost class declaration.
- * ZH: ObjectMetadataHost class 声明。
- */
-class ObjectMetadataHost extends ScopedAtom {
-    public filters: Set<unknown>;
-
-    public values: unknown[];
-
-    /** EN: Initializes test-owned collections with the scoped host. ZH: 随 scoped host 初始化测试集合。 */
-    public constructor(config: ScopedConfig, synapse: ScopedSynapse) {
-        super(config, synapse);
-        this.filters = new Set();
-        this.values = [];
-    }
-
-    @Scope()
-    public memory!: ScopedMemory;
-
-    @Scope()
-    public brain!: ObjectMetadataBrain;
+/** EN: Invalid scoped child whose constructor metadata erases to Object. ZH: 构造参数元数据被擦除为 Object 的非法 scoped child。 */
+class ErasedScopedChild {
+    /** EN: Accepts one erased dependency for rejection coverage. ZH: 接收一个用于拒绝覆盖的擦除依赖。 */
+    public constructor(public readonly value: object) {}
 }
 
 @Provide()
-/**
- * EN: ScopedHostChild class declaration.
- * ZH: ScopedHostChild class 声明。
- */
-class ScopedHostChild {
-    constructor(public host: object) {}
-}
-
-@Provide()
-/**
- * EN: ScopedHostWithChild class declaration.
- * ZH: ScopedHostWithChild class 声明。
- */
-class ScopedHostWithChild {
+/** EN: Host exposing one invalid erased scoped child. ZH: 暴露一个非法擦除 scoped child 的 host。 */
+class ErasedScopedHost {
     @Scope()
-    public child!: ScopedHostChild;
+    public child!: ErasedScopedChild;
 }
 
 /** EN: Reflected dependency fixture inherited by an injected host. ZH: 被注入 host 继承使用的反射依赖 fixture。 */
@@ -188,32 +119,19 @@ class FailingSingleton extends FService {
 }
 
 describe('@Scope', () => {
-    test('resolves constructor args from the host scope', async () => {
-        const config = { name: 'flyflor' };
-        const synapse = new ScopedSynapse();
-        const host = await useContainer().getAsync(ScopedHost, config, synapse);
+    test('resolves only the concrete host and already built scoped instances', async () => {
+        const host = await useContainer().getAsync(ScopedHost);
+        const other = await useContainer().getAsync(ScopedHost);
 
-        expect(host.memory.config).toBe(config);
-        expect(host.memory.synapse).toBe(synapse);
-        expect(host.brain.config).toBe(config);
-        expect(host.brain.synapse).toBe(synapse);
+        expect(host.memory.host).toBe(host);
+        expect(host.brain.host).toBe(host);
         expect(host.brain.memory).toBe(host.memory);
+        expect(other.memory.host).toBe(other);
+        expect(other.memory).not.toBe(host.memory);
     });
 
-    test('passes host values when constructor metadata is erased to Object', async () => {
-        const config = { name: 'flyflor' };
-        const synapse = new ScopedSynapse();
-        const host = await useContainer().getAsync(ObjectMetadataHost, config, synapse);
-
-        expect(host.brain.config).toBe(config);
-        expect(host.brain.synapse).toBe(synapse);
-        expect(host.brain.memory).toBe(host.memory);
-    });
-
-    test('passes the host instance to scoped child constructors', async () => {
-        const host = await useContainer().getAsync(ScopedHostWithChild);
-
-        expect(host.child.host).toBe(host);
+    test('rejects erased scoped constructor dependency types', async () => {
+        await expect(useContainer().getAsync(ErasedScopedHost)).rejects.toThrow('ErasedScopedChild[0]');
     });
 });
 
@@ -255,6 +173,5 @@ describe('IOC lifecycle', () => {
         await expect(useContainer().getAsync(FailingSingleton)).rejects.toThrow('init failed');
 
         expect(FailingSingleton.attempts).toBe(2);
-        expect(useContainer().singletons.has(FailingSingleton)).toBe(false);
     });
 });

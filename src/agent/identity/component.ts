@@ -1,14 +1,8 @@
 import type { FAgentProfileConfiguration } from '@/config';
-import { FComponent, Prompt, Provide } from '@/core';
-import { PromptService, type PromptPackageData } from '@/prompt';
-import { AgentChatRole, type AgentBus, type AgentMemory } from '@/agent/types';
-
-export enum IdentitySection {
-    Soul = 'SOUL',
-    User = 'USER',
-    Agents = 'AGENTS',
-    Extension = 'EXTENSION',
-}
+import { FAgent, FComponent, Prompt, Provide } from '@/core';
+import { PromptService } from '@/prompt';
+import type { AgentBus, AgentStimulus, CompleteSignal } from '@/agent/types';
+import type { TextMessage } from '@/model';
 
 /**
  * EN: Durable identity and prompt-package ownership for exactly one Agent.
@@ -16,24 +10,34 @@ export enum IdentitySection {
  */
 @Provide()
 export class Identity extends FComponent {
-    @Prompt((prop: Identity) => prop.agentConfig.promptPackage as string)
-    public prompt!: PromptService<string> & PromptPackageData<string>;
+    public readonly agentConfig: FAgentProfileConfiguration;
 
-    /** EN: Binds durable identity to one immutable Agent profile. ZH: 将持久身份绑定到一个不可变 Agent profile。 */
+    @Prompt((prop: Identity) => prop.packagePath)
+    public prompt!: PromptService<string>;
+
+    private readonly packagePath: string;
+
+    /**
+     * EN: Binds durable identity to the immutable profile of its owning Agent.
+     * ZH: 将持久身份绑定到所属 Agent 的不可变 profile。
+     */
     public constructor(
-        public readonly agentConfig: FAgentProfileConfiguration,
-        public readonly synapse: AgentBus,
+        agent: FAgent<AgentStimulus, CompleteSignal, FAgentProfileConfiguration, AgentBus>,
     ) {
         super();
+        this.agentConfig = agent.agentConfig;
+        const packagePath = agent.agentConfig.promptPackage;
+        if (typeof packagePath !== 'string' || packagePath.length === 0) throw Error(`Agent prompt package is incomplete: ${agent.agentConfig.name}`);
+        this.packagePath = packagePath;
     }
 
     /**
      * EN: Projects configured identity sections into one system message.
      * ZH: 将配置的身份 sections 投影为一条 system 消息。
      */
-    public messages(): AgentMemory[] {
+    public messages(): TextMessage[] {
         const content = this.prompt.render({ kind: 'sections', sections: this.agentConfig.promptSections });
-        return content.trim().length === 0 ? [] : [{ role: AgentChatRole.System, content }];
+        return content.trim().length === 0 ? [] : [{ role: 'system', content }];
     }
 
     /**

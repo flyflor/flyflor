@@ -52,9 +52,7 @@ describe('openAIAdapter', () => {
             {
                 role: 'tool',
                 toolCallId: 'call_1',
-                toolName: 'filesystem',
-                content: '{"ok":true}',
-                isError: false,
+                content: '{"content":"read"}',
             },
         ];
         const body = openAIAdapter.body({

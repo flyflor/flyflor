@@ -5,7 +5,6 @@ const CONSTRUCTOR_PARAM_METADATA_KEY = 'design:paramtypes';
 
 interface ResolutionScope {
     instances: Map<ClassType, InstanceType<ClassType>>;
-    values: unknown[];
     host: object;
 }
 
@@ -14,26 +13,21 @@ interface ResolutionScope {
  * ZH: 负责项目 class 构造和注入的 singleton IOC container。
  */
 export class Container {
-    /**
-     * 依赖注入容器单例实例
-     */
+    /** EN: Process-wide IOC container instance. ZH: 进程级 IOC container 实例。 */
     protected static instance: Container;
     /** EN: Singleton instance cache keyed by class or symbol. ZH: 按 class 或 symbol 索引的 singleton 实例缓存。 */
-    public singletons!: Map<ClassType | symbol, InstanceType<ClassType>>;
+    private readonly singletons!: Map<ClassType | symbol, InstanceType<ClassType>>;
     /** EN: Singleton constructions currently in flight. ZH: 当前正在构造的 singleton。 */
-    private pending!: Map<ClassType | symbol, Promise<InstanceType<ClassType>>>;
-    /** EN: Classes seen by the container during construction. ZH: container 构造过程中见过的 class 列表。 */
-    public classList!: ClassType[];
+    private readonly pending!: Map<ClassType | symbol, Promise<InstanceType<ClassType>>>;
 
     /**
      * EN: Creates or returns the process-wide container instance.
      * ZH: 创建或返回进程级 container 实例。
      */
-    constructor() {
+    public constructor() {
         if (Container.instance) return Container.instance;
         this.singletons = new Map();
         this.pending = new Map();
-        this.classList = [];
         Container.instance = this;
     }
 
@@ -59,7 +53,6 @@ export class Container {
         scope: ResolutionScope | undefined,
         scoped: boolean,
     ): Promise<InstanceType<T>> {
-        if (!this.classList.includes(Module)) this.classList.push(Module);
         const isSingleton = Reflect.getOwnMetadata(PROVIDER_SINGLETON_KEY, Module) === true;
         if (isSingleton && this.singletons.has(Module)) return this.singletons.get(Module) as InstanceType<T>;
         if (isSingleton && this.pending.has(Module)) return await this.pending.get(Module) as InstanceType<T>;
@@ -83,23 +76,21 @@ export class Container {
         const config = Reflect.getOwnMetadata(MODULE_METADATA_KEY, Module);
         for (const importModule of config?.imports || []) await this.resolve(importModule, [], undefined, false);
         const constructorProps = this.getConstructorProps(Module, this.getModuleImportInstances(config?.imports || []), props);
-        const clz = new Module(...constructorProps);
-        const localScope = scope ?? { instances: new Map(), values: [...props], host: clz };
+        const clz = Reflect.construct(Module, constructorProps) as InstanceType<T>;
+        const localScope = scope ?? { instances: new Map(), host: clz };
         const injectInstances = this.collectMetadata<InjectInstanceMetadata>(Module, INJECT_METADATA_INSTANCE_KEY);
         for (const inject of injectInstances) {
-            const instance = await inject.instance?.call(clz);
+            const instance = await inject.instance.call(clz);
             clz[inject.propertyKey] = instance;
-            if (instance !== undefined && !localScope.values.includes(instance)) localScope.values.push(instance);
         }
         const injects = this.collectMetadata<InjectMetadata>(Module, INJECT_METADATA_KEY);
         for (const inject of injects) {
             const classType = this.getInjectedType(Module, inject.propertyKey);
             const injectProps = inject.scoped
-                ? this.getScopedConstructorProps(classType, [...localScope.values, localScope.host], props)
+                ? this.getScopedConstructorProps(classType, localScope)
                 : [];
             const instance = await this.resolve(classType, injectProps, inject.scoped ? localScope : undefined, inject.scoped);
             clz[inject.propertyKey] = instance;
-            if (!localScope.values.includes(instance)) localScope.values.push(instance);
         }
         const actionPropertyKey = Reflect.getMetadata(INIT_METADATA_KEY, Module.prototype);
         if (actionPropertyKey) await clz[actionPropertyKey]?.apply(clz, props);
@@ -113,15 +104,14 @@ export class Container {
      * ZH: 创建一个由 IOC 拥有但不注册 singleton 的实例。
      */
     public create<T extends ClassType, P extends unknown[]>(Module: T, ...props: P): InstanceType<T> {
-        if (!this.classList.includes(Module)) this.classList.push(Module);
-        return new Module(...props);
+        return Reflect.construct(Module, props) as InstanceType<T>;
     }
 
     /**
      * EN: Returns already-built imported module instances for constructor injection.
      * ZH: 返回已构建的 imported module 实例，用于 constructor injection。
      */
-    public getModuleImportInstances(imports: ClassType[]): Array<{ classType: ClassType; instance: InstanceType<ClassType> }> {
+    private getModuleImportInstances(imports: ClassType[]): Array<{ classType: ClassType; instance: InstanceType<ClassType> }> {
         return imports.filter((classType) => this.singletons.has(classType)).map((classType) => ({ classType, instance: this.singletons.get(classType) as InstanceType<ClassType> }));
     }
 
@@ -129,7 +119,7 @@ export class Container {
      * EN: Builds constructor args from explicit props and imported module instances.
      * ZH: 从显式 props 和 imported module 实例构造构造函数参数。
      */
-    public getConstructorProps<P extends unknown[]>(Module: ClassType, importInstances: Array<{ classType: ClassType; instance: InstanceType<ClassType> }>, props: P): unknown[] {
+    private getConstructorProps<P extends unknown[]>(Module: ClassType, importInstances: Array<{ classType: ClassType; instance: InstanceType<ClassType> }>, props: P): unknown[] {
         const paramTypes: ClassType[] = Reflect.getMetadata(CONSTRUCTOR_PARAM_METADATA_KEY, Module) || [];
         if (paramTypes.length === 0) return props;
         return paramTypes.map((paramType, index) => {
@@ -144,33 +134,18 @@ export class Container {
      * EN: Builds constructor args for `@Scope()` injections from host-local values.
      * ZH: 从 host 本地值构造 `@Scope()` 注入所需参数。
      */
-    private getScopedConstructorProps<P extends unknown[]>(Module: ClassType, values: unknown[], props: P): unknown[] {
+    private getScopedConstructorProps(Module: ClassType, scope: ResolutionScope): unknown[] {
         const paramTypes: ClassType[] = Reflect.getMetadata(CONSTRUCTOR_PARAM_METADATA_KEY, Module) || [];
-        if (paramTypes.length === 0) return props;
-        const used = new Set<number>();
+        if (paramTypes.length === 0) return [];
         return paramTypes.map((paramType, index) => {
-            const matchedIndex = this.getScopedValueIndex(values, paramType, used);
-            if (matchedIndex >= 0) {
-                used.add(matchedIndex);
-                return values[matchedIndex];
+            if (!this.isInjectableClassType(paramType)) {
+                throw Error(`Scoped constructor dependency type is invalid: ${Module.name}[${index}]`);
             }
-            const nextIndex = values.findIndex((_, valueIndex) => !used.has(valueIndex));
-            if (nextIndex >= 0) {
-                used.add(nextIndex);
-                return values[nextIndex];
-            }
-            if (index < props.length) return props[index];
+            if (scope.host instanceof paramType) return scope.host;
+            const instance = scope.instances.get(paramType);
+            if (instance) return instance;
             throw Error(`Scoped constructor dependency not found: ${Module.name}[${index}]`);
         });
-    }
-
-    /**
-     * EN: Finds the next unused scoped value matching a reflected class type.
-     * ZH: 查找下一个匹配 reflected class type 且未使用的 scoped value。
-     */
-    private getScopedValueIndex(values: unknown[], paramType: ClassType, used: Set<number>): number {
-        if (!this.isScopedClassType(paramType)) return -1;
-        return values.findIndex((value, index) => !used.has(index) && value instanceof paramType);
     }
 
     /**
@@ -226,14 +201,6 @@ export class Container {
         return this.isScopedClassType(classType) && classType !== Date && classType !== RegExp;
     }
 
-    /**
-     * EN: Registers an existing object in the singleton map.
-     * ZH: 把已有对象注册到 singleton map。
-     */
-    public registerObject(key: ClassType | symbol, instance: any) {
-        this.singletons.set(key, instance);
-        return this;
-    }
 }
 
 /**

@@ -3,6 +3,7 @@ import type { ProtocolAdapter, ProtocolContext } from './types';
 
 export const geminiAdapter: ProtocolAdapter = {
     name: 'gemini',
+    tools: false,
     body: (context: ProtocolContext) => {
         const { contents, system } = project(context.messages);
         return {
@@ -15,10 +16,12 @@ export const geminiAdapter: ProtocolAdapter = {
         const data = sseData(line);
         if (data === undefined) return false;
         const parsed = JSON.parse(data) as Record<string, unknown>;
+        const blocked = (parsed.promptFeedback as { blockReason?: unknown } | undefined)?.blockReason;
+        if (blocked !== undefined) throw Error(`Gemini prompt was blocked: ${String(blocked)}`);
         const candidate = (parsed.candidates as Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }> | undefined)?.[0];
         for (const part of candidate?.content?.parts ?? []) if (part.text) controller.enqueue({ type: 'text_delta', text: part.text });
         if (candidate?.finishReason) {
-            controller.enqueue({ type: 'done', stopReason: candidate.finishReason === 'MAX_TOKENS' ? 'length' : 'stop' });
+            controller.enqueue({ type: 'done', stopReason: terminal(candidate.finishReason) });
             return true;
         }
         return false;
@@ -37,6 +40,12 @@ function project(messages: Message[]): {
         else contents.push({ role: message.role === 'assistant' ? 'model' : 'user', parts: [{ text: message.content }] });
     }
     return { contents, ...(system.length > 0 ? { system: { parts: [{ text: system.join('\n\n') }] } } : {}) };
+}
+
+function terminal(reason: string): 'stop' | 'length' {
+    if (reason === 'STOP') return 'stop';
+    if (reason === 'MAX_TOKENS') return 'length';
+    throw Error(`Gemini finish reason is unsupported: ${reason}`);
 }
 
 function sseData(line: string): string | undefined {

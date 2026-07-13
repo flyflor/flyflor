@@ -5,10 +5,7 @@ export const HEADER_BYTES = 8;
 export const MAX_BODY_BYTES = 4 * 1024 * 1024;
 export const TEXT_ENCODING = 'utf-8';
 
-/**
- * EN: SocketPacket interface declaration.
- * ZH: SocketPacket interface 声明。
- */
+/** EN: One action and payload inside the stable IPC frame. ZH: 稳定 IPC frame 内的一组 action 与 payload。 */
 export interface SocketPacket<T = unknown> {
     action: string;
     data: T;
@@ -20,7 +17,7 @@ export interface SocketPacket<T = unknown> {
  */
 @Provide()
 export class IPCPacket extends FService {
-    public buffer: Buffer;
+    private buffer: Buffer;
 
     /** EN: Creates an empty incremental packet buffer. ZH: 创建空的增量 packet buffer。 */
     constructor() {
@@ -76,6 +73,7 @@ export class IPCPacket extends FService {
         if (content === undefined) throw Error('Packet content is not JSON serializable');
 
         const body = Buffer.from(content, TEXT_ENCODING);
+        if (body.byteLength > MAX_BODY_BYTES) throw Error('Packet body exceeds limit');
         const header = Buffer.alloc(HEADER_BYTES);
         header.writeBigUInt64BE(BigInt(body.byteLength), 0);
         return Buffer.concat([header, body]);

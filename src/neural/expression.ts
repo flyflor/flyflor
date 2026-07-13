@@ -5,16 +5,16 @@ import type { ExpressionSignal } from './types';
 
 /** EN: Ordered cortical expression circuit projecting replies and terminal completion. ZH: 投影回复与最终完成状态的有序皮层表达回路。 */
 @Provide()
-export class Expression extends Observable<ExpressionSignal> {
+export class Expression extends Observable<ExpressionSignal, ExpressionSignal> {
     @Inject()
     public socket!: FSocket;
 
     /** EN: Wires reply and Complete projection branches once. ZH: 一次性连接回复与 Complete 投影分支。 */
     @Init()
     public init(): void {
-        this.switch<ExpressionSignal['type'], ExpressionSignal>((signal) => signal.type, {
-            reply: (signal) => this.reply(signal as ReplySignal),
-            complete: (signal) => this.complete(signal as CompleteSignal),
+        this.switch('type', {
+            reply: (signal) => this.reply(signal),
+            complete: (signal) => this.complete(signal),
         });
     }
 

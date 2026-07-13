@@ -9,6 +9,7 @@ import type { ContextBrief, Perception, TurnInteraction, TurnSummary } from './t
 @Singleton()
 export class Context extends FComponent {
     private sequence: number;
+    private readonly capacity: number;
     private readonly turns: Turn[];
     private active?: Turn;
 
@@ -16,7 +17,9 @@ export class Context extends FComponent {
     public constructor() {
         super();
         this.sequence = 0;
+        this.capacity = 32;
         this.turns = [];
+        this.active = undefined;
     }
 
     /**
@@ -58,13 +61,14 @@ export class Context extends FComponent {
     }
 
     /**
-     * EN: Stores one Agent Complete as the final Turn summary.
-     * ZH: 将一个 Agent Complete 保存为最终 Turn 摘要。
+     * EN: Stores one Agent Complete as the final Turn summary and trims bounded history.
+     * ZH: 将一个 Agent Complete 保存为最终 Turn 摘要，并裁剪有界历史。
      */
     public complete(turnId: string, answer: string, evidence: readonly string[]): TurnSummary {
         const turn = this.requireActive(turnId);
         turn.complete(answer, evidence);
         this.active = undefined;
+        this.trim();
         return turn.summary();
     }
 
@@ -73,7 +77,19 @@ export class Context extends FComponent {
      * ZH: 返回最近完成 Turns 的不可变摘要。
      */
     public recent(limit = 4): TurnSummary[] {
-        return this.turns.filter((turn) => turn.completed()).slice(-limit).map((turn) => turn.summary());
+        if (!Number.isInteger(limit) || limit < 0) throw Error('Recent Turn limit must be a non-negative integer');
+        if (limit === 0) return [];
+        const bound = Math.min(limit, this.capacity);
+        return this.turns.filter((turn) => turn.completed()).slice(-bound).map((turn) => turn.summary());
+    }
+
+    /**
+     * EN: Evicts oldest completed Turns past finite capacity; never drops the active Turn.
+     * ZH: 在超过有限容量时淘汰最旧已完成 Turn；永不丢弃活动 Turn。
+     */
+    private trim(): void {
+        const drop = this.turns.length - this.capacity;
+        if (drop > 0) this.turns.splice(0, drop);
     }
 
     /**

@@ -1,17 +1,17 @@
 import type { ConfigService } from '@/config';
 import { Config, Provide } from '@/core';
 import { spawn } from 'node:child_process';
+import { isAbsolute, resolve } from 'node:path';
 import type { ShellInput, ShellOutput } from './types';
-import { Tool } from './abstracts';
+import { ActionTool } from './abstracts';
 
 /**
  * EN: Owns one directly spawned external command and its explicit execution data.
  * ZH: 持有一个直接 spawn 的外部命令及其显式执行数据。
  */
 @Provide()
-export class Shell extends Tool<ShellInput, ShellOutput> {
+export class Shell extends ActionTool<ShellInput, ShellOutput> {
     public readonly name: string;
-    public readonly risk: 'external';
     public override readonly workingDirectory: boolean;
     public readonly parameters: Record<string, unknown>;
 
@@ -22,7 +22,6 @@ export class Shell extends Tool<ShellInput, ShellOutput> {
     public constructor() {
         super();
         this.name = 'shell';
-        this.risk = 'external';
         this.workingDirectory = true;
         this.parameters = {
             type: 'object',
@@ -41,9 +40,18 @@ export class Shell extends Tool<ShellInput, ShellOutput> {
         return true;
     }
 
+    /**
+     * EN: Projects one shell result into a compact evidence note without retaining stdout/stderr bodies.
+     * ZH: 将一次 shell 结果投影为紧凑证据笔记，不保留 stdout/stderr 正文。
+     */
+    public override observe(data: ShellOutput): string {
+        return `shell: command=${data.command}; cwd=${data.cwd}; exit=${String(data.exitCode)}; timedOut=${String(data.timedOut)}; stdoutBytes=${Buffer.byteLength(data.stdout)}; stderrBytes=${Buffer.byteLength(data.stderr)}`;
+    }
+
     /** EN: Executes one command and preserves exit and timeout as data. ZH: 执行一个命令，并将退出与超时保留为数据。 */
     public override async execute(input: ShellInput) {
-        const cwd = input.cwd === undefined ? this.config.path.cwd : this.text(input.cwd, 'cwd');
+        const cwdSource = input.cwd === undefined ? this.config.path.cwd : this.text(input.cwd, 'cwd');
+        const cwd = isAbsolute(cwdSource) ? resolve(cwdSource) : resolve(this.config.path.cwd, cwdSource);
         const command = this.text(input.command, 'command');
         const args = this.args(input.args);
         const timeoutMs = this.timeout(input.timeoutMs);
@@ -67,7 +75,6 @@ export class Shell extends Tool<ShellInput, ShellOutput> {
                 proc.on('close', resolve);
             });
             return {
-                ok: true,
                 data: { action: 'shell', cwd, command, args, exitCode, stdout, stderr, timedOut },
                 effects: [{ type: 'execute' }],
             } as const;

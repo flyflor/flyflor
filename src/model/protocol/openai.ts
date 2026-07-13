@@ -13,6 +13,7 @@ interface ChatCompletionChunk {
         delta?: {
             content?: string;
             reasoning_content?: string;
+            refusal?: string;
             tool_calls?: WireToolDelta[];
         };
         finish_reason?: string | null;
@@ -21,6 +22,7 @@ interface ChatCompletionChunk {
 
 export const openAIAdapter: ProtocolAdapter = {
     name: 'openai',
+    tools: true,
     body: (context: ProtocolContext) => {
         const body: Record<string, unknown> = {
             model: context.config.model,
@@ -42,13 +44,12 @@ export const openAIAdapter: ProtocolAdapter = {
         const data = sseData(line);
         if (data === undefined) return false;
         if (data === '[DONE]') {
-            finalizeToolCalls(controller, state);
-            controller.enqueue({ type: 'done', stopReason: state.toolCallsByIndex.size > 0 ? 'toolUse' : 'stop' });
-            return true;
+            throw Error('OpenAI stream ended without a finish reason');
         }
         const parsed = JSON.parse(data) as ChatCompletionChunk;
         if (parsed.error !== undefined) throw Error(providerError(parsed.error, 'Model provider stream error'));
         const choice = parsed.choices?.[0];
+        if (typeof choice?.delta?.refusal === 'string') throw Error(`OpenAI refusal: ${choice.delta.refusal}`);
         const text = choice?.delta?.content;
         if (typeof text === 'string' && text.length > 0) controller.enqueue({ type: 'text_delta', text });
         const reasoning = choice?.delta?.reasoning_content;
@@ -56,13 +57,9 @@ export const openAIAdapter: ProtocolAdapter = {
         for (const delta of choice?.delta?.tool_calls ?? []) accumulateToolCall(controller, state, delta);
         const finishReason = choice?.finish_reason;
         if (typeof finishReason !== 'string' || finishReason.length === 0) return false;
+        const stopReason = terminal(finishReason);
         finalizeToolCalls(controller, state);
-        controller.enqueue({
-            type: 'done',
-            stopReason: finishReason === 'tool_calls' || finishReason === 'function_call'
-                ? 'toolUse'
-                : finishReason === 'length' ? 'length' : 'stop',
-        });
+        controller.enqueue({ type: 'done', stopReason });
         return true;
     },
 };
@@ -104,9 +101,17 @@ function resolveToolCall(state: ProtocolState, delta: WireToolDelta): StreamingT
 function finalizeToolCalls(controller: ReadableStreamDefaultController<StreamEvent>, state: ProtocolState): void {
     const calls = [...state.toolCallsByIndex.values()].sort((left, right) => left.index - right.index);
     for (const pending of calls) {
+        if (pending.id.length === 0 || pending.name.length === 0) throw Error(`Streamed tool call is incomplete: ${pending.index}`);
         const call: ToolCall = { id: pending.id, name: pending.name, arguments: parseArguments(pending.partialArgs) };
         controller.enqueue({ type: 'tool_end', index: pending.index, call });
     }
+}
+
+function terminal(reason: string): 'stop' | 'length' | 'toolUse' {
+    if (reason === 'stop') return 'stop';
+    if (reason === 'length') return 'length';
+    if (reason === 'tool_calls' || reason === 'function_call') return 'toolUse';
+    throw Error(`OpenAI finish reason is unsupported: ${reason}`);
 }
 
 function parseArguments(partialArgs: string): Record<string, unknown> {
@@ -139,7 +144,7 @@ function chatMessages(messages: Message[]): Array<Record<string, unknown>> {
 }
 
 function hasToolHistory(messages: Message[]): boolean {
-    return messages.some((message) => message.role === 'tool' || 'toolCalls' in message);
+    return messages.some((message) => message.role === 'tool' || ('toolCalls' in message && message.toolCalls.length > 0));
 }
 
 function sseData(line: string): string | undefined {

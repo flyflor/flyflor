@@ -1,5 +1,19 @@
-import type { ToolEffect } from './result';
+/** EN: One concrete effect produced by a tool run. ZH: 一次工具执行产生的具体效果。 */
+export interface ToolEffect {
+    type: 'ask' | 'task' | 'read' | 'write' | 'delete' | 'execute';
+    path?: string;
+}
 
+/** EN: Successful concrete tool output; failures reject unchanged. ZH: 成功的具体工具输出；失败原样 reject。 */
+export interface ToolResult<T = unknown> {
+    data: T;
+    effects?: readonly ToolEffect[];
+}
+
+/**
+ * EN: Canonical tool schema owned by the tool domain; model protocols accept the same structural shape.
+ * ZH: 由 tool 域拥有的规范工具 schema；model 协议接受相同结构形状。
+ */
 export interface ToolDefinition {
     name: string;
     description: string;
@@ -17,16 +31,12 @@ export interface ToolRequest {
  * ZH: 返回给模型循环的标准化工具调用结果。
  */
 export interface ToolRunResult {
-    ok: true;
     name: string;
     data: unknown;
     effects?: readonly ToolEffect[];
 }
 
-/**
- * EN: Persistable request/result pair for a tool call.
- * ZH: 可持久化的一次工具请求与结果。
- */
+/** EN: One answer option validated by Ask. ZH: Ask 验证的一项回答选项。 */
 export interface AskOption {
     label: string;
     description?: string;

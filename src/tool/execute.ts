@@ -3,7 +3,7 @@ import { Config, Provide } from '@/core';
 import { spawn } from 'node:child_process';
 import { isAbsolute, resolve } from 'node:path';
 import type { ExecuteInput, ExecuteMode, ExecuteOutput, ExecuteTaskInput, ExecuteTaskResult } from './types';
-import { Tool } from './abstracts';
+import { ActionTool } from './abstracts';
 
 interface ExecuteTask {
     id?: string;
@@ -20,9 +20,8 @@ interface ExecuteTask {
  * ZH: 持有显式脚本文件的串行或有界并行执行。
  */
 @Provide()
-export class Execute extends Tool<ExecuteInput, ExecuteOutput> {
+export class Execute extends ActionTool<ExecuteInput, ExecuteOutput> {
     public readonly name: string;
-    public readonly risk: 'external';
     public override readonly workingDirectory: boolean;
     public readonly parameters: Record<string, unknown>;
 
@@ -33,7 +32,6 @@ export class Execute extends Tool<ExecuteInput, ExecuteOutput> {
     public constructor() {
         super();
         this.name = 'execute';
-        this.risk = 'external';
         this.workingDirectory = true;
         this.parameters = {
             type: 'object',
@@ -67,6 +65,14 @@ export class Execute extends Tool<ExecuteInput, ExecuteOutput> {
         return true;
     }
 
+    /**
+     * EN: Projects one execute batch into a compact evidence note.
+     * ZH: 将一次 execute 批次投影为紧凑证据笔记。
+     */
+    public override observe(data: ExecuteOutput): string {
+        return `execute: total=${data.total}; success=${data.success}; failed=${data.failed}`;
+    }
+
     /** EN: Executes one validated script batch and reports explicit process data. ZH: 执行一个已验证脚本批次并报告显式进程数据。 */
     public override async execute(input: ExecuteInput) {
         const cwd = this.cwd(input.cwd, this.config.path.cwd);
@@ -75,7 +81,6 @@ export class Execute extends Tool<ExecuteInput, ExecuteOutput> {
         const maxConcurrency = this.maxConcurrency(input.maxConcurrency, mode, tasks.length);
         const results = await this.results(tasks, cwd, mode === 'serial' ? 1 : maxConcurrency);
         return {
-            ok: true,
             data: {
                 action: 'execute',
                 mode,

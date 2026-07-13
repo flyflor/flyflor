@@ -33,11 +33,12 @@ describe('Tools', () => {
     });
 
     test('lists class-owned tool definitions and keeps shell description free of semantic cwd', async () => {
-        const definitions = await (await component()).list();
+        const tools = await component();
+        const definitions = tools.list();
 
         expect(definitions.map((definition) => definition.name)).toEqual(['ask', 'filesystem', 'shell', 'execute', 'task']);
         expect(definitions.find((definition) => definition.name === 'filesystem')?.parameters.required).toEqual(['action', 'path']);
-        expect((await (await component()).list(false)).find((definition) => definition.name === 'task')).toBeUndefined();
+        expect(tools.list(false).find((definition) => definition.name === 'task')).toBeUndefined();
         expect(definitions.find((definition) => definition.name === 'ask')?.description).toContain('Ask the user');
         const shell = definitions.find((definition) => definition.name === 'shell');
         expect(shell?.description).toContain('platform=');
@@ -72,8 +73,27 @@ describe('Tools', () => {
         const ask = await tools.run({ id: 'ask_1', name: 'ask', arguments: { questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] } });
         const task = await tools.run({ id: 'task_1', name: 'task', arguments: { tasks: [{ agent: 'worker', goal: 'inspect' }] } });
 
-        expect(ask).toEqual({ ok: true, name: 'ask', data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }, { label: 'other', description: '自定义回答，可引用上面的方案', custom: true }] }] }, effects: [{ type: 'ask' }] });
-        expect(task).toEqual({ ok: true, name: 'task', data: { tasks: [{ agent: 'worker', goal: 'inspect' }] }, effects: [{ type: 'task' }] });
+        expect(ask).toEqual({ name: 'ask', data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }, { label: 'other', description: '自定义回答，可引用上面的方案', custom: true }] }] }, effects: [{ type: 'ask' }] });
+        expect(task).toEqual({ name: 'task', data: { tasks: [{ agent: 'worker', goal: 'inspect' }] }, effects: [{ type: 'task' }] });
+    });
+
+    test('projects direct action results through the result-owned Tool', async () => {
+        const tools = await component();
+
+        expect(tools.observe({
+            name: 'filesystem',
+            data: { action: 'read', path: '/tmp/file', content: 'private', bytes: 7, truncated: false },
+            effects: [{ type: 'read', path: '/tmp/file' }],
+        })).toBe('filesystem: action=read; path=/tmp/file; bytes=7; truncated=false');
+        expect(tools.observe({
+            name: 'shell',
+            data: { action: 'shell', cwd: '/tmp', command: 'true', args: [], exitCode: 0, stdout: 'ok', stderr: '', timedOut: false },
+        })).toContain('stdoutBytes=2');
+        expect(tools.observe({
+            name: 'execute',
+            data: { action: 'execute', mode: 'serial', cwd: '/tmp', total: 2, success: 1, failed: 1, results: [] },
+        })).toBe('execute: total=2; success=1; failed=1');
+        expect(() => tools.observe({ name: 'task', data: { completes: [] } })).toThrow('does not own direct observations');
     });
 
     test('propagates invalid tool input unchanged', async () => {
@@ -102,9 +122,36 @@ describe('Tools', () => {
         const read = await tools.run({ id: 'read_1', name: 'filesystem', arguments: { action: 'read', path: target } });
 
         expect(write.data).toMatchObject({ action: 'write', path: resolve(other, 'dir/file.txt') });
-        expect(read).toMatchObject({ ok: true, name: 'filesystem' });
+        expect(read).toMatchObject({ name: 'filesystem' });
         expect(read.data).toMatchObject({ action: 'read', path: resolve(target), content: 'safe' });
         rmSync(target, { force: true });
+    });
+
+    test('filesystem enforces UTF-8 byte limits without false CRLF truncation', async () => {
+        writeFileSync(join(root, 'utf8.txt'), '界界', 'utf-8');
+        writeFileSync(join(root, 'crlf.txt'), 'one\r\ntwo', 'utf-8');
+
+        const utf8 = await (await component()).run({
+            id: 'read_utf8',
+            name: 'filesystem',
+            arguments: { action: 'read', path: 'utf8.txt', limitBytes: 4 },
+        });
+        const crlf = await (await component()).run({
+            id: 'read_crlf',
+            name: 'filesystem',
+            arguments: { action: 'read', path: 'crlf.txt', limitBytes: 100 },
+        });
+
+        expect(utf8.data).toMatchObject({ content: '界', bytes: 3, truncated: true });
+        expect(crlf.data).toMatchObject({ content: 'one\ntwo', truncated: false });
+    });
+
+    test('filesystem rejects an explicit invalid cwd', async () => {
+        await expect((await component()).run({
+            id: 'read_bad_cwd',
+            name: 'filesystem',
+            arguments: { action: 'read', path: 'file.txt', cwd: 42 },
+        })).rejects.toThrow('cwd is required');
     });
 
     test('filesystem rejects list and directory deletion', async () => {
@@ -125,7 +172,7 @@ describe('Tools', () => {
             },
         });
 
-        expect(result.ok).toBe(true);
+        expect(result.name).toBe('shell');
         const data = result.data as { action: string; cwd: string; command: string; stdout: string; timedOut: boolean };
         expect(data).toMatchObject({ action: 'shell', command: process.execPath, timedOut: false });
         expect(data.stdout).toBe(`${realpathSync(data.cwd)}\n`);
@@ -142,11 +189,28 @@ describe('Tools', () => {
             },
         });
 
-        expect(result.ok).toBe(true);
+        expect(result.name).toBe('shell');
         const data = result.data as { cwd: string; stdout: string };
         expect(data.cwd).toBe(other);
         expect(data.stdout).toBe(`${realpathSync(other)}\n`);
         expect(ConfigService.path.cwd).toBe(root);
+    });
+
+    test('shell resolves a relative cwd from the configured semantic root', async () => {
+        mkdirSync(join(root, 'sub'), { recursive: true });
+        const result = await (await component()).run({
+            id: 'shell_relative',
+            name: 'shell',
+            arguments: {
+                cwd: 'sub',
+                command: process.execPath,
+                args: ['-e', 'console.log(process.cwd())'],
+            },
+        });
+
+        const data = result.data as { cwd: string; stdout: string };
+        expect(data.cwd).toBe(resolve(root, 'sub'));
+        expect(data.stdout).toBe(`${realpathSync(resolve(root, 'sub'))}\n`);
     });
 
     test('execute runs script batches from config cwd and keeps serial order', async () => {
@@ -164,7 +228,7 @@ describe('Tools', () => {
             },
         });
 
-        expect(result.ok).toBe(true);
+        expect(result.name).toBe('execute');
         expect(result.data).toMatchObject({ action: 'execute', mode: 'serial', cwd: root, total: 2, success: 2, failed: 0 });
         const results = (result.data as { results: Array<{ id?: string; stdout: string; cwd: string }> }).results;
         expect(results.map((item) => item.id)).toEqual(['one', 'two']);
@@ -190,7 +254,7 @@ describe('Tools', () => {
             },
         });
 
-        expect(result.ok).toBe(true);
+        expect(result.name).toBe('execute');
         expect(result.data).toMatchObject({ action: 'execute', mode: 'parallel', cwd: root, total: 2, success: 1, failed: 1 });
         const results = (result.data as { results: Array<{ id?: string; cwd: string; timedOut: boolean; ok: boolean; stdout: string }> }).results;
         expect(results.find((item) => item.id === 'slow')).toMatchObject({ cwd: root, timedOut: true, ok: false });

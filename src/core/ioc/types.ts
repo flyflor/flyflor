@@ -2,11 +2,13 @@
  * EN: Constructor type used by IOC metadata and resolution.
  * ZH: IOC 元数据和解析使用的构造器类型。
  */
-export type ClassType<T = any> = new (...args: any[]) => T;
+export type ClassType<T = object> = new (...args: never[]) => T;
 
-// 依赖注入元数据键
+/** EN: Reflect key for module import metadata. ZH: module import 元数据使用的 Reflect key。 */
 export const MODULE_METADATA_KEY = Symbol('MODULE_METADATA_KEY');
+/** EN: Reflect key for property injection metadata. ZH: property injection 元数据使用的 Reflect key。 */
 export const INJECT_METADATA_KEY = Symbol('INJECT_METADATA_KEY');
+/** EN: Reflect key for decorator-owned instance factories. ZH: decorator 自有 instance factory 使用的 Reflect key。 */
 export const INJECT_METADATA_INSTANCE_KEY = Symbol('INJECT_METADATA_INSTANCE_KEY');
 /**
  * EN: One property injection record stored on a class constructor.
@@ -22,11 +24,11 @@ export interface InjectMetadata {
  */
 export interface InjectInstanceMetadata {
     propertyKey: string | symbol;
-    instance?: any;
+    instance: () => unknown | Promise<unknown>;
 }
 
-// 提供器单例键
+/** EN: Reflect key marking a class-owned singleton policy. ZH: 标记 class 自有 singleton policy 的 Reflect key。 */
 export const PROVIDER_SINGLETON_KEY = Symbol('PROVIDER_SINGLETON_KEY');
 
-// 初始化装饰器，用于注册初始化方法
+/** EN: Reflect key naming the post-injection lifecycle method. ZH: 标记注入后生命周期方法名的 Reflect key。 */
 export const INIT_METADATA_KEY = Symbol('INIT_METADATA_KEY');

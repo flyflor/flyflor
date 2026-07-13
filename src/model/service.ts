@@ -1,8 +1,8 @@
 import type { ConfigService, FAgentProfileConfiguration } from '@/config';
-import { Config, FService, Init, Inject, Provide } from '@/core';
+import { Config, FAgent, FService, Init, Inject, Provide } from '@/core';
 import { ProtocolClient } from './protocol/client';
 import type { ModelOptions } from './protocol/types';
-import type { Message, ModelResult, StreamEvent, ToolDefinition } from './types';
+import type { Message, ModelResult, StopReason, StreamEvent, ToolDefinition } from './types';
 
 /**
  * EN: Agent-scoped language-model boundary with fully awaited streaming callbacks.
@@ -16,15 +16,23 @@ export class Model extends FService {
     @Inject()
     public client!: ProtocolClient;
 
-    public config: ModelOptions;
-
     /**
      * EN: Binds one model instance to exactly one complete Agent profile.
      * ZH: 将一个模型实例绑定到唯一、完整的 Agent profile。
      */
-    public constructor(private readonly profile: FAgentProfileConfiguration) {
+    public constructor(agent: FAgent<unknown, unknown, FAgentProfileConfiguration, unknown>) {
         super();
-        this.config = {} as ModelOptions;
+        this.profile = agent.agentConfig;
+        this.options = undefined;
+    }
+
+    private readonly profile: FAgentProfileConfiguration;
+    private options: ModelOptions | undefined;
+
+    /** EN: Returns the initialized provider options owned by this Agent scope. ZH: 返回由当前 Agent scope 持有的已初始化 provider 选项。 */
+    public get config(): ModelOptions {
+        if (this.options === undefined) throw Error(`Agent model is not initialized: ${this.profile.name}`);
+        return this.options;
     }
 
     /**
@@ -41,7 +49,7 @@ export class Model extends FService {
             throw Error(`Agent model profile is incomplete: ${profile.name}`);
         }
         const base = this.root.model;
-        this.config = {
+        this.options = {
             ...base,
             model: profile.model,
             provider: profile.provider,
@@ -66,16 +74,7 @@ export class Model extends FService {
 
     /** EN: Streams text and awaits every consumer callback. ZH: 流式输出文本并等待每个消费回调。 */
     public async stream(messages: Message[], next: (chunk: string) => void | Promise<void>): Promise<void> {
-        const reader = this.reader(messages);
-        try {
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                if (value?.type === 'text_delta' && value.text.length > 0) await next(value.text);
-            }
-        } finally {
-            reader.releaseLock();
-        }
+        await this.consume(this.reader(messages), false, next);
     }
 
     /** EN: Completes one text-only model request. ZH: 完成一次纯文本模型请求。 */
@@ -85,23 +84,34 @@ export class Model extends FService {
 
     /** EN: Consumes one complete model request with optional tools. ZH: 消费一次可带工具的完整模型请求。 */
     public async run(messages: Message[], tools?: ToolDefinition[]): Promise<ModelResult> {
-        return this.consume(this.reader(messages, tools));
+        return await this.consume(this.reader(messages, tools), (tools?.length ?? 0) > 0);
     }
 
     /** EN: Consumes one tool-capable request while awaiting text output. ZH: 消费一次可调用工具的请求，并等待文本输出。 */
     public async streamRun(messages: Message[], tools: ToolDefinition[] | undefined, onText: (chunk: string) => void | Promise<void>): Promise<ModelResult> {
-        return this.consume(this.reader(messages, tools), onText);
+        return await this.consume(this.reader(messages, tools), (tools?.length ?? 0) > 0, onText);
     }
 
     /** EN: Reduces a provider stream into one strict result. ZH: 将 provider stream 归并为一个严格结果。 */
-    private async consume(reader: ReturnType<Model['reader']>, onText?: (chunk: string) => void | Promise<void>): Promise<ModelResult> {
-        const result: ModelResult = { text: '', reasoning: '', toolCalls: [], stopReason: 'stop' };
+    private async consume(reader: ReturnType<Model['reader']>, allowTools: boolean, onText?: (chunk: string) => void | Promise<void>): Promise<ModelResult> {
+        const result: ModelResult = { text: '', reasoning: '', toolCalls: [] };
+        let terminal: StopReason | undefined;
         try {
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
+                if (terminal) throw Error('Model stream emitted data after its terminal event');
+                if (value?.type === 'done') {
+                    terminal = value.stopReason;
+                    continue;
+                }
                 await this.reduce(value, result, onText);
             }
+            if (!terminal) throw Error('Model stream ended without a terminal event');
+            if (terminal === 'length') throw Error('Model response reached the token limit');
+            const usedTools = result.toolCalls.length > 0;
+            if ((terminal === 'toolUse') !== usedTools) throw Error('Model tool-use terminal does not match tool calls');
+            if (usedTools && !allowTools) throw Error('Text-only model response used tools');
             return result;
         } finally {
             reader.releaseLock();
@@ -118,8 +128,6 @@ export class Model extends FService {
             result.reasoning += event.text;
         } else if (event.type === 'tool_end') {
             result.toolCalls.push(event.call);
-        } else if (event.type === 'done') {
-            result.stopReason = event.stopReason;
         }
     }
 }

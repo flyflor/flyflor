@@ -43,13 +43,14 @@ export class Synapse extends FCortex implements AgentBus {
         await this.pool.bind(this);
         this.sensory.bind(this.pool);
         this.delegation.bind(this.pool);
-        this.socket.bind({
+        await this.socket.bind({
+            connected: () => this.interaction.connected(),
             input: async (text) => { await this.sensory.next(text); },
             answer: (turnId, id, response) => this.answer(turnId, id, response),
         });
     }
 
-    /** EN: Exposes the immutable runtime configuration through the cortical facade. ZH: 通过皮层门面暴露不可变 runtime 配置。 */
+    /** EN: Exposes runtime configuration whose profiles are copied while cwd may change. ZH: 暴露 profile 保持副本而 cwd 可变的 runtime 配置。 */
     public get config(): ConfigService {
         return this.pool.config;
     }
@@ -62,10 +63,10 @@ export class Synapse extends FCortex implements AgentBus {
     /** EN: Routes one Agent firing to exactly one independent cortical circuit. ZH: 将一次 Agent 放电路由到唯一的独立皮层回路。 */
     public async fire<TSignal extends NeuralSignal>(signal: TSignal): Promise<NeuralResponse<TSignal>> {
         if (signal.type === 'ask' || signal.type === 'confirm') {
-            return await this.interaction.next(signal) as unknown as NeuralResponse<TSignal>;
+            return await this.interaction.next(signal) as NeuralResponse<TSignal>;
         }
         if (signal.type === 'task') {
-            return await this.delegation.next(signal) as unknown as NeuralResponse<TSignal>;
+            return await this.delegation.next(signal) as NeuralResponse<TSignal>;
         }
         await this.expression.next(signal);
         return undefined as NeuralResponse<TSignal>;

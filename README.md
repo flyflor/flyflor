@@ -37,7 +37,7 @@ To exercise the configured provider rather than mocks, run:
 bun run test:live
 ```
 
-The live suite starts the real AppModule, Unix socket, WebSocket bridge, persistent Agent pool, and the model/provider from `.config/config.jsonc`. It verifies direct reply, filesystem read, Ask, rejected Confirm, approved filesystem write, Shell, Execute, two-person Task delegation, reconnect memory continuity, and Soul updates against a disposable identity package. All files and logs created by this suite live in a temporary directory and are removed afterward. The command intentionally performs real API calls and fails when the configured credential, model, protocol, signal, tool result, or cleanup is wrong.
+The live suite starts the real AppModule, Unix socket, WebSocket bridge, persistent Agent pool, and the model/provider from `.config/config.jsonc`. It verifies direct reply, filesystem read, Ask, rejected Confirm, approved filesystem write, Shell, Execute, two-person Task delegation, refresh-and-resume while Ask and Confirm are pending, reconnect memory continuity, and Soul updates against a disposable identity package. All files and logs created by this suite live in a temporary directory and are removed afterward. The command intentionally performs real API calls and fails when the configured credential, model, protocol, signal, tool result, or cleanup is wrong.
 
 ## Neural Path
 
@@ -60,18 +60,25 @@ flowchart LR
 
 Ask and Confirm share a serial interaction circuit. Task uses an independent delegation circuit. Reply and Complete use an ordered expression circuit. A delegated task can therefore wait for another person while user interaction continues without deadlocking.
 
+Every circuit uses the same four-method `Observable` contract: `pipe`, `switch`, `subscribe`, and `next`. Exactly one Input→Output transform is required; a missing transform, duplicate registration, absent discriminated branch, or downstream rejection fail-stops that circuit.
+
 ## Runtime Contracts
 
 - A Turn is created and changed only under `src/agent/context`; it is never exported.
-- Memory contains only one person's finite notes. It never stores Turns, provider messages, or session state.
+- Context retains at most 32 completed Turns; `recent(0)` is empty and invalid limits reject.
+- Memory contains only one person's 16 finite notes. It never stores Turns, provider messages, or session state.
 - Complete is the final investigation summary. Context stores it directly without a second settlement model call.
 - Root and delegated stimuli enter the receiving person's FIFO. The same person thinks serially; different people may investigate concurrently.
 - Delegated people do not receive the Task tool, preventing recursive delegation.
-- Ask and Confirm wait for exact correlated answers. A rejected Confirm is an explicit non-execution result.
-- Filesystem, Shell, and Execute are direct actions. Thrown failures reject unchanged.
+- Ask and Confirm wait for exact correlated answers. If the client disconnects while waiting, the pending interaction remains paused and replays after `open`; `resume` is written before Context changes. A rejected Confirm is an explicit non-execution result.
+- Filesystem, Shell, and Execute are strongly typed direct actions and each projects only its own compact observation. Investigation owns Ask/Task outcomes plus approval/effect metadata. Thrown failures reject unchanged.
+- Filesystem byte limits preserve UTF-8 boundaries. Runtime cwd changes belong to `ConfigService`; Agent profile copies remain unchanged.
 - PromptService is the only prompt-package and XML rendering boundary.
-- Provider names map to one protocol and one endpoint convention. There is no protocol or endpoint fallback.
-- Catch clauses, `.catch()`, rejection fallbacks, public Turn access, and direct application construction are static violations.
+- Provider names map to one protocol and one endpoint convention. OpenAI-compatible protocols support tools; Responses, Anthropic, Gemini, Bedrock, Cohere, and Ollama reject tool definitions or replay before fetch while retaining text-only paths.
+- A model request succeeds only after one terminal event. Missing/repeated terminals, token limits, unsafe or unknown finish reasons, tool-use mismatches, and tool calls on text-only requests reject.
+- IPC keeps its eight-byte big-endian frame and enforces a 4 MiB body limit, strict packet roots, non-empty actions, exact user text, answer correlation, and backpressure. The Web bridge enforces the same root and body limits.
+- Catch clauses, `.catch()`, rejection fallbacks, public Turn access, direct application construction, cross-domain relative imports, behavioral barrels, unowned instance state, unsupported decorators, and Observable surface expansion are static violations.
+- Unit-test logging is isolated under the system temporary directory, leaving the tracked runtime log unchanged.
 - The checked-in live suite uses the real configured `deepseek` provider and currently targets `deepseek-v4-flash`; it does not replace deterministic unit tests.
 
 ## Source Layout

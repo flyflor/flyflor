@@ -11,10 +11,10 @@ Flyflor is a continuously living intelligent entity. The kernel has one purpose:
 | `Synapse` | life-form singleton | cortical facade, lifecycle composition, signal routing |
 | `AgentPool` | one Synapse lifecycle | active identity, validated profiles, persistent Agent scopes |
 | `Sensory` / `Interaction` / `Delegation` / `Expression` | one Synapse lifecycle | one independent FIFO and its exact cortical effect |
-| `Context` | life-form singleton | sole creation and mutation of Turns; completed experience |
-| `Agent` | persistent pool person | private FIFO boundary around one person's cognition |
+| `Context` | life-form singleton | sole creation and mutation of Turns; bounded completed experience (32) |
+| `Agent` | persistent pool person | person-boundary FIFO around one person's cognition |
 | `Memory` | one Agent scope | bounded continuous temporary notes; never Turns |
-| `Brain` | one Agent scope | cognitive routing and root completion |
+| `Brain` | one Agent scope | cognitive switch FIFO and root completion |
 | `Callosum` | one Agent scope | one strict perception for each root input |
 | `Investigation` | one Agent scope | model loop, Ask/Confirm/Task/Complete network, compact evidence, and local replay |
 | `Identity` | one Agent scope | durable prompt identity under package policy |
@@ -64,18 +64,20 @@ Agent never imports Neural. Their boundary is `AgentBus.fire()` plus the stable 
 - business code never directly constructs an application class;
 - a failed initialization is not published to the singleton cache.
 
-Synapse binds one fresh AgentPool to its `AgentBus`. AgentPool validates and copies every complete configured profile, creates each person once, and retains the isolated scopes. A failed Synapse initialization discards its unpublished pool and circuits. Shared configuration is never mutated and task-level workers are never created.
+Synapse binds one fresh AgentPool to its `AgentBus`. AgentPool validates and copies every complete configured profile, creates each person once, and retains the isolated scopes. A failed Synapse initialization discards its unpublished pool and circuits. Profile copies are never mutated; `ConfigService.path.cwd` is intentionally mutable only through the explicit `cwd` transport action. Task-level workers are never created.
 
 ## Observable Circuits
 
-`Observable<TInput, TOutput>` extends `FlyFlor`. It intentionally exposes only `pipe`, `switch`, `subscribe`, and `next`.
+`Observable<TInput, TOutput>` extends `FlyFlor`. Its complete public method surface is `pipe`, `switch`, `subscribe`, and `next`.
 
+- `pipe` installs the sole Input→Output transform; a missing or second transform rejects;
+- `switch('type', handlers)` installs that same transform with exhaustive discriminated branches;
 - `next()` returns the full processing Promise;
 - one promise tail gives each circuit FIFO ordering;
-- stages, selected branches, and subscribers are awaited in registration order;
-- an absent switch branch throws;
+- the selected transform and subscribers are awaited in registration order;
+- an absent switch case throws;
 - a rejection propagates unchanged and leaves that circuit fail-stopped;
-- separate instances can discharge concurrently.
+- separate instances can process concurrently.
 
 Synapse composes four independent concrete circuit objects:
 
@@ -86,7 +88,7 @@ Synapse composes four independent concrete circuit objects:
 | delegation | Task | builds child tasks from `ContextBrief` and awaits target Completes |
 | expression | Reply or root Complete | orders reply chunks, Complete, then streamEnd |
 
-Each Agent and Brain also owns a private FIFO circuit. Investigation builds its Ask, Confirm, Task, and Complete switch once in `@Init` and reuses the network for later stimuli.
+Each Agent owns a person-boundary FIFO (`pipe` maps stimulus to Complete). Each Brain owns a separate cognitive switch FIFO (`switch` on stimulus type). The two layers stay distinct: serial person thinking versus cognitive routing. Investigation builds its Ask, Confirm, Task, and Complete switch once in `@Init` and reuses it for later stimuli.
 
 ## Root Turn
 
@@ -140,18 +142,20 @@ Tasks targeting the same person queue behind that person's current stimulus. Dif
 
 Provider tool calls exist only in the local Investigation message list.
 
-- Ask is validated by its tool, discharged through the interaction circuit, and replayed with structured answers.
-- Confirm is discharged before a concrete dangerous action. Rejection becomes `{ approved: false, executed: false }`; the action is not run.
-- Task is validated, discharged through delegation, and replayed with child Complete summaries.
+- Ask is validated by its tool, routed through the interaction circuit, and replayed with structured answers.
+- Confirm is routed before a concrete dangerous action. Rejection becomes `{ approved: false, executed: false }`; the action is not run.
+- Task is validated, routed through delegation, and replayed with child Complete summaries.
 - Filesystem, Shell, and Execute run directly through Tools.
 - thrown failures reject unchanged;
 - shell non-zero exit and timeout remain explicit process data;
 - execute spawn errors reject the batch, while completed process exits remain explicit data;
+- Filesystem, Shell, and Execute each own a strongly typed compact `observe` projection;
+- `Tools.observe(result)` trusts the result's single `name`; Investigation projects Ask/Task outcomes and appends approval/effect metadata;
 - valid observations are copied into the current person's bounded Memory.
 
-Investigation advances by understanding the goal, obtaining facts or executing, checking the result, and either continuing or completing. It requests a model-written plain-text summary before the next ordinary sample when Model reports approximately eighty percent of usable context capacity. The compacted history retains identity, the current stimulus, the original goal, compact evidence, the summary, and its next action; older tool replay is removed. Model-facing results share a fixed 64 KiB display budget per tool-call batch and retain UTF-8-safe head and tail content around an explicit omitted-byte marker. Tool schemas, implementations, and public results are unchanged.
+Investigation advances by understanding the goal, obtaining facts or executing, checking the result, and either continuing or completing. It requests a model-written plain-text summary before the next ordinary sample when Model reports approximately eighty percent of usable context capacity. The compacted history retains identity, the current stimulus, the original goal, compact evidence, the summary, and its next action; older tool replay is removed. Model-facing results share a fixed 64 KiB display budget per tool-call batch and retain UTF-8-safe head and tail content around an explicit omitted-byte marker. Model-visible tool JSON schemas remain unchanged.
 
-Memory evicts oldest notes in FIFO order after sixteen notes. It stores compact goals, references, and observations, not the current raw input, full file contents, process output, delegated answers, provider messages, final Turn answer, Turn status, or a Turn array. Context alone retains the completed answer. The current input appears once in the stimulus input block and is omitted from its Context block.
+Memory evicts oldest notes in FIFO order after sixteen notes. It stores compact goals, references, and observations, not the current raw input, full file contents, process output, delegated answers, provider messages, final Turn answer, Turn status, or a Turn array. Context alone retains the completed answer and keeps at most thirty-two completed Turns (active Turn is never evicted). The current input appears once in the stimulus input block and is omitted from its Context block.
 
 ## PromptService And XML
 
@@ -170,19 +174,19 @@ XML exists only at model input boundaries. It is not a storage format for Contex
 
 Each provider resolves to one protocol attempt:
 
-| Provider | Protocol and path |
-| --- | --- |
-| `openai` | Chat Completions, `/v1/chat/completions` |
-| `responses` | Responses, `/v1/responses` |
-| `deepseek` | OpenAI-compatible Chat Completions, `/chat/completions` |
-| `anthropic` | Messages, `/v1/messages` |
-| `google`, `gemini` | Gemini streaming generate content |
-| `aws`, `bedrock` | Bedrock converse stream |
-| `cohere` | Cohere chat |
-| `ollama` | Ollama JSON stream |
-| `vllm`, `lmstudio` | declared OpenAI-compatible Chat Completions |
+| Provider | Protocol and path | Tools |
+| --- | --- | --- |
+| `openai` | Chat Completions, `/v1/chat/completions` | supported |
+| `deepseek` | OpenAI-compatible Chat Completions, `/chat/completions` | supported |
+| `vllm`, `lmstudio` | declared OpenAI-compatible Chat Completions | supported |
+| `responses` | Responses, `/v1/responses` | rejected before fetch |
+| `anthropic` | Messages, `/v1/messages` | rejected before fetch |
+| `google`, `gemini` | Gemini streaming generate content | rejected before fetch |
+| `aws`, `bedrock` | Bedrock converse stream | rejected before fetch |
+| `cohere` | Cohere chat | rejected before fetch |
+| `ollama` | Ollama JSON stream | rejected before fetch |
 
-Unknown providers reject. Failed status codes, wrong response shapes, malformed tool JSON, missing keys, and unterminated streams reject. Streaming text callbacks are awaited, so neural output ordering cannot escape the model Promise.
+Unknown providers reject. Failed status codes, wrong response shapes, malformed tool JSON, missing or repeated terminal events, token limits, unsafe or unknown finish reasons, tool-use mismatches, and tool calls on text-only requests reject. Unsupported protocols reject tool definitions or tool replay before `fetch`. Streaming text callbacks are awaited, so neural output ordering cannot escape the model Promise.
 
 Agent profiles provide `contextLength` and `maxTokens` as capacity facts; they do not configure cognition or review policy. ProtocolClient measures the final UTF-8 JSON body and rejects any request above its internal 512 KiB safety boundary before `fetch`.
 
@@ -190,7 +194,9 @@ Agent profiles provide `contextLength` and `maxTokens` as capacity facts; they d
 
 IPC frames contain an eight-byte unsigned big-endian body length followed by UTF-8 JSON. Packet buffering covers split headers, split bodies, split UTF-8 sequences, and coalesced frames. Invalid and oversized frames reject.
 
-FSocket rejects writes without a live connection. Reconnect resets only transport framing and pending bytes; Context and Agent Memory remain untouched. Input and answer callbacks are awaited. Unknown controller actions reject.
+FSocket rejects writes without a live connection. It validates packet roots, non-empty actions, user text, and answer correlation before routing. Reconnect resets only transport framing and pending bytes; Context and Agent Memory remain untouched. A pending Ask/Confirm stays paused and is replayed after `open` in the original `ask|confirm → pause` order. `resume` is written successfully before Context is resumed and the pending Promise is resolved. Input, answer, and connected callbacks are awaited. Unknown controller actions reject.
+
+The Web bridge preserves the same eight-byte frame and enforces the same 4 MiB body boundary and packet-root validation in both directions.
 
 ## Static Red Lines
 
@@ -198,9 +204,11 @@ FSocket rejects writes without a live connection. Reconnect resets only transpor
 
 - CatchClause, `.catch()`, and rejection fallback handlers;
 - direct application construction outside IOC;
-- missing EN/ZH JSDoc on runtime classes, constructors, methods, and accessors;
+- missing substantive EN/ZH JSDoc on runtime classes, constructors, methods, and accessors;
+- instance state not initialized by its constructor and decorators outside the fixed whitelist;
+- any Observable public method or state beyond its four-method contract;
 - methods over 500 lines;
-- illegal dependency direction and behavioral barrels;
+- illegal dependency direction, cross-domain relative imports, and non-re-export barrels;
 - public or externally imported Turn;
 - Session types;
 - missing Chinese documentation mirrors;
@@ -208,4 +216,4 @@ FSocket rejects writes without a live connection. Reconnect resets only transpor
 
 ## Verification Layers
 
-`bun test` provides deterministic coverage for Observable FIFO/fail-stop behavior, IOC scope and publication, Context isolation, Investigation branching, tools, protocol parsing, IPC framing, and Web bridge encoding. `bun run test:live` then drives the actual browser bridge and kernel with the configured DeepSeek model. Its disposable scenarios cover all three cognitive routes, every concrete tool, Ask/Confirm correlation, multi-person Task completion, and reconnect continuity. This separation keeps ordinary tests repeatable while making provider and prompt behavior independently reproducible.
+`bun test` provides deterministic coverage for Observable FIFO/fail-stop behavior, IOC scope and publication, Context isolation, Investigation branching, tools, protocol parsing, IPC framing, reconnect replay, and Web bridge encoding. Unit-test logging is redirected to a temporary directory so the tracked runtime log is unchanged. `bun run test:live` then drives the actual browser bridge and kernel with the configured model. Its disposable scenarios cover all three cognitive routes, every concrete tool, Ask/Confirm correlation, multi-person Task completion, and reconnect continuity. This separation keeps ordinary tests repeatable while making provider and prompt behavior independently reproducible.

@@ -9,14 +9,12 @@ import type { TaskInput, TaskItemInput, TaskOutput } from './types';
 @Provide()
 export class Task extends Tool<TaskInput, TaskOutput> {
     public readonly name: string;
-    public readonly risk: 'interaction';
     public readonly parameters: Record<string, unknown>;
 
     /** EN: Initializes pure delegation metadata and its strict model schema. ZH: 初始化纯委派元数据及其严格模型 schema。 */
     public constructor() {
         super();
         this.name = 'task';
-        this.risk = 'interaction';
         this.parameters = {
             type: 'object',
             properties: {
@@ -49,6 +47,6 @@ export class Task extends Tool<TaskInput, TaskOutput> {
             if (typeof item.goal !== 'string' || item.goal.length === 0) throw Error(`tasks[${index}].goal is required`);
             return { agent: item.agent, goal: item.goal };
         });
-        return { ok: true, data: { tasks }, effects: [{ type: 'task' }] } as const;
+        return { data: { tasks }, effects: [{ type: 'task' }] } as const;
     }
 }

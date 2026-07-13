@@ -46,6 +46,9 @@ export class ProtocolClient extends FService {
         tools?: ToolDefinition[],
     ): Promise<void> {
         const attempt = this.resolve(config.provider);
+        if (!attempt.adapter.tools && this.usesTools(messages, tools)) {
+            throw Error(`Model protocol does not support tools: ${attempt.spec.name}`);
+        }
         const context: ProtocolContext = { config, messages, tools, ...attempt };
         const url = this.endpoint(config.baseUrl, attempt.spec.path, config.model);
         const body = JSON.stringify(attempt.adapter.body(context));
@@ -73,10 +76,10 @@ export class ProtocolClient extends FService {
         }
         const contentType = response.headers.get('content-type') ?? '';
         if (this.jsonResponse(attempt.spec, contentType)) {
-            if (attempt.spec.json !== true) throw Error(`Unexpected JSON response: ${attempt.spec.name}`);
-            const text = this.responseText(await response.json());
-            if (text.length > 0) controller.enqueue({ type: 'text_delta', text });
-            controller.enqueue({ type: 'done', stopReason: 'stop' });
+            if (attempt.spec.json !== true || attempt.adapter.parseJson === undefined) throw Error(`Unexpected JSON response: ${attempt.spec.name}`);
+            const result = attempt.adapter.parseJson(await response.json());
+            if (result.text.length > 0) controller.enqueue({ type: 'text_delta', text: result.text });
+            controller.enqueue({ type: 'done', stopReason: result.stopReason });
             controller.close();
             return;
         }
@@ -158,23 +161,10 @@ export class ProtocolClient extends FService {
         return spec.jsonStream !== true && contentType.toLowerCase().includes('application/json');
     }
 
-    /** EN: Reads text from the declared Responses JSON shape. ZH: 从声明的 Responses JSON 结构读取文本。 */
-    private responseText(json: unknown): string {
-        const root = json as { output_text?: unknown; output?: unknown };
-        if (typeof root.output_text === 'string') return root.output_text;
-        const parts: string[] = [];
-        if (Array.isArray(root.output)) {
-            for (const output of root.output) {
-                const content = (output as { content?: unknown }).content;
-                if (!Array.isArray(content)) continue;
-                for (const item of content) {
-                    const text = (item as { text?: unknown }).text;
-                    if (typeof text === 'string') parts.push(text);
-                }
-            }
-        }
-        if (parts.length === 0) throw Error('Responses JSON did not include text');
-        return parts.join('');
+    /** EN: Reports whether one request contains tool definitions or replay. ZH: 报告一次请求是否包含工具定义或 replay。 */
+    private usesTools(messages: Message[], tools?: ToolDefinition[]): boolean {
+        return (tools?.length ?? 0) > 0
+            || messages.some((message) => message.role === 'tool' || ('toolCalls' in message && message.toolCalls.length > 0));
     }
 
     /** EN: Reads response bytes until one protocol terminal event. ZH: 读取响应字节直到协议终态事件。 */
@@ -197,7 +187,7 @@ export class ProtocolClient extends FService {
             await this.lines(controller, reader, state, context.adapter, true);
             if (state.finished) return;
         }
-        throw Error(context.spec.terminal ?? 'Model provider stream ended without a terminal event');
+        throw Error('Model provider stream ended without a terminal event');
     }
 
     /** EN: Parses complete response lines in stable order. ZH: 按稳定顺序解析完整响应行。 */

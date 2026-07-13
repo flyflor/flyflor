@@ -9,7 +9,7 @@ import type {
 } from '@/agent/types';
 import { Memory } from '@/agent/memory';
 import type { FAgentProfileConfiguration } from '@/config';
-import { FComponent, Init, Inject, Observable, Prompt, Provide, Scope } from '@/core';
+import { FAgent, FComponent, Init, Inject, Observable, Prompt, Provide, Scope } from '@/core';
 import { Model, type AssistantMessage, type Message, type ModelResult, type ToolCall, type ToolMessage } from '@/model';
 import { PromptService } from '@/prompt';
 import { Tools, type AskOutput, type TaskOutput, type ToolRunResult } from '@/tool';
@@ -23,6 +23,9 @@ const TOOL_REPLAY_BYTES = 64 * 1024;
  */
 @Provide()
 export class Investigation extends FComponent {
+    public readonly agentConfig: FAgentProfileConfiguration;
+    public readonly synapse: AgentBus;
+
     @Scope()
     public model!: Model;
 
@@ -38,18 +41,23 @@ export class Investigation extends FComponent {
     @Prompt('prompts/investigation/SUMMARY.md')
     public summary!: PromptService<string, string>;
 
+    /**
+     * EN: Persistent Ask/Confirm/Task/Complete network reused for every stimulus.
+     * ZH: 对每次刺激复用的持久 Ask/Confirm/Task/Complete 网络。
+     */
     @Inject()
-    public circuit!: Observable<InvestigationSignal>;
+    public circuit!: Observable<InvestigationSignal, InvestigationOutput>;
 
     /**
      * EN: Binds one persistent investigation network to its Agent and cortical bus.
      * ZH: 将一张持久调查网络绑定到所属 Agent 与皮层总线。
      */
     public constructor(
-        public readonly agentConfig: FAgentProfileConfiguration,
-        public readonly synapse: AgentBus,
+        agent: FAgent<unknown, CompleteSignal, FAgentProfileConfiguration, AgentBus>,
     ) {
         super();
+        this.agentConfig = agent.agentConfig;
+        this.synapse = agent.synapse;
     }
 
     /**
@@ -58,11 +66,11 @@ export class Investigation extends FComponent {
      */
     @Init()
     public init(): void {
-        this.circuit.switch<InvestigationSignal['type'], InvestigationOutput>((signal) => signal.type, {
-            ask: (signal) => this.ask(signal as AskSignal),
-            confirm: (signal) => this.confirm(signal as ConfirmSignal),
-            task: (signal) => this.task(signal as TaskSignal),
-            complete: (signal) => this.complete(signal as CompleteSignal),
+        this.circuit.switch('type', {
+            ask: (signal) => this.ask(signal),
+            confirm: (signal) => this.confirm(signal),
+            task: (signal) => this.task(signal),
+            complete: (signal) => this.complete(signal),
         });
     }
 
@@ -77,8 +85,8 @@ export class Investigation extends FComponent {
         ];
         let messages = [...initial];
         const evidence: string[] = [];
+        const tools = this.tools.list(request.root);
         while (true) {
-            const tools = await this.tools.list(request.delegation);
             if (messages.length > initial.length && this.model.needsSummary(messages, tools)) {
                 messages = await this.summarize(initial, messages, evidence, request.goal);
             }
@@ -86,7 +94,7 @@ export class Investigation extends FComponent {
                 messages,
                 tools,
                 async (chunk) => {
-                    if (request.visible) {
+                    if (request.root) {
                         await this.synapse.fire({
                             type: 'reply',
                             turnId: request.turnId,
@@ -107,13 +115,13 @@ export class Investigation extends FComponent {
                 }) as CompleteSignal;
             }
 
-            const calls = await Promise.all(result.toolCalls.map((call) => this.withWorkingDirectory(call, request.context.cwd)));
+            const calls = result.toolCalls.map((call) => this.withWorkingDirectory(call, request.cwd));
             messages.push(this.toolCallMessage({ ...result, toolCalls: calls }));
             const replays: Array<{ call: ToolCall; result: ToolRunResult }> = [];
             for (const call of calls) {
-                const requiresConfirm = await this.tools.requiresConfirm(call);
+                const requiresConfirm = this.tools.requiresConfirm(call);
                 const replay = await this.execute(call, request, requiresConfirm);
-                const observation = this.evidence(call, replay, requiresConfirm);
+                const observation = this.observation(replay, requiresConfirm);
                 evidence.push(observation);
                 this.memory.remember(observation, 'observation');
                 replays.push({ call, result: replay });
@@ -143,8 +151,8 @@ export class Investigation extends FComponent {
     }
 
     /**
-     * EN: Executes one call directly or discharges it through its neural branch.
-     * ZH: 直接执行一次调用，或通过对应神经分支放电。
+     * EN: Executes one call directly or routes it through its neural branch.
+     * ZH: 直接执行一次调用，或通过对应神经分支路由。
      */
     private async execute(call: ToolCall, request: InvestigationRequest, requiresConfirm: boolean): Promise<ToolRunResult> {
         if (call.name === 'ask') {
@@ -156,8 +164,8 @@ export class Investigation extends FComponent {
                 id: call.id,
                 agent: this.agentConfig.name,
                 questions: data.questions,
-            }) as unknown as AskResponse;
-            return { ok: true, name: call.name, data: response };
+            }) as AskResponse;
+            return { name: call.name, data: response, effects: validated.effects };
         }
         if (call.name === 'task') {
             const validated = await this.tools.run(call);
@@ -168,8 +176,8 @@ export class Investigation extends FComponent {
                 id: call.id,
                 agent: this.agentConfig.name,
                 tasks: data.tasks,
-            }) as unknown as CompleteSignal[];
-            return { ok: true, name: call.name, data: { completes } };
+            }) as CompleteSignal[];
+            return { name: call.name, data: { completes }, effects: validated.effects };
         }
         if (requiresConfirm) {
             const response = await this.circuit.next({
@@ -178,9 +186,9 @@ export class Investigation extends FComponent {
                 id: call.id,
                 agent: this.agentConfig.name,
                 call,
-            }) as unknown as ConfirmResponse;
+            }) as ConfirmResponse;
             if (!response.approved) {
-                return { ok: true, name: call.name, data: { approved: false, executed: false } };
+                return { name: call.name, data: { approved: false, executed: false } };
             }
         }
         return await this.tools.run(call);
@@ -220,12 +228,40 @@ export class Investigation extends FComponent {
         return { ...signal, evidence: [...signal.evidence] };
     }
 
+    /** EN: Builds compact evidence from orchestration outcomes or direct Tool output. ZH: 从编排结果或直接 Tool 输出构建紧凑证据。 */
+    private observation(result: ToolRunResult, requiresConfirm: boolean): string {
+        if (typeof result.data !== 'object' || result.data === null || Array.isArray(result.data)) {
+            throw Error(`Tool observation payload is invalid: ${result.name}`);
+        }
+        const data = result.data as Record<string, unknown>;
+        if (data.approved === false) return `${result.name}: approved=false; executed=${String(data.executed === true)}`;
+        let body: string;
+        if (result.name === 'ask') {
+            if (!Array.isArray(data.answers)) throw Error('Ask observation payload is invalid');
+            body = `ask: answers=${data.answers.length}`;
+        } else if (result.name === 'task') {
+            if (!Array.isArray(data.completes)) throw Error('Task observation payload is invalid');
+            const agents = data.completes.map((complete, index) => {
+                if (typeof complete !== 'object' || complete === null || Array.isArray(complete)) throw Error(`Task Complete is invalid: ${index}`);
+                const agent = (complete as { agent?: unknown }).agent;
+                if (typeof agent !== 'string' || agent.length === 0) throw Error(`Task Complete Agent is invalid: ${index}`);
+                return agent;
+            });
+            body = `task: completes=${data.completes.length}; agents=${agents.join(',')}`;
+        } else {
+            body = this.tools.observe(result);
+        }
+        const effects = result.effects?.map((effect) => effect.path ? `${effect.type}:${effect.path}` : effect.type).join(',') ?? '';
+        const metadata = [requiresConfirm ? 'approved=true' : '', effects.length > 0 ? `effects=${effects}` : ''].filter(Boolean).join('; ');
+        return metadata.length > 0 ? `${body}; ${metadata}` : body;
+    }
+
     /**
      * EN: Applies an understood working directory only to tools that own cwd semantics.
      * ZH: 仅为拥有 cwd 语义的工具应用已理解的工作目录。
      */
-    private async withWorkingDirectory(call: ToolCall, cwd?: string): Promise<ToolCall> {
-        if (!cwd || !await this.tools.cwd(call.name) || 'cwd' in call.arguments) return call;
+    private withWorkingDirectory(call: ToolCall, cwd?: string): ToolCall {
+        if (!cwd || !this.tools.cwd(call.name) || 'cwd' in call.arguments) return call;
         return { ...call, arguments: { ...call.arguments, cwd } };
     }
 
@@ -256,40 +292,7 @@ export class Investigation extends FComponent {
                 blocks: [{ tag: 'result', content: this.replay(JSON.stringify(result.data), maxBytes) }],
             }),
             toolCallId: call.id,
-            toolName: call.name,
-            isError: false,
         };
-    }
-
-    /**
-     * EN: Produces one compact factual note from a successful call or interaction.
-     * ZH: 从成功调用或交互中产生一条紧凑事实笔记。
-     */
-    private evidence(call: ToolCall, result: ToolRunResult, requiresConfirm: boolean): string {
-        const data = result.data as Record<string, unknown>;
-        if (data.approved === false) return `${call.name}: approved=false; executed=${String(data.executed === true)}`;
-        const effects = result.effects?.map((effect) => effect.path ? `${effect.type}:${effect.path}` : effect.type).join(',') ?? '';
-        const metadata = [requiresConfirm ? 'approved=true' : '', effects.length > 0 ? `effects=${effects}` : ''].filter(Boolean).join('; ');
-        const suffix = metadata.length > 0 ? `; ${metadata}` : '';
-        if (call.name === 'filesystem') {
-            return `filesystem: action=${String(data.action ?? '')}; path=${String(data.path ?? '')}; bytes=${String(data.bytes ?? '')}; truncated=${String(data.truncated === true)}${suffix}`;
-        }
-        if (call.name === 'shell') {
-            return `shell: command=${String(data.command ?? '')}; cwd=${String(data.cwd ?? '')}; exit=${String(data.exitCode ?? '')}; timedOut=${String(data.timedOut === true)}; stdoutBytes=${this.bytes(data.stdout)}; stderrBytes=${this.bytes(data.stderr)}${suffix}`;
-        }
-        if (call.name === 'execute') {
-            return `execute: total=${String(data.total ?? '')}; success=${String(data.success ?? '')}; failed=${String(data.failed ?? '')}${suffix}`;
-        }
-        if (call.name === 'task') {
-            const completes = Array.isArray(data.completes) ? data.completes : [];
-            const agents = completes.map((complete) => String((complete as { agent?: unknown }).agent ?? '')).filter(Boolean);
-            return `task: completes=${completes.length}; agents=${agents.join(',')}${suffix}`;
-        }
-        if (call.name === 'ask') {
-            const answers = Array.isArray(data.answers) ? data.answers.length : 0;
-            return `ask: answers=${answers}${suffix}`;
-        }
-        throw Error(`Unsupported evidence tool: ${call.name}`);
     }
 
     /** EN: Bounds one model-facing tool replay while preserving its beginning and end. ZH: 限制一条面向模型的工具 replay，同时保留首尾内容。 */
@@ -318,10 +321,5 @@ export class Investigation extends FComponent {
         let start = Math.max(0, content.byteLength - maxBytes);
         while (start < content.byteLength && (content[start]! & 0xc0) === 0x80) start += 1;
         return content.subarray(start).toString('utf-8');
-    }
-
-    /** EN: Measures one optional tool text field without retaining its content. ZH: 测量一个可选工具文本字段而不保留其内容。 */
-    private bytes(value: unknown): number {
-        return typeof value === 'string' ? Buffer.byteLength(value) : 0;
     }
 }

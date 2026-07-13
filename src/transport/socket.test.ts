@@ -34,6 +34,21 @@ class PartialSocket {
     }
 }
 
+/** EN: Opens one test connection and removes its initial open packet. ZH: 打开一个测试连接并移除初始 open packet。 */
+async function connect(socket: FSocket, packet: IPCPacket, connection = new PartialSocket()): Promise<{ connection: PartialSocket; live: Socket<SocketConnectionData> }> {
+    const limit = connection.limit;
+    const blocked = connection.blocked;
+    connection.limit = Number.MAX_SAFE_INTEGER;
+    connection.blocked = false;
+    socket.packet = packet;
+    const live = connection as unknown as Socket<SocketConnectionData>;
+    await socket.open(live);
+    connection.chunks = [];
+    connection.limit = limit;
+    connection.blocked = blocked;
+    return { connection, live };
+}
+
 /**
  * EN: RecordingSynapse class declaration.
  * ZH: RecordingSynapse class 声明。
@@ -72,12 +87,11 @@ describe('FSocket', () => {
         const connection = new PartialSocket();
         const packet = useContainer().create(IPCPacket);
         const message = { action: 'agent', data: '一段很长的流式输出\nwith newline' };
-        socket.packet = packet;
-        socket.connection = connection as unknown as Socket<SocketConnectionData>;
+        const { live } = await connect(socket, packet, connection);
 
         socket.write(message);
         while (Buffer.concat(connection.chunks).byteLength < packet.encode(message).byteLength) {
-            await socket.drain();
+            await socket.drain(live);
         }
 
         const decoded = packet.decode(Buffer.concat(connection.chunks));
@@ -89,16 +103,15 @@ describe('FSocket', () => {
         const connection = new PartialSocket();
         const packet = useContainer().create(IPCPacket);
         const message = { action: 'agent', data: 'blocked first write' };
+        const { live } = await connect(socket, packet, connection);
         connection.blocked = true;
-        socket.packet = packet;
-        socket.connection = connection as unknown as Socket<SocketConnectionData>;
 
         socket.write(message);
         expect(connection.chunks).toEqual([]);
 
         connection.blocked = false;
         while (Buffer.concat(connection.chunks).byteLength < packet.encode(message).byteLength) {
-            await socket.drain();
+            await socket.drain(live);
         }
 
         const decoded = packet.decode(Buffer.concat(connection.chunks));
@@ -109,14 +122,13 @@ describe('FSocket', () => {
         const socket = useContainer().create(FSocket);
         const packet = useContainer().create(IPCPacket);
         const inputs: string[] = [];
-        socket.packet = packet;
-        socket.bind({
+        const { live } = await connect(socket, packet);
+        await socket.bind({
+            connected: () => undefined,
             input: (text) => { inputs.push(text); },
             answer: () => undefined,
         });
-        socket.connection = {} as Socket<SocketConnectionData>;
-
-        await socket.data(socket.connection, packet.encode({ action: SocketEvent.User, data: { text: 'hello' } }));
+        await socket.data(live, packet.encode({ action: SocketEvent.User, data: { text: 'hello' } }));
 
         expect(inputs).toEqual(['hello']);
     });
@@ -125,14 +137,13 @@ describe('FSocket', () => {
         const socket = useContainer().create(FSocket);
         const packet = useContainer().create(IPCPacket);
         const answers: unknown[] = [];
-        socket.packet = packet;
-        socket.bind({
+        const { live } = await connect(socket, packet);
+        await socket.bind({
+            connected: () => undefined,
             input: () => undefined,
             answer: (turnId, id, response) => { answers.push({ turnId, id, response }); },
         });
-        socket.connection = {} as Socket<SocketConnectionData>;
-
-        await socket.data(socket.connection, packet.encode({
+        await socket.data(live, packet.encode({
             action: SocketEvent.Answer,
             data: { turnId: 'turn_1', id: 'ask_1', response: { kind: 'ask', answers: [] } },
         }));
@@ -140,17 +151,137 @@ describe('FSocket', () => {
         expect(answers).toEqual([{ turnId: 'turn_1', id: 'ask_1', response: { kind: 'ask', answers: [] } }]);
     });
 
+    test('awaits input and answer callback completion', async () => {
+        const socket = useContainer().create(FSocket);
+        const packet = useContainer().create(IPCPacket);
+        const { live } = await connect(socket, packet);
+        let releaseInput!: () => void;
+        let releaseAnswer!: () => void;
+        let inputFinished = false;
+        let answerFinished = false;
+        const inputGate = new Promise<void>((resolve) => { releaseInput = resolve; });
+        const answerGate = new Promise<void>((resolve) => { releaseAnswer = resolve; });
+        await socket.bind({
+            connected: () => undefined,
+            input: async () => {
+                await inputGate;
+                inputFinished = true;
+            },
+            answer: async () => {
+                await answerGate;
+                answerFinished = true;
+            },
+        });
+
+        const input = socket.data(live, packet.encode({ action: SocketEvent.User, data: { text: 'wait' } }));
+        await Promise.resolve();
+        expect(inputFinished).toBe(false);
+        releaseInput();
+        await input;
+        expect(inputFinished).toBe(true);
+
+        const answer = socket.data(live, packet.encode({ action: SocketEvent.Answer, data: { turnId: 'turn_1', id: 'ask_1', response: {} } }));
+        await Promise.resolve();
+        expect(answerFinished).toBe(false);
+        releaseAnswer();
+        await answer;
+        expect(answerFinished).toBe(true);
+    });
+
     test('dispatches non-user packets to controller methods', async () => {
         const socket = useContainer().create(FSocket);
         const packet = useContainer().create(IPCPacket);
         const controller = new RecordingController();
         const data = { path: '/tmp/flyflor' };
-        socket.packet = packet;
+        const { live } = await connect(socket, packet);
         socket.controller = controller as unknown as Controller;
-        socket.connection = {} as Socket<SocketConnectionData>;
 
-        await socket.data(socket.connection, packet.encode({ action: 'cwd', data }));
+        await socket.data(live, packet.encode({ action: 'cwd', data }));
 
         expect(controller.cwdCalls).toEqual([data]);
+    });
+
+    test('awaits connected after open and preserves open-before-replay order', async () => {
+        const socket = useContainer().create(FSocket);
+        const packet = useContainer().create(IPCPacket);
+        const connection = new PartialSocket();
+        connection.limit = Number.MAX_SAFE_INTEGER;
+        let connected = 0;
+        socket.packet = packet;
+        await socket.bind({
+            connected: async () => {
+                await Promise.resolve();
+                connected += 1;
+                socket.write({ action: 'ask', data: { id: 'ask_1' } });
+                socket.write({ action: 'pause', data: { id: 'ask_1' } });
+            },
+            input: () => undefined,
+            answer: () => undefined,
+        });
+
+        await socket.open(connection as unknown as Socket<SocketConnectionData>);
+
+        const decoder = useContainer().create(IPCPacket);
+        const actions = decoder.read(Buffer.concat(connection.chunks)).map((frame) => decoder.decode<{ action: string }>(frame).action);
+        expect(connected).toBe(1);
+        expect(actions).toEqual(['open', 'ask', 'pause']);
+    });
+
+    test('notifies callbacks when binding follows an existing connection', async () => {
+        const socket = useContainer().create(FSocket);
+        const connection = new PartialSocket();
+        connection.limit = Number.MAX_SAFE_INTEGER;
+        socket.packet = useContainer().create(IPCPacket);
+        await socket.open(connection as unknown as Socket<SocketConnectionData>);
+        expect(connection.chunks).toEqual([]);
+        let connected = 0;
+
+        await socket.bind({
+            connected: () => { connected += 1; },
+            input: () => undefined,
+            answer: () => undefined,
+        });
+
+        expect(connected).toBe(1);
+        const decoder = useContainer().create(IPCPacket);
+        expect(decoder.read(Buffer.concat(connection.chunks)).map((frame) => decoder.decode<{ action: string }>(frame).action)).toEqual(['open']);
+    });
+
+    test('rejects invalid decoded packet roots and actions', async () => {
+        const socket = useContainer().create(FSocket);
+        const packet = useContainer().create(IPCPacket);
+        const { live } = await connect(socket, packet);
+
+        await expect(socket.data(live, packet.encode(null))).rejects.toThrow('Invalid IPC packet root');
+        await expect(socket.data(live, packet.encode([]))).rejects.toThrow('Invalid IPC packet root');
+        await expect(socket.data(live, packet.encode({ data: true }))).rejects.toThrow('Invalid IPC packet root');
+        await expect(socket.data(live, packet.encode({ action: '', data: true }))).rejects.toThrow('Invalid IPC packet root');
+        await expect(socket.data(live, packet.encode({ action: 'cwd' }))).rejects.toThrow('Invalid IPC packet root');
+    });
+
+    test('rejects non-string or empty user text without coercion', async () => {
+        const socket = useContainer().create(FSocket);
+        const packet = useContainer().create(IPCPacket);
+        const { live } = await connect(socket, packet);
+        await socket.bind({
+            connected: () => undefined,
+            input: () => undefined,
+            answer: () => undefined,
+        });
+
+        await expect(socket.data(live, packet.encode({ action: SocketEvent.User, data: { text: 42 } }))).rejects.toThrow('Invalid user IPC packet');
+        await expect(socket.data(live, packet.encode({ action: SocketEvent.User, data: { text: '' } }))).rejects.toThrow('Invalid user IPC packet');
+        await expect(socket.data(live, packet.encode({ action: SocketEvent.User, data: null }))).rejects.toThrow('Invalid user IPC packet');
+        await expect(socket.data(live, packet.encode({ action: SocketEvent.User, data: [] }))).rejects.toThrow('Invalid user IPC packet');
+    });
+
+    test('rejects incomplete answer correlation data', async () => {
+        const socket = useContainer().create(FSocket);
+        const packet = useContainer().create(IPCPacket);
+        const { live } = await connect(socket, packet);
+
+        await expect(socket.data(live, packet.encode({ action: SocketEvent.Answer, data: { turnId: '', id: 'ask_1', response: {} } }))).rejects.toThrow('Invalid interaction IPC packet');
+        await expect(socket.data(live, packet.encode({ action: SocketEvent.Answer, data: { turnId: 'turn_1', id: '', response: {} } }))).rejects.toThrow('Invalid interaction IPC packet');
+        await expect(socket.data(live, packet.encode({ action: SocketEvent.Answer, data: { turnId: 'turn_1', id: 'ask_1' } }))).rejects.toThrow('Invalid interaction IPC packet');
     });
 });

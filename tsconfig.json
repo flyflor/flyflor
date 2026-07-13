@@ -34,6 +34,6 @@
             "@/*": ["./src/*"]
         },
     },
-    "include": ["src/**/*.ts", "scripts/**/*.ts"],
+    "include": ["src/**/*.ts", "scripts/**/*.ts", "web/**/*.ts"],
     "exclude": ["node_modules", "dist", ".agents"],
 }

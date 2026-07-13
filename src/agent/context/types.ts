@@ -20,7 +20,6 @@ export interface Perception {
 export interface TurnInteraction {
     id: string;
     kind: 'ask' | 'confirm';
-    prompt: string;
 }
 
 /** EN: Immutable completed experience retained by Context. ZH: Context 保留的一条不可变完成经历。 */

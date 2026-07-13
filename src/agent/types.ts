@@ -1,23 +1,9 @@
 import type { ContextBrief } from '@/agent/context';
 import type { ToolCall } from '@/model';
 
-/** EN: Model chat roles used by Agent memory projection. ZH: Agent 记忆投影使用的模型对话角色。 */
-export enum AgentChatRole {
-    System = 'system',
-    User = 'user',
-    Assistant = 'assistant',
-}
-
-/** EN: One pure model-bound message assembled by an Agent. ZH: Agent 组装的一条纯模型消息。 */
-export interface AgentMemory {
-    role: AgentChatRole.System | AgentChatRole.User | AgentChatRole.Assistant;
-    content: string;
-}
-
 /** EN: One cortical task assigned to a persistent Agent. ZH: 分配给持久 Agent 的一项皮层任务。 */
 export interface AgentTask {
     id: string;
-    turnId: string;
     agent: string;
     goal: string;
     context: ContextBrief;

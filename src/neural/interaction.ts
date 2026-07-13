@@ -1,4 +1,4 @@
-import type { AskResponse, AskSignal, ConfirmResponse, ConfirmSignal } from '@/agent';
+import type { AskResponse, ConfirmResponse } from '@/agent';
 import { Context } from '@/agent';
 import { Init, Inject, Observable, Provide } from '@/core';
 import { FSocket } from '@/transport';
@@ -6,7 +6,7 @@ import type { InteractionResponse, InteractionSignal } from './types';
 
 /** EN: Serial Ask and Confirm circuit owning the sole pending user interaction. ZH: 持有唯一待处理用户交互的串行 Ask 与 Confirm 回路。 */
 @Provide()
-export class Interaction extends Observable<InteractionSignal> {
+export class Interaction extends Observable<InteractionSignal, InteractionResponse> {
     @Inject()
     public context!: Context;
 
@@ -27,9 +27,9 @@ export class Interaction extends Observable<InteractionSignal> {
     /** EN: Wires exact Ask and Confirm branches once. ZH: 一次性连接精确的 Ask 与 Confirm 分支。 */
     @Init()
     public init(): void {
-        this.switch<InteractionSignal['type'], InteractionResponse>((signal) => signal.type, {
-            ask: (signal) => this.wait(signal as AskSignal),
-            confirm: (signal) => this.wait(signal as ConfirmSignal),
+        this.switch('type', {
+            ask: (signal) => this.wait(signal),
+            confirm: (signal) => this.wait(signal),
         });
     }
 
@@ -40,10 +40,15 @@ export class Interaction extends Observable<InteractionSignal> {
             throw Error('Interaction response does not match the pending signal');
         }
         const response = this.response(pending.signal, value);
-        this.context.resume(turnId, id);
         this.socket.write({ action: 'resume', data: { turnId, id } });
+        this.context.resume(turnId, id);
         this.pending = undefined;
         pending.resolve(response);
+    }
+
+    /** EN: Replays the exact pending interaction after transport reconnects. ZH: transport 重连后原样重放待处理交互。 */
+    public connected(): void {
+        if (this.pending) this.publish(this.pending.signal);
     }
 
     /** EN: Pauses one Turn and waits for its exact user response. ZH: 暂停一个 Turn，并等待其精确用户响应。 */
@@ -52,13 +57,18 @@ export class Interaction extends Observable<InteractionSignal> {
         this.context.pause(signal.turnId, {
             id: signal.id,
             kind: signal.type,
-            prompt: JSON.stringify(signal.type === 'ask' ? signal.questions : signal.call),
         });
-        this.socket.write({ action: signal.type, data: signal });
-        this.socket.write({ action: 'pause', data: { turnId: signal.turnId, id: signal.id, kind: signal.type } });
-        return await new Promise<InteractionResponse>((resolve) => {
+        const response = new Promise<InteractionResponse>((resolve) => {
             this.pending = { signal, resolve };
         });
+        if (this.socket.connected) this.publish(signal);
+        return await response;
+    }
+
+    /** EN: Publishes one pending interaction and its pause marker in order. ZH: 按序发布一个待处理交互及其 pause 标记。 */
+    private publish(signal: InteractionSignal): void {
+        this.socket.write({ action: signal.type, data: signal });
+        this.socket.write({ action: 'pause', data: { turnId: signal.turnId, id: signal.id, kind: signal.type } });
     }
 
     /** EN: Reads one response according to its exact pending interaction kind. ZH: 按待处理交互的精确类型读取一次响应。 */

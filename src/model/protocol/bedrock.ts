@@ -3,6 +3,7 @@ import type { ProtocolAdapter, ProtocolContext } from './types';
 
 export const bedrockAdapter: ProtocolAdapter = {
     name: 'bedrock',
+    tools: false,
     body: (context: ProtocolContext) => {
         const { system, messages } = project(context.messages);
         return {
@@ -18,12 +19,20 @@ export const bedrockAdapter: ProtocolAdapter = {
         const text = (parsed.contentBlockDelta as { delta?: { text?: string } } | undefined)?.delta?.text;
         if (text) controller.enqueue({ type: 'text_delta', text });
         if (parsed.messageStop !== undefined) {
-            controller.enqueue({ type: 'done', stopReason: 'stop' });
+            const reason = (parsed.messageStop as { stopReason?: unknown }).stopReason;
+            if (typeof reason !== 'string') throw Error('Bedrock stop reason is missing');
+            controller.enqueue({ type: 'done', stopReason: terminal(reason) });
             return true;
         }
         return false;
     },
 };
+
+function terminal(reason: string): 'stop' | 'length' {
+    if (reason === 'end_turn' || reason === 'stop_sequence') return 'stop';
+    if (reason === 'max_tokens') return 'length';
+    throw Error(`Bedrock stop reason is unsupported: ${reason}`);
+}
 
 function project(messages: Message[]): {
     system: string[];

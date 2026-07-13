@@ -1,8 +1,9 @@
 import type { FAgentProfileConfiguration } from '@/config';
-import { FComponent, Prompt, Provide } from '@/core';
+import { FAgent, FComponent, Prompt, Provide } from '@/core';
 import { PromptService } from '@/prompt';
 import type { ContextBrief } from '@/agent/context';
-import { AgentChatRole, type AgentBus, type AgentMemory, type AgentTask } from '@/agent/types';
+import type { AgentBus, AgentStimulus, AgentTask, CompleteSignal } from '@/agent/types';
+import type { TextMessage } from '@/model';
 
 /** EN: Origin of one finite Agent memory note. ZH: 一条有限 Agent 记忆笔记的来源。 */
 export type MemorySource = 'brief' | 'observation';
@@ -12,7 +13,6 @@ export interface MemoryNote {
     id: string;
     source: MemorySource;
     content: string;
-    createdAt: number;
 }
 
 /**
@@ -21,6 +21,8 @@ export interface MemoryNote {
  */
 @Provide()
 export class Memory extends FComponent {
+    public readonly agentConfig: FAgentProfileConfiguration;
+
     @Prompt('prompts/memory')
     public prompt!: PromptService;
 
@@ -29,14 +31,14 @@ export class Memory extends FComponent {
     private notes: MemoryNote[];
 
     /**
-     * EN: Binds this Memory to one Agent identity and its cortical bus.
-     * ZH: 将当前 Memory 绑定到一个 Agent 身份及其皮层总线。
+     * EN: Binds finite notes to the immutable profile of their owning Agent.
+     * ZH: 将有界笔记绑定到所属 Agent 的不可变 profile。
      */
     public constructor(
-        public readonly agentConfig: FAgentProfileConfiguration,
-        public readonly synapse: AgentBus,
+        agent: FAgent<AgentStimulus, CompleteSignal, FAgentProfileConfiguration, AgentBus>,
     ) {
         super();
+        this.agentConfig = agent.agentConfig;
         this.sequence = 0;
         this.capacity = 16;
         this.notes = [];
@@ -66,7 +68,7 @@ export class Memory extends FComponent {
     public remember(content: string, source: MemorySource): void {
         if (content.length === 0) throw Error('Memory note is empty');
         this.sequence += 1;
-        this.notes.push({ id: `note_${this.sequence}`, source, content, createdAt: Date.now() });
+        this.notes.push({ id: `note_${this.sequence}`, source, content });
         if (this.notes.length > this.capacity) this.notes = this.notes.slice(-this.capacity);
     }
 
@@ -74,10 +76,10 @@ export class Memory extends FComponent {
      * EN: Projects finite notes into one model-bound XML memory message.
      * ZH: 将有限笔记投影为一条面向模型的 XML memory 消息。
      */
-    public messages(): AgentMemory[] {
+    public messages(): TextMessage[] {
         if (this.notes.length === 0) return [];
         return [{
-            role: AgentChatRole.User,
+            role: 'user',
             content: this.prompt.render({
                 kind: 'document',
                 root: 'agent_memory',

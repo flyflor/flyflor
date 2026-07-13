@@ -1,7 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
-import { BROWSER_JSON_ONLY_MESSAGE, IpcClientBridge, PACKET_PROTOCOL_MISMATCH_MESSAGE } from './client';
+import {
+    BROWSER_JSON_ONLY_MESSAGE,
+    IpcClientBridge,
+    PACKET_BODY_MAX_BYTES,
+    PACKET_BODY_TOO_LARGE_MESSAGE,
+    PACKET_PROTOCOL_MISMATCH_MESSAGE,
+    PACKET_ROOT_INVALID_MESSAGE,
+} from './client';
 
 /**
  * EN: packet function declaration.
@@ -46,6 +53,23 @@ describe('IpcClientBridge', () => {
         expect(encoded.readBigUInt64BE(0)).toBe(BigInt(Buffer.byteLength(text)));
         expect(encoded.subarray(8).toString('utf8')).toBe(text);
         expect(() => IpcClientBridge.encodeBrowserMessage(Buffer.from(text))).toThrow(BROWSER_JSON_ONLY_MESSAGE);
+    });
+
+    test('rejects invalid packet roots in both bridge directions', () => {
+        expect(() => IpcClientBridge.encodeBrowserMessage('[]')).toThrow(PACKET_ROOT_INVALID_MESSAGE);
+        expect(() => IpcClientBridge.encodeBrowserMessage('{}')).toThrow(PACKET_ROOT_INVALID_MESSAGE);
+        expect(() => IpcClientBridge.encodeBrowserMessage('{"action":""}')).toThrow(PACKET_ROOT_INVALID_MESSAGE);
+        expect(() => IpcClientBridge.encodeBrowserMessage('{"action":"user"}')).toThrow(PACKET_ROOT_INVALID_MESSAGE);
+        expect(() => IpcClientBridge.decodePacketTexts(Buffer.alloc(0), packet('null'))).toThrow(PACKET_ROOT_INVALID_MESSAGE);
+    });
+
+    test('rejects oversized bodies before buffering or forwarding', () => {
+        const header = Buffer.alloc(8);
+        header.writeBigUInt64BE(BigInt(PACKET_BODY_MAX_BYTES + 1));
+
+        expect(() => IpcClientBridge.decodePacketTexts(Buffer.alloc(0), header)).toThrow(PACKET_BODY_TOO_LARGE_MESSAGE);
+        expect(() => IpcClientBridge.encodePacketText('x'.repeat(PACKET_BODY_MAX_BYTES + 1))).toThrow(PACKET_BODY_TOO_LARGE_MESSAGE);
+        expect(() => IpcClientBridge.encodeBrowserMessage(JSON.stringify({ action: 'user', data: 'x'.repeat(PACKET_BODY_MAX_BYTES) }))).toThrow(PACKET_BODY_TOO_LARGE_MESSAGE);
     });
 
     test('keeps the HTML client free of local names and machine-specific paths', () => {

@@ -23,6 +23,8 @@ export class Turn {
         public readonly createdAt: number,
     ) {
         this.status = 'active';
+        this.interaction = undefined;
+        this.answer = undefined;
         this.evidence = [];
     }
 
@@ -53,7 +55,7 @@ export class Turn {
      */
     public complete(answer: string, evidence: readonly string[]): void {
         this.assert('active');
-        if (answer.length === 0) throw Error(`Turn answer is empty: ${this.id}`);
+        if (answer.trim().length === 0) throw Error(`Turn answer is empty: ${this.id}`);
         this.status = 'completed';
         this.answer = answer;
         this.evidence = [...evidence];

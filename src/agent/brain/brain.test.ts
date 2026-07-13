@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import { Agent } from '@/agent/agent';
 import { Context } from '@/agent/context';
 import { Memory } from '@/agent/memory';
-import { AgentChatRole, type AgentBus, type AgentTask, type NeuralSignal } from '@/agent/types';
+import type { AgentBus, AgentStimulus, AgentTask, CompleteSignal, NeuralSignal } from '@/agent/types';
 import { Observable, useContainer } from '@/core';
 import { PromptService } from '@/prompt';
 import { Brain } from './brain';
@@ -26,13 +27,14 @@ function harness(name = 'flyflor') {
         },
     };
     const agentProfile = { ...profile, name };
-    const brain = useContainer().create(Brain, agentProfile, bus);
-    brain.circuit = useContainer().create(Observable<Parameters<Brain['receive']>[0]>, `brain-test:${name}`);
+    const agent = useContainer().create(Agent, agentProfile, bus);
+    const brain = useContainer().create(Brain, agent);
+    brain.circuit = useContainer().create(Observable) as Observable<AgentStimulus, CompleteSignal>;
     brain.context = useContainer().create(Context);
-    brain.memory = useContainer().create(Memory, agentProfile, bus);
+    brain.memory = useContainer().create(Memory, agent);
     brain.memory.prompt = useContainer().create(PromptService, 'prompts/memory') as PromptService;
     brain.prompt = useContainer().create(PromptService, 'prompts/callosum') as never;
-    brain.identity = { messages: () => [{ role: AgentChatRole.System, content: 'identity' }] } as never;
+    brain.identity = { messages: () => [{ role: 'system', content: 'identity' }] } as never;
     brain.init();
     return { brain, signals };
 }
@@ -75,9 +77,9 @@ describe('Brain', () => {
             references: [],
             recent: [],
         };
-        const task: AgentTask = { id: 'task_1', turnId: 'turn_1', agent: 'worker', goal: 'inspect', context };
+        const task: AgentTask = { id: 'task_1', agent: 'worker', goal: 'inspect', context };
         brain.investigation = {
-            run: async () => ({ type: 'complete', id: task.id, turnId: task.turnId, agent: 'worker', answer: 'found', evidence: ['fact'] }),
+            run: async () => ({ type: 'complete', id: task.id, turnId: task.context.turnId, agent: 'worker', answer: 'found', evidence: ['fact'] }),
         } as never;
 
         const complete = await brain.receive({ type: 'task', task });

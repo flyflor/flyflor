@@ -1,6 +1,16 @@
 import { Provide } from '@/core/decorator';
 import { FlyFlor } from '@/core/ioc/abstracts';
 
+type SwitchKey<TInput, TKey extends keyof TInput> = TInput extends Record<TKey, infer TValue>
+    ? Extract<TValue, string>
+    : never;
+
+type SwitchCases<TInput, TOutput, TKey extends keyof TInput> = {
+    [TCase in SwitchKey<TInput, TKey>]: (
+        value: Extract<TInput, Record<TKey, TCase>>,
+    ) => TOutput | Promise<TOutput>;
+};
+
 /**
  * EN: One ordered asynchronous signal circuit. Every stimulus waits for the
  * previous stimulus, while separate Observable instances may fire in parallel.
@@ -8,7 +18,7 @@ import { FlyFlor } from '@/core/ioc/abstracts';
  */
 @Provide()
 export class Observable<TInput = unknown, TOutput = TInput> extends FlyFlor {
-    private readonly stages: Array<(value: unknown) => unknown | Promise<unknown>>;
+    private stage?: (value: TInput) => TOutput | Promise<TOutput>;
     private readonly subscribers: Array<(value: unknown) => void | Promise<void>>;
     private tail: Promise<unknown>;
 
@@ -19,35 +29,37 @@ export class Observable<TInput = unknown, TOutput = TInput> extends FlyFlor {
     public constructor() {
         super();
         this.name = this.constructor.name;
-        this.stages = [];
+        this.stage = undefined;
         this.subscribers = [];
         this.tail = Promise.resolve();
     }
 
     /** EN: Concrete circuit name used in strict routing errors. ZH: 严格路由错误中使用的具体回路名称。 */
-    public readonly name: string;
+    private readonly name: string;
 
     /**
-     * EN: Appends one ordered transformation to this circuit.
-     * ZH: 向当前回路追加一个有序转换阶段。
+     * EN: Installs the sole Input-to-Output transform for this circuit.
+     * ZH: 为当前回路安装唯一的 Input→Output 变换。
      */
-    public pipe<TNext>(stage: (value: TOutput) => TNext | Promise<TNext>): Observable<TInput, TNext> {
-        this.stages.push(stage as (value: unknown) => unknown | Promise<unknown>);
-        return this as unknown as Observable<TInput, TNext>;
+    public pipe(stage: (value: TInput) => TOutput | Promise<TOutput>): this {
+        if (this.stage) throw Error(`Observable transform is already installed: ${this.name}`);
+        this.stage = stage;
+        return this;
     }
 
     /**
      * EN: Routes a discriminated signal to one required branch.
      * ZH: 将判别信号路由到一个必然存在的分支。
      */
-    public switch<TCase extends string, TNext>(
-        select: (value: TOutput) => TCase,
-        cases: Record<TCase, (value: TOutput) => TNext | Promise<TNext>>,
-    ): Observable<TInput, TNext> {
+    public switch<TKey extends keyof TInput>(
+        key: TKey,
+        cases: SwitchCases<TInput, TOutput, TKey>,
+    ): this {
         return this.pipe(async (value) => {
-            const key = select(value);
-            const branch = cases[key];
-            if (!branch) throw Error(`Observable branch is missing: ${this.name}.${key}`);
+            const selected = value[key];
+            if (typeof selected !== 'string') throw Error(`Observable discriminant is invalid: ${this.name}.${String(key)}`);
+            const branch = cases[selected as SwitchKey<TInput, TKey>] as ((input: TInput) => TOutput | Promise<TOutput>) | undefined;
+            if (!branch) throw Error(`Observable branch is missing: ${this.name}.${selected}`);
             return await branch(value);
         });
     }
@@ -72,12 +84,12 @@ export class Observable<TInput = unknown, TOutput = TInput> extends FlyFlor {
     }
 
     /**
-     * EN: Propagates one stimulus through every stage and subscriber.
-     * ZH: 将一个刺激依次传播经过所有阶段与订阅者。
+     * EN: Propagates one stimulus through the sole transform and every subscriber.
+     * ZH: 将一个刺激依次传播经过唯一变换与全部订阅者。
      */
     private async fire(value: TInput): Promise<unknown> {
-        let output: unknown = value;
-        for (const stage of this.stages) output = await stage(output);
+        if (!this.stage) throw Error(`Observable transform is missing: ${this.name}`);
+        const output: unknown = await this.stage(value);
         for (const subscriber of this.subscribers) await subscriber(output);
         return output;
     }

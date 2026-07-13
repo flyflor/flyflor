@@ -71,6 +71,7 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
      */
     public constructor(public readonly path: string) {
         super();
+        this.config = undefined;
         this.writable = true;
         if (!statSync(path).isDirectory()) {
             this.data = readFileSync(path, 'utf-8') as TData;
@@ -91,7 +92,6 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
                 return [name, prompt] as const;
             });
         this.data = Object.fromEntries(prompts) as TData;
-        Object.assign(this, this.data);
     }
 
     /**
@@ -135,8 +135,8 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
     }
 
     /**
-     * EN: Validates an entire identity update and then applies every write atomically by policy.
-     * ZH: 按策略完整验证身份更新后，再应用全部写入。
+     * EN: Validates every identity update before applying policy-approved writes in order.
+     * ZH: 先完整验证身份更新，再按顺序应用策略允许的写入。
      */
     public applyWrites(writes: Array<{ file?: string; content?: string }>): string[] {
         const policy = this.config?.protocolPackage;

@@ -14,9 +14,17 @@ import { Synapse } from './synapse';
 async function harness() {
     const packets: Array<{ action: string; data: unknown }> = [];
     let callbacks: SocketCallbacks | undefined;
+    let online = true;
     const socket = {
-        bind: (value: SocketCallbacks) => { callbacks = value; },
-        write: (packet: { action: string; data: unknown }) => { packets.push(packet); },
+        get connected() { return online; },
+        bind: async (value: SocketCallbacks) => {
+            callbacks = value;
+            if (online) await value.connected();
+        },
+        write: (packet: { action: string; data: unknown }) => {
+            if (!online) throw Error('Socket connection is unavailable');
+            packets.push(packet);
+        },
     } as never;
     const context = useContainer().create(Context);
     const pool = useContainer().create(AgentPool);
@@ -35,7 +43,19 @@ async function harness() {
     const synapse = useContainer().create(Synapse);
     Object.assign(synapse, { pool, sensory, interaction, delegation, expression, socket });
     await synapse.init();
-    return { synapse, pool, context, packets, callbacks: () => callbacks };
+    return {
+        synapse,
+        pool,
+        context,
+        packets,
+        callbacks: () => callbacks,
+        disconnect: () => { online = false; },
+        connect: async () => {
+            online = true;
+            if (!callbacks) throw Error('Socket callbacks are missing');
+            await callbacks.connected();
+        },
+    };
 }
 
 describe('Synapse', () => {
@@ -119,12 +139,12 @@ describe('Synapse', () => {
         let active = 0;
         let maximum = 0;
         pool.spawn = async (name: string) => ({
-            receive: async (stimulus: { task: { id: string; turnId: string } }) => {
+            receive: async (stimulus: { task: { id: string; context: { turnId: string } } }) => {
                 active += 1;
                 maximum = Math.max(maximum, active);
                 await Promise.resolve();
                 active -= 1;
-                return { type: 'complete', id: stimulus.task.id, turnId: stimulus.task.turnId, agent: name, answer: `${name} answer`, evidence: [] } as CompleteSignal;
+                return { type: 'complete', id: stimulus.task.id, turnId: stimulus.task.context.turnId, agent: name, answer: `${name} answer`, evidence: [] } as CompleteSignal;
             },
         }) as never;
 
@@ -168,9 +188,9 @@ describe('Synapse', () => {
         let release!: () => void;
         const gate = new Promise<void>((resolve) => { release = resolve; });
         pool.spawn = async () => ({
-            receive: async (stimulus: { task: { id: string; turnId: string } }) => {
+            receive: async (stimulus: { task: { id: string; context: { turnId: string } } }) => {
                 await gate;
-                return { type: 'complete', id: stimulus.task.id, turnId: stimulus.task.turnId, agent: 'worker', answer: 'done', evidence: [] } as CompleteSignal;
+                return { type: 'complete', id: stimulus.task.id, turnId: stimulus.task.context.turnId, agent: 'worker', answer: 'done', evidence: [] } as CompleteSignal;
             },
         }) as never;
         const delegated = synapse.fire({
@@ -213,5 +233,50 @@ describe('Synapse', () => {
         await input;
 
         expect(finished).toBe(true);
+    });
+
+    test('keeps an offline Ask pending and replays it after reconnect', async () => {
+        const { synapse, context, packets, disconnect, connect } = await harness();
+        const brief = context.begin('root', { intent: 'research', goal: 'inspect', constraints: [], references: [] });
+        disconnect();
+
+        const response = synapse.fire({
+            type: 'ask',
+            turnId: brief.turnId,
+            id: 'ask_reconnect',
+            agent: 'worker',
+            questions: [{ question: 'Continue?', options: [{ label: 'yes' }] }],
+        });
+        await Promise.resolve();
+        expect(packets).toEqual([]);
+
+        await connect();
+        expect(packets.map((packet) => packet.action)).toEqual(['ask', 'pause']);
+        synapse.answer(brief.turnId, 'ask_reconnect', { kind: 'ask', answers: [{ question: 'Continue?', answer: 'yes' }] });
+
+        expect(await response).toEqual({ kind: 'ask', answers: [{ question: 'Continue?', answer: 'yes' }] });
+        expect(packets.map((packet) => packet.action)).toEqual(['ask', 'pause', 'resume']);
+    });
+
+    test('retains pending Confirm state when resume cannot be written', async () => {
+        const { synapse, context, packets, disconnect, connect } = await harness();
+        const brief = context.begin('root', { intent: 'research', goal: 'inspect', constraints: [], references: [] });
+        const response = synapse.fire({
+            type: 'confirm',
+            turnId: brief.turnId,
+            id: 'confirm_reconnect',
+            agent: 'worker',
+            call: { id: 'call_reconnect', name: 'shell', arguments: { command: 'true' } },
+        });
+        await Promise.resolve();
+        disconnect();
+
+        expect(() => synapse.answer(brief.turnId, 'confirm_reconnect', { kind: 'confirm', approved: true })).toThrow('connection is unavailable');
+        await connect();
+        expect(packets.map((packet) => packet.action)).toEqual(['confirm', 'pause', 'confirm', 'pause']);
+
+        synapse.answer(brief.turnId, 'confirm_reconnect', { kind: 'confirm', approved: true });
+        expect(await response).toEqual({ kind: 'confirm', approved: true });
+        expect(packets.map((packet) => packet.action)).toEqual(['confirm', 'pause', 'confirm', 'pause', 'resume']);
     });
 });

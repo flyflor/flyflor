@@ -8,6 +8,7 @@ import { configureLogger, getLoggerConfiguration, useLogger } from './service';
 import { LoggerLevel, type FLogger } from './types';
 
 let tempPaths: string[] = [];
+const baselineConfiguration = { ...getLoggerConfiguration() };
 
 /**
  * EN: tempPath function declaration.
@@ -24,13 +25,7 @@ function tempPath(): string {
  * ZH: resetLoggerConfiguration function 声明。
  */
 function resetLoggerConfiguration(): void {
-    configureLogger({
-        consoleEnabled: true,
-        path: './.logs/flyflor.log',
-        colorEnabled: true,
-        level: LoggerLevel.Debug,
-        inspectDepth: 6,
-    });
+    configureLogger(baselineConfiguration);
 }
 
 afterEach(() => {

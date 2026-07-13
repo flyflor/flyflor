@@ -1,7 +1,7 @@
 import { FService, Singleton } from '@/core';
 import { JSON5 } from 'bun';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 
 export interface FSystemPathInfo {
     root: string;
@@ -77,15 +77,19 @@ export class ConfigService extends FService implements FConfiguration {
 
     /** EN: Returns process-wide resolved paths. ZH: 返回进程级解析路径。 */
     public get path(): FSystemPathInfo {
-        return ConfigService.path;
+        return { ...ConfigService.path };
     }
 
-    /** EN: Replaces process-wide paths for controlled runtime updates. ZH: 为受控 runtime 更新替换进程级路径。 */
-    public set path(value: FSystemPathInfo) {
-        ConfigService.path = value;
+    /** EN: Resolves and stores one semantic working directory update. ZH: 解析并保存一次语义工作目录更新。 */
+    public changeWorkingDirectory(path: string): string {
+        if (typeof path !== 'string' || path.length === 0) throw Error('Working directory path is required');
+        const cwd = isAbsolute(path) ? resolve(path) : resolve(ConfigService.path.cwd, path);
+        ConfigService.path = { ...ConfigService.path, cwd };
+        return cwd;
     }
 }
 
+/** EN: Returns the process root used by prompt decorators. ZH: 返回 prompt decorators 使用的进程根路径。 */
 export function useRootPath(): string {
     return ConfigService.path.root;
 }

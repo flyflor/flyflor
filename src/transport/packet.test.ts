@@ -33,6 +33,7 @@ describe('IPCPacket', () => {
         oversized.writeBigUInt64BE(BigInt(MAX_BODY_BYTES + 1));
 
         expect(() => packet.read(oversized)).toThrow('Packet body exceeds limit');
+        expect(() => packet.encode('x'.repeat(MAX_BODY_BYTES + 1))).toThrow('Packet body exceeds limit');
         expect(() => packet.decode(Buffer.concat([Buffer.alloc(HEADER_BYTES), Buffer.from('{')]))).toThrow('Packet byte length does not match header');
     });
 });

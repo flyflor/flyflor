@@ -2,6 +2,7 @@ import type { ProtocolAdapter, ProtocolContext } from './types';
 
 export const ollamaAdapter: ProtocolAdapter = {
     name: 'ollama',
+    tools: false,
     body: (context: ProtocolContext) => ({
         model: context.config.model,
         messages: context.messages.filter((message) => message.role !== 'tool').map((message) => ({ role: message.role, content: message.content })),
@@ -11,16 +12,23 @@ export const ollamaAdapter: ProtocolAdapter = {
     parse: (controller, line) => {
         const data = sseData(line) ?? line.trim();
         if (!data) return false;
-        const parsed = JSON.parse(data) as { message?: { content?: string }; response?: string; done?: boolean };
+        const parsed = JSON.parse(data) as { message?: { content?: string }; response?: string; done?: boolean; done_reason?: string };
         const text = parsed.message?.content ?? parsed.response;
         if (text) controller.enqueue({ type: 'text_delta', text });
         if (parsed.done === true) {
-            controller.enqueue({ type: 'done', stopReason: 'stop' });
+            if (typeof parsed.done_reason !== 'string' || parsed.done_reason.length === 0) throw Error('Ollama done reason is missing');
+            controller.enqueue({ type: 'done', stopReason: terminal(parsed.done_reason) });
             return true;
         }
         return false;
     },
 };
+
+function terminal(reason: string): 'stop' | 'length' {
+    if (reason === 'stop') return 'stop';
+    if (reason === 'length') return 'length';
+    throw Error(`Ollama done reason is unsupported: ${reason}`);
+}
 
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();

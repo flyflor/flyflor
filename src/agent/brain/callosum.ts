@@ -1,7 +1,7 @@
-import { AgentChatRole, type AgentBus } from '@/agent/types';
+import type { AgentBus, AgentStimulus, CompleteSignal } from '@/agent/types';
 import type { Perception, Reference, TurnSummary } from '@/agent/context';
 import type { FAgentProfileConfiguration } from '@/config';
-import { FComponent, Prompt, Provide, Scope } from '@/core';
+import { FAgent, FComponent, Prompt, Provide, Scope } from '@/core';
 import { Model } from '@/model';
 import { PromptService } from '@/prompt';
 import { parse } from '@/agent/json';
@@ -16,6 +16,8 @@ export enum CallosumPrompt {
  */
 @Provide()
 export class Callosum extends FComponent {
+    public readonly agentConfig: FAgentProfileConfiguration;
+
     @Prompt('prompts/callosum')
     public prompt!: PromptService<CallosumPrompt>;
 
@@ -23,14 +25,14 @@ export class Callosum extends FComponent {
     public model!: Model;
 
     /**
-     * EN: Binds this Callosum to one Agent scope.
-     * ZH: 将当前 Callosum 绑定到一个 Agent scope。
+     * EN: Binds perception to the immutable profile of its owning Agent.
+     * ZH: 将感知绑定到所属 Agent 的不可变 profile。
      */
     public constructor(
-        public readonly agentConfig: FAgentProfileConfiguration,
-        public readonly synapse: AgentBus,
+        agent: FAgent<AgentStimulus, CompleteSignal, FAgentProfileConfiguration, AgentBus>,
     ) {
         super();
+        this.agentConfig = agent.agentConfig;
     }
 
     /**
@@ -47,8 +49,8 @@ export class Callosum extends FComponent {
             ],
         });
         const raw = await this.model.completeText([
-            { role: AgentChatRole.System, content: this.prompt.section(CallosumPrompt.Perceive) },
-            { role: AgentChatRole.User, content: document },
+            { role: 'system', content: this.prompt.section(CallosumPrompt.Perceive) },
+            { role: 'user', content: document },
         ]);
         return this.read(parse<unknown>(raw));
     }
@@ -64,7 +66,7 @@ export class Callosum extends FComponent {
         if (typeof data.goal !== 'string' || data.goal.length === 0) throw Error('Perception goal is invalid');
         if (!Array.isArray(data.constraints) || !data.constraints.every((item) => typeof item === 'string')) throw Error('Perception constraints are invalid');
         if (!Array.isArray(data.references) || !data.references.every((item) => this.reference(item))) throw Error('Perception references are invalid');
-        if (data.cwd !== undefined && typeof data.cwd !== 'string') throw Error('Perception cwd is invalid');
+        if (data.cwd !== undefined && (typeof data.cwd !== 'string' || data.cwd.length === 0)) throw Error('Perception cwd is invalid');
         return {
             intent: data.intent,
             goal: data.goal,

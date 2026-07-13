@@ -68,6 +68,9 @@ export const TEST_PAGE_PATH = 'web/client.html';
 /** Number of bytes used by the kernel IPC unsigned big-endian packet body length header. */
 export const PACKET_LENGTH_HEADER_BYTES = 8;
 
+/** Maximum JSON body size accepted in either bridge direction. */
+export const PACKET_BODY_MAX_BYTES = 4 * 1024 * 1024;
+
 /** Text encoding used by the kernel IPC socket stream. */
 export const PACKET_TEXT_ENCODING = 'utf8';
 
@@ -79,6 +82,12 @@ export const PACKET_PROTOCOL_MISMATCH_MESSAGE = 'Invalid IPC packet: expected 8-
 
 /** Error text used when a declared packet body length is not usable by the bridge. */
 export const PACKET_LENGTH_INVALID_MESSAGE = 'IPC packet body length is invalid';
+
+/** Error text used when a packet body exceeds the shared IPC limit. */
+export const PACKET_BODY_TOO_LARGE_MESSAGE = 'IPC packet body exceeds limit';
+
+/** Error text used when a JSON packet does not declare a usable action. */
+export const PACKET_ROOT_INVALID_MESSAGE = 'IPC packet root is invalid';
 
 /** Enables local IPC bridge diagnostics unless explicitly disabled. */
 const IPC_DEBUG = process.env.NODE_ENV !== 'test' && process.env.FLYFLOR_IPC_DEBUG !== '0';
@@ -214,13 +223,14 @@ function decodePacketTexts(pending: Buffer<ArrayBufferLike>, data: Uint8Array): 
         const contentLength = buffer.readBigUInt64BE(0);
         if (contentLength > BigInt(Number.MAX_SAFE_INTEGER)) throw Error(PACKET_LENGTH_INVALID_MESSAGE);
         const bodyLength = Number(contentLength);
+        if (bodyLength > PACKET_BODY_MAX_BYTES) throw Error(PACKET_BODY_TOO_LARGE_MESSAGE);
         const packetLength = PACKET_LENGTH_HEADER_BYTES + bodyLength;
         if (buffer.byteLength < packetLength) {
             break;
         }
         const body = buffer.subarray(PACKET_LENGTH_HEADER_BYTES, packetLength);
         const text = body.toString(PACKET_TEXT_ENCODING);
-        JSON.parse(text);
+        validatePacketText(text);
         packets.push(text);
         buffer = Buffer.from(buffer.subarray(packetLength));
     }
@@ -236,9 +246,10 @@ function encodeBrowserMessage(message: string | Buffer): Buffer {
     if (typeof message !== 'string') {
         throw Error(BROWSER_JSON_ONLY_MESSAGE);
     }
-    const parsed = JSON.parse(message) as { action?: unknown };
+    if (Buffer.byteLength(message, PACKET_TEXT_ENCODING) > PACKET_BODY_MAX_BYTES) throw Error(PACKET_BODY_TOO_LARGE_MESSAGE);
+    const parsed = validatePacketText(message);
     debugBridge('browser.in.json', {
-        action: typeof parsed?.action === 'string' ? parsed.action : undefined,
+        action: parsed.action,
         chars: message.length,
         bytes: Buffer.byteLength(message, PACKET_TEXT_ENCODING),
         preview: previewText(message),
@@ -252,9 +263,22 @@ function encodeBrowserMessage(message: string | Buffer): Buffer {
  */
 function encodePacketText(content: string): Buffer {
     const body = Buffer.from(content, PACKET_TEXT_ENCODING);
+    if (body.byteLength > PACKET_BODY_MAX_BYTES) throw Error(PACKET_BODY_TOO_LARGE_MESSAGE);
     const header = Buffer.alloc(PACKET_LENGTH_HEADER_BYTES);
     header.writeBigUInt64BE(BigInt(body.byteLength), 0);
     return Buffer.concat([header, body]);
+}
+
+/**
+ * EN: Validates one JSON packet root and returns its non-empty action.
+ * ZH: 验证一个 JSON packet 根对象，并返回其非空 action。
+ */
+function validatePacketText(content: string): { action: string; data: unknown } {
+    const parsed: unknown = JSON.parse(content);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw Error(PACKET_ROOT_INVALID_MESSAGE);
+    const packet = parsed as { action?: unknown; data?: unknown };
+    if (typeof packet.action !== 'string' || packet.action.length === 0 || !('data' in packet)) throw Error(PACKET_ROOT_INVALID_MESSAGE);
+    return { action: packet.action, data: packet.data };
 }
 
 /**

@@ -22,12 +22,14 @@ export interface ToolMessage {
     role: 'tool';
     content: string;
     toolCallId: string;
-    toolName: string;
-    isError: boolean;
 }
 
 export type Message = TextMessage | AssistantMessage | ToolMessage;
 
+/**
+ * EN: Model-facing tool schema. Structural twin of tool `ToolDefinition` (model cannot import tool).
+ * ZH: 面向模型的工具 schema。与 tool 域 `ToolDefinition` 结构孪生（model 不得 import tool）。
+ */
 export interface ToolDefinition {
     name: string;
     description: string;
@@ -48,5 +50,4 @@ export interface ModelResult {
     text: string;
     reasoning: string;
     toolCalls: ToolCall[];
-    stopReason: StopReason;
 }

@@ -1,14 +1,12 @@
 import type { AskResponse, AskSignal, CompleteSignal, ConfirmResponse, ConfirmSignal, TaskSignal } from '@/agent/types';
-import type { ContextBrief } from '@/agent/context';
 
 /** EN: One complete Investigation invocation. ZH: 一次完整 Investigation 调用。 */
 export interface InvestigationRequest {
     id: string;
     turnId: string;
     goal: string;
-    context: ContextBrief;
-    delegation: boolean;
-    visible: boolean;
+    cwd?: string;
+    root: boolean;
 }
 
 /** EN: Signals wired by one persistent Investigation network. ZH: 一张持久 Investigation 网络连接的信号。 */

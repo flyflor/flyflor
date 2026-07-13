@@ -1,17 +1,20 @@
 import { describe, expect, test } from 'bun:test';
+import { Agent } from '@/agent/agent';
 import { useContainer } from '@/core';
 import { PromptService } from '@/prompt';
 import { Memory } from './component';
 
 describe('Memory', () => {
     test('retains goal constraints and references without copying current input', () => {
-        const memory = useContainer().create(Memory, {
+        const profile = {
             name: 'worker',
             model: 'model',
             provider: 'provider',
             contextLength: 2,
             maxTokens: 1,
-        }, { fire: async () => undefined });
+        };
+        const agent = useContainer().create(Agent, profile, { fire: async () => undefined });
+        const memory = useContainer().create(Memory, agent);
         memory.prompt = useContainer().create(PromptService, 'prompts/memory') as PromptService;
 
         memory.observe({
@@ -30,13 +33,15 @@ describe('Memory', () => {
     });
 
     test('keeps finite continuous notes without owning Turn state', () => {
-        const memory = useContainer().create(Memory, {
+        const profile = {
             name: 'worker',
             model: 'model',
             provider: 'provider',
             contextLength: 1,
             maxTokens: 1,
-        }, { fire: async () => undefined });
+        };
+        const agent = useContainer().create(Agent, profile, { fire: async () => undefined });
+        const memory = useContainer().create(Memory, agent);
         memory.prompt = useContainer().create(PromptService, 'prompts/memory') as PromptService;
         for (let index = 0; index < 18; index += 1) memory.remember(`note ${index}`, 'observation');
 

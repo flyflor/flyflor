@@ -9,14 +9,12 @@ import type { AskInput, AskOption, AskOutput, AskQuestion } from './types';
 @Provide()
 export class Ask extends Tool<AskInput, AskOutput> {
     public readonly name: string;
-    public readonly risk: 'interaction';
     public readonly parameters: Record<string, unknown>;
 
     /** EN: Initializes the clarification capability and its strict model schema. ZH: 初始化澄清能力及其严格模型 schema。 */
     public constructor() {
         super();
         this.name = 'ask';
-        this.risk = 'interaction';
         this.parameters = {
             type: 'object',
             properties: {
@@ -52,7 +50,6 @@ export class Ask extends Tool<AskInput, AskOutput> {
         if (!Array.isArray(input.questions) || input.questions.length === 0) throw Error('questions is required');
         const questions = input.questions.map((item) => this.question(item));
         return {
-            ok: true,
             data: { kind: 'ask', questions },
             effects: [{ type: 'ask' }],
         } as const;

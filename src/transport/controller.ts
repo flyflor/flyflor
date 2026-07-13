@@ -2,7 +2,6 @@ import type { ConfigService } from '@/config';
 import { Config, Provide } from '@/core/decorator';
 import type { SocketPacket } from './packet';
 import { FService } from '@/core/ioc';
-import { isAbsolute, resolve } from 'node:path';
 
 /**
  * EN: Dispatches non-neural transport control packets to owned actions.
@@ -15,16 +14,15 @@ export class Controller extends FService {
 
     /** EN: Invokes one explicitly named transport action. ZH: 调用一个显式命名的 transport 动作。 */
     public async dispatch({ action, data }: SocketPacket): Promise<void> {
-        const key = action as keyof Controller;
-        const method = this[key] as unknown as ((arg: unknown) => unknown | Promise<unknown>) | undefined;
-        if (typeof method !== 'function') throw Error(`Unknown transport action: ${action}`);
-        await method.call(this, data);
+        if (action !== 'cwd') throw Error(`Unknown transport action: ${action}`);
+        await this.cwd(data);
     }
 
     /** EN: Updates the configured semantic working directory. ZH: 更新已配置的语义工作目录。 */
-    public async cwd({ path }: { path: string }) {
-        const base = this.config.path.cwd;
-        this.config.path.cwd = isAbsolute(path) ? resolve(path) : resolve(base, path);
-        return true;
+    public async cwd(data: unknown): Promise<void> {
+        if (typeof data !== 'object' || data === null || Array.isArray(data)) throw Error('Invalid cwd transport packet');
+        const path = (data as { path?: unknown }).path;
+        if (typeof path !== 'string' || path.length === 0) throw Error('Invalid cwd transport packet');
+        this.config.changeWorkingDirectory(path);
     }
 }

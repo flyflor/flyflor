@@ -9,13 +9,15 @@ describe('Controller', () => {
         try {
             ConfigService.path = { ...ConfigService.path, cwd: '/tmp/flyflor-root' };
             const controller = useContainer().create(Controller);
-            controller.config = { path: ConfigService.path } as ConfigService;
+            controller.config = useContainer().create(ConfigService);
 
             await controller.cwd({ path: 'workspace' });
             expect(ConfigService.path.cwd).toBe('/tmp/flyflor-root/workspace');
 
             await controller.cwd({ path: '/tmp/absolute-root' });
             expect(ConfigService.path.cwd).toBe('/tmp/absolute-root');
+            await expect(controller.dispatch({ action: 'dispatch', data: { action: 'cwd' } })).rejects.toThrow('Unknown transport action');
+            await expect(controller.cwd({ path: 42 })).rejects.toThrow('Invalid cwd transport packet');
         } finally {
             ConfigService.path = originalPath;
         }

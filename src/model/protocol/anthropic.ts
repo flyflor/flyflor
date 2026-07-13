@@ -3,6 +3,7 @@ import type { ProtocolAdapter, ProtocolContext, ProviderError } from './types';
 
 export const anthropicAdapter: ProtocolAdapter = {
     name: 'anthropic',
+    tools: false,
     body: (context: ProtocolContext) => {
         const { system, messages } = project(context.messages);
         return {
@@ -24,12 +25,11 @@ export const anthropicAdapter: ProtocolAdapter = {
         } else if (type === 'message_delta') {
             const stop = (parsed.delta as { stop_reason?: string } | undefined)?.stop_reason;
             if (stop) {
-                controller.enqueue({ type: 'done', stopReason: stop === 'max_tokens' ? 'length' : 'stop' });
+                controller.enqueue({ type: 'done', stopReason: terminal(stop) });
                 return true;
             }
         } else if (type === 'message_stop') {
-            controller.enqueue({ type: 'done', stopReason: 'stop' });
-            return true;
+            throw Error('Anthropic message stopped without a stop reason');
         } else if (type === 'error') {
             throw Error(errorMessage(parsed.error as ProviderError | undefined, 'Anthropic stream error'));
         }
@@ -46,6 +46,12 @@ function project(messages: Message[]): { system: string[]; messages: Array<{ rol
         else conversation.push({ role: message.role, content: message.content });
     }
     return { system, messages: conversation };
+}
+
+function terminal(reason: string): 'stop' | 'length' {
+    if (reason === 'end_turn' || reason === 'stop_sequence') return 'stop';
+    if (reason === 'max_tokens') return 'length';
+    throw Error(`Anthropic stop reason is unsupported: ${reason}`);
 }
 
 function sseData(line: string): string | undefined {

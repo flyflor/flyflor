@@ -3,16 +3,15 @@ import { Config, Provide } from '@/core';
 import { mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import type { FilesystemInput, FilesystemInputAction, FilesystemOutput } from './types';
-import { Tool } from './abstracts';
+import { ActionTool } from './abstracts';
 
 /**
  * EN: Owns strict file reads and explicitly approved file mutations.
  * ZH: 持有严格文件读取与显式批准的文件变更。
  */
 @Provide()
-export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
+export class Filesystem extends ActionTool<FilesystemInput, FilesystemOutput> {
     public readonly name: string;
-    public readonly risk: 'destructive';
     public override readonly workingDirectory: boolean;
     public readonly parameters: Record<string, unknown>;
 
@@ -23,7 +22,6 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
     public constructor() {
         super();
         this.name = 'filesystem';
-        this.risk = 'destructive';
         this.workingDirectory = true;
         this.parameters = {
             type: 'object',
@@ -56,6 +54,17 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
         return this.remove(input);
     }
 
+    /**
+     * EN: Projects one filesystem result into a compact evidence note.
+     * ZH: 将一次文件系统结果投影为紧凑证据笔记。
+     */
+    public override observe(data: FilesystemOutput): string {
+        if (data.action === 'read') return `filesystem: action=read; path=${data.path}; bytes=${data.bytes}; truncated=${String(data.truncated)}`;
+        if (data.action === 'write') return `filesystem: action=write; path=${data.path}; bytes=${data.bytes}`;
+        if (data.action === 'edit') return `filesystem: action=edit; path=${data.path}; replacements=${data.replacements}; bytes=${data.bytes}`;
+        return `filesystem: action=delete; path=${data.path}`;
+    }
+
     /** EN: Reads one bounded UTF-8 file slice. ZH: 读取一个有界 UTF-8 文件片段。 */
     private read(input: FilesystemInput) {
         const path = this.path(input.path, input.cwd);
@@ -63,16 +72,18 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
         const limitLines = this.number(input.limitLines, 'limitLines', 200);
         const limitBytes = this.number(input.limitBytes, 'limitBytes', 20000);
         const content = readFileSync(path, 'utf-8');
-        const sliced = content.split(/\r?\n/).slice(offsetLines, offsetLines + limitLines).join('\n');
-        const limited = Buffer.byteLength(sliced) > limitBytes ? sliced.slice(0, limitBytes) : sliced;
+        const lines = content.split(/\r?\n/);
+        const sliced = lines.slice(offsetLines, offsetLines + limitLines).join('\n');
+        const limited = this.limit(sliced, limitBytes);
         return {
-            ok: true,
             data: {
                 action: 'read',
                 path,
                 content: limited,
                 bytes: Buffer.byteLength(limited),
-                truncated: limited.length !== sliced.length || sliced.length !== content.length,
+                truncated: Buffer.byteLength(limited) < Buffer.byteLength(sliced)
+                    || offsetLines > 0
+                    || offsetLines + limitLines < lines.length,
             },
             effects: [{ type: 'read', path }],
         } as const;
@@ -85,7 +96,6 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
         mkdirSync(dirname(path), { recursive: true });
         writeFileSync(path, content, 'utf-8');
         return {
-            ok: true,
             data: { action: 'write', path, bytes: Buffer.byteLength(content) },
             effects: [{ type: 'write', path }],
         } as const;
@@ -101,7 +111,6 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
         const updated = content.replace(oldText, newText);
         writeFileSync(path, updated, 'utf-8');
         return {
-            ok: true,
             data: { action: 'edit', path, replacements: 1, bytes: Buffer.byteLength(updated) },
             effects: [{ type: 'write', path }],
         } as const;
@@ -114,7 +123,6 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
         if (!stat.isFile()) throw Error('delete only supports files');
         unlinkSync(path);
         return {
-            ok: true,
             data: { action: 'delete', path },
             effects: [{ type: 'delete', path }],
         } as const;
@@ -124,12 +132,19 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
     private path(value: unknown, cwdValue?: unknown): string {
         const input = this.text(value, 'path');
         if (isAbsolute(input)) return resolve(input);
-        const cwdSource = typeof cwdValue === 'string' && cwdValue.length > 0 ? cwdValue : this.config.path.cwd;
-        const cwd = typeof cwdSource === 'string' && cwdSource.length > 0
-            ? (isAbsolute(cwdSource) ? cwdSource : resolve(this.config.path.cwd, cwdSource))
-            : cwdSource;
-        if (typeof cwd !== 'string' || cwd.length === 0) throw Error('cwd is required');
+        const cwdSource = cwdValue === undefined ? this.config.path.cwd : this.text(cwdValue, 'cwd');
+        if (typeof cwdSource !== 'string' || cwdSource.length === 0) throw Error('cwd is required');
+        const cwd = isAbsolute(cwdSource) ? resolve(cwdSource) : resolve(this.config.path.cwd, cwdSource);
         return resolve(cwd, input);
+    }
+
+    /** EN: Returns a UTF-8-safe prefix within one exact byte budget. ZH: 在精确字节预算内返回 UTF-8 安全前缀。 */
+    private limit(content: string, maxBytes: number): string {
+        const bytes = Buffer.from(content);
+        if (bytes.byteLength <= maxBytes) return content;
+        let end = maxBytes;
+        while (end > 0 && (bytes[end]! & 0xc0) === 0x80) end -= 1;
+        return bytes.subarray(0, end).toString('utf-8');
     }
 
     /** EN: Requires one supported filesystem action. ZH: 要求一个受支持的文件系统动作。 */
