@@ -34,7 +34,10 @@ export class Model extends FService {
     @Init()
     public initProfile(): void {
         const profile = this.profile;
-        if (!profile.model || !profile.provider || !Number.isFinite(profile.maxTokens) || profile.maxTokens <= 0) {
+        if (!profile.model || !profile.provider
+            || !Number.isFinite(profile.contextLength) || profile.contextLength <= 0
+            || !Number.isFinite(profile.maxTokens) || profile.maxTokens <= 0
+            || profile.maxTokens >= profile.contextLength) {
             throw Error(`Agent model profile is incomplete: ${profile.name}`);
         }
         const base = this.root.model;
@@ -42,8 +45,17 @@ export class Model extends FService {
             ...base,
             model: profile.model,
             provider: profile.provider,
+            contextLength: profile.contextLength,
             maxTokens: profile.maxTokens,
         };
+    }
+
+    /** EN: Reports when one investigation history should be summarized before another request. ZH: 报告调查历史是否应在下一次请求前完成摘要。 */
+    public needsSummary(messages: Message[], tools?: ToolDefinition[]): boolean {
+        const available = this.config.contextLength - this.config.maxTokens;
+        const bytes = Buffer.byteLength(JSON.stringify({ messages, tools: tools ?? [] }));
+        const estimatedTokens = Math.ceil(bytes / 4);
+        return estimatedTokens >= Math.floor(available * 0.8);
     }
 
     /** EN: Opens one provider stream reader. ZH: 打开一个 provider stream reader。 */

@@ -60,7 +60,7 @@ export class Container {
         scoped: boolean,
     ): Promise<InstanceType<T>> {
         if (!this.classList.includes(Module)) this.classList.push(Module);
-        const isSingleton = getMetadata(PROVIDER_SINGLETON_KEY, Module) === true;
+        const isSingleton = Reflect.getOwnMetadata(PROVIDER_SINGLETON_KEY, Module) === true;
         if (isSingleton && this.singletons.has(Module)) return this.singletons.get(Module) as InstanceType<T>;
         if (isSingleton && this.pending.has(Module)) return await this.pending.get(Module) as InstanceType<T>;
         if (scoped && scope?.instances.has(Module)) return scope.instances.get(Module) as InstanceType<T>;
@@ -80,34 +80,30 @@ export class Container {
         scope: ResolutionScope | undefined,
         scoped: boolean,
     ): Promise<InstanceType<T>> {
-        const config = getMetadata(MODULE_METADATA_KEY, Module);
+        const config = Reflect.getOwnMetadata(MODULE_METADATA_KEY, Module);
         for (const importModule of config?.imports || []) await this.resolve(importModule, [], undefined, false);
         const constructorProps = this.getConstructorProps(Module, this.getModuleImportInstances(config?.imports || []), props);
         const clz = new Module(...constructorProps);
         const localScope = scope ?? { instances: new Map(), values: [...props], host: clz };
-        const injectInstances: InjectInstanceMetadata[] = getMetadata(INJECT_METADATA_INSTANCE_KEY, Module) || [];
+        const injectInstances = this.collectMetadata<InjectInstanceMetadata>(Module, INJECT_METADATA_INSTANCE_KEY);
         for (const inject of injectInstances) {
             const instance = await inject.instance?.call(clz);
             clz[inject.propertyKey] = instance;
             if (instance !== undefined && !localScope.values.includes(instance)) localScope.values.push(instance);
         }
-        const injects: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, Module) || [];
+        const injects = this.collectMetadata<InjectMetadata>(Module, INJECT_METADATA_KEY);
         for (const inject of injects) {
-            const resolvedProps = inject.scoped || !inject.factoryArgs ? undefined : await inject.factoryArgs.call(clz);
+            const classType = this.getInjectedType(Module, inject.propertyKey);
             const injectProps = inject.scoped
-                ? this.getScopedConstructorProps(inject.classType, [...localScope.values, localScope.host], props)
-                : resolvedProps === undefined
-                    ? []
-                    : Array.isArray(resolvedProps)
-                        ? resolvedProps
-                        : [resolvedProps];
-            const instance = await this.resolve(inject.classType, injectProps, inject.scoped ? localScope : undefined, inject.scoped === true);
+                ? this.getScopedConstructorProps(classType, [...localScope.values, localScope.host], props)
+                : [];
+            const instance = await this.resolve(classType, injectProps, inject.scoped ? localScope : undefined, inject.scoped);
             clz[inject.propertyKey] = instance;
             if (!localScope.values.includes(instance)) localScope.values.push(instance);
         }
-        const actionPropertyKey = getMetadata(INIT_METADATA_KEY, Module.prototype);
+        const actionPropertyKey = Reflect.getMetadata(INIT_METADATA_KEY, Module.prototype);
         if (actionPropertyKey) await clz[actionPropertyKey]?.apply(clz, props);
-        if (getMetadata(PROVIDER_SINGLETON_KEY, Module) === true) this.singletons.set(Module, clz);
+        if (Reflect.getOwnMetadata(PROVIDER_SINGLETON_KEY, Module) === true) this.singletons.set(Module, clz);
         if (scoped) localScope.instances.set(Module, clz);
         return clz;
     }
@@ -134,7 +130,7 @@ export class Container {
      * ZH: 从显式 props 和 imported module 实例构造构造函数参数。
      */
     public getConstructorProps<P extends unknown[]>(Module: ClassType, importInstances: Array<{ classType: ClassType; instance: InstanceType<ClassType> }>, props: P): unknown[] {
-        const paramTypes: ClassType[] = getMetadata(CONSTRUCTOR_PARAM_METADATA_KEY, Module) || [];
+        const paramTypes: ClassType[] = Reflect.getMetadata(CONSTRUCTOR_PARAM_METADATA_KEY, Module) || [];
         if (paramTypes.length === 0) return props;
         return paramTypes.map((paramType, index) => {
             if (index < props.length) return props[index];
@@ -149,7 +145,7 @@ export class Container {
      * ZH: 从 host 本地值构造 `@Scope()` 注入所需参数。
      */
     private getScopedConstructorProps<P extends unknown[]>(Module: ClassType, values: unknown[], props: P): unknown[] {
-        const paramTypes: ClassType[] = getMetadata(CONSTRUCTOR_PARAM_METADATA_KEY, Module) || [];
+        const paramTypes: ClassType[] = Reflect.getMetadata(CONSTRUCTOR_PARAM_METADATA_KEY, Module) || [];
         if (paramTypes.length === 0) return props;
         const used = new Set<number>();
         return paramTypes.map((paramType, index) => {
@@ -192,6 +188,45 @@ export class Container {
     }
 
     /**
+     * EN: Collects inherited member metadata without sharing mutable arrays between constructors.
+     * ZH: 收集继承的成员元数据，同时避免构造器之间共享可变数组。
+     */
+    private collectMetadata<T extends { propertyKey: string | symbol }>(Module: ClassType, key: symbol): T[] {
+        const constructors: ClassType[] = [];
+        let current: unknown = Module;
+        while (typeof current === 'function' && current !== Function.prototype) {
+            constructors.unshift(current as ClassType);
+            current = Object.getPrototypeOf(current);
+        }
+        const metadata = new Map<string | symbol, T>();
+        for (const constructor of constructors) {
+            const own = Reflect.getOwnMetadata(key, constructor) as T[] | undefined;
+            for (const item of own || []) metadata.set(item.propertyKey, item);
+        }
+        return [...metadata.values()];
+    }
+
+    /**
+     * EN: Reads and validates the reflected dependency type for one injected property.
+     * ZH: 读取并验证一个注入属性的反射依赖类型。
+     */
+    private getInjectedType(Module: ClassType, propertyKey: string | symbol): ClassType {
+        const classType = Reflect.getMetadata('design:type', Module.prototype, propertyKey) as ClassType | undefined;
+        if (!classType || !this.isInjectableClassType(classType)) {
+            throw Error(`Injected dependency type is invalid: ${Module.name}.${String(propertyKey)}`);
+        }
+        return classType;
+    }
+
+    /**
+     * EN: Rejects erased and primitive reflected property types before construction.
+     * ZH: 在构造前拒绝被擦除及原始类型的属性反射类型。
+     */
+    private isInjectableClassType(classType: ClassType): boolean {
+        return this.isScopedClassType(classType) && classType !== Date && classType !== RegExp;
+    }
+
+    /**
      * EN: Registers an existing object in the singleton map.
      * ZH: 把已有对象注册到 singleton map。
      */
@@ -207,40 +242,4 @@ export class Container {
  */
 export function useContainer() {
     return new Container();
-}
-
-/**
- * EN: Stores metadata used by decorators and the IOC container.
- * ZH: 保存 decorators 和 IOC container 使用的元数据。
- */
-export function defineMetadata(metadataKey: any, metadataValue: any, target: Object): void;
-/**
- * EN: Stores property-level metadata used by decorators and the IOC container.
- * ZH: 保存 decorators 和 IOC container 使用的属性级元数据。
- */
-export function defineMetadata(metadataKey: any, metadataValue: any, target: Object, propertyKey: string | symbol): void;
-/**
- * EN: Forwards metadata writes to `Reflect.defineMetadata`.
- * ZH: 将元数据写入转发给 `Reflect.defineMetadata`。
- */
-export function defineMetadata(...props: any) {
-    return Reflect.defineMetadata.apply(undefined, props);
-}
-
-/**
- * EN: Reads metadata used by decorators and the IOC container.
- * ZH: 读取 decorators 和 IOC container 使用的元数据。
- */
-export function getMetadata(metadataKey: any, target: Object): any;
-/**
- * EN: Reads property-level metadata used by decorators and the IOC container.
- * ZH: 读取 decorators 和 IOC container 使用的属性级元数据。
- */
-export function getMetadata(metadataKey: any, target: Object, propertyKey: string | symbol): any;
-/**
- * EN: Forwards metadata reads to `Reflect.getMetadata`.
- * ZH: 将元数据读取转发给 `Reflect.getMetadata`。
- */
-export function getMetadata(...props: any): any {
-    return Reflect.getMetadata.apply(undefined, props);
 }

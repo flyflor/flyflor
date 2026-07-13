@@ -41,6 +41,7 @@ describe('Brain', () => {
     test('perceives once, completes Context directly, and fires pure Complete', async () => {
         const { brain, signals } = harness();
         let perceptions = 0;
+        let modelInput = '';
         brain.callosum = {
             perceive: async () => {
                 perceptions += 1;
@@ -48,7 +49,10 @@ describe('Brain', () => {
             },
         } as never;
         brain.model = {
-            stream: async (_messages: unknown, next: (chunk: string) => void | Promise<void>) => { await next('PONG'); },
+            stream: async (messages: unknown, next: (chunk: string) => void | Promise<void>) => {
+                modelInput = JSON.stringify(messages);
+                await next('PONG');
+            },
         } as never;
 
         const complete = await brain.receive({ type: 'input', input: 'PING' });
@@ -57,6 +61,8 @@ describe('Brain', () => {
         expect(complete.answer).toBe('PONG');
         expect(brain.context.recent()[0]).toMatchObject({ input: 'PING', answer: 'PONG' });
         expect(signals.map((signal) => signal.type)).toEqual(['reply', 'complete']);
+        expect(modelInput.match(/PING/g)).toHaveLength(1);
+        expect(JSON.stringify(brain.memory.snapshot())).not.toContain('PONG');
     });
 
     test('runs delegated work without creating or completing a Context Turn', async () => {

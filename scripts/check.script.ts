@@ -106,6 +106,13 @@ function checkBarrels(): void {
         const lines = readFileSync(file, 'utf-8').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
         if (lines.some((line) => !line.startsWith('export '))) architectureErrors.push(`${file}: index.ts must be barrel-only`);
     }
+    const neural = readFileSync(join('src', 'neural', 'index.ts'), 'utf-8')
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    if (neural.length !== 1 || !/^export \* from ['"]\.\/synapse['"];?$/.test(neural[0]!)) {
+        architectureErrors.push('src/neural/index.ts: Neural barrel must expose only Synapse');
+    }
 }
 
 function checkDependencies(): void {

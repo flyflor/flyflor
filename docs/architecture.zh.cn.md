@@ -8,19 +8,21 @@ Flyflor 是一个持续存在的智能生命体。内核只有一个目的：理
 
 | 对象 | 生命周期 | 唯一职责 |
 | --- | --- | --- |
-| `Synapse` | 生命体 singleton | 皮层信号路由、持久 Agent pool、独立回路放电 |
+| `Synapse` | 生命体 singleton | 皮层门面、生命周期组合、信号路由 |
+| `AgentPool` | 单个 Synapse 生命周期 | 活跃身份、已验证 profiles、持久 Agent scopes |
+| `Sensory` / `Interaction` / `Delegation` / `Expression` | 单个 Synapse 生命周期 | 一条独立 FIFO 及其精确皮层效果 |
 | `Context` | 生命体 singleton | 唯一创建和修改 Turn；保存完成经历 |
 | `Agent` | pool 中持久人物 | 用私有 FIFO 包围一个人的认知 |
 | `Memory` | 单个 Agent scope | 有界、连续的临时笔记；绝不保存 Turn |
 | `Brain` | 单个 Agent scope | 认知路由与根任务完成 |
 | `Callosum` | 单个 Agent scope | 对每次根输入进行一次严格感知 |
-| `Investigation` | 单个 Agent scope | 持久 Ask/Confirm/Task/Complete 网络与本地 replay |
+| `Investigation` | 单个 Agent scope | 模型循环、Ask/Confirm/Task/Complete 网络、紧凑证据与本地 replay |
 | `Identity` | 单个 Agent scope | 按 package policy 持有持久 prompt 身份 |
 | `Tools` | 生命体 singleton | 直接具体动作及其 schema |
-| `Model` | 单个 Agent scope | 精确 provider 请求与完整等待的 streaming |
+| `Model` | 单个 Agent scope | 上下文压力判断、精确 provider 请求与完整等待的 streaming |
 | `FSocket` | 生命体 singleton | 仅负责 IPC 生命周期与 backpressure |
 
-Context 持有内部 `Turn` class。Context barrel 只导出不可变 brief 与 summary，绝不导出 Turn。Brain 可调用 `begin()`、`complete()`；Synapse 可调用 `brief()`、`pause()`、`resume()`。任何调用者都无法取得可变 Turn 状态。
+Context 持有内部 `Turn` class。Context barrel 只导出不可变 brief 与 summary，绝不导出 Turn。Brain 调用 `begin()`、`complete()`；Interaction 调用 `pause()`、`resume()`；Delegation 调用 `brief()`。任何调用者都无法取得可变 Turn 状态。
 
 ## 依赖方向
 
@@ -54,13 +56,15 @@ Agent 永不导入 Neural。两者边界是 `AgentBus.fire()` 与 `src/agent/typ
 `src/bootstrap.ts` 在 decorated application class 前加载 `reflect-metadata`，再调用 `Factory.create(AppModule)`。AppModule 导入 Synapse，因此一次调用即可解析并初始化整个生命体。
 
 - `@Singleton` 与 `@Module` 只有在注入和 `@Init` 成功后才写入缓存；
+- `@Inject()` 只登记自有属性键；Container 在解析对象时通过 Reflect metadata 读取其 `design:type`；
+- 继承成员元数据由 Container 显式收集且不共享可变数组，singleton 与 module 策略仍由 class 自有；
 - `@Scope` 使用单个 Agent 本地 resolution scope；
 - Brain、Callosum、Investigation、Identity、Memory、Model 在同一人物 scope 内只创建一次并复用；
 - 不同人物绝不共享 scoped cognition 或 Memory；
 - 业务代码不得直接构造 application class；
 - 初始化失败的对象不会发布到 singleton cache。
 
-Synapse 为每个完整的已配置 profile 创建一个人物并持续保留在 Agent pool 中。它不修改共享配置，也不创建 task-level worker。
+Synapse 将一个全新的 AgentPool 绑定到自身 `AgentBus`。AgentPool 验证并复制每个完整的已配置 profile，为每个人物只创建一次隔离 scope 并持续保留。Synapse 初始化失败时，其尚未发布的 pool 与回路会被整体丢弃。共享配置不会被修改，也不会创建 task-level worker。
 
 ## Observable 回路
 
@@ -73,7 +77,7 @@ Synapse 为每个完整的已配置 profile 创建一个人物并持续保留在
 - rejection 原样传播，并使该回路 fail-stop；
 - 不同 Observable 实例可以并行放电。
 
-Synapse 持有四个独立回路实例：
+Synapse 组合四个独立的具体回路对象：
 
 | 回路 | 输入 | 效果 |
 | --- | --- | --- |
@@ -119,15 +123,15 @@ Investigation 只在根能力运行中暴露 Task。Task 只验证 `[{ agent, go
 ```mermaid
 sequenceDiagram
     participant RI as 根 Investigation
-    participant S as Synapse 委派回路
+    participant D as Delegation
     participant W as 持久 worker Agent
 
-    RI->>S: TaskSignal
-    S->>S: Context.brief(turnId)
-    S->>W: 通过 worker FIFO 发送 AgentTask
+    RI->>D: 通过 Synapse 门面发送 TaskSignal
+    D->>D: Context.brief(turnId)
+    D->>W: 通过 worker FIFO 发送 AgentTask
     W->>W: 记住任务并调查
-    W-->>S: Complete 摘要
-    S-->>RI: Complete[] 作为本地工具结果
+    W-->>D: Complete 摘要
+    D-->>RI: Complete[] 作为本地工具结果
 ```
 
 发给同一人物的任务排在该人物当前 stimulus 之后；不同人物可以并发。自我委派会被拒绝，因为等待当前正在执行的 FIFO 会死锁。委派运行使用 `tools.list(false)`，因此无法递归触发 Task，但仍可使用统一 Ask 与 Confirm 回路。
@@ -145,7 +149,9 @@ Provider tool calls 只存在于本次 Investigation 的本地消息列表。
 - execute spawn 错误使批次 reject，已完成进程的退出仍是显式数据；
 - 有效观察复制到当前人物的有界 Memory。
 
-Memory 在超过十六条 notes 后按 FIFO 淘汰最旧笔记。它不会在任务间清空，也不包含 provider messages、Turn status 或 Turn 数组。
+Investigation 始终按理解目标、获取事实或执行、检查结果、继续或完成推进。当 Model 判断可用上下文容量达到约百分之八十时，它会在下一次普通采样前请求模型生成纯文本摘要。压缩后的历史保留身份、当前 stimulus、原始目标、紧凑证据、摘要及下一步，并移除旧 tool replay。每批 tool call 的模型可见结果共享固定 64 KiB 展示预算，以 UTF-8 安全的首尾内容和显式 omitted-byte 标记呈现。工具 schema、实现与公开结果保持不变。
+
+Memory 在超过十六条 notes 后按 FIFO 淘汰最旧笔记。它只保存紧凑的目标、引用与观察，不保存当前原始输入、完整文件内容、进程输出、委派答案、provider messages、Turn 最终答案、Turn status 或 Turn 数组。完成答案只由 Context 保存。当前输入只出现在 stimulus 的 input block 一次，Context block 不再重复它。
 
 ## PromptService 与 XML
 
@@ -177,6 +183,8 @@ XML 只存在于模型输入边界，不是 Context、Turn 或 Memory 的存储�
 | `vllm`、`lmstudio` | 显式声明的 OpenAI-compatible Chat Completions |
 
 未知 provider 直接 reject。失败状态码、错误响应结构、非法 tool JSON、缺失 key、未终止 stream 都 reject。Streaming 文本 callback 被完整 await，因此神经输出顺序不会逃逸模型 Promise。
+
+Agent profile 的 `contextLength` 与 `maxTokens` 只描述容量事实，不配置认知或审查策略。ProtocolClient 测量最终 UTF-8 JSON body，并在调用 `fetch` 前拒绝超过内部 512 KiB 安全边界的请求。
 
 ## Transport
 

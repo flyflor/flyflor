@@ -4,11 +4,10 @@ import {
     INJECT_METADATA_KEY,
     MODULE_METADATA_KEY,
     PROVIDER_SINGLETON_KEY,
-    type ClassType,
     type InjectInstanceMetadata,
     type InjectMetadata,
 } from './ioc/types';
-import { defineMetadata, getMetadata, useContainer } from './ioc/container';
+import { useContainer } from './ioc/container';
 import type { FModule } from './ioc/abstracts';
 import { get } from 'lodash-es';
 import { join } from 'node:path';
@@ -55,7 +54,7 @@ export function Provide(): ClassDecorator {
  * ZH: 将 provider 类标记为缓存在 IOC singleton map 中。
  */
 export function Singleton(): ClassDecorator {
-    return (target) => defineMetadata(PROVIDER_SINGLETON_KEY, true, target);
+    return (target) => Reflect.defineMetadata(PROVIDER_SINGLETON_KEY, true, target);
 }
 
 /**
@@ -65,7 +64,7 @@ export function Singleton(): ClassDecorator {
 export function Module<T extends FModule>(metadata: ModuleMetadata = {}): ClassDecorator {
     return (target) => {
         Singleton()(target);
-        defineMetadata(MODULE_METADATA_KEY, metadata, target);
+        Reflect.defineMetadata(MODULE_METADATA_KEY, metadata, target);
     };
 }
 
@@ -75,46 +74,11 @@ export function Module<T extends FModule>(metadata: ModuleMetadata = {}): ClassD
  */
 export function Inject(): PropertyDecorator;
 /**
- * EN: Injects a property using constructor args returned from a host callback.
- * ZH: 使用 host callback 返回的构造参数注入属性。
+ * EN: Registers one property key whose dependency type is read from reflected metadata at resolution time.
+ * ZH: 登记一个属性键，其依赖类型在解析时从反射元数据读取。
  */
-export function Inject<TThis, C>(callback: (this: TThis) => C): PropertyDecorator;
-/**
- * EN: Injects a property using an explicit class type.
- * ZH: 使用显式 class type 注入属性。
- */
-export function Inject(classType: ClassType): PropertyDecorator;
-/**
- * EN: Supports bare `@Inject` decorator syntax.
- * ZH: 支持裸 `@Inject` 装饰器语法。
- */
-export function Inject(target: object, propertyKey: string | symbol): void;
-/**
- * EN: Registers property injection metadata for the IOC container.
- * ZH: 为 IOC container 注册属性注入元数据。
- */
-export function Inject(): PropertyDecorator | void {
-    const props = arguments;
-    if (props.length >= 2 && ['symbol', 'string'].includes(typeof props[1])) {
-        const [target, propertyKey] = props as unknown as [object, string | symbol];
-        registerInject(target, propertyKey, getMetadata('design:type', target, propertyKey));
-    } else if (!props[0]) {
-        return (target: object, propertyKey: string | symbol) => {
-            registerInject(target, propertyKey, getMetadata('design:type', target, propertyKey));
-        };
-    } else {
-        return (target: object, propertyKey: string | symbol) => {
-            const reflectedClassType = getMetadata('design:type', target, propertyKey);
-            const value = props[0];
-            const explicitClassType = isClassType(value);
-            registerInject(
-                target,
-                propertyKey,
-                explicitClassType ? value : reflectedClassType,
-                explicitClassType ? undefined : value as InjectMetadata['factoryArgs'],
-            );
-        };
-    }
+export function Inject(): PropertyDecorator {
+    return (target, propertyKey) => registerInject(target, propertyKey, false);
 }
 
 /**
@@ -123,7 +87,7 @@ export function Inject(): PropertyDecorator | void {
  */
 export function Scope(): PropertyDecorator {
     return (target: object, propertyKey: string | symbol) => {
-        registerInject(target, propertyKey, getMetadata('design:type', target, propertyKey), undefined, true);
+        registerInject(target, propertyKey, true);
     };
 }
 
@@ -134,21 +98,12 @@ export function Scope(): PropertyDecorator {
 function registerInject(
     target: object,
     propertyKey: string | symbol,
-    classType: ClassType,
-    factoryArgs?: InjectMetadata['factoryArgs'],
-    scoped?: boolean,
+    scoped: boolean,
 ): void {
-    const data: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, target.constructor) || [];
-    data.push({ propertyKey, classType, factoryArgs, scoped });
-    defineMetadata(INJECT_METADATA_KEY, data, target.constructor);
-}
-
-/**
- * EN: Detects class constructors passed to `@Inject`.
- * ZH: 判断传给 `@Inject` 的值是否为 class 构造器。
- */
-function isClassType(value: unknown): value is ClassType {
-    return typeof value === 'function' && Function.prototype.toString.call(value).startsWith('class ');
+    const owner = target.constructor;
+    const own = Reflect.getOwnMetadata(INJECT_METADATA_KEY, owner) as InjectMetadata[] | undefined;
+    const data = (own || []).filter((inject) => inject.propertyKey !== propertyKey);
+    Reflect.defineMetadata(INJECT_METADATA_KEY, [...data, { propertyKey, scoped }], owner);
 }
 
 /**
@@ -156,7 +111,7 @@ function isClassType(value: unknown): value is ClassType {
  * ZH: 标记一个在 IOC 注入后运行的生命周期方法。
  */
 export function Init(): MethodDecorator {
-    return (target, propertyKey) => defineMetadata(INIT_METADATA_KEY, propertyKey, target);
+    return (target, propertyKey) => Reflect.defineMetadata(INIT_METADATA_KEY, propertyKey, target);
 }
 
 /**
@@ -166,15 +121,16 @@ export function Init(): MethodDecorator {
 export function Config(key?: string): PropertyDecorator {
     return (target, propertyKey) => {
         const configStorageKey = Symbol(String(propertyKey));
-        const data: InjectInstanceMetadata[] = getMetadata(INJECT_METADATA_INSTANCE_KEY, target.constructor) || [];
-        data.push({
+        const owner = target.constructor;
+        const own = Reflect.getOwnMetadata(INJECT_METADATA_INSTANCE_KEY, owner) as InjectInstanceMetadata[] | undefined;
+        const data = (own || []).filter((inject) => inject.propertyKey !== propertyKey);
+        Reflect.defineMetadata(INJECT_METADATA_INSTANCE_KEY, [...data, {
             propertyKey,
             instance: async () => {
                 const { ConfigService } = await import('@/config');
                 return useContainer().getAsync(ConfigService);
             },
-        });
-        defineMetadata(INJECT_METADATA_INSTANCE_KEY, data, target.constructor);
+        }], owner);
         Object.defineProperty(target, propertyKey, {
             configurable: true,
             enumerable: true,
@@ -197,8 +153,10 @@ export function Config(key?: string): PropertyDecorator {
 export function Prompt<TThis = object>(path: string | ((this: TThis, prop: TThis) => string)): PropertyDecorator {
     return (target, propertyKey) => {
         const promptStorageKey = Symbol(String(propertyKey));
-        const data: InjectInstanceMetadata[] = getMetadata(INJECT_METADATA_INSTANCE_KEY, target.constructor) || [];
-        data.push({
+        const owner = target.constructor;
+        const own = Reflect.getOwnMetadata(INJECT_METADATA_INSTANCE_KEY, owner) as InjectInstanceMetadata[] | undefined;
+        const data = (own || []).filter((inject) => inject.propertyKey !== propertyKey);
+        Reflect.defineMetadata(INJECT_METADATA_INSTANCE_KEY, [...data, {
             propertyKey,
             instance: async function (this: TThis) {
                 const [{ useRootPath }, { PromptService }] = await Promise.all([
@@ -208,8 +166,7 @@ export function Prompt<TThis = object>(path: string | ((this: TThis, prop: TThis
                 const promptPath = join(useRootPath(), typeof path === 'function' ? path.call(this, this) : path);
                 return useContainer().getAsync(PromptService, promptPath);
             },
-        });
-        defineMetadata(INJECT_METADATA_INSTANCE_KEY, data, target.constructor);
+        }], owner);
         Object.defineProperty(target, propertyKey, {
             configurable: true,
             enumerable: true,

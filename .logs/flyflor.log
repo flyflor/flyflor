@@ -346,3 +346,185 @@
 [DEBUG]  2026-07-06T09:41:57.763Z  Controller
   | cwd
   | /tmp/absolute-root
+[DEBUG]  2026-07-10T13:28:26.340Z  Controller
+  | cwd
+  | workspace
+[DEBUG]  2026-07-10T13:28:26.341Z  Controller
+  | cwd
+  | /tmp/absolute-root
+[DEBUG]  2026-07-10T16:27:08.638Z  Controller
+  | cwd
+  | workspace
+[DEBUG]  2026-07-10T16:27:08.641Z  Controller
+  | cwd
+  | /tmp/absolute-root
+[INFO ]  2026-07-11T04:53:21.385Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T04:53:21.391Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T04:53:21.587Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'flyflor',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T04:55:24.659Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T04:55:24.663Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T04:55:24.711Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'flyflor',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T14:35:28.282Z  FSocket
+  | open
+[INFO ]  2026-07-11T14:36:07.738Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'flyflor',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T14:43:03.244Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T14:43:03.250Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T14:43:03.318Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'flyflor',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:23:09.345Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:23:09.351Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:23:09.445Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'flyflor',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:35:16.371Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:35:16.374Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:35:16.404Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'flyflor',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:37:53.978Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:37:53.980Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:37:54.007Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'flyflor',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:45:31.273Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:45:31.276Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:45:31.303Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'flyflor',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:49:02.433Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:49:02.436Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:49:02.463Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'flyflor',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:55:42.832Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:55:42.835Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'worker',
+  |   type: 'input'
+  | }
+[INFO ]  2026-07-11T15:55:42.865Z  Agent
+  | agent.receive
+  | {
+  |   agent: 'flyflor',
+  |   type: 'input'
+  | }

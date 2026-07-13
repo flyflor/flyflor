@@ -5,7 +5,7 @@ import type { ContextBrief } from '@/agent/context';
 import { AgentChatRole, type AgentBus, type AgentMemory, type AgentTask } from '@/agent/types';
 
 /** EN: Origin of one finite Agent memory note. ZH: 一条有限 Agent 记忆笔记的来源。 */
-export type MemorySource = 'brief' | 'observation' | 'reflection';
+export type MemorySource = 'brief' | 'observation';
 
 /** EN: One bounded note retained by one Agent. ZH: 一个 Agent 保留的一条有界笔记。 */
 export interface MemoryNote {
@@ -47,7 +47,8 @@ export class Memory extends FComponent {
      * ZH: 记住一个根 Context brief，但不取得其 Turn 所有权。
      */
     public observe(brief: ContextBrief): void {
-        this.remember(`goal=${brief.goal}; input=${brief.input}; constraints=${brief.constraints.join('; ')}`, 'brief');
+        const references = brief.references.map((reference) => `${reference.type}:${reference.value}`).join('; ');
+        this.remember(`goal=${brief.goal}; constraints=${brief.constraints.join('; ')}; references=${references}`, 'brief');
     }
 
     /**

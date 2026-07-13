@@ -13,15 +13,19 @@ export class Observable<TInput = unknown, TOutput = TInput> extends FlyFlor {
     private tail: Promise<unknown>;
 
     /**
-     * EN: Names the circuit for diagnostics without changing its signal contract.
-     * ZH: 为诊断命名回路，不改变其信号契约。
+     * EN: Derives the diagnostic circuit name from its concrete runtime class.
+     * ZH: 从具体 runtime class 派生回路诊断名称。
      */
-    public constructor(public readonly name: string) {
+    public constructor() {
         super();
+        this.name = this.constructor.name;
         this.stages = [];
         this.subscribers = [];
         this.tail = Promise.resolve();
     }
+
+    /** EN: Concrete circuit name used in strict routing errors. ZH: 严格路由错误中使用的具体回路名称。 */
+    public readonly name: string;
 
     /**
      * EN: Appends one ordered transformation to this circuit.

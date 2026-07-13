@@ -64,6 +64,7 @@ describe('openAIAdapter', () => {
                 baseUrl: '',
                 apiKeyEnv: '',
                 timeoutSeconds: 60,
+                contextLength: 1024,
                 maxTokens: 256,
             },
             messages,

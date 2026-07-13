@@ -5,12 +5,12 @@ import { Observable } from './service';
 describe('Observable', () => {
     test('queues one circuit while independent circuits fire in parallel', async () => {
         const values: string[] = [];
-        const first = useContainer().create(Observable<number>, 'first').pipe(async (value) => {
+        const first = useContainer().create(Observable<number>).pipe(async (value) => {
             await Promise.resolve();
             values.push(`first:${value}`);
             return value + 1;
         });
-        const second = useContainer().create(Observable<number>, 'second').pipe(async (value) => {
+        const second = useContainer().create(Observable<number>).pipe(async (value) => {
             values.push(`second:${value}`);
             return value;
         });
@@ -23,7 +23,7 @@ describe('Observable', () => {
 
     test('awaits subscribers and fail-stops after an unregistered switch branch', async () => {
         const values: string[] = [];
-        const circuit = useContainer().create(Observable<{ type: 'known' | 'missing'; value: string }>, 'switch')
+        const circuit = useContainer().create(Observable<{ type: 'known' | 'missing'; value: string }>)
             .switch<'known' | 'missing', string>((signal) => signal.type, {
                 known: async (signal: { type: 'known' | 'missing'; value: string }) => signal.value,
             } as unknown as Record<'known' | 'missing', (signal: { type: 'known' | 'missing'; value: string }) => string | Promise<string>>)

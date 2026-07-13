@@ -42,7 +42,7 @@ export class Brain extends FComponent {
     @Scope()
     public investigation!: Investigation;
 
-    @Inject(function (this: Brain) { return `brain:${this.agentConfig.name}`; })
+    @Inject()
     public circuit!: Observable<AgentStimulus>;
 
     /**
@@ -184,7 +184,6 @@ export class Brain extends FComponent {
      */
     private async finish(complete: CompleteSignal): Promise<CompleteSignal> {
         this.context.complete(complete.turnId, complete.answer, complete.evidence);
-        this.memory.remember(complete.answer, 'reflection');
         await this.synapse.fire(complete);
         return complete;
     }
@@ -194,12 +193,13 @@ export class Brain extends FComponent {
      * ZH: 从 Identity、有限 Memory 和一个 XML 刺激构建模型消息。
      */
     private messages(context: ContextBrief, input: string): Message[] {
+        const { input: _input, ...brief } = context;
         const document = this.prompt.render({
             kind: 'document',
             root: 'agent_stimulus',
             attributes: { agent: this.agentConfig.name },
             blocks: [
-                { tag: 'context', content: JSON.stringify(context) },
+                { tag: 'context', content: JSON.stringify(brief) },
                 { tag: 'input', content: input },
             ],
         });

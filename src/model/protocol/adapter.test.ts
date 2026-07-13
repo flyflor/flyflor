@@ -83,4 +83,34 @@ describe('provider adapters', () => {
         expect(client.resolve('lm-studio').adapter).toBe(openAIAdapter);
         expect(() => client.resolve('huggingface')).toThrow('Unsupported model provider');
     });
+
+    test('rejects an oversized serialized request before fetch', async () => {
+        const client = useContainer().create(ProtocolClient);
+        const originalFetch = globalThis.fetch;
+        let fetches = 0;
+        globalThis.fetch = (async () => {
+            fetches += 1;
+            throw Error('fetch must not run');
+        }) as unknown as typeof fetch;
+        const reader = client.stream({
+            provider: 'vllm',
+            model: 'model',
+            baseUrl: 'http://localhost',
+            apiKeyEnv: '',
+            timeoutSeconds: 60,
+            contextLength: 1024 * 1024,
+            maxTokens: 1024,
+        }, [{ role: 'user', content: 'x'.repeat(600 * 1024) }], AbortSignal.timeout(1000)).getReader();
+
+        try {
+            await expect(reader.read()).rejects.toMatchObject({
+                message: 'Model provider request body exceeds limit',
+                detail: { maxRequestBytes: 512 * 1024 },
+            });
+            expect(fetches).toBe(0);
+        } finally {
+            reader.releaseLock();
+            globalThis.fetch = originalFetch;
+        }
+    });
 });

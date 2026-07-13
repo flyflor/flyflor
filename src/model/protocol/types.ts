@@ -5,6 +5,7 @@ export type ProtocolName = 'anthropic' | 'bedrock' | 'cohere' | 'gemini' | 'olla
 export type ProtocolAuth = 'bearer' | 'optional' | 'anthropic' | 'google' | 'none';
 
 export interface ModelOptions extends FModelConfiguration {
+    contextLength: number;
     maxTokens: number;
 }
 

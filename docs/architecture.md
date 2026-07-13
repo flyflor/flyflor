@@ -8,19 +8,21 @@ Flyflor is a continuously living intelligent entity. The kernel has one purpose:
 
 | Object | Lifetime | Sole responsibility |
 | --- | --- | --- |
-| `Synapse` | life-form singleton | cortex signal routing, persistent Agent pool, independent circuit discharge |
+| `Synapse` | life-form singleton | cortical facade, lifecycle composition, signal routing |
+| `AgentPool` | one Synapse lifecycle | active identity, validated profiles, persistent Agent scopes |
+| `Sensory` / `Interaction` / `Delegation` / `Expression` | one Synapse lifecycle | one independent FIFO and its exact cortical effect |
 | `Context` | life-form singleton | sole creation and mutation of Turns; completed experience |
 | `Agent` | persistent pool person | private FIFO boundary around one person's cognition |
 | `Memory` | one Agent scope | bounded continuous temporary notes; never Turns |
 | `Brain` | one Agent scope | cognitive routing and root completion |
 | `Callosum` | one Agent scope | one strict perception for each root input |
-| `Investigation` | one Agent scope | persistent Ask/Confirm/Task/Complete network and local replay |
+| `Investigation` | one Agent scope | model loop, Ask/Confirm/Task/Complete network, compact evidence, and local replay |
 | `Identity` | one Agent scope | durable prompt identity under package policy |
 | `Tools` | life-form singleton | direct concrete actions and their schemas |
-| `Model` | one Agent scope | exact provider request and fully awaited streaming |
+| `Model` | one Agent scope | context-pressure decision, exact provider request, and fully awaited streaming |
 | `FSocket` | life-form singleton | IPC lifecycle and backpressure only |
 
-Context owns the internal `Turn` class. The Context barrel exports immutable briefs and summaries, never Turn. Brain may call `begin()` and `complete()`; Synapse may call `brief()`, `pause()`, and `resume()`. No caller receives mutable Turn state.
+Context owns the internal `Turn` class. The Context barrel exports immutable briefs and summaries, never Turn. Brain calls `begin()` and `complete()`; Interaction calls `pause()` and `resume()`; Delegation calls `brief()`. No caller receives mutable Turn state.
 
 ## Dependency Direction
 
@@ -54,13 +56,15 @@ Agent never imports Neural. Their boundary is `AgentBus.fire()` plus the stable 
 `src/bootstrap.ts` loads `reflect-metadata` before decorated application classes and calls `Factory.create(AppModule)`. AppModule imports Synapse, so one call resolves and initializes the entire life form.
 
 - `@Singleton` and `@Module` are cached only after injection and `@Init` succeed.
+- `@Inject()` records only an owned property key; Container reads its `design:type` through Reflect metadata when resolving the object.
+- inherited member metadata is collected explicitly without sharing mutable arrays, while singleton and module policies remain class-owned.
 - `@Scope` uses one Agent-local resolution scope.
 - Brain, Callosum, Investigation, Identity, Memory, and Model are created once inside that person's scope and reused there.
 - different people never share scoped cognition or Memory;
 - business code never directly constructs an application class;
 - a failed initialization is not published to the singleton cache.
 
-Synapse creates one person for every complete configured profile and retains it in the Agent pool. It does not mutate shared configuration and it does not create task-level workers.
+Synapse binds one fresh AgentPool to its `AgentBus`. AgentPool validates and copies every complete configured profile, creates each person once, and retains the isolated scopes. A failed Synapse initialization discards its unpublished pool and circuits. Shared configuration is never mutated and task-level workers are never created.
 
 ## Observable Circuits
 
@@ -73,7 +77,7 @@ Synapse creates one person for every complete configured profile and retains it 
 - a rejection propagates unchanged and leaves that circuit fail-stopped;
 - separate instances can discharge concurrently.
 
-Synapse owns four independent circuit instances:
+Synapse composes four independent concrete circuit objects:
 
 | Circuit | Input | Effect |
 | --- | --- | --- |
@@ -119,15 +123,15 @@ Investigation exposes Task only for a root-capable run. Task validates `[{ agent
 ```mermaid
 sequenceDiagram
     participant RI as Root Investigation
-    participant S as Synapse delegation
+    participant D as Delegation
     participant W as Persistent worker Agent
 
-    RI->>S: TaskSignal
-    S->>S: Context.brief(turnId)
-    S->>W: AgentTask through worker FIFO
+    RI->>D: TaskSignal through Synapse facade
+    D->>D: Context.brief(turnId)
+    D->>W: AgentTask through worker FIFO
     W->>W: remember task, investigate
-    W-->>S: Complete summary
-    S-->>RI: Complete[] as local tool result
+    W-->>D: Complete summary
+    D-->>RI: Complete[] as local tool result
 ```
 
 Tasks targeting the same person queue behind that person's current stimulus. Different people can run concurrently. Self-delegation is rejected because waiting on the currently executing FIFO would deadlock. Delegated runs receive `tools.list(false)`, so they cannot recursively emit Task. They may still use the common Ask and Confirm circuit.
@@ -145,7 +149,9 @@ Provider tool calls exist only in the local Investigation message list.
 - execute spawn errors reject the batch, while completed process exits remain explicit data;
 - valid observations are copied into the current person's bounded Memory.
 
-Memory evicts oldest notes in FIFO order after sixteen notes. It does not reset between tasks and never contains provider messages, Turn status, or a Turn array.
+Investigation advances by understanding the goal, obtaining facts or executing, checking the result, and either continuing or completing. It requests a model-written plain-text summary before the next ordinary sample when Model reports approximately eighty percent of usable context capacity. The compacted history retains identity, the current stimulus, the original goal, compact evidence, the summary, and its next action; older tool replay is removed. Model-facing results share a fixed 64 KiB display budget per tool-call batch and retain UTF-8-safe head and tail content around an explicit omitted-byte marker. Tool schemas, implementations, and public results are unchanged.
+
+Memory evicts oldest notes in FIFO order after sixteen notes. It stores compact goals, references, and observations, not the current raw input, full file contents, process output, delegated answers, provider messages, final Turn answer, Turn status, or a Turn array. Context alone retains the completed answer. The current input appears once in the stimulus input block and is omitted from its Context block.
 
 ## PromptService And XML
 
@@ -177,6 +183,8 @@ Each provider resolves to one protocol attempt:
 | `vllm`, `lmstudio` | declared OpenAI-compatible Chat Completions |
 
 Unknown providers reject. Failed status codes, wrong response shapes, malformed tool JSON, missing keys, and unterminated streams reject. Streaming text callbacks are awaited, so neural output ordering cannot escape the model Promise.
+
+Agent profiles provide `contextLength` and `maxTokens` as capacity facts; they do not configure cognition or review policy. ProtocolClient measures the final UTF-8 JSON body and rejects any request above its internal 512 KiB safety boundary before `fetch`.
 
 ## Transport
 

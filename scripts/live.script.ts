@@ -5,6 +5,7 @@ import { AppModule } from '@/app';
 import { Factory, FService, useContainer } from '@/core';
 import { configureLogger, LoggerLevel } from '@/core/logger';
 import { Synapse } from '@/neural';
+import { FSocket } from '@/transport';
 import { IpcClientBridge } from '../web/client';
 import assert from 'node:assert/strict';
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -198,7 +199,7 @@ class LiveScenarios extends FService {
         const packets = await this.turn(`Use the filesystem write action to replace ${path} with exactly REJECTED_WRITE. Attempt the requested write.`, { approved: false });
         assert.ok(packets.some((packet) => packet.action === 'confirm'));
         assert.equal(readFileSync(path, 'utf8'), 'ORIGINAL');
-        assert.match(this.complete(packets).evidence.join('\n'), /"executed":false/);
+        assert.match(this.complete(packets).evidence.join('\n'), /approved=false; executed=false/);
         this.passed.push('confirm-reject');
         console.log('[live] passed: confirm-reject');
     }
@@ -242,10 +243,12 @@ class LiveScenarios extends FService {
         const reviewerPath = join(this.workspace, 'reviewer.txt');
         writeFileSync(workerPath, 'WORKER_SCENARIO_OK', 'utf8');
         writeFileSync(reviewerPath, 'REVIEWER_SCENARIO_OK', 'utf8');
-        const packets = await this.turn(`Use the task tool once with exactly two tasks. Assign worker to read ${workerPath} and return its exact token. Assign reviewer to read ${reviewerPath} and return its exact token. Then include both exact tokens in the final answer. The root must not use another tool.`, { approved: false });
+        const packets = await this.turn(`Use the task tool once with exactly two tasks. Assign worker the goal "Use Filesystem read on ${workerPath} and return its exact token." Assign reviewer the goal "Use Filesystem read on ${reviewerPath} and return its exact token." Then include both exact tokens in the final answer. The root must not use another tool.`, {
+            approved: true,
+            askAnswer: 'Proceed exactly as assigned with Filesystem read and return the exact token.',
+        });
         const evidence = this.complete(packets).evidence.join('\n');
-        assert.match(evidence, /"agent":"worker"/);
-        assert.match(evidence, /"agent":"reviewer"/);
+        assert.match(evidence, /agents=worker,reviewer/);
         assert.match(this.text(packets), /WORKER_SCENARIO_OK/);
         assert.match(this.text(packets), /REVIEWER_SCENARIO_OK/);
         this.passed.push('task');
@@ -351,7 +354,7 @@ class LiveScenarios extends FService {
     private async stop(): Promise<void> {
         if (this.probe) await this.probe.disconnect();
         if (this.bridge) await this.bridge.stop(true);
-        this.synapse?.socket.service?.stop(true);
+        if (this.synapse) (await useContainer().getAsync(FSocket)).service?.stop(true);
         if (this.synapse) rmSync(this.synapse.config.socket, { force: true });
     }
 }

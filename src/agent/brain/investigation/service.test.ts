@@ -27,11 +27,20 @@ const request: InvestigationRequest = {
     visible: true,
 };
 
+interface HarnessOptions {
+    filesystemContent?: string;
+    shellStdout?: string;
+    shellStderr?: string;
+    pressure?: boolean[];
+    summary?: string;
+}
+
 /** EN: Builds one persistent Investigation network with deterministic boundaries. ZH: 使用确定性边界构造一张持久 Investigation 网络。 */
-function harness(responses: Array<{ text: string; toolCalls: ToolCall[] }>, confirm = true) {
+function harness(responses: Array<{ text: string; toolCalls: ToolCall[] }>, confirm = true, options: HarnessOptions = {}) {
     const signals: NeuralSignal[] = [];
     const calls: ToolCall[] = [];
     const seen: Message[][] = [];
+    const summarySeen: Message[][] = [];
     const bus: AgentBus = {
         fire: async (signal) => {
             signals.push(signal);
@@ -46,6 +55,7 @@ function harness(responses: Array<{ text: string; toolCalls: ToolCall[] }>, conf
     const investigation = useContainer().create(Investigation, profile, bus);
     investigation.circuit = useContainer().create(Observable<InvestigationSignal>, 'investigation-test');
     investigation.prompt = useContainer().create(PromptService, 'prompts/investigation/RUN.md') as PromptService<string, string>;
+    investigation.summary = useContainer().create(PromptService, 'prompts/investigation/SUMMARY.md') as PromptService<string, string>;
     investigation.memory = useContainer().create(Memory, profile, bus);
     investigation.memory.prompt = useContainer().create(PromptService, 'prompts/memory') as PromptService;
     investigation.tools = {
@@ -56,11 +66,24 @@ function harness(responses: Array<{ text: string; toolCalls: ToolCall[] }>, conf
             calls.push(call);
             if (call.name === 'ask') return { ok: true, name: 'ask', data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] } };
             if (call.name === 'task') return { ok: true, name: 'task', data: { tasks: [{ agent: 'worker', goal: 'inspect child' }] } };
-            return { ok: true, name: call.name, data: { action: call.arguments.action, path: '/tmp/demo.ts' } };
+            if (call.name === 'filesystem') {
+                const content = options.filesystemContent ?? 'file body';
+                return { ok: true, name: call.name, data: { action: call.arguments.action, path: '/tmp/demo.ts', content, bytes: Buffer.byteLength(content), truncated: false } };
+            }
+            if (call.name === 'shell') {
+                return { ok: true, name: call.name, data: { action: 'shell', cwd: '/tmp/semantic', command: 'inspect', args: [], exitCode: 0, stdout: options.shellStdout ?? '', stderr: options.shellStderr ?? '', timedOut: false } };
+            }
+            throw Error(`Unexpected test tool: ${call.name}`);
         },
     } as never;
     let index = 0;
+    let pressureIndex = 0;
     investigation.model = {
+        needsSummary: () => options.pressure?.[pressureIndex++] ?? false,
+        completeText: async (summaryMessages: Message[]) => {
+            summarySeen.push(summaryMessages.map((message) => ({ ...message } as Message)));
+            return options.summary ?? 'Goal: inspect. Next: continue.';
+        },
         streamRun: async (messages: Message[], _tools: ToolDefinition[] | undefined, onText: (chunk: string) => void | Promise<void>) => {
             seen.push(messages.map((message) => ({ ...message } as Message)));
             const response = responses[index++]!;
@@ -69,7 +92,7 @@ function harness(responses: Array<{ text: string; toolCalls: ToolCall[] }>, conf
         },
     } as never;
     investigation.init();
-    return { investigation, signals, calls, seen };
+    return { investigation, signals, calls, seen, summarySeen };
 }
 
 const messages = [{ role: AgentChatRole.User, content: 'inspect' }] as Message[];
@@ -84,13 +107,17 @@ describe('Investigation', () => {
         expect(signals).toContainEqual({ type: 'reply', turnId: 'turn_1', agent: 'flyflor', chunk: 'answer' });
     });
 
-    test('replays direct actions, Ask, and Task only inside this investigation', async () => {
+    test('keeps full direct and delegated results out of Memory and Complete evidence', async () => {
         const { investigation, calls, seen } = harness([
             { text: '', toolCalls: [{ id: 'read_1', name: 'filesystem', arguments: { action: 'read' } }] },
-            { text: '', toolCalls: [{ id: 'ask_1', name: 'ask', arguments: { questions: [] } }] },
+            { text: '', toolCalls: [{ id: 'shell_1', name: 'shell', arguments: { command: 'inspect' } }] },
             { text: '', toolCalls: [{ id: 'task_1', name: 'task', arguments: { tasks: [] } }] },
             { text: 'done', toolCalls: [] },
-        ]);
+        ], true, {
+            filesystemContent: 'PRIVATE_FILE_CONTENT',
+            shellStdout: 'PRIVATE_STDOUT',
+            shellStderr: 'PRIVATE_STDERR',
+        });
 
         const complete = await investigation.run(messages, request);
 
@@ -98,6 +125,11 @@ describe('Investigation', () => {
         expect(complete.evidence).toHaveLength(3);
         expect(seen.at(-1)?.filter((message) => message.role === 'tool')).toHaveLength(3);
         expect(investigation.memory.snapshot().filter((note) => note.source === 'observation')).toHaveLength(3);
+        const compact = JSON.stringify({ evidence: complete.evidence, memory: investigation.memory.snapshot() });
+        expect(compact).not.toContain('PRIVATE_FILE_CONTENT');
+        expect(compact).not.toContain('PRIVATE_STDOUT');
+        expect(compact).not.toContain('PRIVATE_STDERR');
+        expect(compact).not.toContain('worker fact');
     });
 
     test('treats rejected confirmation as explicit non-execution', async () => {
@@ -111,5 +143,46 @@ describe('Investigation', () => {
         expect(complete.answer).toBe('not written');
         expect(calls).toEqual([]);
         expect(JSON.stringify(seen.at(-1))).toContain('executed');
+    });
+
+    test('bounds one tool replay with UTF-8-safe head and tail omission evidence', async () => {
+        const content = `HEAD_MARKER_${'界'.repeat(30000)}_TAIL_MARKER`;
+        const { investigation, seen } = harness([
+            { text: '', toolCalls: [{ id: 'read_large', name: 'filesystem', arguments: { action: 'read' } }] },
+            { text: 'checked', toolCalls: [] },
+        ], true, { filesystemContent: content });
+
+        const complete = await investigation.run(messages, request);
+        const replay = JSON.stringify(seen[1]);
+
+        expect(replay).toContain('HEAD_MARKER');
+        expect(replay).toContain('TAIL_MARKER');
+        expect(replay).toContain('bytes omitted');
+        expect(Buffer.byteLength(replay)).toBeLessThan(Buffer.byteLength(content));
+        expect(JSON.stringify(complete.evidence)).not.toContain('HEAD_MARKER');
+        expect(JSON.stringify(investigation.memory.snapshot())).not.toContain('TAIL_MARKER');
+    });
+
+    test('summarizes pressured replay before the next ordinary model sample', async () => {
+        const rawHistory = `RAW_REPLAY_${'x'.repeat(70000)}`;
+        const { investigation, seen, summarySeen } = harness([
+            { text: '', toolCalls: [{ id: 'read_pressure', name: 'filesystem', arguments: { action: 'read' } }] },
+            { text: 'done after summary', toolCalls: [] },
+        ], true, {
+            filesystemContent: rawHistory,
+            pressure: [true],
+            summary: 'Confirmed the target. The file was inspected. Next: verify and complete.',
+        });
+
+        const complete = await investigation.run(messages, request);
+        const summarizedRequest = JSON.stringify(seen[1]);
+
+        expect(complete.answer).toBe('done after summary');
+        expect(summarySeen).toHaveLength(1);
+        expect(JSON.stringify(summarySeen[0])).toContain('RAW_REPLAY_');
+        expect(summarizedRequest).toContain('inspect');
+        expect(summarizedRequest).toContain('Confirmed the target');
+        expect(summarizedRequest).toContain('Next: verify and complete');
+        expect(summarizedRequest).not.toContain('RAW_REPLAY_');
     });
 });

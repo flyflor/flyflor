@@ -14,9 +14,7 @@ export const INJECT_METADATA_INSTANCE_KEY = Symbol('INJECT_METADATA_INSTANCE_KEY
  */
 export interface InjectMetadata {
     propertyKey: string | symbol;
-    classType: ClassType;
-    factoryArgs?: (this: any) => unknown | unknown[] | Promise<unknown | unknown[]>;
-    scoped?: boolean;
+    scoped: boolean;
 }
 /**
  * EN: One early instance-injection record stored on a class constructor.

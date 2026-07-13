@@ -12,7 +12,7 @@ export class Agent extends FAgent<AgentStimulus, CompleteSignal, FAgentProfileCo
     @Scope()
     public brain!: Brain;
 
-    @Inject(function (this: Agent) { return `agent:${this.agentConfig.name}`; })
+    @Inject()
     public circuit!: Observable<AgentStimulus>;
 
     /**

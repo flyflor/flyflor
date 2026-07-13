@@ -19,6 +19,8 @@ const ADAPTERS = new Map<ProtocolName, ProtocolAdapter>([
     ['responses', responsesAdapter],
 ]);
 
+const MAX_REQUEST_BODY_BYTES = 512 * 1024;
+
 /** EN: Maps each provider to one exact wire protocol and endpoint. ZH: 将每个 provider 映射到唯一线协议与 endpoint。 */
 @Provide()
 export class ProtocolClient extends FService {
@@ -46,15 +48,27 @@ export class ProtocolClient extends FService {
         const attempt = this.resolve(config.provider);
         const context: ProtocolContext = { config, messages, tools, ...attempt };
         const url = this.endpoint(config.baseUrl, attempt.spec.path, config.model);
+        const body = JSON.stringify(attempt.adapter.body(context));
+        const requestBytes = Buffer.byteLength(body);
+        if (requestBytes > MAX_REQUEST_BODY_BYTES) {
+            throw Object.assign(Error('Model provider request body exceeds limit'), {
+                detail: {
+                    provider: config.provider,
+                    protocol: attempt.spec.name,
+                    requestBytes,
+                    maxRequestBytes: MAX_REQUEST_BODY_BYTES,
+                },
+            });
+        }
         const response = await fetch(url, {
             method: 'POST',
             headers: this.headers(context),
             signal,
-            body: JSON.stringify(attempt.adapter.body(context)),
+            body,
         });
         if (!response.ok) {
             throw Object.assign(Error('Model provider request failed'), {
-                detail: { provider: config.provider, protocol: attempt.spec.name, url, status: response.status, body: await response.text() },
+                detail: { provider: config.provider, protocol: attempt.spec.name, url, requestBytes, status: response.status, body: await response.text() },
             });
         }
         const contentType = response.headers.get('content-type') ?? '';
