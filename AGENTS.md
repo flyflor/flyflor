@@ -56,9 +56,9 @@ Flyflor is a continuously living, sessionless intelligent entity. Every design m
 1. Observable extends FlyFlor and exposes only `pipe`, `switch`, `subscribe`, and FIFO `next`.
 2. Synapse owns independent sensory, interaction, delegation, and expression circuits.
 3. Ask and Confirm share the serial interaction circuit. Task uses delegation. Reply and root Complete use expression.
-4. Agent stimuli enter that person's private FIFO. The same person thinks serially; different people may investigate concurrently.
-5. Callosum perceives each root input exactly once and returns `reply`, `research`, or `soul`.
-6. Investigation builds Ask, Confirm, Task, and Complete branches once in Init. Delegated runs do not receive Task.
+4. Agent stimuli enter that person's private FIFO. The same person thinks serially; different people may investigate concurrently. Brain and Investigation are methods, not extra Observables.
+5. Callosum perceives each root input exactly once (model semantic output) and returns `reply`, `research`, or `soul`.
+6. Investigation discharges Ask, Confirm, and Task through `AgentBus` using each tool's owned `channel`. Tools with `rootOnly` are omitted from delegated runs.
 7. Filesystem, Shell, and Execute are direct actions, not neural signals.
 
 ## Context And Memory
@@ -73,9 +73,10 @@ Flyflor is a continuously living, sessionless intelligent entity. Every design m
 
 1. PromptService is the only prompt-package and XML rendering boundary. Do not add XmlService or hand-written dynamic XML.
 2. Runtime loads canonical English `.md` files and ignores `.zh.cn.md` mirrors.
-3. Package policy controls ordered sections, document blocks, editable files, locked files, and runtime-ignored files.
-4. Identity writes are limited by the package policy to `SOUL.md`, `USER.md`, and `EXTENSION.md`, and are validated completely before any write.
+3. Directory and file names are the highest constraint. Agent packages resolve as `.config/agents/{name}/` or `prompts/agents/{name}.md`. Write policy is filename-derived; optional package `config.jsonc` may only order sections.
+4. Identity writes are limited by filename policy to `SOUL.md`, `USER.md`, and `EXTENSION.md`, and are validated completely before any write.
 5. Every repository documentation Markdown file has a `.zh.cn.md` human mirror.
+6. Prefer object-owned policy and model semantic perception over hardcoded name switches in orchestration code.
 
 ## Model, Tool, And Transport
 

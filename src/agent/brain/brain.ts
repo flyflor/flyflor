@@ -1,23 +1,29 @@
-import { parse } from '@/agent/json';
+import { parse } from '@/model/json';
 import type { ContextBrief } from '@/agent/context';
 import { Context } from '@/agent/context';
 import { Identity } from '@/agent/identity';
 import { Memory } from '@/agent/memory';
-import { AgentChatRole, type AgentBus, type AgentStimulus, type AgentTask, type CompleteSignal } from '@/agent/types';
+import type { AgentBus, AgentStimulus, AgentTask, CompleteSignal } from '@/agent/types';
 import type { FAgentProfileConfiguration } from '@/config';
-import { FComponent, Init, Inject, Observable, Prompt, Provide, Scope } from '@/core';
+import { FComponent, Inject, Prompt, Provide, Scope } from '@/core';
 import { Model, type Message } from '@/model';
 import { PromptService } from '@/prompt';
 import { Callosum } from './callosum';
 import { Investigation } from './investigation';
 
+/** EN: Soul section key inside the Callosum prompt package. ZH: Callosum 提示词包内的 Soul section 键。 */
 export enum BrainPrompt {
     Soul = 'SOUL',
 }
 
 /**
- * EN: Owns one Agent's cognition and routes understood stimuli into pure actions.
- * ZH: 持有一个 Agent 的认知，并将理解后的刺激路由到纯净动作。
+ * EN: Owns one Agent's cognition and routes stimuli into pure actions.
+ * ZH: 持有一个 Agent 的认知，并将刺激路由到纯净动作。
+ *
+ * EN: Routing is method dispatch — no private Observable. Person-level FIFO lives on Agent.
+ * Intent selection is Callosum's model perception, not hardcoded keyword matching.
+ * ZH: 路由是方法分发——无私有 Observable。人物级 FIFO 在 Agent 上。
+ * 意图选择是 Callosum 的模型感知，不是硬编码关键词匹配。
  */
 @Provide()
 export class Brain extends FComponent {
@@ -42,9 +48,6 @@ export class Brain extends FComponent {
     @Scope()
     public investigation!: Investigation;
 
-    @Inject(function (this: Brain) { return `brain:${this.agentConfig.name}`; })
-    public circuit!: Observable<AgentStimulus>;
-
     /**
      * EN: Binds this Brain to one Agent profile and cortical bus.
      * ZH: 将当前 Brain 绑定到一个 Agent profile 与皮层总线。
@@ -57,28 +60,17 @@ export class Brain extends FComponent {
     }
 
     /**
-     * EN: Wires input and delegated-task cognition exactly once.
-     * ZH: 一次性连接用户输入与委派任务认知。
-     */
-    @Init()
-    public init(): void {
-        this.circuit.switch((stimulus) => stimulus.type, {
-            input: (stimulus) => this.input((stimulus as Extract<AgentStimulus, { type: 'input' }>).input),
-            task: (stimulus) => this.task((stimulus as Extract<AgentStimulus, { type: 'task' }>).task),
-        });
-    }
-
-    /**
-     * EN: Sends one ordered stimulus through this Agent's cognitive circuit.
-     * ZH: 将一个有序刺激送入当前 Agent 的认知回路。
+     * EN: Routes one stimulus to input or delegated-task cognition.
+     * ZH: 将一个刺激路由到用户输入或委派任务认知。
      */
     public async receive(stimulus: AgentStimulus): Promise<CompleteSignal> {
-        return await this.circuit.next(stimulus) as unknown as CompleteSignal;
+        if (stimulus.type === 'input') return await this.input(stimulus.input);
+        return await this.task(stimulus.task);
     }
 
     /**
-     * EN: Perceives one user input, begins its Turn, and selects one cognitive path.
-     * ZH: 感知一次用户输入，开始其 Turn，并选择一条认知路径。
+     * EN: Perceives one user input once, begins its Turn, and follows model intent.
+     * ZH: 对用户输入只感知一次，开始其 Turn，并跟随模型意图。
      */
     private async input(input: string): Promise<CompleteSignal> {
         const perception = await this.callosum.perceive(input, this.context.recent());
@@ -86,7 +78,7 @@ export class Brain extends FComponent {
         this.memory.observe(brief);
         if (perception.intent === 'reply') return await this.reply(brief);
         if (perception.intent === 'soul') return await this.soul(brief);
-        return await this.research(brief, true);
+        return await this.research(brief);
     }
 
     /**
@@ -99,10 +91,8 @@ export class Brain extends FComponent {
         return await this.investigation.run(this.messages(task.context, task.goal), {
             id: task.id,
             turnId: task.turnId,
-            goal: task.goal,
             context: task.context,
-            delegation: false,
-            visible: false,
+            root: false,
         });
     }
 
@@ -130,21 +120,19 @@ export class Brain extends FComponent {
      * EN: Runs one root investigation and stores its pure Complete summary.
      * ZH: 执行一次根调查并保存其纯 Complete 摘要。
      */
-    private async research(brief: ContextBrief, delegation: boolean): Promise<CompleteSignal> {
+    private async research(brief: ContextBrief): Promise<CompleteSignal> {
         const complete = await this.investigation.run(this.messages(brief, brief.input), {
             id: brief.turnId,
             turnId: brief.turnId,
-            goal: brief.goal,
             context: brief,
-            delegation,
-            visible: true,
+            root: true,
         });
         return await this.finish(complete);
     }
 
     /**
-     * EN: Applies one strict identity protocol update and completes its Turn.
-     * ZH: 应用一次严格身份协议更新并完成其 Turn。
+     * EN: Applies one model-planned identity update and completes its Turn.
+     * ZH: 应用一次由模型规划的身份更新并完成其 Turn。
      */
     private async soul(brief: ContextBrief): Promise<CompleteSignal> {
         const document = this.prompt.render({
@@ -156,8 +144,8 @@ export class Brain extends FComponent {
             ],
         });
         const raw = await this.model.completeText([
-            { role: AgentChatRole.System, content: this.prompt.section(BrainPrompt.Soul) },
-            { role: AgentChatRole.User, content: document },
+            { role: 'system', content: this.prompt.section(BrainPrompt.Soul) },
+            { role: 'user', content: document },
         ]);
         const plan = parse<unknown>(raw);
         if (typeof plan !== 'object' || plan === null || Array.isArray(plan) || !Array.isArray((plan as { writes?: unknown }).writes)) {
@@ -203,6 +191,6 @@ export class Brain extends FComponent {
                 { tag: 'input', content: input },
             ],
         });
-        return [...this.identity.messages(), ...this.memory.messages(), { role: AgentChatRole.User, content: document }];
+        return [...this.identity.messages(), ...this.memory.messages(), { role: 'user', content: document }];
     }
 }

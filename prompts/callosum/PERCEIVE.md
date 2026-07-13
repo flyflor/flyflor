@@ -5,7 +5,7 @@ Understand the latest user input and choose the response mode in one pass.
 Return only compact JSON with this schema:
 
 ```json
-{"intent":"reply|research|soul","goal":"string","constraints":["string"],"references":[{"type":"path|error|command|symbol|text","value":"string"}]}
+{"intent":"reply|research|soul","goal":"string","constraints":["string"],"references":["string"]}
 ```
 
 The input JSON contains `latest` and up to four completed recent turns.
@@ -14,4 +14,4 @@ The input JSON contains `latest` and up to four completed recent turns.
 - `research`: evidence, files, tools, current information, or clarification is needed.
 - `soul`: stable identity, user, preference, or capability notes should change.
 
-Keep `goal` concrete. Add `cwd` only when the user explicitly supplies a working directory; otherwise omit the field completely. Never return `cwd: null`. Record only explicit constraints and references. Never answer the user or write files.
+Keep `goal` concrete. Add `cwd` only when the user explicitly supplies a working directory; otherwise omit the field completely. Never return `cwd: null`. Record only explicit constraints and references as short strings. Never answer the user or write files.

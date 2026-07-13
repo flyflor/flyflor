@@ -197,20 +197,13 @@ export class Synapse extends FCortex implements AgentBus {
     }
 
     /**
-     * EN: Validates one configured Agent profile without mutating shared configuration.
-     * ZH: 验证一个已配置 Agent profile，且不修改共享配置。
+     * EN: Returns one resolved Agent profile from ConfigService conventions.
+     * ZH: 从 ConfigService 约定返回一个已解析 Agent profile。
      */
     private profile(name: string): FAgentProfileConfiguration {
         const profile = this.config.agents[name];
         if (!profile) throw Error(`Agent profile is missing: ${name}`);
-        if (profile.name !== name) throw Error(`Agent profile name does not match: ${name}`);
-        if (!profile.model || !profile.provider) throw Error(`Agent model configuration is incomplete: ${name}`);
-        if (!Number.isFinite(profile.contextLength) || profile.contextLength <= 0) throw Error(`Agent context length is invalid: ${name}`);
-        if (!Number.isFinite(profile.maxTokens) || profile.maxTokens <= 0) throw Error(`Agent max tokens is invalid: ${name}`);
-        if (!profile.promptPackage || !profile.promptSections || profile.promptSections.length === 0) {
-            throw Error(`Agent prompt configuration is incomplete: ${name}`);
-        }
-        return { ...profile, promptSections: [...profile.promptSections] };
+        return profile;
     }
 
     /**

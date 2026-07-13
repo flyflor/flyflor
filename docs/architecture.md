@@ -82,7 +82,7 @@ Synapse owns four independent circuit instances:
 | delegation | Task | builds child tasks from `ContextBrief` and awaits target Completes |
 | expression | Reply or root Complete | orders reply chunks, Complete, then streamEnd |
 
-Each Agent and Brain also owns a private FIFO circuit. Investigation builds its Ask, Confirm, Task, and Complete switch once in `@Init` and reuses the network for later stimuli.
+Each Agent owns one private FIFO circuit. Brain routes stimuli with methods. Investigation runs a model/tool loop and discharges Ask, Confirm, and Task through `AgentBus` into Synapse circuits — it does not own a private Observable.
 
 ## Root Turn
 
@@ -130,7 +130,7 @@ sequenceDiagram
     S-->>RI: Complete[] as local tool result
 ```
 
-Tasks targeting the same person queue behind that person's current stimulus. Different people can run concurrently. Self-delegation is rejected because waiting on the currently executing FIFO would deadlock. Delegated runs receive `tools.list(false)`, so they cannot recursively emit Task. They may still use the common Ask and Confirm circuit.
+Tasks targeting the same person queue behind that person's current stimulus. Different people can run concurrently. Self-delegation is rejected because waiting on the currently executing FIFO would deadlock. Delegated runs receive `tools.list(root=false)`, which omits tools with `rootOnly` (Task), so they cannot recursively emit Task. They may still use the common Ask and Confirm circuit.
 
 ## Investigation And Tools
 
@@ -152,13 +152,18 @@ Memory evicts oldest notes in FIFO order after sixteen notes. It does not reset 
 PromptService is the only prompt boundary. It owns:
 
 - canonical English Markdown loading and `.zh.cn.md` mirror exclusion;
-- ordered sections declared by package `config.jsonc`;
-- editable, locked, and runtime-ignored identity policy;
+- ordered sections from package `config.jsonc` when present, otherwise preferred order then alpha;
+- write policy derived from filenames (`SOUL.md`/`USER.md`/`EXTENSION.md` editable; `AGENTS.md` locked);
 - strict all-before-any validation of identity writes;
 - XML name validation, attribute escaping, CDATA splitting, and stable block order;
 - inline `document` rendering for ContextBrief, user input, task data, and tool results.
 
-XML exists only at model input boundaries. It is not a storage format for Context, Turn, or Memory. Missing packages, sections, mappings, blocks, and illegal names reject immediately.
+Agent prompt packages resolve by directory convention only:
+
+- `.config/agents/{name}/` for identity packages;
+- `prompts/agents/{name}.md` for single-file people.
+
+XML exists only at model input boundaries. It is not a storage format for Context, Turn, or Memory. Missing packages, sections, and illegal names reject immediately.
 
 ## Model Protocol
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { useContainer } from '@/core';
-import { Context } from './component';
+import { Context } from './service';
 
 describe('Context', () => {
     test('owns the only Turn and exposes immutable briefs and summaries', () => {
@@ -9,7 +9,7 @@ describe('Context', () => {
             intent: 'research',
             goal: 'inspect files',
             constraints: ['read first'],
-            references: [{ type: 'path', value: 'src' }],
+            references: ['src'],
         });
         (brief.constraints as string[]).push('outside mutation');
 

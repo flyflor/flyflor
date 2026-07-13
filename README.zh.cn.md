@@ -48,7 +48,7 @@ flowchart LR
     Root --> Perception["Callosum：只感知一次"]
     Perception --> Context["Context.begin"]
     Context --> Brain["Brain 认知路由"]
-    Brain --> Investigation["Investigation 网络"]
+    Brain --> Investigation["Investigation 循环"]
     Investigation --> Complete["纯净 Complete"]
     Complete --> Store["Context.complete"]
     Store --> Expression["reply / complete / streamEnd"]

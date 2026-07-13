@@ -1,8 +1,9 @@
 import type { FAgentProfileConfiguration } from '@/config';
 import { FComponent, Prompt, Provide } from '@/core';
+import type { Message } from '@/model';
 import { PromptService } from '@/prompt';
 import type { ContextBrief } from '@/agent/context';
-import { AgentChatRole, type AgentBus, type AgentMemory, type AgentTask } from '@/agent/types';
+import type { AgentBus, AgentTask } from '@/agent/types';
 
 /** EN: Origin of one finite Agent memory note. ZH: 一条有限 Agent 记忆笔记的来源。 */
 export type MemorySource = 'brief' | 'observation' | 'reflection';
@@ -18,6 +19,9 @@ export interface MemoryNote {
 /**
  * EN: Finite continuous short-term memory owned by exactly one Agent scope.
  * ZH: 由唯一 Agent scope 持有的有限连续短期记忆。
+ *
+ * EN: Never stores Turns, provider replay, or session state.
+ * ZH: 从不存储 Turn、provider replay 或 session 状态。
  */
 @Provide()
 export class Memory extends FComponent {
@@ -73,10 +77,10 @@ export class Memory extends FComponent {
      * EN: Projects finite notes into one model-bound XML memory message.
      * ZH: 将有限笔记投影为一条面向模型的 XML memory 消息。
      */
-    public messages(): AgentMemory[] {
+    public messages(): Message[] {
         if (this.notes.length === 0) return [];
         return [{
-            role: AgentChatRole.User,
+            role: 'user',
             content: this.prompt.render({
                 kind: 'document',
                 root: 'agent_memory',

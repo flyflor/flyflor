@@ -1,6 +1,8 @@
 {
     // Protocol, path, authentication, and wire parsing are provider conventions
     // under src/model/protocol. Secrets stay in environment variables.
+    // Agent prompt paths are directory conventions:
+    //   .config/agents/{name}/  or  prompts/agents/{name}.md
     "model": {
         "model": "deepseek-v4-flash",
         "provider": "deepseek",
@@ -10,33 +12,9 @@
     },
     "agent": "flyflor",
     "agents": {
-        "flyflor": {
-            "name": "flyflor",
-            "model": "deepseek-v4-flash",
-            "provider": "deepseek",
-            "contextLength": 131072,
-            "maxTokens": 8192,
-            "promptPackage": "./.config/agents/flyflor",
-            "promptSections": ["SOUL", "USER", "EXTENSION"],
-        },
-        "worker": {
-            "name": "worker",
-            "model": "deepseek-v4-flash",
-            "provider": "deepseek",
-            "contextLength": 131072,
-            "maxTokens": 8192,
-            "promptPackage": "./prompts/agents",
-            "promptSections": ["worker"],
-        },
-        "reviewer": {
-            "name": "reviewer",
-            "model": "deepseek-v4-flash",
-            "provider": "deepseek",
-            "contextLength": 131072,
-            "maxTokens": 8192,
-            "promptPackage": "./prompts/agents",
-            "promptSections": ["reviewer"],
-        },
+        "flyflor": { "maxTokens": 8192 },
+        "worker": {},
+        "reviewer": {},
     },
     "socket": "./flyflor.sock",
 }

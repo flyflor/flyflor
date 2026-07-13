@@ -1,23 +1,20 @@
-import type {
-    AgentBus,
-    AskResponse,
-    AskSignal,
-    CompleteSignal,
-    ConfirmResponse,
-    ConfirmSignal,
-    TaskSignal,
-} from '@/agent/types';
+import type { AgentBus, CompleteSignal } from '@/agent/types';
 import { Memory } from '@/agent/memory';
 import type { FAgentProfileConfiguration } from '@/config';
-import { FComponent, Init, Inject, Observable, Prompt, Provide, Scope } from '@/core';
+import { FComponent, Inject, Prompt, Provide, Scope } from '@/core';
 import { Model, type AssistantMessage, type Message, type ModelResult, type ToolCall, type ToolMessage } from '@/model';
 import { PromptService } from '@/prompt';
 import { Tools, type AskOutput, type TaskOutput, type ToolRunResult } from '@/tool';
-import type { InvestigationOutput, InvestigationRequest, InvestigationSignal } from './types';
+import type { InvestigationRequest } from './types';
 
 /**
- * EN: Owns one Agent's persistent investigation network and local provider replay.
- * ZH: 持有一个 Agent 的持久调查网络与本地 provider replay。
+ * EN: Owns one Agent's investigation loop and local provider replay.
+ * ZH: 持有一个 Agent 的调查循环与本地 provider replay。
+ *
+ * EN: No private Observable — Ask/Confirm/Task discharge through AgentBus into Synapse circuits.
+ * Tool routing uses each tool's object-owned `channel`, never hardcoded name switches.
+ * ZH: 无私有 Observable——Ask/Confirm/Task 经 AgentBus 进入 Synapse 回路。
+ * 工具路由使用各工具对象自有的 `channel`，从不硬编码名称分支。
  */
 @Provide()
 export class Investigation extends FComponent {
@@ -33,12 +30,9 @@ export class Investigation extends FComponent {
     @Prompt('prompts/investigation/RUN.md')
     public prompt!: PromptService<string, string>;
 
-    @Inject(function (this: Investigation) { return `investigation:${this.agentConfig.name}`; })
-    public circuit!: Observable<InvestigationSignal>;
-
     /**
-     * EN: Binds one persistent investigation network to its Agent and cortical bus.
-     * ZH: 将一张持久调查网络绑定到所属 Agent 与皮层总线。
+     * EN: Binds one investigation service to its Agent and cortical bus.
+     * ZH: 将调查服务绑定到所属 Agent 与皮层总线。
      */
     public constructor(
         public readonly agentConfig: FAgentProfileConfiguration,
@@ -48,22 +42,8 @@ export class Investigation extends FComponent {
     }
 
     /**
-     * EN: Wires Ask, Confirm, Task, and Complete branches exactly once.
-     * ZH: 一次性连接 Ask、Confirm、Task 与 Complete 分支。
-     */
-    @Init()
-    public init(): void {
-        this.circuit.switch<InvestigationSignal['type'], InvestigationOutput>((signal) => signal.type, {
-            ask: (signal) => this.ask(signal as AskSignal),
-            confirm: (signal) => this.confirm(signal as ConfirmSignal),
-            task: (signal) => this.task(signal as TaskSignal),
-            complete: (signal) => this.complete(signal as CompleteSignal),
-        });
-    }
-
-    /**
-     * EN: Drives one investigation through the existing network until pure Complete.
-     * ZH: 通过既有网络驱动一次调查，直到产生纯净 Complete。
+     * EN: Drives one investigation until a pure Complete summary.
+     * ZH: 驱动一次调查直到产生纯净 Complete 摘要。
      */
     public async run(baseMessages: Message[], request: InvestigationRequest): Promise<CompleteSignal> {
         const messages: Message[] = [
@@ -74,30 +54,29 @@ export class Investigation extends FComponent {
         while (true) {
             const result = await this.model.streamRun(
                 messages,
-                await this.tools.list(request.delegation),
+                this.tools.list(request.root),
                 async (chunk) => {
-                    if (request.visible) {
-                        await this.synapse.fire({
-                            type: 'reply',
-                            turnId: request.turnId,
-                            agent: this.agentConfig.name,
-                            chunk,
-                        });
-                    }
+                    if (!request.root) return;
+                    await this.synapse.fire({
+                        type: 'reply',
+                        turnId: request.turnId,
+                        agent: this.agentConfig.name,
+                        chunk,
+                    });
                 },
             );
             if (result.toolCalls.length === 0) {
-                return await this.circuit.next({
+                return this.complete({
                     type: 'complete',
                     id: request.id,
                     turnId: request.turnId,
                     agent: this.agentConfig.name,
                     answer: result.text,
                     evidence,
-                }) as CompleteSignal;
+                });
             }
 
-            const calls = await Promise.all(result.toolCalls.map((call) => this.withWorkingDirectory(call, request.context.cwd)));
+            const calls = result.toolCalls.map((call) => this.withWorkingDirectory(call, request.context.cwd));
             messages.push(this.toolCallMessage({ ...result, toolCalls: calls }));
             for (const call of calls) {
                 const replay = await this.execute(call, request);
@@ -110,71 +89,48 @@ export class Investigation extends FComponent {
     }
 
     /**
-     * EN: Executes one call directly or discharges it through its neural branch.
-     * ZH: 直接执行一次调用，或通过对应神经分支放电。
+     * EN: Validates one call, then discharges by the tool's owned channel.
+     * ZH: 校验一次调用，再按工具自有 channel 放电。
      */
     private async execute(call: ToolCall, request: InvestigationRequest): Promise<ToolRunResult> {
-        if (call.name === 'ask') {
+        const tool = this.tools.resolve(call.name);
+        if (tool.channel === 'ask') {
             const validated = await this.tools.run(call);
             const data = validated.data as AskOutput;
-            const response = await this.circuit.next({
+            const response = await this.synapse.fire({
                 type: 'ask',
                 turnId: request.turnId,
                 id: call.id,
                 agent: this.agentConfig.name,
                 questions: data.questions,
-            }) as unknown as AskResponse;
-            return { ok: true, name: call.name, data: response };
+            });
+            return { name: call.name, data: response };
         }
-        if (call.name === 'task') {
+        if (tool.channel === 'task') {
             const validated = await this.tools.run(call);
             const data = validated.data as TaskOutput;
-            const completes = await this.circuit.next({
+            const completes = await this.synapse.fire({
                 type: 'task',
                 turnId: request.turnId,
                 id: call.id,
                 agent: this.agentConfig.name,
                 tasks: data.tasks,
-            }) as unknown as CompleteSignal[];
-            return { ok: true, name: call.name, data: { completes } };
+            });
+            return { name: call.name, data: { completes } };
         }
-        if (await this.tools.requiresConfirm(call)) {
-            const response = await this.circuit.next({
+        if (this.tools.requiresConfirm(call)) {
+            const response = await this.synapse.fire({
                 type: 'confirm',
                 turnId: request.turnId,
                 id: call.id,
                 agent: this.agentConfig.name,
                 call,
-            }) as unknown as ConfirmResponse;
+            });
             if (!response.approved) {
-                return { ok: true, name: call.name, data: { approved: false, executed: false } };
+                return { name: call.name, data: { approved: false, executed: false } };
             }
         }
         return await this.tools.run(call);
-    }
-
-    /**
-     * EN: Sends one clarification firing through the shared interaction circuit.
-     * ZH: 将一次澄清放电送入共享交互回路。
-     */
-    private async ask(signal: AskSignal): Promise<AskResponse> {
-        return await this.synapse.fire(signal);
-    }
-
-    /**
-     * EN: Sends one approval firing before any dangerous concrete action.
-     * ZH: 在任何危险具体动作前发送一次审批放电。
-     */
-    private async confirm(signal: ConfirmSignal): Promise<ConfirmResponse> {
-        return await this.synapse.fire(signal);
-    }
-
-    /**
-     * EN: Sends validated child goals to the cortical delegation circuit.
-     * ZH: 将已验证的子目标送入皮层委派回路。
-     */
-    private async task(signal: TaskSignal): Promise<CompleteSignal[]> {
-        return await this.synapse.fire(signal);
     }
 
     /**
@@ -191,8 +147,8 @@ export class Investigation extends FComponent {
      * EN: Applies an understood working directory only to tools that own cwd semantics.
      * ZH: 仅为拥有 cwd 语义的工具应用已理解的工作目录。
      */
-    private async withWorkingDirectory(call: ToolCall, cwd?: string): Promise<ToolCall> {
-        if (!cwd || !await this.tools.cwd(call.name) || 'cwd' in call.arguments) return call;
+    private withWorkingDirectory(call: ToolCall, cwd?: string): ToolCall {
+        if (!cwd || !this.tools.cwd(call.name) || 'cwd' in call.arguments) return call;
         return { ...call, arguments: { ...call.arguments, cwd } };
     }
 

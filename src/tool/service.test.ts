@@ -72,8 +72,8 @@ describe('Tools', () => {
         const ask = await tools.run({ id: 'ask_1', name: 'ask', arguments: { questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] } });
         const task = await tools.run({ id: 'task_1', name: 'task', arguments: { tasks: [{ agent: 'worker', goal: 'inspect' }] } });
 
-        expect(ask).toEqual({ ok: true, name: 'ask', data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }, { label: 'other', description: '自定义回答，可引用上面的方案', custom: true }] }] }, effects: [{ type: 'ask' }] });
-        expect(task).toEqual({ ok: true, name: 'task', data: { tasks: [{ agent: 'worker', goal: 'inspect' }] }, effects: [{ type: 'task' }] });
+        expect(ask).toEqual({ name: 'ask', data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }, { label: 'other', description: '自定义回答，可引用上面的方案', custom: true }] }] } });
+        expect(task).toEqual({ name: 'task', data: { tasks: [{ agent: 'worker', goal: 'inspect' }] } });
     });
 
     test('propagates invalid tool input unchanged', async () => {
@@ -102,7 +102,7 @@ describe('Tools', () => {
         const read = await tools.run({ id: 'read_1', name: 'filesystem', arguments: { action: 'read', path: target } });
 
         expect(write.data).toMatchObject({ action: 'write', path: resolve(other, 'dir/file.txt') });
-        expect(read).toMatchObject({ ok: true, name: 'filesystem' });
+        expect(read).toMatchObject({ name: 'filesystem' });
         expect(read.data).toMatchObject({ action: 'read', path: resolve(target), content: 'safe' });
         rmSync(target, { force: true });
     });
@@ -125,7 +125,7 @@ describe('Tools', () => {
             },
         });
 
-        expect(result.ok).toBe(true);
+        expect(result.name).toBeTruthy();
         const data = result.data as { action: string; cwd: string; command: string; stdout: string; timedOut: boolean };
         expect(data).toMatchObject({ action: 'shell', command: process.execPath, timedOut: false });
         expect(data.stdout).toBe(`${realpathSync(data.cwd)}\n`);
@@ -142,7 +142,7 @@ describe('Tools', () => {
             },
         });
 
-        expect(result.ok).toBe(true);
+        expect(result.name).toBeTruthy();
         const data = result.data as { cwd: string; stdout: string };
         expect(data.cwd).toBe(other);
         expect(data.stdout).toBe(`${realpathSync(other)}\n`);
@@ -164,7 +164,7 @@ describe('Tools', () => {
             },
         });
 
-        expect(result.ok).toBe(true);
+        expect(result.name).toBeTruthy();
         expect(result.data).toMatchObject({ action: 'execute', mode: 'serial', cwd: root, total: 2, success: 2, failed: 0 });
         const results = (result.data as { results: Array<{ id?: string; stdout: string; cwd: string }> }).results;
         expect(results.map((item) => item.id)).toEqual(['one', 'two']);
@@ -190,7 +190,7 @@ describe('Tools', () => {
             },
         });
 
-        expect(result.ok).toBe(true);
+        expect(result.name).toBeTruthy();
         expect(result.data).toMatchObject({ action: 'execute', mode: 'parallel', cwd: root, total: 2, success: 1, failed: 1 });
         const results = (result.data as { results: Array<{ id?: string; cwd: string; timedOut: boolean; ok: boolean; stdout: string }> }).results;
         expect(results.find((item) => item.id === 'slow')).toMatchObject({ cwd: root, timedOut: true, ok: false });

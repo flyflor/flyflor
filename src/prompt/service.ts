@@ -4,43 +4,22 @@ import { FService, useContainer } from '@/core/ioc';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 
-/** EN: One ordered section manifest. ZH: 一份有序 section 清单。 */
+/** EN: Optional ordered section manifest inside a package config.jsonc. ZH: 包内 config.jsonc 可选的有序 section 清单。 */
 export interface PromptSectionManifest<TSection extends string> {
     sections: TSection[];
 }
 
-/** EN: One file-backed block in a prompt protocol package. ZH: prompt 协议包中的一个文件区块。 */
-export interface PromptProtocolBlock<TSection extends string = string> {
-    key: TSection | 'config';
-    tag: string;
-    file: string;
-    role?: string;
-    note?: string;
-}
-
-/** EN: XML document layout declared by a prompt package. ZH: prompt 包声明的 XML 文档布局。 */
-export interface PromptProtocolContext<TSection extends string = string> {
-    root: string;
-    blocks: PromptProtocolBlock<TSection>[];
-}
-
-/** EN: File policy and document layout for one prompt package. ZH: 一个 prompt 包的文件策略与文档布局。 */
-export interface PromptProtocolPackage<TSection extends string = string> {
-    editable: string[];
-    locked: string[];
-    runtimeIgnored: string[];
-    context: PromptProtocolContext<TSection>;
-}
-
-/** EN: Parsed config.jsonc shape for one prompt package. ZH: 一个 prompt 包解析后的 config.jsonc 结构。 */
+/**
+ * EN: Minimal optional package config. Policy is derived from filenames.
+ * ZH: 最小可选包配置。写策略由文件名约定推导。
+ */
 export interface PromptConfig<TSection extends string = string> {
-    version: number;
-    description: string;
-    prompt: PromptSectionManifest<TSection>;
-    protocolPackage: PromptProtocolPackage<TSection>;
+    version?: number;
+    description?: string;
+    prompt?: PromptSectionManifest<TSection>;
 }
 
-/** EN: One inline XML block rendered for a model-bound service payload. ZH: 面向模型的 service payload 内联 XML 区块。 */
+/** EN: One inline XML block rendered for a model-bound payload. ZH: 面向模型的内联 XML 区块。 */
 export interface PromptDocumentBlock {
     tag: string;
     content: string;
@@ -55,23 +34,31 @@ export type PromptRender<TSection extends string> =
 /** EN: Loaded section name to prompt-file service mapping. ZH: 已加载 section 名到 prompt 文件服务的映射。 */
 export type PromptPackageData<TSection extends string> = Partial<Record<TSection, PromptService<string, string>>>;
 
+/** EN: Filename conventions for identity packages. ZH: 身份包文件名约定。 */
+const EDITABLE = new Set(['SOUL.md', 'USER.md', 'EXTENSION.md']);
+const LOCKED = new Set(['AGENTS.md']);
+const PREFERRED_ORDER = ['SOUL', 'USER', 'EXTENSION'] as const;
+
 /**
- * EN: Owns prompt-package loading, policy enforcement, and safe XML rendering.
- * ZH: 负责 prompt 协议包加载、策略执行与安全 XML 渲染。
+ * EN: Owns prompt-package loading, filename-derived policy, and safe XML rendering.
+ * ZH: 负责 prompt 包加载、文件名推导策略与安全 XML 渲染。
  */
 @Provide()
 export class PromptService<TSection extends string = string, TData = PromptPackageData<TSection>> extends FService {
     public config?: PromptConfig<TSection>;
     public data!: TData;
     public writable: boolean;
+    /** EN: Ordered section keys for directory packages. ZH: 目录包的有序 section 键。 */
+    public sections: TSection[];
 
     /**
      * EN: Loads one canonical prompt file or one complete prompt package directory.
-     * ZH: 加载一个规范 prompt 文件或一个完整 prompt 协议包目录。
+     * ZH: 加载一个规范 prompt 文件或一个完整 prompt 包目录。
      */
     public constructor(public readonly path: string) {
         super();
         this.writable = true;
+        this.sections = [];
         if (!statSync(path).isDirectory()) {
             this.data = readFileSync(path, 'utf-8') as TData;
             return;
@@ -79,19 +66,16 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
         const entries = readdirSync(path).sort();
         const configFile = entries.find((entry) => entry === 'config.jsonc');
         if (configFile) this.config = JSON5.parse(readFileSync(join(path, configFile), 'utf-8')) as PromptConfig<TSection>;
-        const prompts = entries
-            .filter((entry) => entry.endsWith('.md') && !entry.endsWith('.zh.cn.md'))
-            .map((entry) => {
-                const name = basename(entry, extname(entry)) as TSection;
-                const prompt = useContainer().create(PromptService, join(path, entry)) as PromptService<string, string>;
-                const policy = this.config?.protocolPackage;
-                if (policy) prompt.writable = policy.editable.includes(entry)
-                    && !policy.locked.includes(entry)
-                    && !policy.runtimeIgnored.includes(entry);
-                return [name, prompt] as const;
-            });
+        const mdFiles = entries.filter((entry) => entry.endsWith('.md') && !entry.endsWith('.zh.cn.md'));
+        const prompts = mdFiles.map((entry) => {
+            const name = basename(entry, extname(entry)) as TSection;
+            const prompt = useContainer().create(PromptService, join(path, entry)) as PromptService<string, string>;
+            prompt.writable = this.isWritable(entry);
+            return [name, prompt] as const;
+        });
         this.data = Object.fromEntries(prompts) as TData;
         Object.assign(this, this.data);
+        this.sections = this.orderSections(prompts.map(([name]) => name));
     }
 
     /**
@@ -110,17 +94,35 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
      */
     public render(shape: PromptRender<TSection>): string {
         if (shape.kind === 'sections') {
-            const sections = shape.sections ?? this.config?.prompt.sections;
-            if (!sections) throw Error(`Prompt section manifest is missing: ${this.path}`);
+            const sections = shape.sections ?? this.sections;
+            if (sections.length === 0) throw Error(`Prompt section manifest is missing: ${this.path}`);
             return sections.map((key) => this.section(key)).join(shape.separator ?? '\n\n');
         }
         if (shape.root !== undefined || shape.blocks !== undefined) {
             if (!shape.root || !shape.blocks || shape.blocks.length === 0) throw Error('Inline prompt document requires root and blocks');
             return this.renderDocument(shape.root, shape.blocks, shape.attributes);
         }
-        const context = this.config?.protocolPackage.context;
-        if (!context) throw Error(`Prompt document context is missing: ${this.path}`);
-        return this.renderDocument(context.root, context.blocks.map((block) => this.protocolBlock(block)), shape.attributes);
+        // Directory package snapshot: config + every loaded section by convention.
+        const blocks: PromptDocumentBlock[] = [
+            {
+                tag: 'document',
+                content: JSON.stringify(this.config ?? { prompt: { sections: this.sections } }, null, 2),
+                attributes: { key: 'config', file: 'config.jsonc', writable: 'false', role: 'policy' },
+            },
+            ...this.sections.map((key) => {
+                const file = `${String(key)}.md`;
+                return {
+                    tag: 'document',
+                    content: this.section(key),
+                    attributes: {
+                        key: String(key),
+                        file,
+                        writable: String(this.prompt(key).writable),
+                    },
+                };
+            }),
+        ];
+        return this.renderDocument('prompt_package', blocks, shape.attributes);
     }
 
     /**
@@ -135,25 +137,21 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
     }
 
     /**
-     * EN: Validates an entire identity update and then applies every write atomically by policy.
-     * ZH: 按策略完整验证身份更新后，再应用全部写入。
+     * EN: Validates an entire identity update then applies every write by filename policy.
+     * ZH: 完整验证身份更新后，按文件名策略应用全部写入。
      */
     public applyWrites(writes: Array<{ file?: string; content?: string }>): string[] {
-        const policy = this.config?.protocolPackage;
-        if (!policy) throw Error(`Prompt package policy is missing: ${this.path}`);
+        if (!statSync(this.path).isDirectory()) throw Error(`Prompt package policy is missing: ${this.path}`);
         const files = new Set<string>();
         const planned = writes.map((write) => {
             if (typeof write.file !== 'string' || typeof write.content !== 'string') throw Error('Prompt write requires file and content');
             if (write.content.trim().length === 0) throw Error(`Prompt content is empty: ${write.file}`);
             if (files.has(write.file)) throw Error(`Prompt file is duplicated: ${write.file}`);
             files.add(write.file);
-            if (!policy.editable.includes(write.file) || policy.locked.includes(write.file) || policy.runtimeIgnored.includes(write.file)) {
-                throw Error(`Prompt file is not writable: ${write.file}`);
-            }
-            const block = policy.context.blocks.find((candidate) => candidate.file === write.file);
-            if (!block || block.key === 'config') throw Error(`Prompt file is not declared: ${write.file}`);
-            const prompt = (this.data as PromptPackageData<TSection>)[block.key as TSection];
-            if (!prompt) throw Error(`Prompt section is missing: ${String(block.key)}`);
+            if (!this.isWritable(write.file)) throw Error(`Prompt file is not writable: ${write.file}`);
+            const key = basename(write.file, extname(write.file)) as TSection;
+            const prompt = (this.data as PromptPackageData<TSection>)[key];
+            if (!prompt) throw Error(`Prompt section is missing: ${String(key)}`);
             return { file: write.file, content: write.content, prompt };
         });
         for (const write of planned) write.prompt.set(write.content);
@@ -161,29 +159,34 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
     }
 
     /**
-     * EN: Resolves one protocol-package file block into inline XML content.
-     * ZH: 将一个协议包文件区块解析为内联 XML 内容。
+     * EN: Filename-derived write policy for identity packages.
+     * ZH: 身份包按文件名推导的写策略。
      */
-    private protocolBlock(block: PromptProtocolBlock<TSection>): PromptDocumentBlock {
-        const content = block.key === 'config'
-            ? JSON.stringify(this.config, null, 2)
-            : this.section(block.key);
-        return {
-            tag: block.tag,
-            content,
-            attributes: {
-                key: String(block.key),
-                file: block.file,
-                writable: String(block.key !== 'config' && this.prompt(block.key).writable),
-                ...(block.role ? { role: block.role } : {}),
-                ...(block.note ? { note: block.note } : {}),
-            },
-        };
+    private isWritable(file: string): boolean {
+        if (LOCKED.has(file) || file === 'config.jsonc' || file.endsWith('.zh.cn.md')) return false;
+        return EDITABLE.has(file);
+    }
+
+    /**
+     * EN: Orders sections from optional config, then preferred names, then alpha.
+     * ZH: 按可选配置、优先名、字母序排列 sections。
+     */
+    private orderSections(names: TSection[]): TSection[] {
+        const configured = this.config?.prompt?.sections;
+        if (configured && configured.length > 0) {
+            for (const key of configured) {
+                if (!names.includes(key)) throw Error(`Prompt section is missing: ${String(key)}`);
+            }
+            return [...configured];
+        }
+        const preferred = PREFERRED_ORDER.filter((key) => names.includes(key as TSection)) as TSection[];
+        const rest = names.filter((key) => !preferred.includes(key)).sort();
+        return [...preferred, ...rest];
     }
 
     /**
      * EN: Returns one required child prompt service.
-     * ZH: 返回一个必需的子 prompt service。
+     * ZH: 返回一个必需的子 prompt 服务。
      */
     private prompt(key: TSection): PromptService<string, string> {
         const prompt = (this.data as PromptPackageData<TSection>)[key];

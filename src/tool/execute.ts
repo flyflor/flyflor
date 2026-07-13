@@ -21,8 +21,6 @@ interface ExecuteTask {
  */
 @Provide()
 export class Execute extends Tool<ExecuteInput, ExecuteOutput> {
-    public readonly name: string;
-    public readonly risk: 'external';
     public override readonly workingDirectory: boolean;
     public readonly parameters: Record<string, unknown>;
 
@@ -32,8 +30,6 @@ export class Execute extends Tool<ExecuteInput, ExecuteOutput> {
     /** EN: Initializes script capability metadata and its cwd-aware model schema. ZH: 初始化脚本能力元数据及其 cwd 感知模型 schema。 */
     public constructor() {
         super();
-        this.name = 'execute';
-        this.risk = 'external';
         this.workingDirectory = true;
         this.parameters = {
             type: 'object',
@@ -68,25 +64,21 @@ export class Execute extends Tool<ExecuteInput, ExecuteOutput> {
     }
 
     /** EN: Executes one validated script batch and reports explicit process data. ZH: 执行一个已验证脚本批次并报告显式进程数据。 */
-    public override async execute(input: ExecuteInput) {
+    public override async execute(input: ExecuteInput): Promise<ExecuteOutput> {
         const cwd = this.cwd(input.cwd, this.config.path.cwd);
         const mode = this.mode(input.mode);
         const tasks = this.tasks(input.tasks);
         const maxConcurrency = this.maxConcurrency(input.maxConcurrency, mode, tasks.length);
         const results = await this.results(tasks, cwd, mode === 'serial' ? 1 : maxConcurrency);
         return {
-            ok: true,
-            data: {
-                action: 'execute',
-                mode,
-                cwd,
-                total: results.length,
-                success: results.filter((item) => item.ok).length,
-                failed: results.filter((item) => !item.ok).length,
-                results,
-            },
-            effects: [{ type: 'execute' }],
-        } as const;
+            action: 'execute' as const,
+            mode,
+            cwd,
+            total: results.length,
+            success: results.filter((item) => item.ok).length,
+            failed: results.filter((item) => !item.ok).length,
+            results,
+        };
     }
 
     /** EN: Runs tasks through a bounded ordered worker set. ZH: 通过有界有序 worker 集合运行任务。 */

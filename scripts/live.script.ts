@@ -8,7 +8,7 @@ import { Synapse } from '@/neural';
 import { IpcClientBridge } from '../web/client';
 import assert from 'node:assert/strict';
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 interface BridgePacket {
@@ -282,8 +282,7 @@ class LiveScenarios extends FService {
         const agent = await useContainer().getAsync(Agent, {
             ...source,
             name: 'soul-live',
-            promptPackage: relative(this.synapse.config.path.root, identity),
-            promptSections: ['SOUL', 'USER', 'EXTENSION'],
+            promptPackage: identity,
         }, bus);
         const complete = await agent.receive({ type: 'input', input: 'Remember permanently that my stable live verification marker is SOUL_SCENARIO_OK. This is an explicit durable user fact.' });
         assert.match(complete.answer, /更新|update/i);

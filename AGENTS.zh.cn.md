@@ -56,9 +56,9 @@ Flyflor 是持续存在、无 Session 的智能生命体。所有设计只服务
 1. Observable 继承 FlyFlor，只暴露 `pipe`、`switch`、`subscribe` 与 FIFO `next`。
 2. Synapse 持有相互独立的感觉、交互、委派、表达回路。
 3. Ask 与 Confirm 共用串行交互回路；Task 使用委派回路；Reply 与根 Complete 使用表达回路。
-4. Agent stimulus 进入该人物私有 FIFO；同一人物串行思考，不同人物可并发调查。
-5. Callosum 对每次根输入只感知一次，只返回 `reply`、`research` 或 `soul`。
-6. Investigation 在 Init 中一次性构建 Ask、Confirm、Task、Complete 分支；委派运行看不到 Task。
+4. Agent stimulus 进入该人物私有 FIFO；同一人物串行思考，不同人物可并发调查。Brain 与 Investigation 是方法，不是额外 Observable。
+5. Callosum 对每次根输入只感知一次（模型语义输出），只返回 `reply`、`research` 或 `soul`。
+6. Investigation 经 `AgentBus` 放电 Ask、Confirm、Task，路由依据各工具自有的 `channel`；带 `rootOnly` 的工具不会出现在委派运行中。
 7. Filesystem、Shell、Execute 是直接动作，不是神经信号。
 
 ## Context 与 Memory
@@ -73,9 +73,10 @@ Flyflor 是持续存在、无 Session 的智能生命体。所有设计只服务
 
 1. PromptService 是唯一 prompt package 与 XML rendering 边界；禁止新增 XmlService 或手写 dynamic XML。
 2. Runtime 加载规范英文 `.md`，忽略 `.zh.cn.md` 镜像。
-3. Package policy 控制有序 sections、document blocks、editable files、locked files、runtime-ignored files。
-4. Identity write 按 package policy 只允许 `SOUL.md`、`USER.md`、`EXTENSION.md`，并在任何写入前完成全部验证。
+3. 目录名与文件名是最高约束。Agent 包解析为 `.config/agents/{name}/` 或 `prompts/agents/{name}.md`。写策略由文件名推导；可选的 package `config.jsonc` 只可声明 section 顺序。
+4. Identity write 按文件名策略只允许 `SOUL.md`、`USER.md`、`EXTENSION.md`，并在任何写入前完成全部验证。
 5. 仓库内每个文档 Markdown 都有 `.zh.cn.md` 人工镜像。
+6. 编排代码优先使用对象自有政策与模型语义感知，禁止硬编码名称分支。
 
 ## Model、Tool 与 Transport
 

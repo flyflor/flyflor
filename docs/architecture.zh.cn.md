@@ -82,7 +82,7 @@ Synapse 持有四个独立回路实例：
 | 委派 | Task | 从 `ContextBrief` 构建子任务并等待目标 Complete |
 | 表达 | Reply 或根 Complete | 保证 reply chunks、Complete、streamEnd 顺序 |
 
-每个 Agent 与 Brain 也拥有私有 FIFO 回路。Investigation 在 `@Init` 中一次性构建 Ask、Confirm、Task、Complete switch，并为后续刺激复用网络。
+每个 Agent 持有一条私有 FIFO 回路。Brain 用方法路由刺激。Investigation 运行模型/工具环，经 `AgentBus` 将 Ask、Confirm、Task 放入 Synapse 回路——它不持有私有 Observable。
 
 ## 根 Turn
 
@@ -130,7 +130,7 @@ sequenceDiagram
     S-->>RI: Complete[] 作为本地工具结果
 ```
 
-发给同一人物的任务排在该人物当前 stimulus 之后；不同人物可以并发。自我委派会被拒绝，因为等待当前正在执行的 FIFO 会死锁。委派运行使用 `tools.list(false)`，因此无法递归触发 Task，但仍可使用统一 Ask 与 Confirm 回路。
+发给同一人物的任务排在该人物当前 stimulus 之后；不同人物可以并发。自我委派会被拒绝，因为等待当前正在执行的 FIFO 会死锁。委派运行使用 `tools.list(root=false)`，会省略带 `rootOnly` 的工具（Task），因此无法递归触发 Task，但仍可使用统一 Ask 与 Confirm 回路。
 
 ## Investigation 与 Tools
 
@@ -152,13 +152,18 @@ Memory 在超过十六条 notes 后按 FIFO 淘汰最旧笔记。它不会在任
 PromptService 是唯一 prompt 边界，负责：
 
 - 加载规范英文 Markdown，并忽略 `.zh.cn.md` 镜像；
-- 按 package `config.jsonc` 声明顺序组合 sections；
-- editable、locked、runtime-ignored 身份策略；
+- section 顺序优先用 package `config.jsonc`，否则按优先名再字母序；
+- 写策略由文件名约定推导（`SOUL.md`/`USER.md`/`EXTENSION.md` 可写；`AGENTS.md` 锁定）；
 - 身份写入的 all-before-any 严格验证；
 - XML name 验证、attribute escaping、CDATA splitting、稳定 block 顺序；
 - 为 ContextBrief、用户输入、task data、tool results 渲染内联 `document`。
 
-XML 只存在于模型输入边界，不是 Context、Turn 或 Memory 的存储格式。缺少 package、section、mapping、block 或非法 name 都立即 reject。
+Agent 提示词包只靠目录约定解析：
+
+- `.config/agents/{name}/` 为身份包；
+- `prompts/agents/{name}.md` 为单文件人物。
+
+XML 只存在于模型输入边界，不是 Context、Turn 或 Memory 的存储格式。缺少 package、section 或非法 name 都立即 reject。
 
 ## 模型协议
 

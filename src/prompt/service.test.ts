@@ -57,7 +57,7 @@ describe('PromptService', () => {
 
         expect(() => service.render({ kind: 'document', root: 'context', blocks: [] })).toThrow('requires root and blocks');
         expect(() => service.render({ kind: 'document', root: 'bad root', blocks: [{ tag: 'input', content: 'value' }] })).toThrow('XML name is invalid');
-        expect(() => service.render({ kind: 'document' })).toThrow('document context is missing');
+        expect(service.render({ kind: 'document' })).toContain('<prompt_package');
     });
 });
 

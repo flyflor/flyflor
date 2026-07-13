@@ -1,18 +1,21 @@
-import { AgentChatRole, type AgentBus } from '@/agent/types';
-import type { Perception, Reference, TurnSummary } from '@/agent/context';
+import type { AgentBus } from '@/agent/types';
+import type { Perception, TurnSummary } from '@/agent/context';
 import type { FAgentProfileConfiguration } from '@/config';
 import { FComponent, Prompt, Provide, Scope } from '@/core';
-import { Model } from '@/model';
+import { Model, parse } from '@/model';
 import { PromptService } from '@/prompt';
-import { parse } from '@/agent/json';
 
+/** EN: Perception section key inside the Callosum prompt package. ZH: Callosum 提示词包内的感知 section 键。 */
 export enum CallosumPrompt {
     Perceive = 'PERCEIVE',
 }
 
 /**
- * EN: Perceives one stimulus once and returns a strict cognitive intent.
- * ZH: 对一个刺激只感知一次，并返回严格的认知意图。
+ * EN: Perceives one stimulus once via the model and returns a strict cognitive intent.
+ * ZH: 通过模型对一个刺激只感知一次，并返回严格的认知意图。
+ *
+ * EN: Intent is semantic model output, never keyword-matched in code.
+ * ZH: 意图是模型语义输出，代码中从不做关键词匹配。
  */
 @Provide()
 export class Callosum extends FComponent {
@@ -47,8 +50,8 @@ export class Callosum extends FComponent {
             ],
         });
         const raw = await this.model.completeText([
-            { role: AgentChatRole.System, content: this.prompt.section(CallosumPrompt.Perceive) },
-            { role: AgentChatRole.User, content: document },
+            { role: 'system', content: this.prompt.section(CallosumPrompt.Perceive) },
+            { role: 'user', content: document },
         ]);
         return this.read(parse<unknown>(raw));
     }
@@ -63,29 +66,14 @@ export class Callosum extends FComponent {
         if (data.intent !== 'reply' && data.intent !== 'research' && data.intent !== 'soul') throw Error('Perception intent is invalid');
         if (typeof data.goal !== 'string' || data.goal.length === 0) throw Error('Perception goal is invalid');
         if (!Array.isArray(data.constraints) || !data.constraints.every((item) => typeof item === 'string')) throw Error('Perception constraints are invalid');
-        if (!Array.isArray(data.references) || !data.references.every((item) => this.reference(item))) throw Error('Perception references are invalid');
+        if (!Array.isArray(data.references) || !data.references.every((item) => typeof item === 'string')) throw Error('Perception references are invalid');
         if (data.cwd !== undefined && typeof data.cwd !== 'string') throw Error('Perception cwd is invalid');
         return {
             intent: data.intent,
             goal: data.goal,
             cwd: data.cwd as string | undefined,
             constraints: [...data.constraints],
-            references: data.references.map((reference) => ({ ...(reference as Reference) })),
+            references: [...data.references],
         };
-    }
-
-    /**
-     * EN: Validates one normalized perception reference.
-     * ZH: 验证一条规范化感知引用。
-     */
-    private reference(value: unknown): value is Reference {
-        if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
-        const reference = value as Record<string, unknown>;
-        return (reference.type === 'path'
-            || reference.type === 'error'
-            || reference.type === 'command'
-            || reference.type === 'symbol'
-            || reference.type === 'text')
-            && typeof reference.value === 'string';
     }
 }

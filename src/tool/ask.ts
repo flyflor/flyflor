@@ -5,18 +5,21 @@ import type { AskInput, AskOption, AskOutput, AskQuestion } from './types';
 /**
  * EN: Validates structured clarification questions without performing interaction.
  * ZH: 验证结构化澄清问题，不执行交互。
+ *
+ * EN: channel=`ask` tells Investigation to fire the interaction circuit after validation.
+ * ZH: channel=`ask` 告知 Investigation 在校验后走交互回路。
  */
 @Provide()
 export class Ask extends Tool<AskInput, AskOutput> {
-    public readonly name: string;
-    public readonly risk: 'interaction';
     public readonly parameters: Record<string, unknown>;
 
-    /** EN: Initializes the clarification capability and its strict model schema. ZH: 初始化澄清能力及其严格模型 schema。 */
+    /**
+     * EN: Initializes the clarification capability and its strict model schema.
+     * ZH: 初始化澄清能力及其严格模型 schema。
+     */
     public constructor() {
         super();
-        this.name = 'ask';
-        this.risk = 'interaction';
+        this.channel = 'ask';
         this.parameters = {
             type: 'object',
             properties: {
@@ -47,18 +50,19 @@ export class Ask extends Tool<AskInput, AskOutput> {
         };
     }
 
-    /** EN: Validates and normalizes one question collection. ZH: 验证并规范化一组问题。 */
-    public override execute(input: AskInput) {
+    /**
+     * EN: Validates and normalizes one question collection.
+     * ZH: 验证并规范化一组问题。
+     */
+    public override execute(input: AskInput): AskOutput {
         if (!Array.isArray(input.questions) || input.questions.length === 0) throw Error('questions is required');
-        const questions = input.questions.map((item) => this.question(item));
-        return {
-            ok: true,
-            data: { kind: 'ask', questions },
-            effects: [{ type: 'ask' }],
-        } as const;
+        return { kind: 'ask', questions: input.questions.map((item) => this.question(item)) };
     }
 
-    /** EN: Validates one question and appends the free-input choice. ZH: 验证一个问题并追加自由输入选项。 */
+    /**
+     * EN: Validates one question and appends the free-input choice.
+     * ZH: 验证一个问题并追加自由输入选项。
+     */
     private question(value: unknown): AskQuestion {
         if (typeof value !== 'object' || value === null) throw Error('question must be an object');
         const raw = value as { question?: unknown; options?: unknown };
@@ -69,7 +73,10 @@ export class Ask extends Tool<AskInput, AskOutput> {
         return { question, options };
     }
 
-    /** EN: Validates one offered answer direction. ZH: 验证一个候选回答方向。 */
+    /**
+     * EN: Validates one offered answer direction.
+     * ZH: 验证一个候选回答方向。
+     */
     private option(value: unknown): AskOption {
         if (typeof value !== 'object' || value === null) throw Error('option must be an object');
         const raw = value as { label?: unknown; description?: unknown; recommended?: unknown };
@@ -79,7 +86,10 @@ export class Ask extends Tool<AskInput, AskOutput> {
         return option;
     }
 
-    /** EN: Requires one non-empty string field. ZH: 要求一个非空字符串字段。 */
+    /**
+     * EN: Requires one non-empty string field.
+     * ZH: 要求一个非空字符串字段。
+     */
     private text(value: unknown, name: string): string {
         if (typeof value !== 'string' || value.length === 0) throw Error(`${name} is required`);
         return value;

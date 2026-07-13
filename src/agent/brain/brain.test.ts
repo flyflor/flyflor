@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { Context } from '@/agent/context';
 import { Memory } from '@/agent/memory';
-import { AgentChatRole, type AgentBus, type AgentTask, type NeuralSignal } from '@/agent/types';
-import { Observable, useContainer } from '@/core';
+import type { AgentBus, AgentTask, NeuralSignal } from '@/agent/types';
+import { useContainer } from '@/core';
 import { PromptService } from '@/prompt';
 import { Brain } from './brain';
 
@@ -10,13 +10,14 @@ const profile = {
     name: 'flyflor',
     model: 'model',
     provider: 'provider',
-    contextLength: 1024,
     maxTokens: 256,
     promptPackage: '.config/agents/flyflor',
-    promptSections: ['SOUL'],
 };
 
-/** EN: Builds one isolated Brain test object. ZH: 构造一个隔离的 Brain 测试对象。 */
+/**
+ * EN: Builds one isolated Brain test object.
+ * ZH: 构造一个隔离的 Brain 测试对象。
+ */
 function harness(name = 'flyflor') {
     const signals: NeuralSignal[] = [];
     const bus: AgentBus = {
@@ -27,13 +28,11 @@ function harness(name = 'flyflor') {
     };
     const agentProfile = { ...profile, name };
     const brain = useContainer().create(Brain, agentProfile, bus);
-    brain.circuit = useContainer().create(Observable<Parameters<Brain['receive']>[0]>, `brain-test:${name}`);
     brain.context = useContainer().create(Context);
     brain.memory = useContainer().create(Memory, agentProfile, bus);
     brain.memory.prompt = useContainer().create(PromptService, 'prompts/memory') as PromptService;
     brain.prompt = useContainer().create(PromptService, 'prompts/callosum') as never;
-    brain.identity = { messages: () => [{ role: AgentChatRole.System, content: 'identity' }] } as never;
-    brain.init();
+    brain.identity = { messages: () => [{ role: 'system', content: 'identity' }] } as never;
     return { brain, signals };
 }
 

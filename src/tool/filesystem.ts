@@ -11,8 +11,6 @@ import { Tool } from './abstracts';
  */
 @Provide()
 export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
-    public readonly name: string;
-    public readonly risk: 'destructive';
     public override readonly workingDirectory: boolean;
     public readonly parameters: Record<string, unknown>;
 
@@ -22,8 +20,6 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
     /** EN: Initializes file capability metadata and its cwd-aware model schema. ZH: 初始化文件能力元数据及其 cwd 感知模型 schema。 */
     public constructor() {
         super();
-        this.name = 'filesystem';
-        this.risk = 'destructive';
         this.workingDirectory = true;
         this.parameters = {
             type: 'object',
@@ -48,7 +44,7 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
     }
 
     /** EN: Routes one validated file action to its owned implementation. ZH: 将一个已验证文件动作路由到自身实现。 */
-    public override execute(input: FilesystemInput) {
+    public override execute(input: FilesystemInput): FilesystemOutput {
         const action = this.action(input.action);
         if (action === 'read') return this.read(input);
         if (action === 'write') return this.write(input);
@@ -66,16 +62,12 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
         const sliced = content.split(/\r?\n/).slice(offsetLines, offsetLines + limitLines).join('\n');
         const limited = Buffer.byteLength(sliced) > limitBytes ? sliced.slice(0, limitBytes) : sliced;
         return {
-            ok: true,
-            data: {
-                action: 'read',
-                path,
-                content: limited,
-                bytes: Buffer.byteLength(limited),
-                truncated: limited.length !== sliced.length || sliced.length !== content.length,
-            },
-            effects: [{ type: 'read', path }],
-        } as const;
+            action: 'read' as const,
+            path,
+            content: limited,
+            bytes: Buffer.byteLength(limited),
+            truncated: limited.length !== sliced.length || sliced.length !== content.length,
+        };
     }
 
     /** EN: Replaces one file with explicit complete content. ZH: 使用显式完整内容替换一个文件。 */
@@ -84,11 +76,7 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
         const content = this.text(input.content, 'content');
         mkdirSync(dirname(path), { recursive: true });
         writeFileSync(path, content, 'utf-8');
-        return {
-            ok: true,
-            data: { action: 'write', path, bytes: Buffer.byteLength(content) },
-            effects: [{ type: 'write', path }],
-        } as const;
+        return { action: 'write' as const, path, bytes: Buffer.byteLength(content) };
     }
 
     /** EN: Applies one exact text replacement. ZH: 应用一次精确文本替换。 */
@@ -100,11 +88,7 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
         if (!content.includes(oldText)) throw Error('oldText not found');
         const updated = content.replace(oldText, newText);
         writeFileSync(path, updated, 'utf-8');
-        return {
-            ok: true,
-            data: { action: 'edit', path, replacements: 1, bytes: Buffer.byteLength(updated) },
-            effects: [{ type: 'write', path }],
-        } as const;
+        return { action: 'edit' as const, path, replacements: 1, bytes: Buffer.byteLength(updated) };
     }
 
     /** EN: Deletes one exact regular file. ZH: 删除一个精确普通文件。 */
@@ -113,11 +97,7 @@ export class Filesystem extends Tool<FilesystemInput, FilesystemOutput> {
         const stat = statSync(path);
         if (!stat.isFile()) throw Error('delete only supports files');
         unlinkSync(path);
-        return {
-            ok: true,
-            data: { action: 'delete', path },
-            effects: [{ type: 'delete', path }],
-        } as const;
+        return { action: 'delete' as const, path };
     }
 
     /** EN: Resolves one semantic path against the owned cwd convention. ZH: 按自身 cwd 约定解析语义路径。 */

@@ -71,7 +71,7 @@ export class Turn {
             input: this.input,
             goal: this.perception.goal,
             constraints: [...this.perception.constraints],
-            references: this.perception.references.map((reference) => ({ ...reference })),
+            references: [...this.perception.references],
             cwd: this.perception.cwd,
             recent: recent.map((summary) => ({ ...summary, evidence: [...summary.evidence] })),
         };

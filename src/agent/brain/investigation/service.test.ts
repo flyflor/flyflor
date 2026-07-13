@@ -1,33 +1,32 @@
 import { describe, expect, test } from 'bun:test';
 import { Memory } from '@/agent/memory';
-import { AgentChatRole, type AgentBus, type CompleteSignal, type NeuralSignal } from '@/agent/types';
-import { Observable, useContainer } from '@/core';
+import type { AgentBus, CompleteSignal, NeuralSignal } from '@/agent/types';
+import { useContainer } from '@/core';
 import type { Message, ToolCall, ToolDefinition } from '@/model';
 import { PromptService } from '@/prompt';
 import type { ToolRunResult } from '@/tool';
 import { Investigation } from './service';
-import type { InvestigationRequest, InvestigationSignal } from './types';
+import type { InvestigationRequest } from './types';
 
 const profile = {
     name: 'flyflor',
     model: 'model',
     provider: 'provider',
-    contextLength: 1024,
     maxTokens: 256,
     promptPackage: '.config/agents/flyflor',
-    promptSections: ['SOUL'],
 };
 
 const request: InvestigationRequest = {
     id: 'turn_1',
     turnId: 'turn_1',
-    goal: 'inspect',
     context: { turnId: 'turn_1', input: 'inspect', goal: 'inspect', constraints: [], references: [], cwd: '/tmp/semantic', recent: [] },
-    delegation: true,
-    visible: true,
+    root: true,
 };
 
-/** EN: Builds one persistent Investigation network with deterministic boundaries. ZH: 使用确定性边界构造一张持久 Investigation 网络。 */
+/**
+ * EN: Builds one Investigation with deterministic tool and model boundaries.
+ * ZH: 使用确定性工具与模型边界构造一次 Investigation。
+ */
 function harness(responses: Array<{ text: string; toolCalls: ToolCall[] }>, confirm = true) {
     const signals: NeuralSignal[] = [];
     const calls: ToolCall[] = [];
@@ -44,19 +43,28 @@ function harness(responses: Array<{ text: string; toolCalls: ToolCall[] }>, conf
         },
     };
     const investigation = useContainer().create(Investigation, profile, bus);
-    investigation.circuit = useContainer().create(Observable<InvestigationSignal>, 'investigation-test');
     investigation.prompt = useContainer().create(PromptService, 'prompts/investigation/RUN.md') as PromptService<string, string>;
     investigation.memory = useContainer().create(Memory, profile, bus);
     investigation.memory.prompt = useContainer().create(PromptService, 'prompts/memory') as PromptService;
     investigation.tools = {
-        list: async () => [{ name: 'filesystem', description: 'filesystem', parameters: {} }] as ToolDefinition[],
-        cwd: async (name: string) => name === 'filesystem',
-        requiresConfirm: async (call: ToolCall) => call.name === 'filesystem' && call.arguments.action === 'write',
+        list: () => [{ name: 'filesystem', description: 'filesystem', parameters: {} }] as ToolDefinition[],
+        cwd: (name: string) => name === 'filesystem',
+        resolve: (name: string) => ({
+            name,
+            channel: name === 'ask' ? 'ask' : name === 'task' ? 'task' : 'direct',
+            rootOnly: name === 'task',
+            workingDirectory: name === 'filesystem',
+            confirm: () => false,
+            execute: async () => ({}),
+            definition: () => ({ name, description: name, parameters: {} }),
+            parameters: {},
+        }),
+        requiresConfirm: (call: ToolCall) => call.name === 'filesystem' && call.arguments.action === 'write',
         run: async (call: ToolCall): Promise<ToolRunResult> => {
             calls.push(call);
-            if (call.name === 'ask') return { ok: true, name: 'ask', data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] } };
-            if (call.name === 'task') return { ok: true, name: 'task', data: { tasks: [{ agent: 'worker', goal: 'inspect child' }] } };
-            return { ok: true, name: call.name, data: { action: call.arguments.action, path: '/tmp/demo.ts' } };
+            if (call.name === 'ask') return { name: 'ask', data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] } };
+            if (call.name === 'task') return { name: 'task', data: { tasks: [{ agent: 'worker', goal: 'inspect child' }] } };
+            return { name: call.name, data: { action: call.arguments.action, path: '/tmp/demo.ts' } };
         },
     } as never;
     let index = 0;
@@ -68,11 +76,10 @@ function harness(responses: Array<{ text: string; toolCalls: ToolCall[] }>, conf
             return { ...response, reasoning: '', stopReason: 'stop' };
         },
     } as never;
-    investigation.init();
     return { investigation, signals, calls, seen };
 }
 
-const messages = [{ role: AgentChatRole.User, content: 'inspect' }] as Message[];
+const messages = [{ role: 'user', content: 'inspect' }] as Message[];
 
 describe('Investigation', () => {
     test('streams and returns pure Complete without steps or pause state', async () => {

@@ -11,7 +11,7 @@ import {
 import { defineMetadata, getMetadata, useContainer } from './ioc/container';
 import type { FModule } from './ioc/abstracts';
 import { get } from 'lodash-es';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 
 /**
  * EN: Concrete constructor accepted by decorators and factory helpers.
@@ -191,8 +191,12 @@ export function Config(key?: string): PropertyDecorator {
 }
 
 /**
- * EN: Injects a canonical prompt file or directory resolved from the repository root.
- * ZH: 从仓库根目录按约定解析并注入 prompt 文件或目录。
+ * EN: Injects a canonical prompt file or directory.
+ * ZH: 注入一个规范 prompt 文件或目录。
+ *
+ * EN: Relative paths resolve from the repository root; absolute paths load as-is
+ * (identity packages and live disposable trees).
+ * ZH: 相对路径相对仓库根解析；绝对路径原样加载（身份包与 live 临时树）。
  */
 export function Prompt<TThis = object>(path: string | ((this: TThis, prop: TThis) => string)): PropertyDecorator {
     return (target, propertyKey) => {
@@ -205,7 +209,8 @@ export function Prompt<TThis = object>(path: string | ((this: TThis, prop: TThis
                     import('@/config'),
                     import('@/prompt/service'),
                 ]);
-                const promptPath = join(useRootPath(), typeof path === 'function' ? path.call(this, this) : path);
+                const resolved = typeof path === 'function' ? path.call(this, this) : path;
+                const promptPath = isAbsolute(resolved) ? resolved : join(useRootPath(), resolved);
                 return useContainer().getAsync(PromptService, promptPath);
             },
         });

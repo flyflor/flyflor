@@ -10,8 +10,6 @@ import { Tool } from './abstracts';
  */
 @Provide()
 export class Shell extends Tool<ShellInput, ShellOutput> {
-    public readonly name: string;
-    public readonly risk: 'external';
     public override readonly workingDirectory: boolean;
     public readonly parameters: Record<string, unknown>;
 
@@ -21,8 +19,6 @@ export class Shell extends Tool<ShellInput, ShellOutput> {
     /** EN: Initializes command capability metadata and its cwd-aware model schema. ZH: 初始化命令能力元数据及其 cwd 感知模型 schema。 */
     public constructor() {
         super();
-        this.name = 'shell';
-        this.risk = 'external';
         this.workingDirectory = true;
         this.parameters = {
             type: 'object',
@@ -42,7 +38,7 @@ export class Shell extends Tool<ShellInput, ShellOutput> {
     }
 
     /** EN: Executes one command and preserves exit and timeout as data. ZH: 执行一个命令，并将退出与超时保留为数据。 */
-    public override async execute(input: ShellInput) {
+    public override async execute(input: ShellInput): Promise<ShellOutput> {
         const cwd = input.cwd === undefined ? this.config.path.cwd : this.text(input.cwd, 'cwd');
         const command = this.text(input.command, 'command');
         const args = this.args(input.args);
@@ -66,11 +62,7 @@ export class Shell extends Tool<ShellInput, ShellOutput> {
                 proc.on('error', reject);
                 proc.on('close', resolve);
             });
-            return {
-                ok: true,
-                data: { action: 'shell', cwd, command, args, exitCode, stdout, stderr, timedOut },
-                effects: [{ type: 'execute' }],
-            } as const;
+            return { action: 'shell' as const, cwd, command, args, exitCode, stdout, stderr, timedOut };
         } finally {
             clearTimeout(timer);
         }

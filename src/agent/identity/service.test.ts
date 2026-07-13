@@ -1,19 +1,17 @@
 import { describe, expect, test } from 'bun:test';
 import { useContainer } from '@/core';
-import { Identity } from './component';
+import { Identity } from './service';
 
 const bus = { fire: async () => undefined };
 
 describe('Identity', () => {
-    test('renders one Agent prompt package without Turn state', async () => {
+    test('renders one Agent single-file prompt without Turn state', async () => {
         const identity = await useContainer().getAsync(Identity, {
             name: 'worker',
             model: 'model',
             provider: 'provider',
-            contextLength: 1,
             maxTokens: 1,
-            promptPackage: './prompts/agents',
-            promptSections: ['worker'],
+            promptPackage: './prompts/agents/worker.md',
         }, bus);
 
         expect(identity.messages()[0]?.content).toContain('persistent independent person');
@@ -25,10 +23,8 @@ describe('Identity', () => {
             name: 'flyflor',
             model: 'model',
             provider: 'provider',
-            contextLength: 1,
             maxTokens: 1,
             promptPackage: './.config/agents/flyflor',
-            promptSections: ['SOUL', 'USER', 'EXTENSION'],
         }, bus);
 
         expect(identity.snapshot()).toContain('<prompt_package');
