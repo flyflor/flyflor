@@ -3,7 +3,7 @@ import { Context } from '@/agent';
 import { Inject, Observable, Provide } from '@/core';
 import { AgentPool } from './pool';
 
-/** EN: Independent cortical task circuit dispatching persistent people concurrently. ZH: 并发派发持久人物的独立皮层任务回路。 */
+/** ZH: 并发派发持久人物的独立皮层任务回路。 EN: Independent cortical task circuit dispatching persistent people concurrently. */
 @Provide()
 export class Delegation extends Observable<TaskSignal, CompleteSignal[]> {
     @Inject()
@@ -11,20 +11,20 @@ export class Delegation extends Observable<TaskSignal, CompleteSignal[]> {
 
     private pool?: AgentPool;
 
-    /** EN: Creates one unbound delegation FIFO. ZH: 创建一条尚未绑定人物池的委派 FIFO。 */
+    /** ZH: 创建一条尚未绑定人物池的委派 FIFO。 EN: Creates one unbound delegation FIFO. */
     public constructor() {
         super();
         this.pool = undefined;
     }
 
-    /** EN: Binds this circuit to the one Agent pool owned by its Synapse. ZH: 将本回路绑定到所属 Synapse 的唯一人物池。 */
+    /** ZH: 将本回路绑定到所属 Synapse 的唯一人物池。 EN: Binds this circuit to the one Agent pool owned by its Synapse. */
     public bind(pool: AgentPool): void {
         if (this.pool) throw Error('Delegation circuit is already bound');
         this.pool = pool;
         this.pipe((signal) => this.delegate(pool, signal));
     }
 
-    /** EN: Builds child goals from Context and awaits every correlated Complete. ZH: 从 Context 构建子目标，并等待全部关联 Complete。 */
+    /** ZH: 从 Context 构建子目标，并等待全部关联 Complete。 EN: Builds child goals from Context and awaits every correlated Complete. */
     private async delegate(pool: AgentPool, signal: TaskSignal): Promise<CompleteSignal[]> {
         return await Promise.all(signal.tasks.map(async (item, index) => {
             if (item.agent === signal.agent) throw Error(`Agent cannot delegate to itself: ${item.agent}`);

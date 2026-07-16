@@ -11,8 +11,8 @@ let tempPaths: string[] = [];
 const baselineConfiguration = { ...getLoggerConfiguration() };
 
 /**
- * EN: tempPath function declaration.
  * ZH: tempPath function 声明。
+ * EN: tempPath function declaration.
  */
 function tempPath(): string {
     const path = mkdtempSync(join(tmpdir(), 'flyflor-logger-'));
@@ -21,8 +21,8 @@ function tempPath(): string {
 }
 
 /**
- * EN: resetLoggerConfiguration function declaration.
  * ZH: resetLoggerConfiguration function 声明。
+ * EN: resetLoggerConfiguration function declaration.
  */
 function resetLoggerConfiguration(): void {
     configureLogger(baselineConfiguration);
@@ -80,8 +80,8 @@ describe('logger service', () => {
         const path = join(tempPath(), 'decorator.log');
 
         /**
-         * EN: DecoratedLoggerHost class declaration.
          * ZH: DecoratedLoggerHost class 声明。
+         * EN: DecoratedLoggerHost class declaration.
          */
         class DecoratedLoggerHost {
             @Logger('decorated', {

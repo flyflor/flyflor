@@ -1,5 +1,9 @@
 import type { ProtocolAdapter, ProtocolContext } from './types';
 
+/**
+ * ZH: Ollama JSON 流适配器；纯文本，终态 chunk 必须带 done_reason。
+ * EN: Ollama JSON stream adapter; text-only, requires done_reason on the terminal chunk.
+ */
 export const ollamaAdapter: ProtocolAdapter = {
     name: 'ollama',
     tools: false,
@@ -24,12 +28,14 @@ export const ollamaAdapter: ProtocolAdapter = {
     },
 };
 
+/** ZH: 将 Ollama done_reason 映射为 StopReason。 EN: Maps Ollama done_reason strings to StopReason. */
 function terminal(reason: string): 'stop' | 'length' {
     if (reason === 'stop') return 'stop';
     if (reason === 'length') return 'length';
     throw Error(`Ollama done reason is unsupported: ${reason}`);
 }
 
+/** ZH: 有 SSE data 时提取负载；亦允许原始 JSON 行。 EN: Extracts SSE data payload when present; raw JSON lines remain allowed. */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();
     return trimmed.startsWith('data:') ? trimmed.slice('data:'.length).trim() : undefined;

@@ -5,7 +5,7 @@ import { Model } from './service';
 import type { StreamEvent } from './types';
 
 class ModelAgent extends FAgent<unknown, unknown, FAgentProfileConfiguration, unknown> {
-    /** EN: Returns no cognition in this model-scope fixture. ZH: 在该 model scope fixture 中不返回认知。 */
+    /** ZH: 在该 model scope fixture 中不返回认知。 EN: Returns no cognition in this model-scope fixture. */
     public async receive(): Promise<unknown> {
         return undefined;
     }

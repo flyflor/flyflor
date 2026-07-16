@@ -1,6 +1,6 @@
 import type { AskResponse, AskSignal, CompleteSignal, ConfirmResponse, ConfirmSignal, TaskSignal } from '@/agent/types';
 
-/** EN: One complete Investigation invocation. ZH: 一次完整 Investigation 调用。 */
+/** ZH: 一次完整 Investigation 调用。 EN: One complete Investigation invocation. */
 export interface InvestigationRequest {
     id: string;
     turnId: string;
@@ -9,8 +9,8 @@ export interface InvestigationRequest {
     root: boolean;
 }
 
-/** EN: Signals wired by one persistent Investigation network. ZH: 一张持久 Investigation 网络连接的信号。 */
+/** ZH: 一张持久 Investigation 网络连接的信号。 EN: Signals wired by one persistent Investigation network. */
 export type InvestigationSignal = AskSignal | ConfirmSignal | TaskSignal | CompleteSignal;
 
-/** EN: Results produced by the four Investigation branches. ZH: 四条 Investigation 分支产生的结果。 */
+/** ZH: 四条 Investigation 分支产生的结果。 EN: Results produced by the four Investigation branches. */
 export type InvestigationOutput = AskResponse | ConfirmResponse | CompleteSignal[] | CompleteSignal;

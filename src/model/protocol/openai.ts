@@ -1,12 +1,14 @@
 import type { Message, StreamEvent, ToolCall } from '../types';
 import type { ProtocolAdapter, ProtocolContext, ProtocolState, ProviderError, StreamingToolCall } from './types';
 
+/** ZH: OpenAI 兼容流式 tool_call 增量片段。 EN: OpenAI-compatible streamed tool_call delta fragment. */
 interface WireToolDelta {
     index?: number;
     id?: string;
     function?: { name?: string; arguments?: string };
 }
 
+/** ZH: OpenAI 适配器使用的 Chat Completions SSE chunk 形状。 EN: One Chat Completions SSE chunk shape used by the OpenAI adapter. */
 interface ChatCompletionChunk {
     error?: ProviderError;
     choices?: Array<{
@@ -20,6 +22,10 @@ interface ChatCompletionChunk {
     }>;
 }
 
+/**
+ * ZH: 支持 tools 的 Chat Completions 线适配器；将 SSE delta 映射为 StreamEvent，直到唯一 finish_reason。
+ * EN: Chat Completions wire adapter with tools; maps SSE deltas to StreamEvents until one finish_reason.
+ */
 export const openAIAdapter: ProtocolAdapter = {
     name: 'openai',
     tools: true,
@@ -64,6 +70,7 @@ export const openAIAdapter: ProtocolAdapter = {
     },
 };
 
+/** ZH: 将一次 tool_call delta 累计进 ProtocolState 并发出 tool_start/tool_delta。 EN: Accumulates one tool_call delta into ProtocolState and emits tool_start/tool_delta. */
 function accumulateToolCall(
     controller: ReadableStreamDefaultController<StreamEvent>,
     state: ProtocolState,
@@ -85,6 +92,7 @@ function accumulateToolCall(
     controller.enqueue({ type: 'tool_delta', index: call.index, delta: fragment });
 }
 
+/** ZH: 按 provider index 或 id 解析或创建 StreamingToolCall。 EN: Resolves or creates one StreamingToolCall by provider index or id. */
 function resolveToolCall(state: ProtocolState, delta: WireToolDelta): StreamingToolCall {
     const providerIndex = typeof delta.index === 'number' ? delta.index : undefined;
     let call = providerIndex !== undefined ? state.toolCallsByIndex.get(providerIndex) : undefined;
@@ -98,6 +106,7 @@ function resolveToolCall(state: ProtocolState, delta: WireToolDelta): StreamingT
     return call;
 }
 
+/** ZH: 在终态为每个完整流式工具调用发出 tool_end。 EN: Emits tool_end for every complete streamed tool call at the terminal. */
 function finalizeToolCalls(controller: ReadableStreamDefaultController<StreamEvent>, state: ProtocolState): void {
     const calls = [...state.toolCallsByIndex.values()].sort((left, right) => left.index - right.index);
     for (const pending of calls) {
@@ -107,6 +116,7 @@ function finalizeToolCalls(controller: ReadableStreamDefaultController<StreamEve
     }
 }
 
+/** ZH: 将 OpenAI finish_reason 映射为 StopReason。 EN: Maps OpenAI finish_reason strings to StopReason. */
 function terminal(reason: string): 'stop' | 'length' | 'toolUse' {
     if (reason === 'stop') return 'stop';
     if (reason === 'length') return 'length';
@@ -114,6 +124,7 @@ function terminal(reason: string): 'stop' | 'length' | 'toolUse' {
     throw Error(`OpenAI finish reason is unsupported: ${reason}`);
 }
 
+/** ZH: 将累计的工具参数 JSON 解析为对象。 EN: Parses accumulated tool argument JSON into one object. */
 function parseArguments(partialArgs: string): Record<string, unknown> {
     const trimmed = partialArgs.trim();
     if (trimmed.length === 0) return {};
@@ -122,6 +133,7 @@ function parseArguments(partialArgs: string): Record<string, unknown> {
     return parsed as Record<string, unknown>;
 }
 
+/** ZH: 将模型 Message 投影为 Chat Completions 线消息。 EN: Projects model Messages into Chat Completions wire messages. */
 function chatMessages(messages: Message[]): Array<Record<string, unknown>> {
     return messages.map((message) => {
         if (message.role === 'tool') {
@@ -143,16 +155,19 @@ function chatMessages(messages: Message[]): Array<Record<string, unknown>> {
     });
 }
 
+/** ZH: 报告历史是否已含工具调用或工具结果。 EN: Reports whether history already contains tool calls or tool results. */
 function hasToolHistory(messages: Message[]): boolean {
     return messages.some((message) => message.role === 'tool' || ('toolCalls' in message && message.toolCalls.length > 0));
 }
 
+/** ZH: 提取 SSE data 负载；忽略非 data 行。 EN: Extracts SSE data payload; ignores non-data lines. */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();
     if (trimmed.length === 0 || !trimmed.startsWith('data:')) return undefined;
     return trimmed.slice('data:'.length).trim();
 }
 
+/** ZH: 将 ProviderError 格式化为 reject 消息。 EN: Formats one ProviderError into a reject message. */
 function providerError(error: ProviderError | undefined, fallback: string): string {
     return error?.code ? `${error.code}: ${error.message ?? error.type ?? fallback}` : error?.message ?? error?.type ?? fallback;
 }

@@ -4,21 +4,21 @@ import type { SocketPacket } from './packet';
 import { FService } from '@/core/ioc';
 
 /**
- * EN: Dispatches non-neural transport control packets to owned actions.
  * ZH: 将非神经 transport 控制包派发到自身动作。
+ * EN: Dispatches non-neural transport control packets to owned actions.
  */
 @Provide()
 export class Controller extends FService {
     @Config()
     public config!: ConfigService;
 
-    /** EN: Invokes one explicitly named transport action. ZH: 调用一个显式命名的 transport 动作。 */
+    /** ZH: 调用一个显式命名的 transport 动作。 EN: Invokes one explicitly named transport action. */
     public async dispatch({ action, data }: SocketPacket): Promise<void> {
         if (action !== 'cwd') throw Error(`Unknown transport action: ${action}`);
         await this.cwd(data);
     }
 
-    /** EN: Updates the configured semantic working directory. ZH: 更新已配置的语义工作目录。 */
+    /** ZH: 更新已配置的语义工作目录。 EN: Updates the configured semantic working directory. */
     public async cwd(data: unknown): Promise<void> {
         if (typeof data !== 'object' || data === null || Array.isArray(data)) throw Error('Invalid cwd transport packet');
         const path = (data as { path?: unknown }).path;

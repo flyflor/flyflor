@@ -17,7 +17,7 @@ const profile = {
     promptSections: ['SOUL'],
 };
 
-/** EN: Builds one isolated Brain test object. ZH: 构造一个隔离的 Brain 测试对象。 */
+/** ZH: 构造一个隔离的 Brain 测试对象。 EN: Builds one isolated Brain test object. */
 function harness(name = 'flyflor') {
     const signals: NeuralSignal[] = [];
     const bus: AgentBus = {

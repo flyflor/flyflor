@@ -6,8 +6,8 @@ import type { FilesystemInput, FilesystemInputAction, FilesystemOutput } from '.
 import { ActionTool } from './abstracts';
 
 /**
- * EN: Owns strict file reads and explicitly approved file mutations.
  * ZH: 持有严格文件读取与显式批准的文件变更。
+ * EN: Owns strict file reads and explicitly approved file mutations.
  */
 @Provide()
 export class Filesystem extends ActionTool<FilesystemInput, FilesystemOutput> {
@@ -18,7 +18,7 @@ export class Filesystem extends ActionTool<FilesystemInput, FilesystemOutput> {
     @Config()
     public config!: ConfigService;
 
-    /** EN: Initializes file capability metadata and its cwd-aware model schema. ZH: 初始化文件能力元数据及其 cwd 感知模型 schema。 */
+    /** ZH: 初始化文件能力元数据及其 cwd 感知模型 schema。 EN: Initializes file capability metadata and its cwd-aware model schema. */
     public constructor() {
         super();
         this.name = 'filesystem';
@@ -40,12 +40,12 @@ export class Filesystem extends ActionTool<FilesystemInput, FilesystemOutput> {
         };
     }
 
-    /** EN: Requires approval for every mutating file action. ZH: 所有文件变更动作均要求审批。 */
+    /** ZH: 所有文件变更动作均要求审批。 EN: Requires approval for every mutating file action. */
     public override confirm(input: FilesystemInput): boolean {
         return input.action !== 'read';
     }
 
-    /** EN: Routes one validated file action to its owned implementation. ZH: 将一个已验证文件动作路由到自身实现。 */
+    /** ZH: 将一个已验证文件动作路由到自身实现。 EN: Routes one validated file action to its owned implementation. */
     public override execute(input: FilesystemInput) {
         const action = this.action(input.action);
         if (action === 'read') return this.read(input);
@@ -55,8 +55,8 @@ export class Filesystem extends ActionTool<FilesystemInput, FilesystemOutput> {
     }
 
     /**
-     * EN: Projects one filesystem result into a compact evidence note.
      * ZH: 将一次文件系统结果投影为紧凑证据笔记。
+     * EN: Projects one filesystem result into a compact evidence note.
      */
     public override observe(data: FilesystemOutput): string {
         if (data.action === 'read') return `filesystem: action=read; path=${data.path}; bytes=${data.bytes}; truncated=${String(data.truncated)}`;
@@ -65,7 +65,7 @@ export class Filesystem extends ActionTool<FilesystemInput, FilesystemOutput> {
         return `filesystem: action=delete; path=${data.path}`;
     }
 
-    /** EN: Reads one bounded UTF-8 file slice. ZH: 读取一个有界 UTF-8 文件片段。 */
+    /** ZH: 读取一个有界 UTF-8 文件片段。 EN: Reads one bounded UTF-8 file slice. */
     private read(input: FilesystemInput) {
         const path = this.path(input.path, input.cwd);
         const offsetLines = this.number(input.offsetLines, 'offsetLines', 0);
@@ -89,7 +89,7 @@ export class Filesystem extends ActionTool<FilesystemInput, FilesystemOutput> {
         } as const;
     }
 
-    /** EN: Replaces one file with explicit complete content. ZH: 使用显式完整内容替换一个文件。 */
+    /** ZH: 使用显式完整内容替换一个文件。 EN: Replaces one file with explicit complete content. */
     private write(input: FilesystemInput) {
         const path = this.path(input.path, input.cwd);
         const content = this.text(input.content, 'content');
@@ -101,7 +101,7 @@ export class Filesystem extends ActionTool<FilesystemInput, FilesystemOutput> {
         } as const;
     }
 
-    /** EN: Applies one exact text replacement. ZH: 应用一次精确文本替换。 */
+    /** ZH: 应用一次精确文本替换。 EN: Applies one exact text replacement. */
     private edit(input: FilesystemInput) {
         const path = this.path(input.path, input.cwd);
         const oldText = this.text(input.oldText, 'oldText');
@@ -116,7 +116,7 @@ export class Filesystem extends ActionTool<FilesystemInput, FilesystemOutput> {
         } as const;
     }
 
-    /** EN: Deletes one exact regular file. ZH: 删除一个精确普通文件。 */
+    /** ZH: 删除一个精确普通文件。 EN: Deletes one exact regular file. */
     private remove(input: FilesystemInput) {
         const path = this.path(input.path, input.cwd);
         const stat = statSync(path);
@@ -128,7 +128,7 @@ export class Filesystem extends ActionTool<FilesystemInput, FilesystemOutput> {
         } as const;
     }
 
-    /** EN: Resolves one semantic path against the owned cwd convention. ZH: 按自身 cwd 约定解析语义路径。 */
+    /** ZH: 按自身 cwd 约定解析语义路径。 EN: Resolves one semantic path against the owned cwd convention. */
     private path(value: unknown, cwdValue?: unknown): string {
         const input = this.text(value, 'path');
         if (isAbsolute(input)) return resolve(input);
@@ -138,7 +138,7 @@ export class Filesystem extends ActionTool<FilesystemInput, FilesystemOutput> {
         return resolve(cwd, input);
     }
 
-    /** EN: Returns a UTF-8-safe prefix within one exact byte budget. ZH: 在精确字节预算内返回 UTF-8 安全前缀。 */
+    /** ZH: 在精确字节预算内返回 UTF-8 安全前缀。 EN: Returns a UTF-8-safe prefix within one exact byte budget. */
     private limit(content: string, maxBytes: number): string {
         const bytes = Buffer.from(content);
         if (bytes.byteLength <= maxBytes) return content;
@@ -147,19 +147,19 @@ export class Filesystem extends ActionTool<FilesystemInput, FilesystemOutput> {
         return bytes.subarray(0, end).toString('utf-8');
     }
 
-    /** EN: Requires one supported filesystem action. ZH: 要求一个受支持的文件系统动作。 */
+    /** ZH: 要求一个受支持的文件系统动作。 EN: Requires one supported filesystem action. */
     private action(value: unknown): FilesystemInputAction {
         if (value === 'read' || value === 'write' || value === 'edit' || value === 'delete') return value;
         throw Error('action must be read, write, edit, or delete');
     }
 
-    /** EN: Requires one non-empty string field. ZH: 要求一个非空字符串字段。 */
+    /** ZH: 要求一个非空字符串字段。 EN: Requires one non-empty string field. */
     private text(value: unknown, name: string): string {
         if (typeof value !== 'string' || value.length === 0) throw Error(`${name} is required`);
         return value;
     }
 
-    /** EN: Reads one bounded non-negative integer option. ZH: 读取一个有界非负整数选项。 */
+    /** ZH: 读取一个有界非负整数选项。 EN: Reads one bounded non-negative integer option. */
     private number(value: unknown, name: string, fallback: number): number {
         if (value === undefined) return fallback;
         if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) throw Error(`${name} must be a non-negative number`);

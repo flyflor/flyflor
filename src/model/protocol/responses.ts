@@ -1,5 +1,6 @@
 import type { ProtocolAdapter, ProtocolContext, ProviderError } from './types';
 
+/** ZH: 一条 Responses API SSE 事件形状。 EN: One Responses API SSE event shape. */
 interface ResponsesEvent {
     type?: string;
     delta?: string;
@@ -9,6 +10,7 @@ interface ResponsesEvent {
     code?: string;
 }
 
+/** ZH: parseJson 与终态事件使用的 completed/incomplete Responses 体。 EN: Completed or incomplete Responses body used by parseJson and terminal events. */
 interface ResponsesBody {
     status?: string;
     output_text?: unknown;
@@ -17,6 +19,10 @@ interface ResponsesBody {
     incomplete_details?: { reason?: unknown };
 }
 
+/**
+ * ZH: OpenAI Responses 线适配器；纯文本，tools:false 使 fetch 前拒绝工具。
+ * EN: OpenAI Responses wire adapter; text-only, rejects tools before fetch via tools:false.
+ */
 export const responsesAdapter: ProtocolAdapter = {
     name: 'responses',
     tools: false,
@@ -59,11 +65,13 @@ export const responsesAdapter: ProtocolAdapter = {
     },
 };
 
+/** ZH: 将 incomplete reason 映射为 length，否则 reject。 EN: Maps incomplete reason to StopReason length or rejects. */
 function incomplete(reason: unknown): 'length' {
     if (reason === 'max_output_tokens') return 'length';
     throw Error(`Responses incomplete reason is unsupported: ${String(reason)}`);
 }
 
+/** ZH: 从 completed Responses 体提取纯文本。 EN: Extracts plain text from a completed Responses body. */
 function responseText(root: ResponsesBody): string {
     assertNoRefusal(root);
     if (typeof root.output_text === 'string') return root.output_text;
@@ -83,6 +91,7 @@ function responseText(root: ResponsesBody): string {
     return parts.join('');
 }
 
+/** ZH: Responses 体含 refusal 字符串时 reject。 EN: Rejects when the Responses body embeds a refusal string. */
 function assertNoRefusal(root: ResponsesBody): void {
     if (!Array.isArray(root.output)) return;
     for (const output of root.output) {
@@ -95,11 +104,13 @@ function assertNoRefusal(root: ResponsesBody): void {
     }
 }
 
+/** ZH: 提取 SSE data 负载；忽略非 data 行。 EN: Extracts SSE data payload; ignores non-data lines. */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();
     return trimmed.startsWith('data:') ? trimmed.slice('data:'.length).trim() : undefined;
 }
 
+/** ZH: 将 Responses 错误字段格式化为一条 reject 消息。 EN: Formats Responses error fields into one reject message. */
 function errorMessage(error: ProviderError | undefined, fallback: string, message?: string, code?: string): string {
     const resolvedMessage = message ?? error?.message ?? error?.type;
     const resolvedCode = code ?? error?.code;

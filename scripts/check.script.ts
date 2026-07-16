@@ -38,7 +38,7 @@ const OBSERVABLE_METHODS = new Set(['pipe', 'switch', 'subscribe', 'next']);
 
 if (import.meta.main) run();
 
-/** EN: Executes all repository architecture gates once. ZH: 一次性执行全部仓库架构门禁。 */
+/** ZH: 一次性执行全部仓库架构门禁。 EN: Executes all repository architecture gates once. */
 function run(): void {
     const promptFiles = [
         ...filesUnder('prompts').filter((file) => file.endsWith('.md') || file.endsWith('.json')),
@@ -326,7 +326,7 @@ function moduleSpecifiers(source: ts.SourceFile): string[] {
     return specifiers;
 }
 
-/** EN: Pure source gates used by positive and negative checker fixtures. ZH: 正负 checker fixture 共用的纯源码门禁。 */
+/** ZH: 正负 checker fixture 共用的纯源码门禁。 EN: Pure source gates used by positive and negative checker fixtures. */
 export const CheckRules = {
     inspect(file: string, content: string): string[] {
         const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);

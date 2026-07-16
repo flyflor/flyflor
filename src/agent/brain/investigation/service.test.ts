@@ -35,7 +35,7 @@ interface HarnessOptions {
     summary?: string;
 }
 
-/** EN: Builds one persistent Investigation network with deterministic boundaries. ZH: 使用确定性边界构造一张持久 Investigation 网络。 */
+/** ZH: 使用确定性边界构造一张持久 Investigation 网络。 EN: Builds one persistent Investigation network with deterministic boundaries. */
 function harness(responses: Array<{ text: string; toolCalls: ToolCall[] }>, confirm = true, options: HarnessOptions = {}) {
     const signals: NeuralSignal[] = [];
     const calls: ToolCall[] = [];

@@ -2,31 +2,31 @@ import { describe, expect, test } from 'bun:test';
 import { CheckRules } from './check.script';
 
 const POSITIVE_CLASS = `
-/** EN: Owns one fixture value. ZH: 持有一个 fixture 值。 */
+/** ZH: 持有一个 fixture 值。 EN: Owns one fixture value. */
 class Fixture {
     private value: number;
-    /** EN: Initializes the fixture value. ZH: 初始化 fixture 值。 */
+    /** ZH: 初始化 fixture 值。 EN: Initializes the fixture value. */
     public constructor() { this.value = 1; }
-    /** EN: Returns the fixture value. ZH: 返回 fixture 值。 */
+    /** ZH: 返回 fixture 值。 EN: Returns the fixture value. */
     public read(): number { return this.value; }
 }
 `;
 
 const POSITIVE_OBSERVABLE = `
-/** EN: Owns one exact fixture circuit. ZH: 持有一条精确 fixture 回路。 */
+/** ZH: 持有一条精确 fixture 回路。 EN: Owns one exact fixture circuit. */
 class Observable {
     private state: unknown;
-    /** EN: Initializes circuit state. ZH: 初始化回路状态。 */
+    /** ZH: 初始化回路状态。 EN: Initializes circuit state. */
     public constructor() { this.state = undefined; }
-    /** EN: Installs a transform. ZH: 安装一个变换。 */
+    /** ZH: 安装一个变换。 EN: Installs a transform. */
     public pipe(): void {}
-    /** EN: Installs branches. ZH: 安装分支。 */
+    /** ZH: 安装分支。 EN: Installs branches. */
     public switch(): void {}
-    /** EN: Adds a subscriber. ZH: 添加订阅者。 */
+    /** ZH: 添加订阅者。 EN: Adds a subscriber. */
     public subscribe(): void {}
-    /** EN: Emits a value. ZH: 发出一个值。 */
+    /** ZH: 发出一个值。 EN: Emits a value. */
     public next(): void {}
-    /** EN: Runs private work. ZH: 执行私有工作。 */
+    /** ZH: 执行私有工作。 EN: Runs private work. */
     private fire(): void {}
 }
 `;
@@ -40,10 +40,10 @@ describe('architecture checker fixtures', () => {
 
     test('rejects every newly guarded architecture regression', () => {
         const state = CheckRules.inspect('src/core/state.ts', `
-            /** EN: Invalid fixture. ZH: 无效 fixture。 */
+            /** ZH: 无效 fixture。 EN: Invalid fixture. */
             class Invalid {
                 public value = 1;
-                /** EN: Does not own state. ZH: 未持有状态。 */
+                /** ZH: 未持有状态。 EN: Does not own state. */
                 public constructor() {}
             }
         `);
@@ -56,10 +56,10 @@ describe('architecture checker fixtures', () => {
         `);
         const observable = CheckRules.inspect('src/core/observable/service.ts', POSITIVE_OBSERVABLE.replace('private fire()', 'public branch()'));
         const decorator = CheckRules.inspect('src/core/decorator-fixture.ts', `
-            /** EN: Invalid decorated fixture. ZH: 无效装饰 fixture。 */
+            /** ZH: 无效装饰 fixture。 EN: Invalid decorated fixture. */
             @Memo()
             class Invalid {
-                /** EN: Creates the fixture. ZH: 创建 fixture。 */
+                /** ZH: 创建 fixture。 EN: Creates the fixture. */
                 public constructor() {}
             }
         `);

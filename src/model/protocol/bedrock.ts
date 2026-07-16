@@ -1,6 +1,10 @@
 import type { Message } from '../types';
 import type { ProtocolAdapter, ProtocolContext } from './types';
 
+/**
+ * ZH: AWS Bedrock converse-stream 适配器；纯文本，单独投影 system blocks。
+ * EN: AWS Bedrock converse-stream adapter; text-only, projects system blocks separately.
+ */
 export const bedrockAdapter: ProtocolAdapter = {
     name: 'bedrock',
     tools: false,
@@ -28,12 +32,14 @@ export const bedrockAdapter: ProtocolAdapter = {
     },
 };
 
+/** ZH: 将 Bedrock stopReason 映射为 StopReason。 EN: Maps Bedrock stopReason strings to StopReason. */
 function terminal(reason: string): 'stop' | 'length' {
     if (reason === 'end_turn' || reason === 'stop_sequence') return 'stop';
     if (reason === 'max_tokens') return 'length';
     throw Error(`Bedrock stop reason is unsupported: ${reason}`);
 }
 
+/** ZH: 将模型 Message 投影为 Bedrock system 与对话 blocks。 EN: Projects model Messages into Bedrock system and conversation blocks. */
 function project(messages: Message[]): {
     system: string[];
     messages: Array<{ role: string; content: Array<{ text: string }> }>;
@@ -48,6 +54,7 @@ function project(messages: Message[]): {
     return { system, messages: conversation };
 }
 
+/** ZH: 有 SSE data 时提取负载；亦允许原始行。 EN: Extracts SSE data payload when present; raw lines remain allowed. */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();
     return trimmed.startsWith('data:') ? trimmed.slice('data:'.length).trim() : undefined;

@@ -5,10 +5,10 @@ import type { ContextBrief } from '@/agent/context';
 import type { AgentBus, AgentStimulus, AgentTask, CompleteSignal } from '@/agent/types';
 import type { TextMessage } from '@/model';
 
-/** EN: Origin of one finite Agent memory note. ZH: 一条有限 Agent 记忆笔记的来源。 */
+/** ZH: 一条有限 Agent 记忆笔记的来源。 EN: Origin of one finite Agent memory note. */
 export type MemorySource = 'brief' | 'observation';
 
-/** EN: One bounded note retained by one Agent. ZH: 一个 Agent 保留的一条有界笔记。 */
+/** ZH: 一个 Agent 保留的一条有界笔记。 EN: One bounded note retained by one Agent. */
 export interface MemoryNote {
     id: string;
     source: MemorySource;
@@ -16,8 +16,8 @@ export interface MemoryNote {
 }
 
 /**
- * EN: Finite continuous short-term memory owned by exactly one Agent scope.
  * ZH: 由唯一 Agent scope 持有的有限连续短期记忆。
+ * EN: Finite continuous short-term memory owned by exactly one Agent scope.
  */
 @Provide()
 export class Memory extends FComponent {
@@ -31,8 +31,8 @@ export class Memory extends FComponent {
     private notes: MemoryNote[];
 
     /**
-     * EN: Binds finite notes to the immutable profile of their owning Agent.
      * ZH: 将有界笔记绑定到所属 Agent 的不可变 profile。
+     * EN: Binds finite notes to the immutable profile of their owning Agent.
      */
     public constructor(
         agent: FAgent<AgentStimulus, CompleteSignal, FAgentProfileConfiguration, AgentBus>,
@@ -45,8 +45,8 @@ export class Memory extends FComponent {
     }
 
     /**
-     * EN: Remembers one root Context brief without taking ownership of its Turn.
      * ZH: 记住一个根 Context brief，但不取得其 Turn 所有权。
+     * EN: Remembers one root Context brief without taking ownership of its Turn.
      */
     public observe(brief: ContextBrief): void {
         const references = brief.references.map((reference) => `${reference.type}:${reference.value}`).join('; ');
@@ -54,16 +54,16 @@ export class Memory extends FComponent {
     }
 
     /**
-     * EN: Remembers one cortical task assigned to this Agent.
      * ZH: 记住一项由皮层分配给当前 Agent 的任务。
+     * EN: Remembers one cortical task assigned to this Agent.
      */
     public assign(task: AgentTask): void {
         this.remember(`task=${task.goal}; parent=${task.context.goal}`, 'brief');
     }
 
     /**
-     * EN: Adds one note and evicts the oldest note past finite capacity.
      * ZH: 添加一条笔记，并在超过有限容量时淘汰最旧笔记。
+     * EN: Adds one note and evicts the oldest note past finite capacity.
      */
     public remember(content: string, source: MemorySource): void {
         if (content.length === 0) throw Error('Memory note is empty');
@@ -73,8 +73,8 @@ export class Memory extends FComponent {
     }
 
     /**
-     * EN: Projects finite notes into one model-bound XML memory message.
      * ZH: 将有限笔记投影为一条面向模型的 XML memory 消息。
+     * EN: Projects finite notes into one model-bound XML memory message.
      */
     public messages(): TextMessage[] {
         if (this.notes.length === 0) return [];
@@ -94,8 +94,8 @@ export class Memory extends FComponent {
     }
 
     /**
-     * EN: Returns immutable notes for diagnostics and focused tests.
      * ZH: 返回用于诊断和聚焦测试的不可变笔记。
+     * EN: Returns immutable notes for diagnostics and focused tests.
      */
     public snapshot(): MemoryNote[] {
         return this.notes.map((note) => ({ ...note }));

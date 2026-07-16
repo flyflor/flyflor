@@ -11,8 +11,8 @@ import {
 } from './client';
 
 /**
- * EN: packet function declaration.
  * ZH: packet function 声明。
+ * EN: packet function declaration.
  */
 function packet(text: string): Buffer {
     return IpcClientBridge.encodePacketText(text);

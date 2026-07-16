@@ -16,11 +16,11 @@ export enum BrainPrompt {
 }
 
 /**
- * EN: Owns one Agent's cognition and routes understood stimuli into pure actions.
  * ZH: 持有一个 Agent 的认知，并将理解后的刺激路由到纯净动作。
  *
- * EN: This circuit is the cognitive switch network; the person-boundary FIFO lives on Agent.
  * ZH: 本回路是认知 switch 网络；人物边界 FIFO 在 Agent 上。
+ * EN: Owns one Agent's cognition and routes understood stimuli into pure actions.
+ * EN: This circuit is the cognitive switch network; the person-boundary FIFO lives on Agent.
  */
 @Provide()
 export class Brain extends FComponent {
@@ -49,15 +49,15 @@ export class Brain extends FComponent {
     public investigation!: Investigation;
 
     /**
-     * EN: Cognitive FIFO switching input vs delegated task stimuli.
      * ZH: 在用户输入与委派任务刺激之间切换的认知 FIFO。
+     * EN: Cognitive FIFO switching input vs delegated task stimuli.
      */
     @Inject()
     public circuit!: Observable<AgentStimulus, CompleteSignal>;
 
     /**
-     * EN: Binds this Brain to one Agent profile and cortical bus.
      * ZH: 将当前 Brain 绑定到一个 Agent profile 与皮层总线。
+     * EN: Binds this Brain to one Agent profile and cortical bus.
      */
     public constructor(
         agent: FAgent<AgentStimulus, CompleteSignal, FAgentProfileConfiguration, AgentBus>,
@@ -68,8 +68,8 @@ export class Brain extends FComponent {
     }
 
     /**
-     * EN: Wires input and delegated-task cognition exactly once.
      * ZH: 一次性连接用户输入与委派任务认知。
+     * EN: Wires input and delegated-task cognition exactly once.
      */
     @Init()
     public init(): void {
@@ -80,16 +80,16 @@ export class Brain extends FComponent {
     }
 
     /**
-     * EN: Sends one ordered stimulus through this Agent's cognitive circuit.
      * ZH: 将一个有序刺激送入当前 Agent 的认知回路。
+     * EN: Sends one ordered stimulus through this Agent's cognitive circuit.
      */
     public async receive(stimulus: AgentStimulus): Promise<CompleteSignal> {
         return await this.circuit.next(stimulus);
     }
 
     /**
-     * EN: Perceives one user input, begins its Turn, and selects one cognitive path.
      * ZH: 感知一次用户输入，开始其 Turn，并选择一条认知路径。
+     * EN: Perceives one user input, begins its Turn, and selects one cognitive path.
      */
     private async input(input: string): Promise<CompleteSignal> {
         const perception = await this.callosum.perceive(input, this.context.recent());
@@ -101,8 +101,8 @@ export class Brain extends FComponent {
     }
 
     /**
-     * EN: Runs one delegated investigation without creating or completing a Turn.
      * ZH: 执行一项委派调查，不创建或完成 Turn。
+     * EN: Runs one delegated investigation without creating or completing a Turn.
      */
     private async task(task: AgentTask): Promise<CompleteSignal> {
         if (task.agent !== this.agentConfig.name) throw Error(`Task Agent does not match: ${task.agent}`);
@@ -117,8 +117,8 @@ export class Brain extends FComponent {
     }
 
     /**
-     * EN: Streams a direct root answer and completes its Context Turn.
      * ZH: 流式输出直接根回答，并完成其 Context Turn。
+     * EN: Streams a direct root answer and completes its Context Turn.
      */
     private async reply(brief: ContextBrief): Promise<CompleteSignal> {
         let answer = '';
@@ -137,8 +137,8 @@ export class Brain extends FComponent {
     }
 
     /**
-     * EN: Runs one root investigation and stores its pure Complete summary.
      * ZH: 执行一次根调查并保存其纯 Complete 摘要。
+     * EN: Runs one root investigation and stores its pure Complete summary.
      */
     private async research(brief: ContextBrief): Promise<CompleteSignal> {
         const complete = await this.investigation.run(this.messages(brief, brief.input), {
@@ -152,8 +152,8 @@ export class Brain extends FComponent {
     }
 
     /**
-     * EN: Applies one strict identity protocol update and completes its Turn.
      * ZH: 应用一次严格身份协议更新并完成其 Turn。
+     * EN: Applies one strict identity protocol update and completes its Turn.
      */
     private async soul(brief: ContextBrief): Promise<CompleteSignal> {
         const document = this.prompt.render({
@@ -188,8 +188,8 @@ export class Brain extends FComponent {
     }
 
     /**
-     * EN: Commits one root Complete to Context and fires terminal expression.
      * ZH: 将一个根 Complete 提交给 Context，并触发终止表达。
+     * EN: Commits one root Complete to Context and fires terminal expression.
      */
     private async finish(complete: CompleteSignal): Promise<CompleteSignal> {
         this.context.complete(complete.turnId, complete.answer, complete.evidence);
@@ -198,8 +198,8 @@ export class Brain extends FComponent {
     }
 
     /**
-     * EN: Builds model messages from Identity, finite Memory, and one XML stimulus.
      * ZH: 从 Identity、有限 Memory 和一个 XML 刺激构建模型消息。
+     * EN: Builds model messages from Identity, finite Memory, and one XML stimulus.
      */
     private messages(context: ContextBrief, input: string): Message[] {
         const { input: _input, ...brief } = context;

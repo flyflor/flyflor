@@ -10,7 +10,7 @@ import { AgentPool } from './pool';
 import { Sensory } from './sensory';
 import { Synapse } from './synapse';
 
-/** EN: Creates one wired cortex with an observable fake transport. ZH: 使用可观察 fake transport 创建一个已连接皮层。 */
+/** ZH: 使用可观察 fake transport 创建一个已连接皮层。 EN: Creates one wired cortex with an observable fake transport. */
 async function harness() {
     const packets: Array<{ action: string; data: unknown }> = [];
     let callbacks: SocketCallbacks | undefined;

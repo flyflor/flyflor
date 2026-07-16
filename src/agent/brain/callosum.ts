@@ -11,8 +11,8 @@ export enum CallosumPrompt {
 }
 
 /**
- * EN: Perceives one stimulus once and returns a strict cognitive intent.
  * ZH: 对一个刺激只感知一次，并返回严格的认知意图。
+ * EN: Perceives one stimulus once and returns a strict cognitive intent.
  */
 @Provide()
 export class Callosum extends FComponent {
@@ -25,8 +25,8 @@ export class Callosum extends FComponent {
     public model!: Model;
 
     /**
-     * EN: Binds perception to the immutable profile of its owning Agent.
      * ZH: 将感知绑定到所属 Agent 的不可变 profile。
+     * EN: Binds perception to the immutable profile of its owning Agent.
      */
     public constructor(
         agent: FAgent<AgentStimulus, CompleteSignal, FAgentProfileConfiguration, AgentBus>,
@@ -36,8 +36,8 @@ export class Callosum extends FComponent {
     }
 
     /**
-     * EN: Understands the latest input against immutable completed experience.
      * ZH: 根据不可变完成经历理解最新输入。
+     * EN: Understands the latest input against immutable completed experience.
      */
     public async perceive(input: string, recent: TurnSummary[]): Promise<Perception> {
         const document = this.prompt.render({
@@ -56,8 +56,8 @@ export class Callosum extends FComponent {
     }
 
     /**
-     * EN: Validates one model perception without default routing.
      * ZH: 验证一次模型感知，不进行默认路由。
+     * EN: Validates one model perception without default routing.
      */
     private read(value: unknown): Perception {
         if (typeof value !== 'object' || value === null || Array.isArray(value)) throw Error('Perception must be an object');
@@ -77,8 +77,8 @@ export class Callosum extends FComponent {
     }
 
     /**
-     * EN: Validates one normalized perception reference.
      * ZH: 验证一条规范化感知引用。
+     * EN: Validates one normalized perception reference.
      */
     private reference(value: unknown): value is Reference {
         if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;

@@ -3,15 +3,15 @@ import { Tool } from './abstracts';
 import type { AskInput, AskOption, AskOutput, AskQuestion } from './types';
 
 /**
- * EN: Validates structured clarification questions without performing interaction.
  * ZH: 验证结构化澄清问题，不执行交互。
+ * EN: Validates structured clarification questions without performing interaction.
  */
 @Provide()
 export class Ask extends Tool<AskInput, AskOutput> {
     public readonly name: string;
     public readonly parameters: Record<string, unknown>;
 
-    /** EN: Initializes the clarification capability and its strict model schema. ZH: 初始化澄清能力及其严格模型 schema。 */
+    /** ZH: 初始化澄清能力及其严格模型 schema。 EN: Initializes the clarification capability and its strict model schema. */
     public constructor() {
         super();
         this.name = 'ask';
@@ -45,7 +45,7 @@ export class Ask extends Tool<AskInput, AskOutput> {
         };
     }
 
-    /** EN: Validates and normalizes one question collection. ZH: 验证并规范化一组问题。 */
+    /** ZH: 验证并规范化一组问题。 EN: Validates and normalizes one question collection. */
     public override execute(input: AskInput) {
         if (!Array.isArray(input.questions) || input.questions.length === 0) throw Error('questions is required');
         const questions = input.questions.map((item) => this.question(item));
@@ -55,7 +55,7 @@ export class Ask extends Tool<AskInput, AskOutput> {
         } as const;
     }
 
-    /** EN: Validates one question and appends the free-input choice. ZH: 验证一个问题并追加自由输入选项。 */
+    /** ZH: 验证一个问题并追加自由输入选项。 EN: Validates one question and appends the free-input choice. */
     private question(value: unknown): AskQuestion {
         if (typeof value !== 'object' || value === null) throw Error('question must be an object');
         const raw = value as { question?: unknown; options?: unknown };
@@ -66,7 +66,7 @@ export class Ask extends Tool<AskInput, AskOutput> {
         return { question, options };
     }
 
-    /** EN: Validates one offered answer direction. ZH: 验证一个候选回答方向。 */
+    /** ZH: 验证一个候选回答方向。 EN: Validates one offered answer direction. */
     private option(value: unknown): AskOption {
         if (typeof value !== 'object' || value === null) throw Error('option must be an object');
         const raw = value as { label?: unknown; description?: unknown; recommended?: unknown };
@@ -76,7 +76,7 @@ export class Ask extends Tool<AskInput, AskOutput> {
         return option;
     }
 
-    /** EN: Requires one non-empty string field. ZH: 要求一个非空字符串字段。 */
+    /** ZH: 要求一个非空字符串字段。 EN: Requires one non-empty string field. */
     private text(value: unknown, name: string): string {
         if (typeof value !== 'string' || value.length === 0) throw Error(`${name} is required`);
         return value;

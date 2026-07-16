@@ -4,12 +4,12 @@ import { FService, useContainer } from '@/core/ioc';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 
-/** EN: One ordered section manifest. ZH: 一份有序 section 清单。 */
+/** ZH: 一份有序 section 清单。 EN: One ordered section manifest. */
 export interface PromptSectionManifest<TSection extends string> {
     sections: TSection[];
 }
 
-/** EN: One file-backed block in a prompt protocol package. ZH: prompt 协议包中的一个文件区块。 */
+/** ZH: prompt 协议包中的一个文件区块。 EN: One file-backed block in a prompt protocol package. */
 export interface PromptProtocolBlock<TSection extends string = string> {
     key: TSection | 'config';
     tag: string;
@@ -18,13 +18,13 @@ export interface PromptProtocolBlock<TSection extends string = string> {
     note?: string;
 }
 
-/** EN: XML document layout declared by a prompt package. ZH: prompt 包声明的 XML 文档布局。 */
+/** ZH: prompt 包声明的 XML 文档布局。 EN: XML document layout declared by a prompt package. */
 export interface PromptProtocolContext<TSection extends string = string> {
     root: string;
     blocks: PromptProtocolBlock<TSection>[];
 }
 
-/** EN: File policy and document layout for one prompt package. ZH: 一个 prompt 包的文件策略与文档布局。 */
+/** ZH: 一个 prompt 包的文件策略与文档布局。 EN: File policy and document layout for one prompt package. */
 export interface PromptProtocolPackage<TSection extends string = string> {
     editable: string[];
     locked: string[];
@@ -32,7 +32,7 @@ export interface PromptProtocolPackage<TSection extends string = string> {
     context: PromptProtocolContext<TSection>;
 }
 
-/** EN: Parsed config.jsonc shape for one prompt package. ZH: 一个 prompt 包解析后的 config.jsonc 结构。 */
+/** ZH: 一个 prompt 包解析后的 config.jsonc 结构。 EN: Parsed config.jsonc shape for one prompt package. */
 export interface PromptConfig<TSection extends string = string> {
     version: number;
     description: string;
@@ -40,24 +40,24 @@ export interface PromptConfig<TSection extends string = string> {
     protocolPackage: PromptProtocolPackage<TSection>;
 }
 
-/** EN: One inline XML block rendered for a model-bound service payload. ZH: 面向模型的 service payload 内联 XML 区块。 */
+/** ZH: 面向模型的 service payload 内联 XML 区块。 EN: One inline XML block rendered for a model-bound service payload. */
 export interface PromptDocumentBlock {
     tag: string;
     content: string;
     attributes?: Record<string, string>;
 }
 
-/** EN: Supported PromptService render shapes. ZH: PromptService 支持的渲染形状。 */
+/** ZH: PromptService 支持的渲染形状。 EN: Supported PromptService render shapes. */
 export type PromptRender<TSection extends string> =
     | { kind: 'sections'; sections?: TSection[]; separator?: string }
     | { kind: 'document'; root?: string; attributes?: Record<string, string>; blocks?: PromptDocumentBlock[] };
 
-/** EN: Loaded section name to prompt-file service mapping. ZH: 已加载 section 名到 prompt 文件服务的映射。 */
+/** ZH: 已加载 section 名到 prompt 文件服务的映射。 EN: Loaded section name to prompt-file service mapping. */
 export type PromptPackageData<TSection extends string> = Partial<Record<TSection, PromptService<string, string>>>;
 
 /**
- * EN: Owns prompt-package loading, policy enforcement, and safe XML rendering.
  * ZH: 负责 prompt 协议包加载、策略执行与安全 XML 渲染。
+ * EN: Owns prompt-package loading, policy enforcement, and safe XML rendering.
  */
 @Provide()
 export class PromptService<TSection extends string = string, TData = PromptPackageData<TSection>> extends FService {
@@ -66,8 +66,8 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
     public writable: boolean;
 
     /**
-     * EN: Loads one canonical prompt file or one complete prompt package directory.
      * ZH: 加载一个规范 prompt 文件或一个完整 prompt 协议包目录。
+     * EN: Loads one canonical prompt file or one complete prompt package directory.
      */
     public constructor(public readonly path: string) {
         super();
@@ -95,8 +95,8 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
     }
 
     /**
-     * EN: Returns one required prompt section.
      * ZH: 返回一个必需的 prompt section。
+     * EN: Returns one required prompt section.
      */
     public section(key: TSection): string {
         const prompt = (this.data as PromptPackageData<TSection>)[key];
@@ -105,8 +105,8 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
     }
 
     /**
-     * EN: Renders ordered prompt sections or one safe XML document.
      * ZH: 渲染有序 prompt sections 或一份安全 XML 文档。
+     * EN: Renders ordered prompt sections or one safe XML document.
      */
     public render(shape: PromptRender<TSection>): string {
         if (shape.kind === 'sections') {
@@ -124,8 +124,8 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
     }
 
     /**
-     * EN: Replaces one writable prompt file with complete content.
      * ZH: 使用完整内容替换一个可写 prompt 文件。
+     * EN: Replaces one writable prompt file with complete content.
      */
     public set(content: string): void {
         if (statSync(this.path).isDirectory()) throw Error('Prompt package cannot be written as a file');
@@ -135,8 +135,8 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
     }
 
     /**
-     * EN: Validates every identity update before applying policy-approved writes in order.
      * ZH: 先完整验证身份更新，再按顺序应用策略允许的写入。
+     * EN: Validates every identity update before applying policy-approved writes in order.
      */
     public applyWrites(writes: Array<{ file?: string; content?: string }>): string[] {
         const policy = this.config?.protocolPackage;
@@ -161,8 +161,8 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
     }
 
     /**
-     * EN: Resolves one protocol-package file block into inline XML content.
      * ZH: 将一个协议包文件区块解析为内联 XML 内容。
+     * EN: Resolves one protocol-package file block into inline XML content.
      */
     private protocolBlock(block: PromptProtocolBlock<TSection>): PromptDocumentBlock {
         const content = block.key === 'config'
@@ -182,8 +182,8 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
     }
 
     /**
-     * EN: Returns one required child prompt service.
      * ZH: 返回一个必需的子 prompt service。
+     * EN: Returns one required child prompt service.
      */
     private prompt(key: TSection): PromptService<string, string> {
         const prompt = (this.data as PromptPackageData<TSection>)[key];
@@ -192,8 +192,8 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
     }
 
     /**
-     * EN: Renders one ordered XML document using validated names and escaped content.
      * ZH: 使用已验证名称和转义内容渲染一份有序 XML 文档。
+     * EN: Renders one ordered XML document using validated names and escaped content.
      */
     private renderDocument(root: string, blocks: PromptDocumentBlock[], attributes?: Record<string, string>): string {
         this.assertXmlName(root);
@@ -209,8 +209,8 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
     }
 
     /**
-     * EN: Renders validated XML attributes in stable insertion order.
      * ZH: 按稳定插入顺序渲染已验证的 XML attributes。
+     * EN: Renders validated XML attributes in stable insertion order.
      */
     private attributes(values: Record<string, string>): string[] {
         return Object.entries(values).map(([key, value]) => {
@@ -220,24 +220,24 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
     }
 
     /**
-     * EN: Escapes one XML attribute value.
      * ZH: 转义一个 XML attribute 值。
+     * EN: Escapes one XML attribute value.
      */
     private escapeAttribute(value: string): string {
         return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;');
     }
 
     /**
-     * EN: Splits embedded CDATA terminators without changing payload text.
      * ZH: 拆分内嵌 CDATA 终止符且不改变 payload 文本。
+     * EN: Splits embedded CDATA terminators without changing payload text.
      */
     private cdata(content: string): string {
         return content.replaceAll(']]>', ']]]]><![CDATA[>');
     }
 
     /**
-     * EN: Rejects names that cannot be emitted as XML elements or attributes.
      * ZH: 拒绝不能作为 XML element 或 attribute 输出的名称。
+     * EN: Rejects names that cannot be emitted as XML elements or attributes.
      */
     private assertXmlName(name: string): void {
         if (!/^[A-Za-z_][A-Za-z0-9_.:-]*$/.test(name)) throw Error(`Prompt XML name is invalid: ${name}`);

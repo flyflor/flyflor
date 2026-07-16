@@ -16,8 +16,8 @@ interface ExecuteTask {
 }
 
 /**
- * EN: Owns serial or bounded-parallel execution of explicit script files.
  * ZH: 持有显式脚本文件的串行或有界并行执行。
+ * EN: Owns serial or bounded-parallel execution of explicit script files.
  */
 @Provide()
 export class Execute extends ActionTool<ExecuteInput, ExecuteOutput> {
@@ -28,7 +28,7 @@ export class Execute extends ActionTool<ExecuteInput, ExecuteOutput> {
     @Config()
     public config!: ConfigService;
 
-    /** EN: Initializes script capability metadata and its cwd-aware model schema. ZH: 初始化脚本能力元数据及其 cwd 感知模型 schema。 */
+    /** ZH: 初始化脚本能力元数据及其 cwd 感知模型 schema。 EN: Initializes script capability metadata and its cwd-aware model schema. */
     public constructor() {
         super();
         this.name = 'execute';
@@ -60,20 +60,20 @@ export class Execute extends ActionTool<ExecuteInput, ExecuteOutput> {
         };
     }
 
-    /** EN: Requires approval for every script batch. ZH: 每个脚本批次均要求审批。 */
+    /** ZH: 每个脚本批次均要求审批。 EN: Requires approval for every script batch. */
     public override confirm(): boolean {
         return true;
     }
 
     /**
-     * EN: Projects one execute batch into a compact evidence note.
      * ZH: 将一次 execute 批次投影为紧凑证据笔记。
+     * EN: Projects one execute batch into a compact evidence note.
      */
     public override observe(data: ExecuteOutput): string {
         return `execute: total=${data.total}; success=${data.success}; failed=${data.failed}`;
     }
 
-    /** EN: Executes one validated script batch and reports explicit process data. ZH: 执行一个已验证脚本批次并报告显式进程数据。 */
+    /** ZH: 执行一个已验证脚本批次并报告显式进程数据。 EN: Executes one validated script batch and reports explicit process data. */
     public override async execute(input: ExecuteInput) {
         const cwd = this.cwd(input.cwd, this.config.path.cwd);
         const mode = this.mode(input.mode);
@@ -94,7 +94,7 @@ export class Execute extends ActionTool<ExecuteInput, ExecuteOutput> {
         } as const;
     }
 
-    /** EN: Runs tasks through a bounded ordered worker set. ZH: 通过有界有序 worker 集合运行任务。 */
+    /** ZH: 通过有界有序 worker 集合运行任务。 EN: Runs tasks through a bounded ordered worker set. */
     private async results(tasks: ExecuteTask[], cwd: string, concurrency: number): Promise<ExecuteTaskResult[]> {
         const results = new Array<ExecuteTaskResult>(tasks.length);
         let index = 0;
@@ -109,7 +109,7 @@ export class Execute extends ActionTool<ExecuteInput, ExecuteOutput> {
         return results;
     }
 
-    /** EN: Runs one script while allowing spawn failures to reject. ZH: 运行一个脚本，并允许 spawn 失败直接 reject。 */
+    /** ZH: 运行一个脚本，并允许 spawn 失败直接 reject。 EN: Runs one script while allowing spawn failures to reject. */
     private async runTask(task: ExecuteTask, batchCwd: string): Promise<ExecuteTaskResult> {
         const cwd = task.cwd === undefined ? batchCwd : this.cwd(task.cwd, batchCwd);
         const path = this.path(task.path, cwd);
@@ -131,7 +131,7 @@ export class Execute extends ActionTool<ExecuteInput, ExecuteOutput> {
         };
     }
 
-    /** EN: Spawns one process and resolves its exit or timeout data. ZH: spawn 一个进程并返回其退出或超时数据。 */
+    /** ZH: spawn 一个进程并返回其退出或超时数据。 EN: Spawns one process and resolves its exit or timeout data. */
     private spawn(command: string, args: string[], cwd: string, timeoutMs: number, env?: Record<string, string>) {
         const proc = spawn(command, args, {
             cwd,
@@ -153,13 +153,13 @@ export class Execute extends ActionTool<ExecuteInput, ExecuteOutput> {
         }).finally(() => clearTimeout(timer));
     }
 
-    /** EN: Requires one non-empty task collection. ZH: 要求一个非空任务集合。 */
+    /** ZH: 要求一个非空任务集合。 EN: Requires one non-empty task collection. */
     private tasks(value: unknown): ExecuteTask[] {
         if (!Array.isArray(value) || value.length === 0) throw Error('tasks is required');
         return value.map((item, index) => this.task(item, index));
     }
 
-    /** EN: Validates one indexed script task. ZH: 验证一个带索引的脚本任务。 */
+    /** ZH: 验证一个带索引的脚本任务。 EN: Validates one indexed script task. */
     private task(value: unknown, index: number): ExecuteTask {
         if (typeof value !== 'object' || value === null) throw Error(`tasks[${index}] must be an object`);
         const task = value as ExecuteTaskInput;
@@ -174,33 +174,33 @@ export class Execute extends ActionTool<ExecuteInput, ExecuteOutput> {
         };
     }
 
-    /** EN: Requires one supported script runtime. ZH: 要求一个受支持的脚本 runtime。 */
+    /** ZH: 要求一个受支持的脚本 runtime。 EN: Requires one supported script runtime. */
     private runtime(value: unknown, index: number): 'python' | 'sh' {
         if (value === 'python' || value === 'sh') return value;
         throw Error(`tasks[${index}].runtime must be python or sh`);
     }
 
-    /** EN: Resolves one batch or task working directory. ZH: 解析一个批次或任务工作目录。 */
+    /** ZH: 解析一个批次或任务工作目录。 EN: Resolves one batch or task working directory. */
     private cwd(value: unknown, base: string): string {
         const cwd = value === undefined ? base : this.text(value, 'cwd');
         if (typeof cwd !== 'string' || cwd.length === 0) throw Error('cwd is required');
         return isAbsolute(cwd) ? resolve(cwd) : resolve(base, cwd);
     }
 
-    /** EN: Resolves one script path against its task directory. ZH: 相对任务目录解析一个脚本路径。 */
+    /** ZH: 相对任务目录解析一个脚本路径。 EN: Resolves one script path against its task directory. */
     private path(value: string, cwd: string): string {
         if (isAbsolute(value)) return resolve(value);
         return resolve(cwd, value);
     }
 
-    /** EN: Requires one supported batch execution mode. ZH: 要求一个受支持的批次执行模式。 */
+    /** ZH: 要求一个受支持的批次执行模式。 EN: Requires one supported batch execution mode. */
     private mode(value: unknown): ExecuteMode {
         if (value === undefined) return 'serial';
         if (value === 'serial' || value === 'parallel') return value;
         throw Error('mode must be serial or parallel');
     }
 
-    /** EN: Validates parallelism without affecting serial order. ZH: 验证并行度且不影响串行顺序。 */
+    /** ZH: 验证并行度且不影响串行顺序。 EN: Validates parallelism without affecting serial order. */
     private maxConcurrency(value: unknown, mode: ExecuteMode, total: number): number {
         if (mode === 'serial') return 1;
         if (value === undefined) return Math.max(1, total);
@@ -208,13 +208,13 @@ export class Execute extends ActionTool<ExecuteInput, ExecuteOutput> {
         return Math.floor(value);
     }
 
-    /** EN: Requires one non-empty string field. ZH: 要求一个非空字符串字段。 */
+    /** ZH: 要求一个非空字符串字段。 EN: Requires one non-empty string field. */
     private text(value: unknown, name: string): string {
         if (typeof value !== 'string' || value.length === 0) throw Error(`${name} is required`);
         return value;
     }
 
-    /** EN: Converts primitive script arguments to strings. ZH: 将基础脚本参数转换为字符串。 */
+    /** ZH: 将基础脚本参数转换为字符串。 EN: Converts primitive script arguments to strings. */
     private args(value: unknown, name: string): string[] {
         if (value === undefined) return [];
         if (!Array.isArray(value)) throw Error(`${name} must be an array`);
@@ -224,7 +224,7 @@ export class Execute extends ActionTool<ExecuteInput, ExecuteOutput> {
         });
     }
 
-    /** EN: Validates one task environment map. ZH: 验证一个任务环境变量 map。 */
+    /** ZH: 验证一个任务环境变量 map。 EN: Validates one task environment map. */
     private env(value: unknown, index: number): Record<string, string> | undefined {
         if (value === undefined) return undefined;
         if (typeof value !== 'object' || value === null || Array.isArray(value)) throw Error(`tasks[${index}].env must be an object`);
@@ -235,7 +235,7 @@ export class Execute extends ActionTool<ExecuteInput, ExecuteOutput> {
         return Object.fromEntries(entries);
     }
 
-    /** EN: Validates and bounds one task timeout. ZH: 验证并限制一个任务超时。 */
+    /** ZH: 验证并限制一个任务超时。 EN: Validates and bounds one task timeout. */
     private timeout(value: unknown): number {
         if (value === undefined) return 30000;
         if (typeof value !== 'number' || !Number.isFinite(value)) throw Error('timeoutMs must be a number');

@@ -6,8 +6,8 @@ import type { ShellInput, ShellOutput } from './types';
 import { ActionTool } from './abstracts';
 
 /**
- * EN: Owns one directly spawned external command and its explicit execution data.
  * ZH: 持有一个直接 spawn 的外部命令及其显式执行数据。
+ * EN: Owns one directly spawned external command and its explicit execution data.
  */
 @Provide()
 export class Shell extends ActionTool<ShellInput, ShellOutput> {
@@ -18,7 +18,7 @@ export class Shell extends ActionTool<ShellInput, ShellOutput> {
     @Config()
     public config!: ConfigService;
 
-    /** EN: Initializes command capability metadata and its cwd-aware model schema. ZH: 初始化命令能力元数据及其 cwd 感知模型 schema。 */
+    /** ZH: 初始化命令能力元数据及其 cwd 感知模型 schema。 EN: Initializes command capability metadata and its cwd-aware model schema. */
     public constructor() {
         super();
         this.name = 'shell';
@@ -35,20 +35,20 @@ export class Shell extends ActionTool<ShellInput, ShellOutput> {
         };
     }
 
-    /** EN: Requires approval for every external command. ZH: 所有外部命令均要求审批。 */
+    /** ZH: 所有外部命令均要求审批。 EN: Requires approval for every external command. */
     public override confirm(): boolean {
         return true;
     }
 
     /**
-     * EN: Projects one shell result into a compact evidence note without retaining stdout/stderr bodies.
      * ZH: 将一次 shell 结果投影为紧凑证据笔记，不保留 stdout/stderr 正文。
+     * EN: Projects one shell result into a compact evidence note without retaining stdout/stderr bodies.
      */
     public override observe(data: ShellOutput): string {
         return `shell: command=${data.command}; cwd=${data.cwd}; exit=${String(data.exitCode)}; timedOut=${String(data.timedOut)}; stdoutBytes=${Buffer.byteLength(data.stdout)}; stderrBytes=${Buffer.byteLength(data.stderr)}`;
     }
 
-    /** EN: Executes one command and preserves exit and timeout as data. ZH: 执行一个命令，并将退出与超时保留为数据。 */
+    /** ZH: 执行一个命令，并将退出与超时保留为数据。 EN: Executes one command and preserves exit and timeout as data. */
     public override async execute(input: ShellInput) {
         const cwdSource = input.cwd === undefined ? this.config.path.cwd : this.text(input.cwd, 'cwd');
         const cwd = isAbsolute(cwdSource) ? resolve(cwdSource) : resolve(this.config.path.cwd, cwdSource);
@@ -83,7 +83,7 @@ export class Shell extends ActionTool<ShellInput, ShellOutput> {
         }
     }
 
-    /** EN: Adds owned platform facts to the canonical description. ZH: 将自身拥有的平台事实加入规范描述。 */
+    /** ZH: 将自身拥有的平台事实加入规范描述。 EN: Adds owned platform facts to the canonical description. */
     protected override describe(base: string): string {
         const lines = [
             base.trim(),
@@ -97,13 +97,13 @@ export class Shell extends ActionTool<ShellInput, ShellOutput> {
         return lines.join('\n').trim();
     }
 
-    /** EN: Requires one non-empty string field. ZH: 要求一个非空字符串字段。 */
+    /** ZH: 要求一个非空字符串字段。 EN: Requires one non-empty string field. */
     private text(value: unknown, name: string): string {
         if (typeof value !== 'string' || value.length === 0) throw Error(`${name} is required`);
         return value;
     }
 
-    /** EN: Converts primitive command arguments to strings. ZH: 将基础命令参数转换为字符串。 */
+    /** ZH: 将基础命令参数转换为字符串。 EN: Converts primitive command arguments to strings. */
     private args(value: unknown): string[] {
         if (value === undefined) return [];
         if (!Array.isArray(value)) throw Error('args must be an array');
@@ -113,7 +113,7 @@ export class Shell extends ActionTool<ShellInput, ShellOutput> {
         });
     }
 
-    /** EN: Validates and bounds one command timeout. ZH: 验证并限制一个命令超时。 */
+    /** ZH: 验证并限制一个命令超时。 EN: Validates and bounds one command timeout. */
     private timeout(value: unknown): number {
         if (value === undefined) return 30000;
         if (typeof value !== 'number' || !Number.isFinite(value)) throw Error('timeoutMs must be a number');

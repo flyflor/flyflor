@@ -9,20 +9,20 @@ interface ResolutionScope {
 }
 
 /**
- * EN: Singleton IOC container that owns project class construction and injection.
  * ZH: 负责项目 class 构造和注入的 singleton IOC container。
+ * EN: Singleton IOC container that owns project class construction and injection.
  */
 export class Container {
-    /** EN: Process-wide IOC container instance. ZH: 进程级 IOC container 实例。 */
+    /** ZH: 进程级 IOC container 实例。 EN: Process-wide IOC container instance. */
     protected static instance: Container;
-    /** EN: Singleton instance cache keyed by class or symbol. ZH: 按 class 或 symbol 索引的 singleton 实例缓存。 */
+    /** ZH: 按 class 或 symbol 索引的 singleton 实例缓存。 EN: Singleton instance cache keyed by class or symbol. */
     private readonly singletons!: Map<ClassType | symbol, InstanceType<ClassType>>;
-    /** EN: Singleton constructions currently in flight. ZH: 当前正在构造的 singleton。 */
+    /** ZH: 当前正在构造的 singleton。 EN: Singleton constructions currently in flight. */
     private readonly pending!: Map<ClassType | symbol, Promise<InstanceType<ClassType>>>;
 
     /**
-     * EN: Creates or returns the process-wide container instance.
      * ZH: 创建或返回进程级 container 实例。
+     * EN: Creates or returns the process-wide container instance.
      */
     public constructor() {
         if (Container.instance) return Container.instance;
@@ -32,20 +32,20 @@ export class Container {
     }
 
     /**
-     * EN: Resolves one class through the async IOC lifecycle.
      * ZH: 通过异步 IOC 生命周期解析一个 class。
      *
+     * ZH: `getAsync` 是唯一 IOC 构造入口。`@Singleton()` class 会缓存；普通 provider 每次 fresh 构造，避免有状态请求对象跨请求泄漏。
+     * EN: Resolves one class through the async IOC lifecycle.
      * EN: `getAsync` is the single IOC construction entrypoint. Classes marked with `@Singleton()` are cached;
      * ordinary providers are constructed fresh on each call so stateful request objects do not leak across requests.
-     * ZH: `getAsync` 是唯一 IOC 构造入口。`@Singleton()` class 会缓存；普通 provider 每次 fresh 构造，避免有状态请求对象跨请求泄漏。
      */
     public async getAsync<T extends ClassType, P extends unknown[]>(Module: T, ...props: P): Promise<InstanceType<T>> {
         return await this.resolve(Module, props, undefined, false);
     }
 
     /**
-     * EN: Resolves one class inside an optional Agent-local dependency scope.
      * ZH: 在可选的 Agent 本地依赖作用域中解析一个 class。
+     * EN: Resolves one class inside an optional Agent-local dependency scope.
      */
     private async resolve<T extends ClassType, P extends unknown[]>(
         Module: T,
@@ -64,8 +64,8 @@ export class Container {
     }
 
     /**
-     * EN: Constructs, injects, initializes, and only then publishes one object.
      * ZH: 构造、注入并初始化对象，完成后才发布该对象。
+     * EN: Constructs, injects, initializes, and only then publishes one object.
      */
     private async construct<T extends ClassType, P extends unknown[]>(
         Module: T,
@@ -100,24 +100,24 @@ export class Container {
     }
 
     /**
-     * EN: Creates one IOC-owned instance without singleton registration.
      * ZH: 创建一个由 IOC 拥有但不注册 singleton 的实例。
+     * EN: Creates one IOC-owned instance without singleton registration.
      */
     public create<T extends ClassType, P extends unknown[]>(Module: T, ...props: P): InstanceType<T> {
         return Reflect.construct(Module, props) as InstanceType<T>;
     }
 
     /**
-     * EN: Returns already-built imported module instances for constructor injection.
      * ZH: 返回已构建的 imported module 实例，用于 constructor injection。
+     * EN: Returns already-built imported module instances for constructor injection.
      */
     private getModuleImportInstances(imports: ClassType[]): Array<{ classType: ClassType; instance: InstanceType<ClassType> }> {
         return imports.filter((classType) => this.singletons.has(classType)).map((classType) => ({ classType, instance: this.singletons.get(classType) as InstanceType<ClassType> }));
     }
 
     /**
-     * EN: Builds constructor args from explicit props and imported module instances.
      * ZH: 从显式 props 和 imported module 实例构造构造函数参数。
+     * EN: Builds constructor args from explicit props and imported module instances.
      */
     private getConstructorProps<P extends unknown[]>(Module: ClassType, importInstances: Array<{ classType: ClassType; instance: InstanceType<ClassType> }>, props: P): unknown[] {
         const paramTypes: ClassType[] = Reflect.getMetadata(CONSTRUCTOR_PARAM_METADATA_KEY, Module) || [];
@@ -131,8 +131,8 @@ export class Container {
     }
 
     /**
-     * EN: Builds constructor args for `@Scope()` injections from host-local values.
      * ZH: 从 host 本地值构造 `@Scope()` 注入所需参数。
+     * EN: Builds constructor args for `@Scope()` injections from host-local values.
      */
     private getScopedConstructorProps(Module: ClassType, scope: ResolutionScope): unknown[] {
         const paramTypes: ClassType[] = Reflect.getMetadata(CONSTRUCTOR_PARAM_METADATA_KEY, Module) || [];
@@ -149,8 +149,8 @@ export class Container {
     }
 
     /**
-     * EN: Rejects primitive reflected constructor placeholders for scoped matching.
      * ZH: 在 scoped matching 中排除 primitive reflected constructor 占位类型。
+     * EN: Rejects primitive reflected constructor placeholders for scoped matching.
      */
     private isScopedClassType(paramType: ClassType): boolean {
         return paramType !== Object
@@ -163,8 +163,8 @@ export class Container {
     }
 
     /**
-     * EN: Collects inherited member metadata without sharing mutable arrays between constructors.
      * ZH: 收集继承的成员元数据，同时避免构造器之间共享可变数组。
+     * EN: Collects inherited member metadata without sharing mutable arrays between constructors.
      */
     private collectMetadata<T extends { propertyKey: string | symbol }>(Module: ClassType, key: symbol): T[] {
         const constructors: ClassType[] = [];
@@ -182,8 +182,8 @@ export class Container {
     }
 
     /**
-     * EN: Reads and validates the reflected dependency type for one injected property.
      * ZH: 读取并验证一个注入属性的反射依赖类型。
+     * EN: Reads and validates the reflected dependency type for one injected property.
      */
     private getInjectedType(Module: ClassType, propertyKey: string | symbol): ClassType {
         const classType = Reflect.getMetadata('design:type', Module.prototype, propertyKey) as ClassType | undefined;
@@ -194,8 +194,8 @@ export class Container {
     }
 
     /**
-     * EN: Rejects erased and primitive reflected property types before construction.
      * ZH: 在构造前拒绝被擦除及原始类型的属性反射类型。
+     * EN: Rejects erased and primitive reflected property types before construction.
      */
     private isInjectableClassType(classType: ClassType): boolean {
         return this.isScopedClassType(classType) && classType !== Date && classType !== RegExp;
@@ -204,8 +204,8 @@ export class Container {
 }
 
 /**
- * EN: Returns the process-wide IOC container singleton.
  * ZH: 返回进程级 IOC container singleton。
+ * EN: Returns the process-wide IOC container singleton.
  */
 export function useContainer() {
     return new Container();

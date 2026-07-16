@@ -3,8 +3,8 @@ import type { ContextBrief, Perception, TurnInteraction, TurnSummary } from './t
 type TurnStatus = 'active' | 'paused' | 'completed';
 
 /**
- * EN: Internal conversational entity reachable only through Context.
  * ZH: 只能通过 Context 访问的内部对话实体。
+ * EN: Internal conversational entity reachable only through Context.
  */
 export class Turn {
     private status: TurnStatus;
@@ -13,8 +13,8 @@ export class Turn {
     private evidence: string[];
 
     /**
-     * EN: Creates one active experience from raw input and one perception.
      * ZH: 从原始输入和一次感知创建一条活动经历。
+     * EN: Creates one active experience from raw input and one perception.
      */
     public constructor(
         public readonly id: string,
@@ -29,8 +29,8 @@ export class Turn {
     }
 
     /**
-     * EN: Marks this Turn as waiting for one exact interaction.
      * ZH: 将当前 Turn 标记为等待一个精确交互。
+     * EN: Marks this Turn as waiting for one exact interaction.
      */
     public pause(interaction: TurnInteraction): void {
         this.assert('active');
@@ -39,8 +39,8 @@ export class Turn {
     }
 
     /**
-     * EN: Resumes this Turn after its exact interaction is answered.
      * ZH: 在精确交互得到回答后恢复当前 Turn。
+     * EN: Resumes this Turn after its exact interaction is answered.
      */
     public resume(interactionId: string): void {
         this.assert('paused');
@@ -50,8 +50,8 @@ export class Turn {
     }
 
     /**
-     * EN: Completes this Turn with the Agent's final answer and evidence.
      * ZH: 使用 Agent 的最终回答和证据完成当前 Turn。
+     * EN: Completes this Turn with the Agent's final answer and evidence.
      */
     public complete(answer: string, evidence: readonly string[]): void {
         this.assert('active');
@@ -63,8 +63,8 @@ export class Turn {
     }
 
     /**
-     * EN: Projects this active or paused Turn into an immutable Agent brief.
      * ZH: 将活动或暂停 Turn 投影为不可变 Agent brief。
+     * EN: Projects this active or paused Turn into an immutable Agent brief.
      */
     public brief(recent: TurnSummary[]): ContextBrief {
         if (this.status === 'completed') throw Error(`Turn is already completed: ${this.id}`);
@@ -80,8 +80,8 @@ export class Turn {
     }
 
     /**
-     * EN: Projects this completed Turn into an immutable retained summary.
      * ZH: 将完成的 Turn 投影为不可变保留摘要。
+     * EN: Projects this completed Turn into an immutable retained summary.
      */
     public summary(): TurnSummary {
         this.assert('completed');
@@ -97,16 +97,16 @@ export class Turn {
     }
 
     /**
-     * EN: Reports whether this Turn has reached its final state.
      * ZH: 报告当前 Turn 是否已到达最终状态。
+     * EN: Reports whether this Turn has reached its final state.
      */
     public completed(): boolean {
         return this.status === 'completed';
     }
 
     /**
-     * EN: Rejects an invalid Turn transition.
      * ZH: 拒绝非法 Turn 状态迁移。
+     * EN: Rejects an invalid Turn transition.
      */
     private assert(expected: TurnStatus): void {
         if (this.status !== expected) throw Error(`Turn ${this.id} is ${this.status}, expected ${expected}`);

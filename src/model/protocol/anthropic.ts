@@ -1,6 +1,10 @@
 import type { Message } from '../types';
 import type { ProtocolAdapter, ProtocolContext, ProviderError } from './types';
 
+/**
+ * ZH: Anthropic Messages 线适配器；纯文本，单独投影 system blocks。
+ * EN: Anthropic Messages wire adapter; text-only, projects system blocks separately.
+ */
 export const anthropicAdapter: ProtocolAdapter = {
     name: 'anthropic',
     tools: false,
@@ -37,6 +41,7 @@ export const anthropicAdapter: ProtocolAdapter = {
     },
 };
 
+/** ZH: 为 Messages API 将 system 文本与对话消息拆分。 EN: Splits system text from conversation messages for the Messages API. */
 function project(messages: Message[]): { system: string[]; messages: Array<{ role: string; content: string }> } {
     const system: string[] = [];
     const conversation: Array<{ role: string; content: string }> = [];
@@ -48,17 +53,20 @@ function project(messages: Message[]): { system: string[]; messages: Array<{ rol
     return { system, messages: conversation };
 }
 
+/** ZH: 将 Anthropic stop_reason 映射为 StopReason。 EN: Maps Anthropic stop_reason strings to StopReason. */
 function terminal(reason: string): 'stop' | 'length' {
     if (reason === 'end_turn' || reason === 'stop_sequence') return 'stop';
     if (reason === 'max_tokens') return 'length';
     throw Error(`Anthropic stop reason is unsupported: ${reason}`);
 }
 
+/** ZH: 提取 SSE data 负载；忽略非 data 行。 EN: Extracts SSE data payload; ignores non-data lines. */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();
     return trimmed.startsWith('data:') ? trimmed.slice('data:'.length).trim() : undefined;
 }
 
+/** ZH: 将 ProviderError 格式化为 reject 消息。 EN: Formats one ProviderError into a reject message. */
 function errorMessage(error: ProviderError | undefined, fallback: string): string {
     return error?.code ? `${error.code}: ${error.message ?? error.type ?? fallback}` : error?.message ?? error?.type ?? fallback;
 }

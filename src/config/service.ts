@@ -3,6 +3,7 @@ import { JSON5 } from 'bun';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 
+/** ZH: 进程级解析路径；cwd 是唯一有意可变字段。 EN: Process-wide resolved paths; cwd is the only intentionally mutable field. */
 export interface FSystemPathInfo {
     root: string;
     runtime: string;
@@ -11,6 +12,7 @@ export interface FSystemPathInfo {
     socket: string;
 }
 
+/** ZH: 来自 config.jsonc 的进程级 provider endpoint 与认证事实。 EN: Process-wide provider endpoint and authentication facts from config.jsonc. */
 export interface FModelConfiguration {
     model: string;
     provider: string;
@@ -19,6 +21,7 @@ export interface FModelConfiguration {
     timeoutSeconds: number;
 }
 
+/** ZH: 一份完整 Agent profile；pool 副本永不修改该共享形状。 EN: One complete Agent profile; pool copies never mutate this shared shape. */
 export interface FAgentProfileConfiguration {
     name: string;
     model: string;
@@ -29,6 +32,7 @@ export interface FAgentProfileConfiguration {
     promptSections?: string[];
 }
 
+/** ZH: 生命体启动前必须满足的规范 JSONC 根结构。 EN: Canonical JSONC root shape required before the life form can start. */
 export interface FConfiguration {
     model: FModelConfiguration;
     agent: string;
@@ -36,7 +40,7 @@ export interface FConfiguration {
     socket: string;
 }
 
-/** EN: Process-wide strict configuration loaded from the canonical JSONC file. ZH: 从规范 JSONC 文件加载的进程级严格配置。 */
+/** ZH: 从规范 JSONC 文件加载的进程级严格配置。 EN: Process-wide strict configuration loaded from the canonical JSONC file. */
 @Singleton()
 export class ConfigService extends FService implements FConfiguration {
     public static path: FSystemPathInfo = {
@@ -52,7 +56,7 @@ export class ConfigService extends FService implements FConfiguration {
     public agents!: Record<string, FAgentProfileConfiguration>;
     public socket!: string;
 
-    /** EN: Loads canonical configuration without synthesizing missing values. ZH: 加载规范配置，不合成缺失值。 */
+    /** ZH: 加载规范配置，不合成缺失值。 EN: Loads canonical configuration without synthesizing missing values. */
     public constructor() {
         super();
         const value: unknown = JSON5.parse(readFileSync(join(ConfigService.path.config, 'config.jsonc'), 'utf-8'));
@@ -75,12 +79,12 @@ export class ConfigService extends FService implements FConfiguration {
         ConfigService.path.socket = this.socket;
     }
 
-    /** EN: Returns process-wide resolved paths. ZH: 返回进程级解析路径。 */
+    /** ZH: 返回进程级解析路径。 EN: Returns process-wide resolved paths. */
     public get path(): FSystemPathInfo {
         return { ...ConfigService.path };
     }
 
-    /** EN: Resolves and stores one semantic working directory update. ZH: 解析并保存一次语义工作目录更新。 */
+    /** ZH: 解析并保存一次语义工作目录更新。 EN: Resolves and stores one semantic working directory update. */
     public changeWorkingDirectory(path: string): string {
         if (typeof path !== 'string' || path.length === 0) throw Error('Working directory path is required');
         const cwd = isAbsolute(path) ? resolve(path) : resolve(ConfigService.path.cwd, path);
@@ -89,7 +93,7 @@ export class ConfigService extends FService implements FConfiguration {
     }
 }
 
-/** EN: Returns the process root used by prompt decorators. ZH: 返回 prompt decorators 使用的进程根路径。 */
+/** ZH: 返回 prompt decorators 使用的进程根路径。 EN: Returns the process root used by prompt decorators. */
 export function useRootPath(): string {
     return ConfigService.path.root;
 }

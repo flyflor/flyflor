@@ -24,21 +24,21 @@ interface TurnOptions {
 }
 
 /**
- * EN: Drives the real browser bridge as one strict sequential packet consumer.
  * ZH: 作为严格串行 packet consumer 驱动真实 browser bridge。
+ * EN: Drives the real browser bridge as one strict sequential packet consumer.
  */
 class BrowserProbe extends FService {
     private socket?: WebSocket;
     private readonly inbox: BridgePacket[];
     private waiting?: (packet: BridgePacket) => void;
 
-    /** EN: Binds this probe to one live WebSocket endpoint. ZH: 将 probe 绑定到一个真实 WebSocket endpoint。 */
+    /** ZH: 将 probe 绑定到一个真实 WebSocket endpoint。 EN: Binds this probe to one live WebSocket endpoint. */
     public constructor(private readonly endpoint: string) {
         super();
         this.inbox = [];
     }
 
-    /** EN: Connects to the bridge and waits for the kernel open packet. ZH: 连接 bridge 并等待 kernel open packet。 */
+    /** ZH: 连接 bridge 并等待 kernel open packet。 EN: Connects to the bridge and waits for the kernel open packet. */
     public async connect(): Promise<void> {
         this.socket = new WebSocket(this.endpoint);
         this.socket.addEventListener('message', (event) => this.receive(event.data));
@@ -51,13 +51,13 @@ class BrowserProbe extends FService {
         assert.equal(packet.action, 'open');
     }
 
-    /** EN: Sends one browser JSON packet to the kernel bridge. ZH: 向 kernel bridge 发送一个 browser JSON packet。 */
+    /** ZH: 向 kernel bridge 发送一个 browser JSON packet。 EN: Sends one browser JSON packet to the kernel bridge. */
     public send(packet: BridgePacket): void {
         if (!this.socket || this.socket.readyState !== WebSocket.OPEN) throw Error('Live WebSocket is not open');
         this.socket.send(JSON.stringify(packet));
     }
 
-    /** EN: Returns the next decoded bridge packet with a strict timeout. ZH: 在严格 timeout 内返回下一个 decoded bridge packet。 */
+    /** ZH: 在严格 timeout 内返回下一个 decoded bridge packet。 EN: Returns the next decoded bridge packet with a strict timeout. */
     public async next(): Promise<BridgePacket> {
         const packet = this.inbox.shift();
         if (packet) return packet;
@@ -68,7 +68,7 @@ class BrowserProbe extends FService {
         );
     }
 
-    /** EN: Closes the browser connection and waits for its terminal event. ZH: 关闭 browser connection 并等待终态事件。 */
+    /** ZH: 关闭 browser connection 并等待终态事件。 EN: Closes the browser connection and waits for its terminal event. */
     public async disconnect(): Promise<void> {
         if (!this.socket || this.socket.readyState === WebSocket.CLOSED) return;
         const closed = new Promise<void>((resolve) => this.socket?.addEventListener('close', () => resolve(), { once: true }));
@@ -79,7 +79,7 @@ class BrowserProbe extends FService {
         this.waiting = undefined;
     }
 
-    /** EN: Delivers one strict JSON WebSocket message to its single consumer. ZH: 将一个严格 JSON WebSocket message 交给唯一 consumer。 */
+    /** ZH: 将一个严格 JSON WebSocket message 交给唯一 consumer。 EN: Delivers one strict JSON WebSocket message to its single consumer. */
     private receive(value: unknown): void {
         if (typeof value !== 'string') throw Error('Live bridge returned a non-text message');
         const parsed: unknown = JSON.parse(value);
@@ -96,7 +96,7 @@ class BrowserProbe extends FService {
         waiting(normalized);
     }
 
-    /** EN: Waits at one live boundary and always clears its rejecting timer. ZH: 等待一个 live boundary，并始终清理 rejecting timer。 */
+    /** ZH: 等待一个 live boundary，并始终清理 rejecting timer。 EN: Waits at one live boundary and always clears its rejecting timer. */
     private async boundary<T>(operation: Promise<T>, name: string): Promise<T> {
         let timer: ReturnType<typeof setTimeout> | undefined;
         const timeout = new Promise<never>((_resolve, reject) => {
@@ -111,8 +111,8 @@ class BrowserProbe extends FService {
 }
 
 /**
- * EN: Exercises every cognitive route and concrete tool through the configured real provider.
  * ZH: 通过已配置真实 provider 验收全部认知路径与具体工具。
+ * EN: Exercises every cognitive route and concrete tool through the configured real provider.
  */
 class LiveScenarios extends FService {
     private synapse?: Synapse;
@@ -121,14 +121,14 @@ class LiveScenarios extends FService {
     private workspace: string;
     private readonly passed: string[];
 
-    /** EN: Creates empty ownership for one disposable live-suite run. ZH: 为一次性 live suite 创建空所有权状态。 */
+    /** ZH: 为一次性 live suite 创建空所有权状态。 EN: Creates empty ownership for one disposable live-suite run. */
     public constructor() {
         super();
         this.workspace = '';
         this.passed = [];
     }
 
-    /** EN: Runs the complete live suite and releases only test-owned resources. ZH: 运行完整 live suite，并只释放测试拥有的资源。 */
+    /** ZH: 运行完整 live suite，并只释放测试拥有的资源。 EN: Runs the complete live suite and releases only test-owned resources. */
     public async run(): Promise<void> {
         this.workspace = mkdtempSync(join(tmpdir(), 'flyflor-live-'));
         configureLogger({ consoleEnabled: false, colorEnabled: false, level: LoggerLevel.Debug, path: join(this.workspace, 'live.log') });
@@ -151,7 +151,7 @@ class LiveScenarios extends FService {
         }
     }
 
-    /** EN: Starts the real application graph, IPC socket, bridge, and browser probe. ZH: 启动真实 application graph、IPC socket、bridge 与 browser probe。 */
+    /** ZH: 启动真实 application graph、IPC socket、bridge 与 browser probe。 EN: Starts the real application graph, IPC socket, bridge, and browser probe. */
     private async start(): Promise<void> {
         await Factory.create(AppModule);
         this.synapse = await useContainer().getAsync(Synapse);
@@ -162,7 +162,7 @@ class LiveScenarios extends FService {
         await this.probe.connect();
     }
 
-    /** EN: Verifies direct reply perception and expression. ZH: 验证直接 reply 感知与表达。 */
+    /** ZH: 验证直接 reply 感知与表达。 EN: Verifies direct reply perception and expression. */
     private async replyScenario(): Promise<void> {
         const packets = await this.turn('Reply with exactly REPLY_SCENARIO_OK and nothing else. Do not use tools.', { approved: false });
         assert.match(this.text(packets), /REPLY_SCENARIO_OK/);
@@ -171,7 +171,7 @@ class LiveScenarios extends FService {
         console.log('[live] passed: reply');
     }
 
-    /** EN: Verifies real filesystem read selection and evidence replay. ZH: 验证真实 filesystem read 选择与 evidence replay。 */
+    /** ZH: 验证真实 filesystem read 选择与 evidence replay。 EN: Verifies real filesystem read selection and evidence replay. */
     private async readScenario(): Promise<void> {
         const path = join(this.workspace, 'read.txt');
         writeFileSync(path, 'READ_SCENARIO_OK', 'utf8');
@@ -182,7 +182,7 @@ class LiveScenarios extends FService {
         console.log('[live] passed: filesystem-read');
     }
 
-    /** EN: Verifies structured Ask, pause, answer, and resume. ZH: 验证结构化 Ask、pause、answer 与 resume。 */
+    /** ZH: 验证结构化 Ask、pause、answer 与 resume。 EN: Verifies structured Ask, pause, answer, and resume. */
     private async askScenario(): Promise<void> {
         const packets = await this.turn('You must use the ask tool to ask whether the target environment is staging or production. Do not guess. After the answer, reply with the selected environment.', { askAnswer: 'staging', approved: false, reconnect: 'ask' });
         assert.ok(packets.some((packet) => packet.action === 'ask'));
@@ -193,7 +193,7 @@ class LiveScenarios extends FService {
         console.log('[live] passed: ask');
     }
 
-    /** EN: Verifies rejected Confirm produces no filesystem mutation. ZH: 验证拒绝 Confirm 时不产生 filesystem mutation。 */
+    /** ZH: 验证拒绝 Confirm 时不产生 filesystem mutation。 EN: Verifies rejected Confirm produces no filesystem mutation. */
     private async rejectedWriteScenario(): Promise<void> {
         const path = join(this.workspace, 'rejected.txt');
         writeFileSync(path, 'ORIGINAL', 'utf8');
@@ -205,7 +205,7 @@ class LiveScenarios extends FService {
         console.log('[live] passed: confirm-reject');
     }
 
-    /** EN: Verifies approved Confirm permits one exact filesystem write. ZH: 验证批准 Confirm 后允许一次精确 filesystem write。 */
+    /** ZH: 验证批准 Confirm 后允许一次精确 filesystem write。 EN: Verifies approved Confirm permits one exact filesystem write. */
     private async approvedWriteScenario(): Promise<void> {
         const path = join(this.workspace, 'approved.txt');
         writeFileSync(path, 'ORIGINAL', 'utf8');
@@ -216,7 +216,7 @@ class LiveScenarios extends FService {
         console.log('[live] passed: filesystem-write');
     }
 
-    /** EN: Verifies approved Shell execution and result replay. ZH: 验证批准后的 Shell execution 与 result replay。 */
+    /** ZH: 验证批准后的 Shell execution 与 result replay。 EN: Verifies approved Shell execution and result replay. */
     private async shellScenario(): Promise<void> {
         const path = join(this.workspace, 'shell.txt');
         writeFileSync(path, 'SHELL_SCENARIO_OK', 'utf8');
@@ -227,7 +227,7 @@ class LiveScenarios extends FService {
         console.log('[live] passed: shell');
     }
 
-    /** EN: Verifies approved Execute script batches and result replay. ZH: 验证批准后的 Execute script batch 与 result replay。 */
+    /** ZH: 验证批准后的 Execute script batch 与 result replay。 EN: Verifies approved Execute script batches and result replay. */
     private async executeScenario(): Promise<void> {
         const path = join(this.workspace, 'execute.sh');
         writeFileSync(path, 'printf EXECUTE_SCENARIO_OK', 'utf8');
@@ -238,7 +238,7 @@ class LiveScenarios extends FService {
         console.log('[live] passed: execute');
     }
 
-    /** EN: Verifies real multi-person Task dispatch and root synthesis. ZH: 验证真实多人 Task 派发与根综合。 */
+    /** ZH: 验证真实多人 Task 派发与根综合。 EN: Verifies real multi-person Task dispatch and root synthesis. */
     private async taskScenario(): Promise<void> {
         const workerPath = join(this.workspace, 'worker.txt');
         const reviewerPath = join(this.workspace, 'reviewer.txt');
@@ -256,7 +256,7 @@ class LiveScenarios extends FService {
         console.log('[live] passed: task');
     }
 
-    /** EN: Verifies transport reconnect preserves Context and root Memory. ZH: 验证 transport reconnect 保留 Context 与根 Memory。 */
+    /** ZH: 验证 transport reconnect 保留 Context 与根 Memory。 EN: Verifies transport reconnect preserves Context and root Memory. */
     private async reconnectScenario(): Promise<void> {
         if (!this.probe || !this.bridge) throw Error('Live bridge is not started');
         await this.probe.disconnect();
@@ -268,7 +268,7 @@ class LiveScenarios extends FService {
         console.log('[live] passed: reconnect-memory');
     }
 
-    /** EN: Verifies the Soul route against a disposable identity package. ZH: 使用一次性 identity package 验证 Soul 路径。 */
+    /** ZH: 使用一次性 identity package 验证 Soul 路径。 EN: Verifies the Soul route against a disposable identity package. */
     private async soulScenario(): Promise<void> {
         if (!this.synapse) throw Error('Live Synapse is not started');
         const identity = join(this.workspace, 'identity');
@@ -298,7 +298,7 @@ class LiveScenarios extends FService {
         console.log('[live] passed: soul');
     }
 
-    /** EN: Runs one root Turn through browser packets and exact interactions. ZH: 通过 browser packets 与精确交互运行一个根 Turn。 */
+    /** ZH: 通过 browser packets 与精确交互运行一个根 Turn。 EN: Runs one root Turn through browser packets and exact interactions. */
     private async turn(input: string, options: TurnOptions = {}): Promise<BridgePacket[]> {
         if (!this.probe) throw Error('Live browser probe is not connected');
         this.probe.send({ action: 'user', data: { text: input } });
@@ -323,7 +323,7 @@ class LiveScenarios extends FService {
         return packets;
     }
 
-    /** EN: Refreshes during one pending interaction and validates its exact replay order. ZH: 在一次 pending interaction 期间刷新，并验证其精确重放顺序。 */
+    /** ZH: 在一次 pending interaction 期间刷新，并验证其精确重放顺序。 EN: Refreshes during one pending interaction and validates its exact replay order. */
     private async reconnectInteraction(original: BridgePacket, packets: BridgePacket[]): Promise<BridgePacket> {
         if (!this.probe || !this.bridge || (original.action !== 'ask' && original.action !== 'confirm')) throw Error('Live reconnect interaction is invalid');
         await this.probe.disconnect();
@@ -341,7 +341,7 @@ class LiveScenarios extends FService {
         return replay;
     }
 
-    /** EN: Reads exact Turn and interaction ids from one replay packet. ZH: 从一个重放 packet 读取精确 Turn 与 interaction id。 */
+    /** ZH: 从一个重放 packet 读取精确 Turn 与 interaction id。 EN: Reads exact Turn and interaction ids from one replay packet. */
     private correlation(packet: BridgePacket): { turnId: string; id: string } {
         if (typeof packet.data !== 'object' || packet.data === null || Array.isArray(packet.data)) throw Error('Live interaction correlation is invalid');
         const data = packet.data as { turnId?: unknown; id?: unknown };
@@ -351,7 +351,7 @@ class LiveScenarios extends FService {
         return { turnId: data.turnId, id: data.id };
     }
 
-    /** EN: Answers every strict Ask question with the scenario value. ZH: 使用场景值回答每个严格 Ask question。 */
+    /** ZH: 使用场景值回答每个严格 Ask question。 EN: Answers every strict Ask question with the scenario value. */
     private answerAsk(packet: BridgePacket, answer?: string): void {
         if (!this.probe || typeof answer !== 'string') throw Error('Live Ask answer is missing');
         const data = packet.data as { turnId?: unknown; id?: unknown; questions?: unknown };
@@ -363,7 +363,7 @@ class LiveScenarios extends FService {
         this.probe.send({ action: 'answer', data: { turnId: data.turnId, id: data.id, response: { kind: 'ask', answers } } });
     }
 
-    /** EN: Answers one strict Confirm with the scenario decision. ZH: 使用场景决策回答一个严格 Confirm。 */
+    /** ZH: 使用场景决策回答一个严格 Confirm。 EN: Answers one strict Confirm with the scenario decision. */
     private answerConfirm(packet: BridgePacket, approved?: boolean): void {
         if (!this.probe || typeof approved !== 'boolean') throw Error('Live Confirm decision is missing');
         const data = packet.data as { turnId?: unknown; id?: unknown };
@@ -371,12 +371,12 @@ class LiveScenarios extends FService {
         this.probe.send({ action: 'answer', data: { turnId: data.turnId, id: data.id, response: { kind: 'confirm', approved } } });
     }
 
-    /** EN: Concatenates ordered user-visible reply chunks. ZH: 拼接有序、用户可见的 reply chunks。 */
+    /** ZH: 拼接有序、用户可见的 reply chunks。 EN: Concatenates ordered user-visible reply chunks. */
     private text(packets: BridgePacket[]): string {
         return packets.filter((packet) => packet.action === 'agent').map((packet) => String(packet.data)).join('');
     }
 
-    /** EN: Returns and validates the single root Complete packet. ZH: 返回并验证唯一根 Complete packet。 */
+    /** ZH: 返回并验证唯一根 Complete packet。 EN: Returns and validates the single root Complete packet. */
     private complete(packets: BridgePacket[]): CompleteSignal {
         const matches = packets.filter((packet) => packet.action === 'complete');
         assert.equal(matches.length, 1);
@@ -387,7 +387,7 @@ class LiveScenarios extends FService {
         return complete as CompleteSignal;
     }
 
-    /** EN: Stops only live-test transports and listeners. ZH: 只停止 live test transport 与 listener。 */
+    /** ZH: 只停止 live test transport 与 listener。 EN: Stops only live-test transports and listeners. */
     private async stop(): Promise<void> {
         if (this.probe) await this.probe.disconnect();
         if (this.bridge) await this.bridge.stop(true);

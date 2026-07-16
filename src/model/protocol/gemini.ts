@@ -1,6 +1,10 @@
 import type { Message } from '../types';
 import type { ProtocolAdapter, ProtocolContext } from './types';
 
+/**
+ * ZH: Gemini generateContent 流适配器；纯文本，单独投影 system_instruction。
+ * EN: Gemini generateContent stream adapter; text-only, projects system_instruction separately.
+ */
 export const geminiAdapter: ProtocolAdapter = {
     name: 'gemini',
     tools: false,
@@ -28,6 +32,7 @@ export const geminiAdapter: ProtocolAdapter = {
     },
 };
 
+/** ZH: 将模型 Message 投影为 Gemini contents 与可选 system_instruction。 EN: Projects model Messages into Gemini contents and optional system_instruction. */
 function project(messages: Message[]): {
     contents: Array<{ role: string; parts: Array<{ text: string }> }>;
     system?: { parts: Array<{ text: string }> };
@@ -42,12 +47,14 @@ function project(messages: Message[]): {
     return { contents, ...(system.length > 0 ? { system: { parts: [{ text: system.join('\n\n') }] } } : {}) };
 }
 
+/** ZH: 将 Gemini finishReason 映射为 StopReason。 EN: Maps Gemini finishReason strings to StopReason. */
 function terminal(reason: string): 'stop' | 'length' {
     if (reason === 'STOP') return 'stop';
     if (reason === 'MAX_TOKENS') return 'length';
     throw Error(`Gemini finish reason is unsupported: ${reason}`);
 }
 
+/** ZH: 提取 SSE data 负载；忽略非 data 行。 EN: Extracts SSE data payload; ignores non-data lines. */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();
     return trimmed.startsWith('data:') ? trimmed.slice('data:'.length).trim() : undefined;

@@ -18,8 +18,8 @@ import type { InvestigationOutput, InvestigationRequest, InvestigationSignal } f
 const TOOL_REPLAY_BYTES = 64 * 1024;
 
 /**
- * EN: Owns one Agent's persistent investigation network and local provider replay.
  * ZH: 持有一个 Agent 的持久调查网络与本地 provider replay。
+ * EN: Owns one Agent's persistent investigation network and local provider replay.
  */
 @Provide()
 export class Investigation extends FComponent {
@@ -42,15 +42,15 @@ export class Investigation extends FComponent {
     public summary!: PromptService<string, string>;
 
     /**
-     * EN: Persistent Ask/Confirm/Task/Complete network reused for every stimulus.
      * ZH: 对每次刺激复用的持久 Ask/Confirm/Task/Complete 网络。
+     * EN: Persistent Ask/Confirm/Task/Complete network reused for every stimulus.
      */
     @Inject()
     public circuit!: Observable<InvestigationSignal, InvestigationOutput>;
 
     /**
-     * EN: Binds one persistent investigation network to its Agent and cortical bus.
      * ZH: 将一张持久调查网络绑定到所属 Agent 与皮层总线。
+     * EN: Binds one persistent investigation network to its Agent and cortical bus.
      */
     public constructor(
         agent: FAgent<unknown, CompleteSignal, FAgentProfileConfiguration, AgentBus>,
@@ -61,8 +61,8 @@ export class Investigation extends FComponent {
     }
 
     /**
-     * EN: Wires Ask, Confirm, Task, and Complete branches exactly once.
      * ZH: 一次性连接 Ask、Confirm、Task 与 Complete 分支。
+     * EN: Wires Ask, Confirm, Task, and Complete branches exactly once.
      */
     @Init()
     public init(): void {
@@ -75,8 +75,8 @@ export class Investigation extends FComponent {
     }
 
     /**
-     * EN: Drives one investigation through the existing network until pure Complete.
      * ZH: 通过既有网络驱动一次调查，直到产生纯净 Complete。
+     * EN: Drives one investigation through the existing network until pure Complete.
      */
     public async run(baseMessages: Message[], request: InvestigationRequest): Promise<CompleteSignal> {
         const initial: Message[] = [
@@ -131,7 +131,7 @@ export class Investigation extends FComponent {
         }
     }
 
-    /** EN: Replaces provider replay with one model-understood investigation summary. ZH: 使用模型理解的调查摘要替换 provider replay。 */
+    /** ZH: 使用模型理解的调查摘要替换 provider replay。 EN: Replaces provider replay with one model-understood investigation summary. */
     private async summarize(initial: Message[], messages: Message[], evidence: string[], goal: string): Promise<Message[]> {
         const summary = await this.model.completeText([
             { role: 'system', content: String(this.summary.data).trim() },
@@ -151,8 +151,8 @@ export class Investigation extends FComponent {
     }
 
     /**
-     * EN: Executes one call directly or routes it through its neural branch.
      * ZH: 直接执行一次调用，或通过对应神经分支路由。
+     * EN: Executes one call directly or routes it through its neural branch.
      */
     private async execute(call: ToolCall, request: InvestigationRequest, requiresConfirm: boolean): Promise<ToolRunResult> {
         if (call.name === 'ask') {
@@ -195,32 +195,32 @@ export class Investigation extends FComponent {
     }
 
     /**
-     * EN: Sends one clarification firing through the shared interaction circuit.
      * ZH: 将一次澄清放电送入共享交互回路。
+     * EN: Sends one clarification firing through the shared interaction circuit.
      */
     private async ask(signal: AskSignal): Promise<AskResponse> {
         return await this.synapse.fire(signal);
     }
 
     /**
-     * EN: Sends one approval firing before any dangerous concrete action.
      * ZH: 在任何危险具体动作前发送一次审批放电。
+     * EN: Sends one approval firing before any dangerous concrete action.
      */
     private async confirm(signal: ConfirmSignal): Promise<ConfirmResponse> {
         return await this.synapse.fire(signal);
     }
 
     /**
-     * EN: Sends validated child goals to the cortical delegation circuit.
      * ZH: 将已验证的子目标送入皮层委派回路。
+     * EN: Sends validated child goals to the cortical delegation circuit.
      */
     private async task(signal: TaskSignal): Promise<CompleteSignal[]> {
         return await this.synapse.fire(signal);
     }
 
     /**
-     * EN: Validates the final pure summary produced by this Agent.
      * ZH: 验证当前 Agent 产生的最终纯净摘要。
+     * EN: Validates the final pure summary produced by this Agent.
      */
     private complete(signal: CompleteSignal): CompleteSignal {
         if (signal.agent !== this.agentConfig.name) throw Error(`Complete Agent does not match: ${signal.agent}`);
@@ -228,7 +228,7 @@ export class Investigation extends FComponent {
         return { ...signal, evidence: [...signal.evidence] };
     }
 
-    /** EN: Builds compact evidence from orchestration outcomes or direct Tool output. ZH: 从编排结果或直接 Tool 输出构建紧凑证据。 */
+    /** ZH: 从编排结果或直接 Tool 输出构建紧凑证据。 EN: Builds compact evidence from orchestration outcomes or direct Tool output. */
     private observation(result: ToolRunResult, requiresConfirm: boolean): string {
         if (typeof result.data !== 'object' || result.data === null || Array.isArray(result.data)) {
             throw Error(`Tool observation payload is invalid: ${result.name}`);
@@ -257,8 +257,8 @@ export class Investigation extends FComponent {
     }
 
     /**
-     * EN: Applies an understood working directory only to tools that own cwd semantics.
      * ZH: 仅为拥有 cwd 语义的工具应用已理解的工作目录。
+     * EN: Applies an understood working directory only to tools that own cwd semantics.
      */
     private withWorkingDirectory(call: ToolCall, cwd?: string): ToolCall {
         if (!cwd || !this.tools.cwd(call.name) || 'cwd' in call.arguments) return call;
@@ -266,8 +266,8 @@ export class Investigation extends FComponent {
     }
 
     /**
-     * EN: Preserves one provider assistant tool-call message inside this run only.
      * ZH: 仅在本次运行内保留一条 provider assistant tool-call 消息。
+     * EN: Preserves one provider assistant tool-call message inside this run only.
      */
     private toolCallMessage(result: ModelResult): AssistantMessage {
         return {
@@ -279,8 +279,8 @@ export class Investigation extends FComponent {
     }
 
     /**
-     * EN: Encapsulates one local tool result as safe XML for provider replay.
      * ZH: 将一次本地工具结果封装为安全 XML，供 provider replay 使用。
+     * EN: Encapsulates one local tool result as safe XML for provider replay.
      */
     private toolResultMessage(call: ToolCall, result: ToolRunResult, maxBytes: number): ToolMessage {
         return {
@@ -295,7 +295,7 @@ export class Investigation extends FComponent {
         };
     }
 
-    /** EN: Bounds one model-facing tool replay while preserving its beginning and end. ZH: 限制一条面向模型的工具 replay，同时保留首尾内容。 */
+    /** ZH: 限制一条面向模型的工具 replay，同时保留首尾内容。 EN: Bounds one model-facing tool replay while preserving its beginning and end. */
     private replay(content: string, maxBytes: number): string {
         const bytes = Buffer.from(content);
         if (bytes.byteLength <= maxBytes) return content;
@@ -309,14 +309,14 @@ export class Investigation extends FComponent {
         return `${head}\n... ${bytes.byteLength - retained} bytes omitted ...\n${tail}`;
     }
 
-    /** EN: Reads a UTF-8 safe prefix from one output buffer. ZH: 从输出 buffer 读取 UTF-8 安全前缀。 */
+    /** ZH: 从输出 buffer 读取 UTF-8 安全前缀。 EN: Reads a UTF-8 safe prefix from one output buffer. */
     private head(content: Buffer, maxBytes: number): string {
         let end = Math.min(content.byteLength, maxBytes);
         while (end > 0 && end < content.byteLength && (content[end]! & 0xc0) === 0x80) end -= 1;
         return content.subarray(0, end).toString('utf-8');
     }
 
-    /** EN: Reads a UTF-8 safe suffix from one output buffer. ZH: 从输出 buffer 读取 UTF-8 安全后缀。 */
+    /** ZH: 从输出 buffer 读取 UTF-8 安全后缀。 EN: Reads a UTF-8 safe suffix from one output buffer. */
     private tail(content: Buffer, maxBytes: number): string {
         let start = Math.max(0, content.byteLength - maxBytes);
         while (start < content.byteLength && (content[start]! & 0xc0) === 0x80) start += 1;

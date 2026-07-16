@@ -7,12 +7,12 @@ import { FSocket, SocketEvent, type SocketConnectionData } from './socket';
 import type { Controller } from './controller';
 
 /**
- * EN: RecordedSignal interface declaration.
  * ZH: RecordedSignal interface 声明。
+ * EN: RecordedSignal interface declaration.
  */
 /**
- * EN: PartialSocket class declaration.
  * ZH: PartialSocket class 声明。
+ * EN: PartialSocket class declaration.
  */
 class PartialSocket {
     public chunks: Buffer[];
@@ -34,7 +34,7 @@ class PartialSocket {
     }
 }
 
-/** EN: Opens one test connection and removes its initial open packet. ZH: 打开一个测试连接并移除初始 open packet。 */
+/** ZH: 打开一个测试连接并移除初始 open packet。 EN: Opens one test connection and removes its initial open packet. */
 async function connect(socket: FSocket, packet: IPCPacket, connection = new PartialSocket()): Promise<{ connection: PartialSocket; live: Socket<SocketConnectionData> }> {
     const limit = connection.limit;
     const blocked = connection.blocked;
@@ -50,12 +50,12 @@ async function connect(socket: FSocket, packet: IPCPacket, connection = new Part
 }
 
 /**
- * EN: RecordingSynapse class declaration.
  * ZH: RecordingSynapse class 声明。
+ * EN: RecordingSynapse class declaration.
  */
 /**
- * EN: RecordingController class declaration.
  * ZH: RecordingController class 声明。
+ * EN: RecordingController class declaration.
  */
 class RecordingController {
     public cwdCalls: unknown[];
