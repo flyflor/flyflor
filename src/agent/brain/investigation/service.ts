@@ -29,10 +29,13 @@ export class Investigation extends FAgentAtom {
         const emitReply = options.emitReply !== false;
         let step = 0;
         while (true) {
+            if (options.turnId && this.synapse.preempted?.(options.turnId)) {
+                return { answer: '', steps: step, completed: false, paused: false, evidence, interrupted: true };
+            }
             step += 1;
-            this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.LlmRequest, chunk: String(step), data: { step } });
+            this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: CallosumSignalType.LlmRequest, chunk: String(step), data: { step } });
             const result = await this.intelligence.streamRequest(messages, await this.tools.list(), (chunk) => {
-                if (emitReply) this.synapse.emit(SynapseSignalType.Reply, chunk);
+                if (emitReply) this.synapse.emit(SynapseSignalType.Reply, { turnId: options.turnId, chunk });
             });
             if (result.actionRequests.length === 0) {
                 return { answer: result.text, steps: step, completed: true, paused: false, evidence };
@@ -56,9 +59,9 @@ export class Investigation extends FAgentAtom {
                         continue;
                     }
                 }
-                this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.ActionStart, chunk: request.name, data: request.arguments });
+                this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: CallosumSignalType.ActionStart, chunk: request.name, data: request.arguments });
                 const actionResult = await this.tools.run(request);
-                this.synapse.emit(SynapseSignalType.Event, { type: CallosumSignalType.ActionResult, chunk: request.name, data: actionResult });
+                this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: CallosumSignalType.ActionResult, chunk: request.name, data: actionResult });
                 messages.push(this.actionResultMessage(request, actionResult));
                 evidence.push(this.evidence(request, actionResult));
                 if (actionResult.ok && this.pause(actionResult.data)) {

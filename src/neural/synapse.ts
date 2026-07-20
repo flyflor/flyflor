@@ -1,12 +1,23 @@
 import { Agent, AgentChatRole } from '@/agent';
+import type { AgentInput } from '@/agent/types';
 import { Context, type AgentBrief } from '@/agent/context';
 import type { ConfigService } from '@/configuration';
 import { Config, FCortex, Init, Inject, Module, Prompt, PromptService, Scope, useContainer } from '@/core';
 import { Intelligence } from '@/agent/brain/intelligence/service';
 import { parse } from '@/agent/json';
 import type { CallosumSignal } from '@/agent/brain/callosum';
+import { Awareness } from '@/neural/awareness';
+import type { Stimulus } from '@/neural/awareness/types';
 import { FSocket } from './ipc';
-import { SynapseSignalType, type CoordinatePlan, type InteractionRequest, type InteractionResponse, type SynapseSignal } from './types';
+import {
+    SynapseSignalType,
+    TurnPreempted,
+    type CoordinatePlan,
+    type InteractionRequest,
+    type InteractionResponse,
+    type ReplyChunk,
+    type SynapseSignal,
+} from './types';
 
 export interface AgentPool {
     [name: string]: Agent;
@@ -33,6 +44,9 @@ export class Synapse extends FCortex<SynapseSignal> {
     @Inject()
     public intelligence!: Intelligence;
 
+    @Inject()
+    public awareness!: Awareness;
+
     @Prompt('prompts/synapse')
     public planPrompt!: PromptService;
 
@@ -41,10 +55,7 @@ export class Synapse extends FCortex<SynapseSignal> {
 
     public agentPool: AgentPool;
     public active: string;
-    private interaction?: {
-        request: InteractionRequest;
-        resolve: (response: InteractionResponse) => void;
-    };
+    private interactions = new Map<string, { request: InteractionRequest; resolve: (response: InteractionResponse) => void }>();
 
     public get agent() {
         return this.agentPool[this.active]!;
@@ -61,14 +72,13 @@ export class Synapse extends FCortex<SynapseSignal> {
         const active = this.config.agent;
         this.active = active;
         await this.spawnAgent(active);
-        this.socket.synapse = this;
-        this.on(SynapseSignalType.Input, (signal) => this.input(String(signal.data)));
+        this.awareness.attend(this);
         this.on(SynapseSignalType.Reply, (signal) => this.output(signal.data));
-        this.on(SynapseSignalType.Event, (signal) => this.socket.write({ action: 'data', data: signal.data }));
-        this.on(SynapseSignalType.Ask, (signal) => this.socket.write({ action: 'ask', data: signal.data }));
-        this.on(SynapseSignalType.Confirm, (signal) => this.socket.write({ action: 'confirm', data: signal.data }));
-        this.on(SynapseSignalType.Pause, (signal) => this.socket.write({ action: 'pause', data: signal.data }));
-        this.on(SynapseSignalType.Resume, (signal) => this.socket.write({ action: 'resume', data: signal.data }));
+        this.on(SynapseSignalType.Event, (signal) => this.addressedWrite('data', signal.data));
+        this.on(SynapseSignalType.Ask, (signal) => this.addressedWrite('ask', signal.data));
+        this.on(SynapseSignalType.Confirm, (signal) => this.addressedWrite('confirm', signal.data));
+        this.on(SynapseSignalType.Pause, (signal) => this.addressedWrite('pause', signal.data));
+        this.on(SynapseSignalType.Resume, (signal) => this.addressedWrite('resume', signal.data));
         return true;
     }
 
@@ -111,25 +121,74 @@ export class Synapse extends FCortex<SynapseSignal> {
         return await useContainer().getAsync(Agent, agentConfig, this);
     }
 
-    public async input(data: any) {
-        this.log.info('input', data);
+    /**
+     * EN: Awareness asks the cortex to pay attention to one stimulus. This is the
+     * entry point for the active thought stream. The error boundary is the single
+     * place where a failing main turn is reported to the speaker.
+     * ZH: Awareness 请求皮层注意一条刺激。这是主动意识流的入口。失败的主 turn 通过
+     * 此处统一错误边界报告给说话人。
+     */
+    public async attend(stimulus: Stimulus): Promise<void> {
+        this.log.info('input', { speakerId: stimulus.speakerId, text: stimulus.text });
+        const input: AgentInput = { text: stimulus.text, speakerId: stimulus.speakerId, stimulusId: stimulus.id };
         try {
-            await this.agent.next(data);
+            await this.agent.next(input);
+            this.awareness.turnSettled(input.stimulusId ?? '');
         } catch (error) {
+            if (error instanceof TurnPreempted) {
+                this.awareness.turnInterrupted(error.turnId);
+                return;
+            }
             this.log.error('synapse.input', error);
-            this.emit(SynapseSignalType.Reply, '处理这条消息时出错，请重试。');
-            this.emit(SynapseSignalType.Reply, null);
+            const { speakerId } = input;
+            this.awareness.say(speakerId, '处理这条消息时出错，请重试。');
         }
     }
 
+    /**
+     * EN: Runs one background thought about an unrelated stimulus. If the worker
+     * cannot finish without a live interaction, it falls back to the main thread.
+     * ZH: 针对一条无关刺激运行一次后台思考。如果 worker 无法在没有实时交互的情况下
+     * 完成,则回退到主线程。
+     */
+    public async ponder(stimulus: Stimulus): Promise<void> {
+        const worker = await this.spawnWorker(this.active);
+        const brief = { ...this.context.brief('none'), goal: stimulus.text };
+        try {
+            const outcome = await worker.understand(brief);
+            if (!outcome) {
+                this.log.info('ponder.paused', { stimulusId: stimulus.id });
+                this.stimuliFallback(stimulus);
+                return;
+            }
+            this.awareness.say(stimulus.speakerId, outcome.answer);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (message.includes('Confirm boundary is missing')) {
+                this.log.info('ponder.fallback', { stimulusId: stimulus.id });
+                this.stimuliFallback(stimulus);
+                return;
+            }
+            this.log.error('ponder', error);
+        }
+    }
+
+    private stimuliFallback(stimulus: Stimulus): void {
+        this.awareness.perceive(stimulus);
+    }
+
     public async output(data: unknown) {
-        this.socket.write(data === null
-            ? { action: 'streamEnd', data: true }
-            : { action: 'agent', data: String(data) });
+        const { turnId, chunk } = data as ReplyChunk;
+        const turn = this.context.turns.find((t) => t.id === turnId);
+        if (!turn) {
+            this.log.warn('synapse.output.turn_not_found', { turnId });
+            return;
+        }
+        this.awareness.speak(turnId, turn.speakerId, chunk);
     }
 
     public async interact(request: InteractionRequest): Promise<InteractionResponse> {
-        if (this.interaction) throw Error('An interaction is already pending');
+        if (this.interactions.has(request.turnId)) throw Error('An interaction is already pending for this turn');
         this.context.pause(request.turnId, { id: request.id, kind: request.kind, prompt: JSON.stringify(request.data) });
         this.emit(request.kind === 'ask' ? SynapseSignalType.Ask : SynapseSignalType.Confirm, {
             turnId: request.turnId,
@@ -137,21 +196,30 @@ export class Synapse extends FCortex<SynapseSignal> {
             ...request.data as object,
         });
         this.emit(SynapseSignalType.Pause, request);
+        this.awareness.turnPaused(request.turnId);
         return await new Promise<InteractionResponse>((resolve) => {
-            this.interaction = { request, resolve };
+            this.interactions.set(request.turnId, { request, resolve });
         });
     }
 
     public answer(turnId: string, id: string, response: InteractionResponse): void {
-        const interaction = this.interaction;
-        if (!interaction || interaction.request.turnId !== turnId || interaction.request.id !== id) {
+        const interaction = this.interactions.get(turnId);
+        if (!interaction || interaction.request.id !== id) {
             throw Error('Interaction response does not match pending request');
         }
         if (interaction.request.kind !== response.kind) throw Error('Interaction response kind does not match request');
         this.context.resume(turnId, id);
-        this.interaction = undefined;
+        this.interactions.delete(turnId);
         interaction.resolve(response);
         this.emit(SynapseSignalType.Resume, { turnId, id });
+    }
+
+    /**
+     * EN: Motor output: write a packet addressed to the speaker of the given turn.
+     * ZH: 运动输出：将包寻址到对应 turn 的说话人。
+     */
+    public deliver(speakerId: string, packet: { action: string; data: unknown }): void {
+        this.socket.write(speakerId, packet);
     }
 
     /**
@@ -162,19 +230,12 @@ export class Synapse extends FCortex<SynapseSignal> {
      * 完成计划、派发 agent pool、合成最终回复，并通过 Synapse 信号输出。
      */
     public async coordinate(signal: CallosumSignal, turnId: string): Promise<void> {
-        // EN: Ask the cortex plan prompt how to slice the understanding work.
-        // ZH: 询问皮层计划提示词如何切分理解工作。
         const brief = this.context.brief(turnId);
         const plan = parse<CoordinatePlan>(await this.intelligence.completeText([
             { role: AgentChatRole.System, content: this.planPrompt.section('plan') },
             { role: AgentChatRole.User, content: `${JSON.stringify(brief)}\n<latest_user_message>${signal.chunk}</latest_user_message>` },
         ]));
 
-        // EN: Dispatch one independent worker per slice. Each worker gets its own
-        // private Memory seeded from the Context brief. If any worker pauses for
-        // ask/confirm, stop and let Synapse resume later.
-        // ZH: 每个切片派发一个独立 worker。每个 worker 都从 Context 简报获得私有记忆
-        // 种子。如果某个 worker 因 ask/confirm 暂停，则停止，稍后再由 Synapse 恢复。
         const outcomes: Array<{ profile: string; persona: string; slice: string; brief: string; result: string; evidence: string[] }> = [];
         const slices = plan.slices.length === 0
             ? [{ profile: this.active, persona: '', brief: this.context.brief(turnId).goal, slice: String(signal.chunk) }]
@@ -190,16 +251,28 @@ export class Synapse extends FCortex<SynapseSignal> {
         const review = await reviewer.understand(this.reviewBrief(plan, outcomes, turnId));
         if (!review) return;
 
-        // EN: Synthesize worker understandings into one coherent reply.
-        // ZH: 把各 worker 的理解合成一条连贯回复。
         const answer = await this.intelligence.completeText([
             { role: AgentChatRole.System, content: this.synthesisPrompt.section('synthesis') },
             { role: AgentChatRole.User, content: JSON.stringify({ outcomes, review: { profile: plan.review.profile, persona: plan.review.persona, result: review.answer, evidence: review.evidence }, hint: plan.synthesisHint }) },
         ]);
 
         await this.context.settle(turnId, { assistant: answer, evidence: [...outcomes.flatMap((outcome) => outcome.evidence), ...review.evidence] });
-        this.emit(SynapseSignalType.Reply, answer);
-        this.emit(SynapseSignalType.Reply, null);
+        this.emit(SynapseSignalType.Reply, { turnId, chunk: answer });
+        this.emit(SynapseSignalType.Reply, { turnId, chunk: null });
+    }
+
+    private addressedWrite(action: string, data: unknown): void {
+        if (typeof data !== 'object' || data === null || !('turnId' in data)) {
+            this.log.debug('synapse.addressed_write.no_turnId', { action, data });
+            return;
+        }
+        const { turnId } = data as { turnId: string };
+        const turn = this.context.turns.find((t) => t.id === turnId);
+        if (!turn) {
+            this.log.warn('synapse.addressed_write.turn_not_found', { action, turnId });
+            return;
+        }
+        this.socket.write(turn.speakerId, { action, data });
     }
 
     private workerBrief(slice: { profile: string; persona: string; brief: string; slice: string }, turnId: string): AgentBrief {

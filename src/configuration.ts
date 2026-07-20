@@ -149,6 +149,24 @@ export interface FConfiguration {
     socket: string;
     skills: SkillsConfig;
     mcp: MCPServerConfig;
+    awareness: FAwarenessConfiguration;
+}
+
+/**
+ * EN: Attention-gate tuning for the life-form's Awareness layer.
+ * ZH: 生命体 Awareness 注意门控的调节参数。
+ *
+ * EN: `maxConcurrentThoughts` caps background worker thinking; `scheduleTimeoutMs`
+ * bounds one scheduler LLM call before FIFO fallback; `batchWindowMs` coalesces
+ * bursts of stimuli into one scheduling pass.
+ * ZH: `maxConcurrentThoughts` 限制后台 worker 并发思考数;`scheduleTimeoutMs`
+ * 限定单次调度 LLM 调用时长,超时降级为 FIFO;`batchWindowMs` 把突发刺激
+ * 合并进同一次调度。
+ */
+export interface FAwarenessConfiguration {
+    maxConcurrentThoughts: number;
+    scheduleTimeoutMs: number;
+    batchWindowMs: number;
 }
 
 /**
@@ -221,6 +239,7 @@ export class ConfigService extends FService implements FConfiguration {
     public socket: string;
     public skills: SkillsConfig;
     public mcp: MCPServerConfig;
+    public awareness: FAwarenessConfiguration;
 
     /**
      * EN: Loads config defaults, merges `.config/config.jsonc`, and resolves active model protocols.
@@ -284,6 +303,11 @@ export class ConfigService extends FService implements FConfiguration {
             externalDirs: [],
         };
         this.mcp = {};
+        this.awareness = {
+            maxConcurrentThoughts: 2,
+            scheduleTimeoutMs: 8000,
+            batchWindowMs: 200,
+        };
         Object.assign(this, JSON5.parse(readFileSync(join(this.path.config, 'config.jsonc'), 'utf-8')));
         this.path.socket = this.socket;
         this.model.protocols = this.resolveModelProtocols();

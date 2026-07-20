@@ -1,6 +1,6 @@
-import { AgentChatRole } from '@/agent/types';
+import { AgentChatRole, type AgentInput } from '@/agent/types';
 import { Context } from '@/agent/context';
-import { SynapseSignalType } from '@/neural/types';
+import { SynapseSignalType, TurnPreempted } from '@/neural/types';
 import { FAgentAtom, Inject, Prompt, PromptService, Provide, Scope, type IObservable } from '@/core';
 import { parse } from '@/agent/json';
 import { Memory } from '../memory';
@@ -24,7 +24,7 @@ export enum BrainPrompt {
  * ZH: `reply`、`research`、`soul` 在本地处理；`coordinate` 转发给 Synapse，由皮层派发 agent pool。
  */
 @Provide()
-export class Brain extends FAgentAtom<string, CallosumSignal> implements IObservable<string, CallosumSignal> {
+export class Brain extends FAgentAtom<AgentInput, CallosumSignal> implements IObservable<AgentInput, CallosumSignal> {
     @Scope()
     public callosum!: Callosum;
 
@@ -53,9 +53,9 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
      * ZH: ingest、route 和选中的 handler 都可自由抛出;唯一错误边界在 `Synapse.input`
      * (调 `agent.next` 的地方),由它接住拒绝并决定给用户看什么。`Brain` 不做 catch。
      */
-    public override async onPipe(data: string) {
-        const turn = await this.context.ingest({ text: data });
-        await this.handle(await this.callosum.route(data), turn.id);
+    public override async onPipe(data: AgentInput) {
+        const turn = await this.context.ingest({ text: data.text, speakerId: data.speakerId, stimulusId: data.stimulusId });
+        await this.handle(await this.callosum.route(data.text), turn.id);
     }
 
     private handle(signal: CallosumSignal, turnId: string): Promise<void> {
@@ -71,21 +71,33 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
     private async reply(signal: CallosumSignal, turnId: string): Promise<void> {
         let assistant = '';
         const messages = [...this.memory.buildMessage(), { role: AgentChatRole.User, content: String(signal.chunk) }];
-        await this.intelligence.stream(messages, (chunk) => {
-            assistant += chunk;
-            this.synapse.emit(SynapseSignalType.Reply, chunk);
-        });
+        try {
+            await this.intelligence.stream(messages, (chunk) => {
+                if (this.synapse.preempted?.(turnId)) throw new TurnPreempted(turnId);
+                assistant += chunk;
+                this.synapse.emit(SynapseSignalType.Reply, { turnId, chunk });
+            });
+        } catch (error) {
+            if (error instanceof TurnPreempted && error.turnId === turnId) {
+                await this.context.interrupt(turnId, { assistant });
+            }
+            throw error;
+        }
         await this.context.settle(turnId, { assistant });
-        this.synapse.emit(SynapseSignalType.Reply, null);
+        this.synapse.emit(SynapseSignalType.Reply, { turnId, chunk: null });
     }
 
     private async research(signal: CallosumSignal, turnId: string): Promise<void> {
         const messages = [...this.memory.buildMessage(), { role: AgentChatRole.User, content: String(signal.chunk) }];
         const turn = this.context.turn(turnId);
         const outcome = await this.investigation.run(signal, messages, { turnId, cwd: turn.cwd });
+        if (outcome.interrupted) {
+            await this.context.interrupt(turnId, { assistant: '', evidence: outcome.evidence });
+            throw new TurnPreempted(turnId);
+        }
         if (outcome.paused) return;
         await this.context.settle(turnId, { assistant: outcome.answer, evidence: outcome.evidence });
-        this.synapse.emit(SynapseSignalType.Reply, null);
+        this.synapse.emit(SynapseSignalType.Reply, { turnId, chunk: null });
     }
 
     private async soul(signal: CallosumSignal, turnId: string): Promise<void> {
@@ -97,9 +109,9 @@ export class Brain extends FAgentAtom<string, CallosumSignal> implements IObserv
         const plan = parse<{ writes?: Array<{ file?: string; content?: string }> }>(raw);
         const { written, rejected } = pkg.applyWrites(plan.writes ?? []);
         const assistant = `协议包已更新: ${written.join(', ') || '无'}${rejected.length ? `；已拒绝: ${rejected.join(', ')}` : ''}`;
-        this.synapse.emit(SynapseSignalType.Reply, assistant);
+        this.synapse.emit(SynapseSignalType.Reply, { turnId, chunk: assistant });
         await this.context.settle(turnId, { assistant });
-        this.synapse.emit(SynapseSignalType.Reply, null);
+        this.synapse.emit(SynapseSignalType.Reply, { turnId, chunk: null });
     }
 
     /**

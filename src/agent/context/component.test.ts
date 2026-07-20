@@ -37,7 +37,7 @@ describe('Context', () => {
         } as never;
 
         const userMessage = '简化 Context';
-        const settled = await context.ingest({ text: userMessage });
+        const settled = await context.ingest({ text: userMessage, speakerId: 'test' });
         const summary = await context.settle(settled.id, { assistant: '已把 turn 拍平' });
 
         expect(context.turns.length).toBeGreaterThan(0);
@@ -65,7 +65,7 @@ describe('Context', () => {
             }),
         } as never;
 
-        await context.ingest({ text: '简化 Context' });
+        await context.ingest({ text: '简化 Context', speakerId: 'test' });
         const brief = context.brief();
 
         expect(brief.intent).toBe('research');

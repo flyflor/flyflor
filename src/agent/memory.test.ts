@@ -31,7 +31,7 @@ describe('Memory', () => {
         } as never;
 
         const userMessage = '实现计划';
-        const turn = await context.ingest({ text: userMessage });
+        const turn = await context.ingest({ text: userMessage, speakerId: 'test' });
 
         // EN: Seed the agent's private memory cache from the Context brief.
         // ZH: 用 Context 简报初始化 agent 的私有记忆缓存。

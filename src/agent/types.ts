@@ -12,3 +12,15 @@ export interface AgentMemory {
     role: AgentChatRole.System | AgentChatRole.User | AgentChatRole.Assistant;
     content: string;
 }
+
+/**
+ * EN: One stimulus handed to an agent: what was said, who said it, and the
+ * stimulus it grew from. Session-less: identity is only the speaker id.
+ * ZH: 交给 agent 的一条刺激:说了什么、谁说的、它源自哪条刺激。
+ * 无 session:身份只有 speaker id。
+ */
+export interface AgentInput {
+    text: string;
+    speakerId: string;
+    stimulusId?: string;
+}

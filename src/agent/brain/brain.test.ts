@@ -46,7 +46,8 @@ describe('Brain', () => {
         }, 'turn_1');
 
         expect(seen[0]).toContainEqual({ role: AgentChatRole.User, content: '请只回复这五个字符：PONG1' });
-        expect(emitted).toContainEqual({ type: SynapseSignalType.Reply, data: 'PONG1' });
+        expect(emitted).toContainEqual({ type: SynapseSignalType.Reply, data: { turnId: 'turn_1', chunk: 'PONG1' } });
+        expect(emitted).toContainEqual({ type: SynapseSignalType.Reply, data: { turnId: 'turn_1', chunk: null } });
     });
 
     test('passes the latest user message into research turns', async () => {

@@ -42,7 +42,7 @@ describe('ToolComponent', () => {
                 });
             },
         } as never;
-        await context.ingest({ text: `调查当前环境 cwd=${other}` });
+        await context.ingest({ text: `调查当前环境 cwd=${other}`, speakerId: 'test' });
     });
 
     afterEach(() => {

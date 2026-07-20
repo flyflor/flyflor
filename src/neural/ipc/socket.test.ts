@@ -1,34 +1,21 @@
 import 'reflect-metadata';
-import { describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import type { Socket } from 'bun';
+import { useContainer } from '@/core';
 import { IPCPacket } from './packet';
-import { FSocket, SocketEvent, type SocketConnectionData } from './socket';
+import { FSocket, SocketEvent } from './socket';
+import { Connection, type ConnectionData } from './connection';
 import type { Controller } from './controller';
-import type { Synapse } from '../synapse';
+import type { Awareness } from '@/neural/awareness';
 
 /**
- * EN: RecordedSignal interface declaration.
- * ZH: RecordedSignal interface 声明。
- */
-interface RecordedSignal {
-    type: string;
-    data: unknown;
-}
-
-/**
- * EN: PartialSocket class declaration.
- * ZH: PartialSocket class 声明。
+ * EN: Mock socket that records backpressure and partial writes.
+ * ZH: 记录背压和部分写入的 mock socket。
  */
 class PartialSocket {
-    public chunks: Buffer[];
-    public limit: number;
-    public blocked: boolean;
-
-    constructor() {
-        this.chunks = [];
-        this.limit = 5;
-        this.blocked = false;
-    }
+    public chunks: Buffer[] = [];
+    public limit = 5;
+    public blocked = false;
 
     public write(data: string | Uint8Array): number {
         if (this.blocked) return -1;
@@ -39,32 +26,31 @@ class PartialSocket {
     }
 }
 
-/**
- * EN: RecordingSynapse class declaration.
- * ZH: RecordingSynapse class 声明。
- */
-class RecordingSynapse {
-    public signals: RecordedSignal[];
+interface CapturedStimulus {
+    speakerId: string;
+    text: string;
+}
 
-    constructor() {
-        this.signals = [];
+class RecordingAwareness {
+    public stimuli: CapturedStimulus[] = [];
+    public forgotten: string[] = [];
+    public answers: unknown[] = [];
+
+    public perceive(input: { speakerId: string; text: string }): void {
+        this.stimuli.push(input);
     }
 
-    public emit(type: string, data: unknown): void {
-        this.signals.push({ type, data });
+    public forget(speakerId: string): void {
+        this.forgotten.push(speakerId);
+    }
+
+    public answer(turnId: string, id: string, response: unknown): void {
+        this.answers.push({ turnId, id, response });
     }
 }
 
-/**
- * EN: RecordingController class declaration.
- * ZH: RecordingController class 声明。
- */
 class RecordingController {
-    public cwdCalls: unknown[];
-
-    constructor() {
-        this.cwdCalls = [];
-    }
+    public cwdCalls: unknown[] = [];
 
     public cwd(data: unknown): void {
         this.cwdCalls.push(data);
@@ -79,70 +65,118 @@ class RecordingController {
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('FSocket', () => {
-    test('continues partial IPC writes on drain', () => {
-        const socket = new FSocket();
-        const connection = new PartialSocket();
-        const packet = new IPCPacket();
-        const message = { action: 'agent', data: '一段很长的流式输出\nwith newline' };
-        socket.packet = packet;
-        socket.connection = connection as unknown as Socket<SocketConnectionData>;
+    let socket: FSocket;
+    let packet: IPCPacket;
+    let awareness: RecordingAwareness;
+    let controller: RecordingController;
 
-        socket.write(message);
-        while (Buffer.concat(connection.chunks).byteLength < packet.encode(message).byteLength) {
-            void socket.drain();
+    beforeEach(async () => {
+        socket = new FSocket();
+        packet = new IPCPacket();
+        awareness = new RecordingAwareness();
+        controller = new RecordingController();
+        socket.packet = packet;
+        socket.awareness = awareness as unknown as Awareness;
+        socket.controller = controller as unknown as Controller;
+        socket.path = '/tmp/flyflor.test.sock';
+    });
+
+    let connectionCounter = 0;
+    function openConnection(mock = new PartialSocket()): { mock: PartialSocket; connection: Connection; speakerId: string } {
+        connectionCounter += 1;
+        const speakerId = `conn_${connectionCounter}`;
+        const connection = useContainer().create(Connection, mock as unknown as Socket<ConnectionData>, speakerId);
+        connection.packet = packet;
+        const access = socket as unknown as { connections: Map<Socket<ConnectionData>, Connection>; bySpeaker: Map<string, Connection> };
+        access.connections.set(mock as unknown as Socket<ConnectionData>, connection);
+        access.bySpeaker.set(speakerId, connection);
+        return { mock, connection, speakerId };
+    }
+
+    test('continues partial IPC writes on drain', () => {
+        const { mock, speakerId } = openConnection();
+        const message = { action: 'agent', data: '一段很长的流式输出\nwith newline' };
+
+        socket.write(speakerId, message);
+        while (Buffer.concat(mock.chunks).byteLength < packet.encode(message).byteLength) {
+            void socket.drain(mock as unknown as Socket<ConnectionData>);
         }
 
-        const decoded = packet.decode(Buffer.concat(connection.chunks));
+        const decoded = packet.decode(Buffer.concat(mock.chunks));
         expect(decoded).toEqual(message);
     });
 
     test('keeps pending output when socket write is backpressured', () => {
-        const socket = new FSocket();
-        const connection = new PartialSocket();
-        const packet = new IPCPacket();
+        const { mock, speakerId } = openConnection();
         const message = { action: 'agent', data: 'blocked first write' };
-        connection.blocked = true;
-        socket.packet = packet;
-        socket.connection = connection as unknown as Socket<SocketConnectionData>;
+        mock.blocked = true;
 
-        socket.write(message);
-        expect(connection.chunks).toEqual([]);
+        socket.write(speakerId, message);
+        expect(mock.chunks).toEqual([]);
 
-        connection.blocked = false;
-        while (Buffer.concat(connection.chunks).byteLength < packet.encode(message).byteLength) {
-            void socket.drain();
+        mock.blocked = false;
+        while (Buffer.concat(mock.chunks).byteLength < packet.encode(message).byteLength) {
+            void socket.drain(mock as unknown as Socket<ConnectionData>);
         }
 
-        const decoded = packet.decode(Buffer.concat(connection.chunks));
+        const decoded = packet.decode(Buffer.concat(mock.chunks));
         expect(decoded).toEqual(message);
     });
 
-    test('emits user packets to synapse input', async () => {
-        const socket = new FSocket();
-        const packet = new IPCPacket();
-        const synapse = new RecordingSynapse();
-        socket.packet = packet;
-        socket.synapse = synapse as unknown as Synapse;
-        socket.connection = {} as Socket<SocketConnectionData>;
+    test('hands user packets to Awareness as stimuli', async () => {
+        const { connection } = openConnection();
 
-        await socket.data(socket.connection, packet.encode({ action: SocketEvent.User, data: { text: 'hello' } }));
+        await socket.data(connection.socket, packet.encode({ action: SocketEvent.User, data: { text: 'hello' } }));
         await tick();
 
-        expect(synapse.signals).toEqual([{ type: 'input', data: 'hello' }]);
+        expect(awareness.stimuli).toEqual([{ speakerId: connection.speakerId, text: 'hello' }]);
+    });
+
+    test('hands answer packets to Awareness', async () => {
+        const { connection } = openConnection();
+        const answer = { turnId: 'turn_1', id: 'ask_1', response: { kind: 'ask', answers: [{ question: 'Pick?', answer: 'a' }] } };
+
+        await socket.data(connection.socket, packet.encode({ action: SocketEvent.Answer, data: answer }));
+        await tick();
+
+        expect(awareness.answers).toEqual([answer]);
     });
 
     test('dispatches non-user packets to controller methods', async () => {
-        const socket = new FSocket();
-        const packet = new IPCPacket();
-        const controller = new RecordingController();
+        const { connection } = openConnection();
         const data = { path: '/tmp/flyflor' };
-        socket.packet = packet;
-        socket.controller = controller as unknown as Controller;
-        socket.connection = {} as Socket<SocketConnectionData>;
 
-        await socket.data(socket.connection, packet.encode({ action: 'cwd', data }));
+        await socket.data(connection.socket, packet.encode({ action: 'cwd', data }));
         await tick();
 
         expect(controller.cwdCalls).toEqual([data]);
+    });
+
+    test('keeps each connection on its own packet buffer', async () => {
+        const { connection: a } = openConnection();
+        const { connection: b } = openConnection();
+
+        const first = packet.encode({ action: SocketEvent.User, data: { text: 'a first' } }).subarray(0, 6);
+        const rest = packet.encode({ action: SocketEvent.User, data: { text: 'a first' } }).subarray(6);
+
+        await socket.data(a.socket, first);
+        await socket.data(b.socket, packet.encode({ action: SocketEvent.User, data: { text: 'b first' } }));
+        await socket.data(a.socket, rest);
+        await tick();
+
+        expect(awareness.stimuli).toEqual([
+            { speakerId: b.speakerId, text: 'b first' },
+            { speakerId: a.speakerId, text: 'a first' },
+        ]);
+    });
+
+    test('forgets a speaker and drops its connection on close', async () => {
+        const { connection } = openConnection();
+        await socket.close(connection.socket);
+
+        expect(awareness.forgotten).toEqual([connection.speakerId]);
+        const access = socket as unknown as { connections: Map<Socket<ConnectionData>, Connection>; bySpeaker: Map<string, Connection> };
+        expect(access.connections.has(connection.socket as never)).toBe(false);
+        expect(access.bySpeaker.has(connection.speakerId)).toBe(false);
     });
 });

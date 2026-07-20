@@ -364,6 +364,7 @@ export interface FAgentSynapseBus {
     emit(type: string, data: unknown): unknown;
     coordinate?(signal: unknown, turnId: string): Promise<void>;
     interact?(request: { turnId: string; id: string; kind: 'ask' | 'confirm'; data: unknown }): Promise<unknown>;
+    preempted?(turnId: string): boolean;
 }
 
 /**

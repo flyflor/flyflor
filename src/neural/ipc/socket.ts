@@ -1,11 +1,12 @@
-import { Config, Init, Inject, Singleton } from '@/core/decorator';
-import { FlyFlor } from '@/core/ioc';
+import { Config, Init, Inject } from '@/core/decorator';
+import { FlyFlor, useContainer } from '@/core/ioc';
 import { rm } from 'fs/promises';
 import type { Socket, UnixSocketListener } from 'bun';
+import { Awareness } from '@/neural/awareness';
+import { Connection, type ConnectionData } from './connection';
 import { IPCPacket, type SocketPacket } from './packet';
 import { Controller } from './controller';
 import type { Synapse } from '../synapse';
-import type { InteractionResponse } from '../types';
 
 export enum SocketEvent {
     Constructor = 'constructor',
@@ -25,24 +26,19 @@ export enum SocketEvent {
 }
 
 /**
- * EN: SocketConnectionData interface declaration.
- * ZH: SocketConnectionData interface 声明。
+ * EN: Legacy alias for connection-bound data. Keep for compatibility; each
+ * accepted socket now owns a Connection instance.
+ * ZH: 与连接绑定数据的兼容别名。现在每条已接受的 socket 都拥有一个
+ * Connection 实例。
  */
-export interface SocketConnectionData {}
-
-const SYNAPSE_INPUT = 'input' as Parameters<Synapse['emit']>[0];
+export type SocketConnectionData = ConnectionData;
 
 /**
- * Bun socket handler used by the runtime IPC listener.
- *
- * The class owns socket lifecycle callbacks only: connection open/close, inbound data, and transport
- * errors. Callback methods are bound in the constructor so `this` is the FSocket instance however
- * Bun invokes them; the instance is passed straight to `Bun.listen({ socket })`.
- */
-@Singleton()
-/**
- * EN: FSocket class declaration.
- * ZH: FSocket class 声明。
+ * EN: Unix socket sensory surface. FSocket is the ear that hears multiple
+ * speakers at once. Every connection is a speaker; all inbound frames are
+ * handed to Awareness as stimuli. Replies are addressed back to the speaker.
+ * ZH: Unix socket 感官表面。FSocket 是同时听到多个说话人的耳朵。
+ * 每条连接是一个说话人;所有入站帧作为刺激交给 Awareness。回复按说话人寻址。
  */
 export class FSocket extends FlyFlor {
     @Config('socket')
@@ -54,23 +50,20 @@ export class FSocket extends FlyFlor {
     @Inject()
     public controller!: Controller;
 
+    @Inject()
+    public awareness!: Awareness;
+
     public service?: UnixSocketListener<object>;
 
-    public connection?: Socket<SocketConnectionData>;
+    public synapse?: Synapse;
 
-    public synapse!: Synapse;
-
-    private pending: Buffer[];
-
-    constructor() {
-        super();
-        this.pending = [];
-    }
+    private connections = new Map<Socket<ConnectionData>, Connection>();
+    private bySpeaker = new Map<string, Connection>();
+    private sequence = 0;
 
     @Init()
     public async init() {
         await rm(this.path, { force: true });
-        // this.service = Bun.listen({ unix: this.path, socket: this });
         this.service = Bun.listen({
             unix: this.path,
             socket: {
@@ -84,74 +77,78 @@ export class FSocket extends FlyFlor {
         console.log(`[IPC] Socket listening at ${this.path}`);
     }
 
-    public async open(socket: Socket<SocketConnectionData>) {
-        this.pending = [];
-        this.packet.reset();
-        this.connection = socket;
-        this.log.info(SocketEvent.Open);
-        this.write({ action: SocketEvent.Open, data: true });
+    public async open(socket: Socket<ConnectionData>) {
+        this.sequence += 1;
+        const speakerId = `conn_${this.sequence}`;
+        const connection = await useContainer().getAsync(Connection, socket, speakerId);
+        this.connections.set(socket, connection);
+        this.bySpeaker.set(speakerId, connection);
+        socket.data = { speakerId };
+        this.log.info(SocketEvent.Open, { speakerId });
+        connection.write({ action: SocketEvent.Open, data: { speakerId } });
     }
 
-    public async close(socket: Socket<SocketConnectionData>, error?: Error) {
-        this.log.info(SocketEvent.Close, { error });
-        if (this.connection === socket) {
-            this.connection = undefined;
-            this.pending = [];
-            this.packet.reset();
+    public async close(socket: Socket<ConnectionData>, error?: Error) {
+        const connection = this.connections.get(socket);
+        this.log.info(SocketEvent.Close, { speakerId: connection?.speakerId, error });
+        if (connection) {
+            connection.forget();
+            this.awareness.forget(connection.speakerId);
+            this.connections.delete(socket);
+            this.bySpeaker.delete(connection.speakerId);
         }
     }
 
-    public async error(socket: Socket<SocketConnectionData>, error: Error) {
-        this.log.error(SocketEvent.Error, error);
-        this.write({ action: SocketEvent.Error, data: error.message });
+    public async error(socket: Socket<ConnectionData>, error: Error) {
+        const connection = this.connections.get(socket);
+        this.log.error(SocketEvent.Error, { speakerId: connection?.speakerId, error });
+        if (connection) connection.write({ action: SocketEvent.Error, data: error.message });
     }
 
-    public async drain() {
-        this.flush();
+    public async drain(socket: Socket<ConnectionData>) {
+        this.connections.get(socket)?.flush();
     }
 
-    public async data(socket: Socket<SocketConnectionData>, data: Uint8Array) {
-        if (socket !== this.connection) return;
-        // this.log.info('data', data);
-        this.packet
-            .of(data)
-            .pipe((buffer: Uint8Array) => this.packet.decode<SocketPacket>(buffer))
-            .switch((packet) => (packet as unknown as SocketPacket).action, {
-                [SocketEvent.User]: (packet) => {
-                    this.synapse.emit(SYNAPSE_INPUT, this.readUserText((packet as unknown as SocketPacket).data));
-                    return undefined;
-                },
-                [SocketEvent.Answer]: (packet) => {
-                    const data = (packet as unknown as SocketPacket).data as { turnId?: unknown; id?: unknown; response?: unknown };
-                    if (typeof data?.turnId !== 'string' || typeof data.id !== 'string') throw Error('Invalid interaction IPC packet');
-                    this.synapse.answer(data.turnId, data.id, data.response as InteractionResponse);
-                    return undefined;
-                },
-            })
-            .subscribe<SocketPacket>((packet) => Reflect.get(this.controller, packet.action)?.call(this.controller, packet.data));
-    }
+    public async data(socket: Socket<ConnectionData>, data: Uint8Array) {
+        const connection = this.connections.get(socket);
+        if (!connection) return;
 
-    public write(packet: SocketPacket): void {
-        if (!this.connection) {
-            this.log.warn('socket.write.no_connection', packet);
+        let packets: SocketPacket[];
+        try {
+            packets = connection.read(data).map((buffer) => this.packet.decode<SocketPacket>(buffer));
+        } catch (error) {
+            this.log.error(SocketEvent.Error, { speakerId: connection.speakerId, error });
             return;
         }
-        this.pending.push(this.packet.encode(packet));
-        this.flush();
-    }
 
-    private flush(): void {
-        while (this.connection && this.pending.length > 0) {
-            const current = this.pending[0]!;
-            const written = this.connection.write(current);
-            if (written < 0) break;
-            if (written === current.byteLength) {
-                this.pending.shift();
+        for (const packet of packets) {
+            if (packet.action === SocketEvent.User) {
+                this.awareness.perceive({ speakerId: connection.speakerId, text: this.readUserText(packet.data) });
                 continue;
             }
-            if (written > 0) this.pending[0] = current.subarray(written);
-            break;
+            if (packet.action === SocketEvent.Answer) {
+                const data = packet.data as { turnId?: unknown; id?: unknown; response?: unknown };
+                if (typeof data?.turnId !== 'string' || typeof data.id !== 'string') throw Error('Invalid interaction IPC packet');
+                this.awareness.answer(data.turnId, data.id, data.response);
+                continue;
+            }
+            const method = Reflect.get(this.controller, packet.action) as ((arg: unknown) => unknown) | undefined;
+            if (typeof method === 'function') method.call(this.controller, packet.data);
         }
+    }
+
+    /**
+     * EN: Writes one packet to a specific speaker. If the speaker has left, the
+     * packet is silently dropped.
+     * ZH: 向指定说话人写回一个包。若说话人已离开,则静默丢弃。
+     */
+    public write(speakerId: string, packet: SocketPacket): void {
+        const connection = this.bySpeaker.get(speakerId);
+        if (!connection) {
+            this.log.warn('socket.write.no_connection', { speakerId, packet });
+            return;
+        }
+        connection.write(packet);
     }
 
     private readUserText(data: unknown): string {

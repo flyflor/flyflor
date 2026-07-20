@@ -82,7 +82,7 @@ describe('Investigation', () => {
         context = new Context();
         context.prompt = { section: () => 'system placeholder' } as never;
         context.intelligence = ingestMock() as never;
-        await context.ingest({ text: '调查工具层 cwd=/tmp/semantic' });
+        await context.ingest({ text: '调查工具层 cwd=/tmp/semantic', speakerId: 'test' });
     });
 
     test('returns a final answer when the local loop ends without further action requests', async () => {
@@ -94,7 +94,7 @@ describe('Investigation', () => {
         );
 
         expect(outcome).toMatchObject({ answer: '直接答案', completed: true, paused: false, steps: 1, evidence: [] });
-        expect(events).toContainEqual({ type: SynapseSignalType.Reply, data: '直接答案' });
+        expect(events).toContainEqual({ type: SynapseSignalType.Reply, data: { turnId: undefined, chunk: '直接答案' } });
     });
 
     test('can finish silently for worker and reviewer runs', async () => {

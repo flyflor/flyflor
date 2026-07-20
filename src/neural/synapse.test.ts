@@ -47,7 +47,7 @@ describe('Synapse coordinate', () => {
         const synthesis = JSON.parse(synapse.synthesisInput) as { outcomes: Array<{ result: string }>; review: { result: string } };
         expect(synthesis.outcomes.map((outcome) => outcome.result)).toEqual(['worker answer', 'worker answer']);
         expect(synthesis.review.result).toBe('review answer');
-        expect(replies).toEqual(['final answer', null]);
+        expect(replies).toEqual([{ turnId: undefined, chunk: 'final answer' }, { turnId: undefined, chunk: null }]);
     });
 
     test('uses the active profile when the plan has no slices and still runs review', async () => {

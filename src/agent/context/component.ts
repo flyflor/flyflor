@@ -26,8 +26,8 @@ export class Context extends FComponent {
     @Prompt('prompts/context')
     public prompt!: PromptService;
 
-    public load(current: TurnDraft): Turn {
-        return this.begin(current);
+    public load(current: TurnDraft, meta: Pick<Ingest, 'speakerId' | 'stimulusId'> = { speakerId: 'unknown' }): Turn {
+        return this.begin(current, meta);
     }
 
     public recent(limit = 4): Turn[] {
@@ -40,8 +40,23 @@ export class Context extends FComponent {
         return turn;
     }
 
+    /**
+     * EN: The turn the life-form is actively thinking about right now. A paused
+     * turn (waiting for an ask/confirm answer) is not thinking, so it does not
+     * block new thought; only one active thought may exist at a time.
+     * ZH: 生命体此刻正在主动思考的 turn。暂停的 turn(在等待 ask/confirm 回答)
+     * 不在思考,因此不阻塞新思考;同一时刻只能有一个主动思考。
+     */
     public working(): Turn | undefined {
-        return this.turns.findLast((turn) => turn.status === 'working');
+        return this.turns.findLast((turn) => turn.status === 'working' && !turn.pause);
+    }
+
+    /**
+     * EN: Finds the turn that grew out of one stimulus, if it has begun.
+     * ZH: 查找由某条刺激长出的 turn(如果已经开始)。
+     */
+    public turnForStimulus(stimulusId: string): Turn | undefined {
+        return this.turns.find((turn) => turn.stimulusId === stimulusId);
     }
 
     /**
@@ -74,9 +89,8 @@ export class Context extends FComponent {
 
     private doneSummaries(): Summary[] {
         return structuredClone(this.turns
-            .filter((turn) => turn.status === 'completed')
-            .map((turn) => turn.summary)
-            .filter((summary): summary is Summary => summary !== undefined));
+            .filter((turn) => (turn.status === 'completed' || turn.status === 'interrupted') && turn.summary !== undefined)
+            .map((turn) => turn.summary as Summary));
     }
 
     public async ingest(input: Ingest): Promise<Turn> {
@@ -85,7 +99,7 @@ export class Context extends FComponent {
             { role: AgentChatRole.User, content: JSON.stringify({ latest: input.text, current: this.working(), recent: this.recent() }) },
         ]);
         const draft = this.draft(parse<unknown>(raw), input.text);
-        return this.begin(draft);
+        return this.begin(draft, input);
     }
 
     public pause(turnId: string, input: Pause): void {
@@ -117,6 +131,36 @@ export class Context extends FComponent {
         const target = this.turn(turnId);
         if (target !== turn || target.status !== 'working') throw Error(`Turn changed while settling: ${turnId}`);
         target.status = 'completed';
+        target.summary = summary;
+        target.assistant = input.assistant;
+        delete target.pause;
+        target.updated = summary.createdAt;
+        return summary;
+    }
+
+    /**
+     * EN: Partially settles a preempted turn. The usable part of the thought —
+     * partial answer, evidence, remaining work — is summarized and kept as an
+     * interrupted record, so the next ingest on this thread re-consolidates it
+     * instead of losing it. This is memory reconsolidation, not deletion.
+     * ZH: 部分结算一个被抢占的 turn。思考中可用的部分——半截回答、证据、
+     * 未完成事项——被摘要保留为 interrupted 记录,使该线程的下一次 ingest
+     * 能重新巩固它而不是丢失它。这是记忆再巩固,不是删除。
+     */
+    public async interrupt(turnId: string, input: Settle): Promise<Summary> {
+        const turn = this.turn(turnId);
+        if (turn.status !== 'working') throw Error(`Turn is not working: ${turnId}`);
+        const raw = await this.intelligence.completeText([
+            { role: AgentChatRole.System, content: this.prompt.section('SETTLE') },
+            {
+                role: AgentChatRole.User,
+                content: JSON.stringify({ ...input, interrupted: true, current: turn, recent: this.recent() }),
+            },
+        ]);
+        const summary = { ...parse<Omit<Summary, 'createdAt'>>(raw), createdAt: Date.now() };
+        const target = this.turn(turnId);
+        if (target !== turn || target.status !== 'working') throw Error(`Turn changed while interrupting: ${turnId}`);
+        target.status = 'interrupted';
         target.summary = summary;
         target.assistant = input.assistant;
         delete target.pause;
@@ -158,13 +202,15 @@ export class Context extends FComponent {
             && typeof item.value === 'string';
     }
 
-    private begin(current: TurnDraft): Turn {
-        if (this.working()) throw Error('A turn is already working');
+    private begin(current: TurnDraft, meta: Pick<Ingest, 'speakerId' | 'stimulusId'>): Turn {
+        if (this.working()) throw Error('A turn is already being thought about');
         const now = Date.now();
         this.sequence += 1;
         const turn: Turn = {
             ...current,
             id: `turn_${this.sequence}`,
+            speakerId: meta.speakerId,
+            stimulusId: meta.stimulusId,
             status: 'working',
             ts: now,
         };

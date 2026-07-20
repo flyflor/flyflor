@@ -1,5 +1,5 @@
 import { Service } from '@/core/decorator';
-import { FService, of, type Observable } from '@/core/ioc';
+import { FService } from '@/core/ioc';
 
 export const HEADER_BYTES = 8;
 export const MAX_BODY_BYTES = 4 * 1024 * 1024;
@@ -14,46 +14,39 @@ export interface SocketPacket<T = unknown> {
     data: T;
 }
 
+export interface PacketSplit {
+    packets: Uint8Array[];
+    rest: Buffer;
+}
+
 @Service()
 /**
- * EN: IPCPacket class declaration.
- * ZH: IPCPacket class 声明。
+ * EN: Stateless IPC packet codec. Buffer ownership belongs to the Connection
+ * that is being read; this class only encodes, decodes, and splits frames.
+ * ZH: 无状态 IPC 包编解码器。buffer 所有权属于正在读取的 Connection；
+ * 本类只负责编码、解码和切帧。
  */
 export class IPCPacket extends FService {
-    public buffer: Buffer;
-
-    constructor() {
-        super();
-        this.buffer = Buffer.alloc(0);
-    }
-
-    public reset(): void {
-        this.buffer = Buffer.alloc(0);
-    }
-
-    public of(data: Uint8Array): Observable<Uint8Array> {
-        return of(...this.read(data));
-    }
-
-    public read(data: Uint8Array): Uint8Array[] {
-        this.buffer = Buffer.concat([this.buffer, Buffer.from(data)]);
+    /**
+     * EN: Appends inbound bytes to the connection buffer and slices every
+     * complete frame, returning the unconsumed remainder.
+     * ZH: 把入站字节追加到连接 buffer 并切出所有完整帧，返回未消费的剩余部分。
+     */
+    public split(buffer: Buffer, data: Uint8Array): PacketSplit {
+        let current = Buffer.concat([buffer, Buffer.from(data)]);
         const packets: Uint8Array[] = [];
 
-        while (this.buffer.byteLength >= HEADER_BYTES) {
-            const bodyBytes = this.buffer.readBigUInt64BE(0);
-            if (bodyBytes > BigInt(MAX_BODY_BYTES)) {
-                this.buffer = Buffer.alloc(0);
-                throw Error('Packet body exceeds limit');
-            }
+        while (current.byteLength >= HEADER_BYTES) {
+            const bodyBytes = current.readBigUInt64BE(0);
+            if (bodyBytes > BigInt(MAX_BODY_BYTES)) throw Error('Packet body exceeds limit');
             const packetBytes = HEADER_BYTES + Number(bodyBytes);
-            if (this.buffer.byteLength < packetBytes) break;
+            if (current.byteLength < packetBytes) break;
 
-            const packet = this.buffer.subarray(0, packetBytes);
-            this.buffer = Buffer.from(this.buffer.subarray(packetBytes));
-            packets.push(packet);
+            packets.push(current.subarray(0, packetBytes));
+            current = Buffer.from(current.subarray(packetBytes));
         }
 
-        return packets;
+        return { packets, rest: current };
     }
 
     public decode<T = unknown>(data: Uint8Array): T {
@@ -78,11 +71,5 @@ export class IPCPacket extends FService {
         const header = Buffer.alloc(HEADER_BYTES);
         header.writeBigUInt64BE(BigInt(body.byteLength), 0);
         return Buffer.concat([header, body]);
-    }
-
-    public async *encodeStream<T>(packets: Iterable<T> | AsyncIterable<T>): AsyncGenerator<Buffer> {
-        for await (const packet of packets) {
-            yield this.encode(packet);
-        }
     }
 }

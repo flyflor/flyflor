@@ -1,4 +1,5 @@
 import { Scope, Provide, FAgent, type IObservable } from '@/core';
+import type { AgentInput } from '@/agent/types';
 import type { AgentBrief } from '@/agent/context/types';
 import type { InvestigationOutcome } from './brain/investigation/types';
 import { Brain } from './brain';
@@ -14,11 +15,11 @@ import { Brain } from './brain';
  * worker 入口。worker 不向 socket 广播，也不写入共享的 Context.turns。
  */
 @Provide()
-export class Agent extends FAgent<string, string> implements IObservable<string, string> {
+export class Agent extends FAgent<AgentInput, string> implements IObservable<AgentInput, string> {
     @Scope()
     public brain!: Brain;
 
-    public override async onPipe(data: string) {
+    public override async onPipe(data: AgentInput) {
         this.log.info('agent received', { data });
         await this.brain.next(data);
     }

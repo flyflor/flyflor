@@ -9,7 +9,7 @@ export interface Reference {
 
 export type Intent = 'reply' | 'research' | 'soul';
 export type PauseKind = 'ask' | 'confirm';
-export type TurnStatus = 'working' | 'completed';
+export type TurnStatus = 'working' | 'completed' | 'interrupted';
 
 export interface Pause {
     id: string;
@@ -19,6 +19,8 @@ export interface Pause {
 
 export interface Ingest {
     text: string;
+    speakerId: string;
+    stimulusId?: string;
 }
 
 export interface Settle {
@@ -91,6 +93,8 @@ export interface TurnDraft {
  */
 export interface Turn extends TurnDraft {
     id: string;
+    speakerId: string;
+    stimulusId?: string;
     status: TurnStatus;
     summary?: Summary;
     assistant?: string;
