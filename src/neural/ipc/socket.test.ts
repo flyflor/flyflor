@@ -142,6 +142,25 @@ describe('FSocket', () => {
         expect(awareness.answers).toEqual([answer]);
     });
 
+    test('continues after malformed coalesced packets', async () => {
+        const { connection } = openConnection();
+        const malformed = packet.encode({ action: SocketEvent.User, data: { nope: true } });
+        const valid = packet.encode({ action: SocketEvent.User, data: { text: 'after malformed' } });
+
+        await expect(socket.data(connection.socket, Buffer.concat([malformed, valid]))).resolves.toBeUndefined();
+
+        expect(awareness.stimuli).toEqual([{ speakerId: connection.speakerId, text: 'after malformed' }]);
+    });
+
+    test('contains async controller rejection from malformed packets', async () => {
+        const { connection } = openConnection();
+        socket.controller = {
+            cwd: async () => { throw Error('bad cwd'); },
+        } as unknown as Controller;
+
+        await expect(socket.data(connection.socket, packet.encode({ action: 'cwd', data: {} }))).resolves.toBeUndefined();
+    });
+
     test('dispatches non-user packets to controller methods', async () => {
         const { connection } = openConnection();
         const data = { path: '/tmp/flyflor' };

@@ -1,26 +1,33 @@
 import 'reflect-metadata';
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { ConfigService } from '@/configuration';
 import { Context } from '@/agent/context';
 import type { Intelligence } from '@/agent/brain/intelligence';
 import type { PromptService } from '@/core';
 import { Awareness } from './service';
-import { DispositionAction, type ScheduleVerdict, type Stimulus } from './types';
+import { DispositionRelation, type ScheduleVerdict, type Stimulus } from './types';
 import type { Synapse } from '@/neural/synapse';
 import type { SocketPacket } from '@/neural/ipc';
 
 class MockCortex {
     public attended: Stimulus[] = [];
-    public pondered: Stimulus[] = [];
+    public revised: Array<{ stimulus: Stimulus; targetTurnId: string }> = [];
+    public cancelled: string[] = [];
     public delivered: Array<{ speakerId: string; packet: SocketPacket }> = [];
     public answers: Array<{ turnId: string; id: string; response: unknown }> = [];
+    public pending: Array<{ resolve: () => void }> = [];
 
     public async attend(stimulus: Stimulus): Promise<void> {
         this.attended.push(stimulus);
+        await new Promise<void>((resolve) => this.pending.push({ resolve }));
     }
 
-    public async ponder(stimulus: Stimulus): Promise<void> {
-        this.pondered.push(stimulus);
+    public async revise(stimulus: Stimulus, targetTurnId: string): Promise<void> {
+        this.revised.push({ stimulus, targetTurnId });
+    }
+
+    public cancel(turnId: string): void {
+        this.cancelled.push(turnId);
     }
 
     public deliver(speakerId: string, packet: SocketPacket): void {
@@ -30,19 +37,22 @@ class MockCortex {
     public answer(turnId: string, id: string, response: unknown): void {
         this.answers.push({ turnId, id, response });
     }
+
+    public release(): void {
+        this.pending.shift()?.resolve();
+    }
 }
 
-function mockAwareness(overrides: Partial<Awareness> = {}): { awareness: Awareness; cortex: MockCortex } {
+function mockAwareness(verdict: ScheduleVerdict = { dispositions: [] }): { awareness: Awareness; cortex: MockCortex } {
     const awareness = new Awareness();
     awareness.config = {
-        awareness: { maxConcurrentThoughts: 2, scheduleTimeoutMs: 5000, batchWindowMs: 0 },
+        awareness: { scheduleTimeoutMs: 5000, batchWindowMs: 0 },
     } as ConfigService;
     awareness.context = new Context();
     awareness.prompt = { section: () => 'schedule prompt' } as unknown as PromptService;
     awareness.intelligence = {
-        completeText: async () => JSON.stringify({ dispositions: [] }),
+        completeText: async () => JSON.stringify(verdict),
     } as unknown as Intelligence;
-    Object.assign(awareness, overrides);
     const cortex = new MockCortex();
     awareness.attend(cortex as unknown as Synapse);
     return { awareness, cortex };
@@ -51,7 +61,7 @@ function mockAwareness(overrides: Partial<Awareness> = {}): { awareness: Awarene
 const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
 
 describe('Awareness', () => {
-    test('perceives a stimulus and dispatches the only idle thought immediately', async () => {
+    test('dispatches the first stimulus as a new foreground turn', async () => {
         const { awareness, cortex } = mockAwareness();
 
         awareness.perceive({ speakerId: 'conn_1', text: 'hello' });
@@ -59,83 +69,297 @@ describe('Awareness', () => {
 
         expect(cortex.attended).toHaveLength(1);
         expect(cortex.attended[0]).toMatchObject({ speakerId: 'conn_1', text: 'hello' });
+        expect(cortex.attended[0]?.attention).toMatchObject({ relation: DispositionRelation.New, urgent: false });
     });
 
-    test('answers bypass the scheduler and go straight to the cortex', () => {
-        const { awareness, cortex } = mockAwareness();
-        awareness.answer('turn_1', 'ask_1', { kind: 'ask', answers: [] });
+    test('keeps the original batch deadline when more stimuli arrive', () => {
+        const { awareness } = mockAwareness();
+        awareness.config = {
+            awareness: { scheduleTimeoutMs: 5000, batchWindowMs: 1000 },
+        } as ConfigService;
 
-        expect(cortex.answers).toEqual([{ turnId: 'turn_1', id: 'ask_1', response: { kind: 'ask', answers: [] } }]);
+        awareness.perceive({ speakerId: 'conn_1', text: 'a' });
+        const firstTimer = (awareness as unknown as { batchTimer?: ReturnType<typeof setTimeout> }).batchTimer;
+        awareness.perceive({ speakerId: 'conn_2', text: 'b' });
+
+        expect((awareness as unknown as { batchTimer?: ReturnType<typeof setTimeout> }).batchTimer).toBe(firstTimer);
+        if (firstTimer !== undefined) clearTimeout(firstTimer);
     });
 
-    test('forgets a speaker and drops their pending stimuli', async () => {
+    test('keeps external stimuli serial and FIFO', async () => {
         const { awareness, cortex } = mockAwareness();
         awareness.perceive({ speakerId: 'conn_1', text: 'a' });
+        await tick();
         awareness.perceive({ speakerId: 'conn_2', text: 'b' });
-        awareness.forget('conn_1');
         await tick();
 
-        expect(cortex.attended.map((s) => s.speakerId)).not.toContain('conn_1');
-        expect(cortex.attended.map((s) => s.speakerId)).toContain('conn_2');
+        expect(cortex.attended.map((stimulus) => stimulus.text)).toEqual(['a']);
+        cortex.release();
+        await tick();
+        expect(cortex.attended.map((stimulus) => stimulus.text)).toEqual(['a', 'b']);
     });
 
-    test('mouth lets one turn stream at a time and buffers others', () => {
+    test('applies explicit backpressure when the transient queue is full', async () => {
         const { awareness, cortex } = mockAwareness();
+        awareness.config = {
+            awareness: { scheduleTimeoutMs: 5000, batchWindowMs: 0, pendingCapacity: 1 },
+        } as ConfigService;
 
+        awareness.perceive({ speakerId: 'conn_1', text: 'active' });
+        await tick();
+        const queued = awareness.perceive({ speakerId: 'conn_2', text: 'queued' });
+        const rejected = awareness.perceive({ speakerId: 'conn_3', text: 'overflow' });
+
+        expect(queued?.text).toBe('queued');
+        expect(rejected).toBeUndefined();
+        expect(cortex.attended.map((stimulus) => stimulus.text)).toEqual(['active']);
+        expect(cortex.delivered.at(-1)).toEqual({
+            speakerId: 'conn_3',
+            packet: { action: 'error', data: Awareness.QueueBackpressureMessage },
+        });
+    });
+
+    test('rejects a new stimulus when all four semantic slots are protected', async () => {
+        const { awareness, cortex } = mockAwareness();
+        awareness.context.turns = Array.from({ length: 4 }, (_, index) => ({
+            id: `turn_${index + 1}`,
+            speakerId: `conn_${index + 1}`,
+            status: 'suspended' as const,
+            intent: 'reply' as const,
+            goal: `goal ${index + 1}`,
+            constraints: [], refs: [], done: [], open: [], investigate: false, ts: index + 1,
+        }));
+
+        awareness.perceive({ speakerId: 'conn_5', text: 'new work' });
+        await tick();
+
+        expect(cortex.attended).toHaveLength(0);
+        expect(cortex.delivered.at(-1)).toEqual({
+            speakerId: 'conn_5',
+            packet: { action: 'error', data: Awareness.WorkspaceBackpressureMessage },
+        });
+        expect((awareness as unknown as { stimuli: Stimulus[] }).stimuli).toHaveLength(0);
+    });
+
+    test('revises a same-speaker semantic turn in place', async () => {
+        const turn = {
+            id: 'turn_1', speakerId: 'conn_1', status: 'completed', intent: 'reply', goal: 'g',
+            constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
+        } as any;
+        const { awareness, cortex } = mockAwareness({
+            dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.Same, targetTurnId: turn.id }],
+        });
+        awareness.context.turns = [turn];
+
+        awareness.perceive({ speakerId: 'conn_1', text: 'follow up' });
+        await tick();
+
+        expect(cortex.revised).toHaveLength(1);
+        expect(cortex.revised[0]).toMatchObject({ targetTurnId: 'turn_1', stimulus: { text: 'follow up' } });
+    });
+
+    test('falls back to a new Turn when semantic scheduling has no valid verdict', async () => {
+        const { awareness, cortex } = mockAwareness();
+        awareness.context.turns = [{
+            id: 'turn_1', speakerId: 'conn_1', status: 'completed', intent: 'reply', goal: 'old goal',
+            constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
+        }];
+
+        awareness.perceive({ speakerId: 'conn_1', text: 'unclassified request' });
+        await tick();
+
+        expect(cortex.revised).toHaveLength(0);
+        expect(cortex.attended[0]?.attention).toMatchObject({ relation: DispositionRelation.New, urgent: false });
+    });
+
+    test('marks only an explicit urgent verdict for pre-emption', async () => {
+        const { awareness, cortex } = mockAwareness({
+            dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.New, urgent: true, targetTurnId: 'turn_1' }],
+        });
+        awareness.context.turns = [{
+            id: 'turn_1', speakerId: 'conn_1', status: 'working', intent: 'reply', goal: 'g',
+            constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
+        }];
+
+        awareness.perceive({ speakerId: 'conn_2', text: 'stop' });
+        await tick();
+        expect(awareness.preempted('turn_1')).toBe(true);
+
+        awareness.speak('turn_1', 'conn_1', 'partial');
+        awareness.turnInterrupted('turn_1');
+        expect(awareness.preempted('turn_1')).toBe(false);
+        expect(cortex.delivered.slice(-2).map(({ packet }) => packet.action)).toEqual(['interrupted', 'streamEnd']);
+    });
+
+    test('does not let a cross-speaker same-Turn verdict pre-empt its owner', async () => {
+        const { awareness, cortex } = mockAwareness({
+            dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.Same, targetTurnId: 'turn_1', urgent: true }],
+        });
+        awareness.context.turns = [{
+            id: 'turn_1', speakerId: 'conn_1', status: 'working', intent: 'reply', goal: 'g',
+            constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
+        }];
+
+        awareness.perceive({ speakerId: 'conn_2', text: 'unrelated correction' });
+        await tick();
+
+        expect(cortex.cancelled).toEqual([]);
+        expect(awareness.preempted('turn_1')).toBe(false);
+    });
+
+    test('clears a pre-emption flag when settlement is reported by stimulus id', () => {
+        const { awareness } = mockAwareness();
+        awareness.context.turns = [{
+            id: 'turn_1', speakerId: 'conn_1', stimulusId: 'stim_1', status: 'completed', intent: 'reply', goal: 'g',
+            constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
+        }];
+        (awareness as unknown as { preemptFlags: Set<string> }).preemptFlags.add('turn_1');
+
+        awareness.turnSettled('stim_1');
+
+        expect(awareness.preempted('turn_1')).toBe(false);
+    });
+
+    test('allows an explicit urgent stimulus to interrupt a waiting foreground turn', async () => {
+        const { awareness, cortex } = mockAwareness({
+            dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.New, urgent: true }],
+        });
+        awareness.context.turns = [{
+            id: 'turn_1', speakerId: 'conn_1', status: 'waiting', intent: 'reply', goal: 'waiting',
+            constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
+        }];
+
+        awareness.perceive({ speakerId: 'conn_2', text: 'stop waiting' });
+        await tick();
+
+        expect(cortex.cancelled).toEqual(['turn_1']);
+        expect(awareness.preempted('turn_1')).toBe(true);
+    });
+
+    test('answers are forwarded only for the owning speaker when supplied', () => {
+        const { awareness, cortex } = mockAwareness();
+        awareness.context.turns = [{
+            id: 'turn_1', speakerId: 'conn_1', status: 'waiting', intent: 'reply', goal: 'g',
+            constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
+        }];
+
+        expect(() => awareness.answer('turn_1', 'ask_1', { kind: 'ask' }, 'conn_2')).toThrow();
+        awareness.answer('turn_1', 'ask_1', { kind: 'ask' }, 'conn_1');
+        expect(cortex.answers).toHaveLength(1);
+    });
+
+    test('forgets a speaker pending in the FIFO queue', async () => {
+        const { awareness, cortex } = mockAwareness();
+        awareness.perceive({ speakerId: 'conn_1', text: 'a' });
+        await tick();
+        awareness.perceive({ speakerId: 'conn_2', text: 'b' });
+        awareness.forget('conn_2');
+        cortex.release();
+        await tick();
+
+        expect(cortex.attended.map((stimulus) => stimulus.speakerId)).toEqual(['conn_1']);
+    });
+
+    test('defers active-turn cleanup until interruption settles', () => {
+        const { awareness } = mockAwareness();
+        awareness.context.turns = [{
+            id: 'turn_1', speakerId: 'conn_1', status: 'working', intent: 'reply', goal: 'g',
+            constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
+        }];
+
+        awareness.forget('conn_1');
+        expect(awareness.context.turns).toHaveLength(1);
+        awareness.turnInterrupted('turn_1');
+        expect(awareness.context.turns).toHaveLength(0);
+    });
+
+    test('drops late chunks from a disconnected active speaker before they seize the mouth', () => {
+        const { awareness, cortex } = mockAwareness();
+        awareness.context.turns = [{
+            id: 'turn_a', speakerId: 'conn_a', status: 'working', intent: 'reply', goal: 'work',
+            constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
+        }];
+
+        awareness.forget('conn_a');
+        awareness.speak('turn_a', 'conn_a', 'late', 'stim_a');
+        awareness.speak('turn_b', 'conn_b', 'next', 'stim_b');
+        awareness.speak('turn_b', 'conn_b', null, 'stim_b');
+
+        expect(cortex.delivered.map(({ packet }) => packet)).toEqual([
+            { action: 'agent', data: 'next' },
+            { action: 'streamEnd', data: true },
+        ]);
+    });
+
+    test('serializes mouth chunks and full answers', () => {
+        const { awareness, cortex } = mockAwareness();
         awareness.speak('turn_1', 'conn_1', 'one');
         awareness.speak('turn_2', 'conn_2', 'two');
         awareness.speak('turn_1', 'conn_1', null);
         awareness.speak('turn_2', 'conn_2', null);
 
-        expect(cortex.delivered).toEqual([
-            { speakerId: 'conn_1', packet: { action: 'agent', data: 'one' } },
-            { speakerId: 'conn_1', packet: { action: 'streamEnd', data: true } },
-            { speakerId: 'conn_2', packet: { action: 'agent', data: 'two' } },
-            { speakerId: 'conn_2', packet: { action: 'streamEnd', data: true } },
+        expect(cortex.delivered.map(({ packet }) => packet)).toEqual([
+            { action: 'agent', data: 'one' },
+            { action: 'streamEnd', data: true },
+            { action: 'agent', data: 'two' },
+            { action: 'streamEnd', data: true },
         ]);
     });
 
-    test('say queues full answers behind the current mouth', () => {
+    test('reopens a same-Turn mouth for a new stream generation and ignores late old chunks', () => {
         const { awareness, cortex } = mockAwareness();
 
-        awareness.speak('turn_1', 'conn_1', 'hello');
-        awareness.say('conn_2', 'later');
-        awareness.speak('turn_1', 'conn_1', null);
+        awareness.speak('turn_1', 'conn_1', 'old', 'stim_1');
+        awareness.speak('turn_1', 'conn_1', null, 'stim_1');
+        awareness.speak('turn_1', 'conn_1', 'late old', 'stim_1');
+        awareness.speak('turn_1', 'conn_1', 'new', 'stim_2');
+        awareness.speak('turn_1', 'conn_1', null, 'stim_2');
 
-        expect(cortex.delivered.slice(-2)).toEqual([
-            { speakerId: 'conn_2', packet: { action: 'agent', data: 'later' } },
-            { speakerId: 'conn_2', packet: { action: 'streamEnd', data: true } },
+        expect(cortex.delivered.map(({ packet }) => packet)).toEqual([
+            { action: 'agent', data: 'old' },
+            { action: 'streamEnd', data: true },
+            { action: 'agent', data: 'new' },
+            { action: 'streamEnd', data: true },
         ]);
     });
 
-    test('sets and clears preempt flags', async () => {
-        const { awareness } = mockAwareness({
-            intelligence: {
-                completeText: async (messages: Array<{ role: string; content: string }>) => {
-                    return JSON.stringify({
-                        dispositions: [{
-                            stimulusId: 'stim_1',
-                            action: DispositionAction.Preempt,
-                            targetTurnId: 'turn_1',
-                            priority: 30,
-                        }],
-                    } as ScheduleVerdict);
-                },
-            } as unknown as Intelligence,
-        });
-        const context = awareness.context as Context;
-        context.turns = [{
-            id: 'turn_1', speakerId: 'conn_1', status: 'working', intent: 'reply', goal: 'g', user: 'u',
+    test('releases a waiting speaker mouth when the connection closes', () => {
+        const { awareness, cortex } = mockAwareness();
+        awareness.context.turns = [{
+            id: 'turn_a', speakerId: 'conn_a', status: 'waiting', intent: 'reply', goal: 'wait',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
 
-        awareness.perceive({ speakerId: 'conn_2', text: 'stop!' });
+        awareness.speak('turn_a', 'conn_a', 'partial', 'stim_a');
+        awareness.forget('conn_a');
+        awareness.speak('turn_b', 'conn_b', 'next', 'stim_b');
+        awareness.speak('turn_b', 'conn_b', null, 'stim_b');
+
+        expect(cortex.delivered.map(({ packet }) => packet)).toEqual([
+            { action: 'agent', data: 'partial' },
+            { action: 'agent', data: 'next' },
+            { action: 'streamEnd', data: true },
+        ]);
+    });
+
+    test('does not dispatch a stimulus removed while the scheduler is awaiting', async () => {
+        const { awareness, cortex } = mockAwareness();
+        let resolveSchedule!: (value: string) => void;
+        awareness.context.turns = [{
+            id: 'turn_done', speakerId: 'old', status: 'completed', intent: 'reply', goal: 'done',
+            constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
+        }];
+        awareness.intelligence = {
+            completeText: () => new Promise<string>((resolve) => { resolveSchedule = resolve; }),
+        } as unknown as Intelligence;
+
+        awareness.perceive({ speakerId: 'conn_a', text: 'a' });
+        awareness.perceive({ speakerId: 'conn_b', text: 'b' });
         await tick();
-        await tick();
+        awareness.forget('conn_a');
+        resolveSchedule(JSON.stringify({ dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.New }] }));
         await tick();
 
-        expect(awareness.preempted('turn_1')).toBe(true);
-        awareness.turnInterrupted('turn_1');
-        expect(awareness.preempted('turn_1')).toBe(false);
+        expect(cortex.attended.map((stimulus) => stimulus.speakerId)).not.toContain('conn_a');
     });
 });

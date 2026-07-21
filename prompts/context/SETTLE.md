@@ -1,20 +1,14 @@
-# Record a Compact Completion Note
+# Compactly settle a semantic Turn
 
-Create a compact note for the completed work. Return only compact JSON.
+Use the supplied semantic Turn and the just-produced `assistant` outcome to
+write a small working-set summary. Return only JSON:
 
-Input contains `user`, `assistant`, `completed`, `current`, `recent`, and optional text-only `evidence`, `decisions`, `remaining`.
+```json
+{"goal":"short goal","result":"what happened","changedFiles":[],"decisions":[],"evidence":[],"remaining":[]}
+```
 
-Schema:
-
-{"goal":"short goal","result":"what was completed","changedFiles":[],"decisions":[],"evidence":[],"remaining":[]}
-
-Rules:
-
-- Do not include `createdAt`; it is added later.
-- Keep it short but preserve enough recovery clues for the next turn.
-- Record the result, useful decisions, project/scope anchor, evidence, and remaining work.
-- Prefer explicit project names, paths, symbols, commands, and verified outcomes over generic prose.
-- If the assistant corrected a wrong project/scope, record that correction as a decision or evidence item.
-- Use only compact text summaries. Do not serialize tool requests or raw service messages.
-- Never include transcripts, action buffers, provider roles, tool call IDs, or raw tool payloads.
-- Return valid JSON only.
+The summary is an in-process working outcome, not a transcript or long-term
+memory record. Never include raw tool payloads, provider roles, action ids,
+connection/session data, or a verbatim conversation. If the Turn was
+interrupted, describe only salvageable progress and unfinished work; the wire
+stream is terminated separately by Awareness.

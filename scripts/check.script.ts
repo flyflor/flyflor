@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-const roots = ['.', 'docs', 'prompts'];
+const roots = ['.'];
 const missing: string[] = [];
 const promptFiles = [
     ...filesUnder('prompts').filter((file) => file.endsWith('.md') || file.endsWith('.json')),

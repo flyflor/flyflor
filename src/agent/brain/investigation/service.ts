@@ -1,7 +1,7 @@
 import { AgentChatRole, type AgentMemory } from '@/agent/types';
 import { FAgentAtom, Inject, Provide, Scope } from '@/core';
 import { Context } from '@/agent/context';
-import { SynapseSignalType } from '@/neural/types';
+import { SynapseSignalType, TurnPreempted } from '@/neural/types';
 import { type ActionRequest, ToolComponent } from '@/plugins';
 import { CallosumSignalType, type CallosumSignal } from '../callosum';
 import { Intelligence } from '../intelligence/service';
@@ -32,11 +32,25 @@ export class Investigation extends FAgentAtom {
             if (options.turnId && this.synapse.preempted?.(options.turnId)) {
                 return { answer: '', steps: step, completed: false, paused: false, evidence, interrupted: true };
             }
+            options.signal?.throwIfAborted();
             step += 1;
             this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: CallosumSignalType.LlmRequest, chunk: String(step), data: { step } });
-            const result = await this.intelligence.streamRequest(messages, await this.tools.list(), (chunk) => {
-                if (emitReply) this.synapse.emit(SynapseSignalType.Reply, { turnId: options.turnId, chunk });
-            });
+            let result: Awaited<ReturnType<Intelligence['runRequest']>>;
+            try {
+                result = await this.intelligence.streamRequest(messages, await this.tools.list(), (chunk) => {
+                    if (options.turnId && this.synapse.preempted?.(options.turnId)) throw new TurnPreempted(options.turnId);
+                    if (emitReply) this.synapse.emit(SynapseSignalType.Reply, {
+                        turnId: options.turnId,
+                        ...(options.streamId ? { streamId: options.streamId } : {}),
+                        chunk,
+                    });
+                }, options.signal);
+            } catch (error) {
+                if (error instanceof TurnPreempted) {
+                    return { answer: '', steps: step, completed: false, paused: false, evidence, interrupted: true };
+                }
+                throw error;
+            }
             if (result.actionRequests.length === 0) {
                 return { answer: result.text, steps: step, completed: true, paused: false, evidence };
             }
@@ -44,6 +58,7 @@ export class Investigation extends FAgentAtom {
             const requests = await Promise.all(result.actionRequests.map((request) => this.withWorkingDirectory(request, options.cwd)));
             messages.push(this.actionRequestMessage({ ...result, actionRequests: requests }));
             for (const request of requests) {
+                options.signal?.throwIfAborted();
                 if (await this.tools.requiresConfirm(request)) {
                     if (!options.turnId || !this.synapse.interact) throw Error('Confirm boundary is missing');
                     const response = await this.synapse.interact({
@@ -60,7 +75,8 @@ export class Investigation extends FAgentAtom {
                     }
                 }
                 this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: CallosumSignalType.ActionStart, chunk: request.name, data: request.arguments });
-                const actionResult = await this.tools.run(request);
+                const actionResult = await this.tools.run(request, options.signal);
+                options.signal?.throwIfAborted();
                 this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: CallosumSignalType.ActionResult, chunk: request.name, data: actionResult });
                 messages.push(this.actionResultMessage(request, actionResult));
                 evidence.push(this.evidence(request, actionResult));

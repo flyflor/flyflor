@@ -7,9 +7,9 @@ export interface Reference {
     value: string;
 }
 
-export type Intent = 'reply' | 'research' | 'soul';
+export type Intent = 'reply' | 'research' | 'coordinate';
 export type PauseKind = 'ask' | 'confirm';
-export type TurnStatus = 'working' | 'completed' | 'interrupted';
+export type TurnStatus = 'working' | 'waiting' | 'suspended' | 'completed';
 
 export interface Pause {
     id: string;
@@ -31,8 +31,8 @@ export interface Settle {
 }
 
 /**
- * EN: One durable summary saved after a completed turn.
- * ZH: 一次完成 turn 后保存的长期摘要。
+ * EN: One compact outcome kept inside the bounded working set.
+ * ZH: 有界工作集内保留的一条紧凑 outcome。
  */
 export interface Summary {
     goal: string;
@@ -59,7 +59,25 @@ export interface AgentBrief {
     constraints: string[];
     refs: Reference[];
     cwd?: string;
-    recentSummaries: Summary[];
+    done: string[];
+    open: string[];
+    workspace: TurnBrief[];
+}
+
+/**
+ * EN: A semantic projection of one Turn kept in the bounded working set.
+ * ZH: 有界工作集里一个 Turn 的语义投影。
+ */
+export interface TurnBrief {
+    turnId: string;
+    intent: Intent;
+    goal: string;
+    constraints: string[];
+    refs: Reference[];
+    cwd?: string;
+    done: string[];
+    open: string[];
+    outcome?: Summary;
 }
 
 /**
@@ -74,7 +92,6 @@ export interface MemoryNote {
 }
 
 export interface TurnDraft {
-    user: string;
     intent: Intent;
     goal: string;
     cwd?: string;
@@ -87,9 +104,10 @@ export interface TurnDraft {
 }
 
 /**
- * EN: One tracked user turn. Acts as both the in-flight understanding and the
- * durable record after settlement, decided by `status`.
- * ZH: 一条被跟踪的用户 turn。既是进行中的理解视图,也靠 status 成为落地后的持久记录。
+ * EN: One tracked semantic turn. Its lifecycle state determines whether it is
+ * foreground, waiting, suspended, or completed inside the bounded workspace.
+ * ZH: 一条被跟踪的语义 turn。生命周期状态决定它在有界工作空间中是前台、等待、
+ * 挂起还是完成。
  */
 export interface Turn extends TurnDraft {
     id: string;
@@ -97,7 +115,6 @@ export interface Turn extends TurnDraft {
     stimulusId?: string;
     status: TurnStatus;
     summary?: Summary;
-    assistant?: string;
     pause?: Pause;
     ts: number;
     updated?: number;

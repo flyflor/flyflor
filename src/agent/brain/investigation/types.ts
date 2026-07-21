@@ -15,5 +15,7 @@ export interface InvestigationOutcome {
 export interface InvestigationRunOptions {
     emitReply?: boolean;
     turnId?: string;
+    streamId?: string;
     cwd?: string;
+    signal?: AbortSignal;
 }

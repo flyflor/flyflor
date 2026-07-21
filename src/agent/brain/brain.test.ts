@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { AgentChatRole } from '@/agent/types';
 import { Brain } from './brain';
 import { CallosumSignalType } from './callosum';
-import { SynapseSignalType } from '@/neural/types';
+import { SynapseSignalType, TurnPreempted } from '@/neural/types';
 
 describe('Brain', () => {
     test('awaits coordinate handling at the Synapse boundary', async () => {
@@ -95,10 +95,46 @@ describe('Brain', () => {
             persona: 'temporary specialist',
             constraints: [],
             refs: [],
-            recentSummaries: [],
+            done: [],
+            open: [],
+            workspace: [],
         });
 
         expect(seen[0]?.signal).toEqual({ type: CallosumSignalType.Research, chunk: 'study this slice' });
         expect(seen[0]?.options).toEqual({ emitReply: false, cwd: undefined });
+    });
+
+    test('passes the abort signal into settle and suppresses stale terminal output', async () => {
+        const emitted: Array<{ type: SynapseSignalType; data: unknown }> = [];
+        let preempted = false;
+        const controller = new AbortController();
+        const brain = new Brain({ name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 }, {
+            emit: (type: string, data: unknown) => {
+                emitted.push({ type: type as SynapseSignalType, data });
+                return undefined;
+            },
+            preempted: () => preempted,
+        });
+        brain.memory = { buildMessage: () => [] } as never;
+        brain.intelligence = {
+            stream: async (_messages: unknown, onChunk: (chunk: string) => void) => onChunk('answer'),
+        } as never;
+        brain.context = {
+            settle: async (_turnId: string, _input: unknown, signal?: AbortSignal) => {
+                expect(signal).toBe(controller.signal);
+                preempted = true;
+                controller.abort();
+                return undefined;
+            },
+            turn: () => ({ status: 'working' }),
+            interrupt: async () => undefined,
+        } as never;
+
+        await expect((brain as unknown as { reply: (signal: { type: CallosumSignalType; chunk: string }, turnId: string, abortSignal: AbortSignal) => Promise<void> }).reply({
+            type: CallosumSignalType.Reply,
+            chunk: 'reply',
+        }, 'turn_1', controller.signal)).rejects.toBeInstanceOf(TurnPreempted);
+
+        expect(emitted).not.toContainEqual({ type: SynapseSignalType.Reply, data: { turnId: 'turn_1', chunk: null } });
     });
 });

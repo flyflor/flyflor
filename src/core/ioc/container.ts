@@ -115,6 +115,10 @@ export class Container {
             if (index < props.length) return props[index];
             const matched = importInstances.find((item) => item.classType === paramType);
             if (matched) return matched.instance;
+            // JavaScript's constructor length excludes parameters with a
+            // default value. Preserve that optional boundary instead of
+            // treating a missing optional profile as a broken dependency.
+            if (index >= Module.length) return undefined;
             throw Error(`Constructor dependency not found: ${Module.name}[${index}]`);
         });
     }
@@ -140,6 +144,7 @@ export class Container {
                 return scopedValues[nextIndex];
             }
             if (index < props.length) return props[index];
+            if (index >= Module.length) return undefined;
             throw Error(`Scoped constructor dependency not found: ${Module.name}[${index}]`);
         });
     }

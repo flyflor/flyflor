@@ -181,6 +181,25 @@ describe('ToolComponent', () => {
         expect(ConfigService.path.cwd).toBe(root);
     });
 
+    test('aborts a running shell process', async () => {
+        const controller = new AbortController();
+        const startedAt = Date.now();
+        const running = (await component()).run({
+            id: 'shell_abort',
+            name: 'shell',
+            arguments: {
+                command: process.execPath,
+                args: ['-e', 'setTimeout(() => {}, 10000)'],
+                timeoutMs: 10000,
+            },
+        }, controller.signal);
+
+        setTimeout(() => controller.abort(), 40);
+
+        await expect(running).rejects.toMatchObject({ name: 'AbortError' });
+        expect(Date.now() - startedAt).toBeLessThan(2000);
+    });
+
     test('execute runs script batches from config cwd and keeps serial order', async () => {
         writeFileSync(join(root, 'one.sh'), 'printf "one:%s\\n" "$PWD"\n', 'utf-8');
         writeFileSync(join(root, 'two.sh'), 'printf "two:%s\\n" "$PWD"\n', 'utf-8');
@@ -229,6 +248,28 @@ describe('ToolComponent', () => {
         const nested = results.find((item) => item.id === 'nested');
         expect(nested).toMatchObject({ cwd: resolve(root, 'sub'), timedOut: false, ok: true });
         expect(nested?.stdout).toBe(`nested:${realpathSync(nested!.cwd)}\n`);
+    });
+
+    test('aborts active execute tasks and does not start later serial tasks', async () => {
+        writeFileSync(join(root, 'slow.sh'), 'sleep 10\n', 'utf-8');
+        writeFileSync(join(root, 'later.sh'), 'printf "later" > later.txt\n', 'utf-8');
+        const controller = new AbortController();
+        const running = (await component()).run({
+            id: 'execute_abort',
+            name: 'execute',
+            arguments: {
+                mode: 'serial',
+                tasks: [
+                    { id: 'slow', runtime: 'sh', path: 'slow.sh', timeoutMs: 10000 },
+                    { id: 'later', runtime: 'sh', path: 'later.sh' },
+                ],
+            },
+        }, controller.signal);
+
+        setTimeout(() => controller.abort(), 40);
+
+        await expect(running).rejects.toMatchObject({ name: 'AbortError' });
+        expect(() => readFileSync(join(root, 'later.txt'), 'utf-8')).toThrow();
     });
 
     test('filesystem and execute ignore process cwd changes when config cwd is fixed', async () => {

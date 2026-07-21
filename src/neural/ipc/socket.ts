@@ -18,6 +18,7 @@ export enum SocketEvent {
     Agent = 'agent',
     Data = 'data',
     StreamEnd = 'streamEnd',
+    Interrupted = 'interrupted',
     Drain = 'drain',
     Handshake = 'handshake',
     End = 'end',
@@ -122,18 +123,37 @@ export class FSocket extends FlyFlor {
         }
 
         for (const packet of packets) {
-            if (packet.action === SocketEvent.User) {
-                this.awareness.perceive({ speakerId: connection.speakerId, text: this.readUserText(packet.data) });
-                continue;
+            const action = this.packetAction(packet);
+            try {
+                if (action === SocketEvent.User) {
+                    this.awareness.perceive({ speakerId: connection.speakerId, text: this.readUserText(packet.data) });
+                    continue;
+                }
+                if (action === SocketEvent.Answer) {
+                    const answer = packet.data as { turnId?: unknown; id?: unknown; response?: unknown };
+                    if (typeof answer?.turnId !== 'string' || typeof answer.id !== 'string') throw Error('Invalid interaction IPC packet');
+                    try {
+                        this.awareness.answer(answer.turnId, answer.id, answer.response, connection.speakerId);
+                    } catch (error) {
+                        this.log.warn('socket.answer.rejected', {
+                            speakerId: connection.speakerId,
+                            name: error instanceof Error ? error.name : 'UnknownError',
+                        });
+                    }
+                    continue;
+                }
+                if (action === undefined) throw Error('Invalid IPC packet action');
+                const method = Reflect.get(this.controller, action) as ((arg: unknown) => unknown) | undefined;
+                if (typeof method === 'function') await method.call(this.controller, packet.data);
+            } catch (error) {
+                // A malformed packet must not abort processing of coalesced
+                // frames that follow it on the same connection.
+                this.log.warn('socket.packet.rejected', {
+                    speakerId: connection.speakerId,
+                    action,
+                    name: error instanceof Error ? error.name : 'UnknownError',
+                });
             }
-            if (packet.action === SocketEvent.Answer) {
-                const data = packet.data as { turnId?: unknown; id?: unknown; response?: unknown };
-                if (typeof data?.turnId !== 'string' || typeof data.id !== 'string') throw Error('Invalid interaction IPC packet');
-                this.awareness.answer(data.turnId, data.id, data.response);
-                continue;
-            }
-            const method = Reflect.get(this.controller, packet.action) as ((arg: unknown) => unknown) | undefined;
-            if (typeof method === 'function') method.call(this.controller, packet.data);
         }
     }
 
@@ -145,7 +165,7 @@ export class FSocket extends FlyFlor {
     public write(speakerId: string, packet: SocketPacket): void {
         const connection = this.bySpeaker.get(speakerId);
         if (!connection) {
-            this.log.warn('socket.write.no_connection', { speakerId, packet });
+            this.log.warn('socket.write.no_connection', { speakerId, action: packet.action });
             return;
         }
         connection.write(packet);
@@ -154,5 +174,11 @@ export class FSocket extends FlyFlor {
     private readUserText(data: unknown): string {
         if (typeof data !== 'object' || data === null || !('text' in data)) throw Error('Invalid user IPC packet');
         return String((data as { text: unknown }).text);
+    }
+
+    private packetAction(packet: unknown): string | undefined {
+        if (typeof packet !== 'object' || packet === null || !('action' in packet)) return undefined;
+        const action = (packet as { action?: unknown }).action;
+        return typeof action === 'string' ? action : undefined;
     }
 }

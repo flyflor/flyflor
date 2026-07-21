@@ -1,29 +1,24 @@
 {
-    // EN: Long-term note schema version.
-    // ZH: 长期记录结构版本。
+    // EN: Static constitution package version. Runtime does not write this package.
+    // ZH: 静态宪章包版本。运行时不写入该包。
     "version": 1,
     // EN: Human-readable note set description.
     // ZH: 面向人的记录集描述。
-    "description": "Long-term assistant notes template.",
+    "description": "Static assistant constitution and capability template.",
     // EN: Files loaded into ordinary assistant messages.
     // ZH: 会加载进普通助手消息的文件。
     "prompt": {
         "sections": [
             "SOUL",
-            "USER",
             "EXTENSION"
         ]
     },
-    // EN: Files and write limits for long-term note updates.
-    // ZH: 长期记录更新使用的文件和写入限制。
+    // EN: Static package policy; runtime writes are disabled.
+    // ZH: 静态包策略；运行时写入已禁用。
     "protocolPackage": {
-        // EN: Files that a reviewed update may modify.
-        // ZH: 审查后的更新允许修改的文件。
-        "editable": [
-            "SOUL.md",
-            "USER.md",
-            "EXTENSION.md"
-        ],
+        // EN: No runtime writes are enabled in the session-less organism.
+        // ZH: 无 session 生命体不启用运行时写入。
+        "editable": [],
         // EN: Files that can be read for rules but must not be rewritten.
         // ZH: 可读取规则但禁止重写的文件。
         "locked": [
@@ -35,6 +30,7 @@
             "config.jsonc",
             "AGENTS.md",
             "AGENTS.zh.cn.md",
+            "USER.md",
             "SOUL.zh.cn.md",
             "USER.zh.cn.md",
             "EXTENSION.zh.cn.md"

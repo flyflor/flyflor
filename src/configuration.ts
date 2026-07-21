@@ -100,22 +100,6 @@ export interface FModelConfiguration {
 }
 
 /**
- * EN: Persistent memory configuration.
- * ZH: 持久记忆配置。
- *
- * EN: It controls agent memory, user profile memory, character budgets, periodic nudges, and flush timing.
- * ZH: 它控制 agent memory、user profile memory、字符预算、周期性提醒和 flush 时机。
- */
-export interface FMemoryConfiguration {
-    memoryEnabled: boolean;
-    userProfileEnabled: boolean;
-    memoryCharLimit: number;
-    userCharLimit: number;
-    nudgeInterval: number;
-    flushMinTurns: number;
-}
-
-/**
  * EN: One configured agent profile.
  * ZH: 单个已配置 agent profile。
  *
@@ -136,14 +120,13 @@ export interface FAgentProfileConfiguration {
  * EN: Flyflor's single configuration object.
  * ZH: Flyflor 的单一配置对象。
  *
- * EN: It keeps the fields Flyflor currently needs: model/provider settings, memory, agent profiles, skills,
+ * EN: It keeps the fields Flyflor currently needs: model/provider settings, agent profiles, skills,
  * MCP servers, and the public IPC socket path.
- * ZH: 它只保存 Flyflor 当前需要的字段：model/provider 设置、memory、agent profiles、skills、MCP servers 和公开 IPC socket path。
+ * ZH: 它只保存 Flyflor 当前需要的字段：model/provider 设置、agent profiles、skills、MCP servers 和公开 IPC socket path。
  */
 export interface FConfiguration {
     model: FModelConfiguration;
     providers: Record<string, FProviderConfiguration>;
-    memory: FMemoryConfiguration;
     agent: string;
     agents: Record<string, FAgentProfileConfiguration>;
     socket: string;
@@ -156,17 +139,18 @@ export interface FConfiguration {
  * EN: Attention-gate tuning for the life-form's Awareness layer.
  * ZH: 生命体 Awareness 注意门控的调节参数。
  *
- * EN: `maxConcurrentThoughts` caps background worker thinking; `scheduleTimeoutMs`
- * bounds one scheduler LLM call before FIFO fallback; `batchWindowMs` coalesces
- * bursts of stimuli into one scheduling pass.
- * ZH: `maxConcurrentThoughts` 限制后台 worker 并发思考数;`scheduleTimeoutMs`
- * 限定单次调度 LLM 调用时长,超时降级为 FIFO;`batchWindowMs` 把突发刺激
- * 合并进同一次调度。
+ * EN: `scheduleTimeoutMs` bounds one scheduler LLM call before FIFO fallback;
+ * `batchWindowMs` coalesces bursts of stimuli into one scheduling pass;
+ * `pendingCapacity` applies explicit backpressure before the sensory queue can
+ * grow without bound.
+ * ZH: `scheduleTimeoutMs` 限定单次调度 LLM 调用时长，超时降级为 FIFO；
+ * `batchWindowMs` 把突发刺激合并进同一次调度；`pendingCapacity` 在感觉队列
+ * 无界增长前施加明确背压。
  */
 export interface FAwarenessConfiguration {
-    maxConcurrentThoughts: number;
     scheduleTimeoutMs: number;
     batchWindowMs: number;
+    pendingCapacity: number;
 }
 
 /**
@@ -233,7 +217,6 @@ export class ConfigService extends FService implements FConfiguration {
 
     public model: FModelConfiguration;
     public providers: Record<string, FProviderConfiguration>;
-    public memory: FMemoryConfiguration;
     public agent: string;
     public agents: Record<string, FAgentProfileConfiguration>;
     public socket: string;
@@ -259,14 +242,6 @@ export class ConfigService extends FService implements FConfiguration {
             maxTokens: 8192,
         };
         this.providers = {};
-        this.memory = {
-            memoryEnabled: true,
-            userProfileEnabled: true,
-            memoryCharLimit: 2200,
-            userCharLimit: 1375,
-            nudgeInterval: 10,
-            flushMinTurns: 6,
-        };
         this.agent = 'flyflor';
         this.agents = {
             flyflor: {
@@ -304,11 +279,14 @@ export class ConfigService extends FService implements FConfiguration {
         };
         this.mcp = {};
         this.awareness = {
-            maxConcurrentThoughts: 2,
             scheduleTimeoutMs: 8000,
             batchWindowMs: 200,
+            pendingCapacity: 32,
         };
         Object.assign(this, JSON5.parse(readFileSync(join(this.path.config, 'config.jsonc'), 'utf-8')));
+        // Legacy memory blocks may remain in config files as migration placeholders,
+        // but they are deliberately not part of the active runtime configuration.
+        delete (this as unknown as Record<string, unknown>).memory;
         this.path.socket = this.socket;
         this.model.protocols = this.resolveModelProtocols();
     }

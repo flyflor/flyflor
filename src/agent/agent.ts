@@ -20,7 +20,13 @@ export class Agent extends FAgent<AgentInput, string> implements IObservable<Age
     public brain!: Brain;
 
     public override async onPipe(data: AgentInput) {
-        this.log.info('agent received', { data });
+        // Keep diagnostics metadata-only; the active runtime must not turn its
+        // log file into a transcript or a second memory store.
+        this.log.info('agent received', {
+            speakerId: data.speakerId,
+            stimulusId: data.stimulusId,
+            relation: data.relation,
+        });
         await this.brain.next(data);
     }
 
@@ -31,7 +37,7 @@ export class Agent extends FAgent<AgentInput, string> implements IObservable<Age
      * ZH: 从 Context 简报跑一次 worker 理解。agent 把简报写入私有记忆缓存并返回
      * 原始理解结果。它既不向 socket 广播，也不结算 Context。
      */
-    public async understand(brief: AgentBrief): Promise<InvestigationOutcome | undefined> {
-        return await this.brain.understand(brief);
+    public async understand(brief: AgentBrief, signal?: AbortSignal): Promise<InvestigationOutcome | undefined> {
+        return await this.brain.understand(brief, signal);
     }
 }

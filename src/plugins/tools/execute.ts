@@ -27,12 +27,13 @@ export class Execute extends FToolAtom<ExecuteInput, ExecuteOutput> {
         return true;
     }
 
-    public override async onPipe(input: ExecuteInput) {
+    public override async onPipe(input: ExecuteInput, signal?: AbortSignal) {
+        signal?.throwIfAborted();
         const cwd = this.cwd(input.cwd, this.config.path.cwd);
         const mode = this.mode(input.mode);
         const tasks = this.tasks(input.tasks);
         const maxConcurrency = this.maxConcurrency(input.maxConcurrency, mode, tasks.length);
-        const results = await this.results(tasks, cwd, mode === 'serial' ? 1 : maxConcurrency);
+        const results = await this.results(tasks, cwd, mode === 'serial' ? 1 : maxConcurrency, signal);
         return {
             ok: true,
             data: {
@@ -48,27 +49,28 @@ export class Execute extends FToolAtom<ExecuteInput, ExecuteOutput> {
         } as const;
     }
 
-    private async results(tasks: ExecuteTask[], cwd: string, concurrency: number): Promise<ExecuteTaskResult[]> {
+    private async results(tasks: ExecuteTask[], cwd: string, concurrency: number, signal?: AbortSignal): Promise<ExecuteTaskResult[]> {
         const results = new Array<ExecuteTaskResult>(tasks.length);
         let index = 0;
         const workers = Array.from({ length: Math.max(1, concurrency) }, async () => {
             while (true) {
+                signal?.throwIfAborted();
                 const current = index++;
                 if (current >= tasks.length) return;
-                results[current] = await this.runTask(tasks[current]!, cwd);
+                results[current] = await this.runTask(tasks[current]!, cwd, signal);
             }
         });
         await Promise.all(workers);
         return results;
     }
 
-    private async runTask(task: ExecuteTask, batchCwd: string): Promise<ExecuteTaskResult> {
+    private async runTask(task: ExecuteTask, batchCwd: string, signal?: AbortSignal): Promise<ExecuteTaskResult> {
         const cwd = task.cwd === undefined ? batchCwd : this.cwd(task.cwd, batchCwd);
         const path = this.path(task.path, cwd);
         const command = task.runtime === 'python' ? 'python' : 'sh';
         const startedAt = Date.now();
         try {
-            const { stdout, stderr, exitCode, timedOut } = await this.spawn(command, [path, ...task.args], cwd, task.timeoutMs, task.env);
+            const { stdout, stderr, exitCode, timedOut } = await this.spawn(command, [path, ...task.args], cwd, task.timeoutMs, task.env, signal);
             return {
                 id: task.id,
                 runtime: task.runtime,
@@ -83,6 +85,7 @@ export class Execute extends FToolAtom<ExecuteInput, ExecuteOutput> {
                 durationMs: Date.now() - startedAt,
             };
         } catch (error) {
+            if (signal?.aborted) throw error;
             return {
                 id: task.id,
                 runtime: task.runtime,
@@ -99,9 +102,10 @@ export class Execute extends FToolAtom<ExecuteInput, ExecuteOutput> {
         }
     }
 
-    private spawn(command: string, args: string[], cwd: string, timeoutMs: number, env?: Record<string, string>) {
+    private spawn(command: string, args: string[], cwd: string, timeoutMs: number, env?: Record<string, string>, signal?: AbortSignal) {
         const proc = spawn(command, args, {
             cwd,
+            detached: process.platform !== 'win32',
             env: { ...process.env, ...(env ?? {}) },
             stdio: ['ignore', 'pipe', 'pipe'],
         });
@@ -112,12 +116,30 @@ export class Execute extends FToolAtom<ExecuteInput, ExecuteOutput> {
         proc.stderr.on('data', (chunk) => { stderr += String(chunk); });
         const timer = setTimeout(() => {
             timedOut = true;
-            proc.kill();
+            this.kill(proc);
         }, timeoutMs);
+        const abort = () => { this.kill(proc); };
+        signal?.addEventListener('abort', abort, { once: true });
+        if (signal?.aborted) this.kill(proc);
         return new Promise<{ stdout: string; stderr: string; exitCode: number | null; timedOut: boolean }>((resolvePromise, reject) => {
             proc.on('error', reject);
             proc.on('close', (exitCode) => resolvePromise({ stdout, stderr, exitCode, timedOut }));
-        }).finally(() => clearTimeout(timer));
+        }).finally(() => {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', abort);
+        });
+    }
+
+    private kill(proc: ReturnType<typeof spawn>): void {
+        if (process.platform !== 'win32' && proc.pid !== undefined) {
+            try {
+                process.kill(-proc.pid, 'SIGTERM');
+                return;
+            } catch {
+                // The process may have already exited; fall back to its handle.
+            }
+        }
+        proc.kill();
     }
 
     private tasks(value: unknown): ExecuteTask[] {

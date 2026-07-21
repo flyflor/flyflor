@@ -36,14 +36,16 @@ export interface InteractionRequest {
 export interface ReplyChunk {
     turnId: string;
     chunk: string | null;
+    /** Stimulus generation that produced this stream; protects same-Turn revisions from late chunks. */
+    streamId?: string;
 }
 
 /**
  * EN: Control-flow signal thrown when a turn yields to a preempting stimulus.
- * Not an error boundary failure: the partial thought is already settled as
- * interrupted before this is thrown.
+ * Not an error boundary failure: the partial thought is already compacted as
+ * suspended before this is thrown.
  * ZH: 当 turn 让位于抢占刺激时抛出的控制流信号。这不是错误边界失败:
- * 部分思考在抛出前已被部分结算为 interrupted。
+ * 部分思考在抛出前已被压缩为 suspended outcome。
  */
 export class TurnPreempted extends Error {
     constructor(public readonly turnId: string) {

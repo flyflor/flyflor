@@ -434,6 +434,13 @@
                     rgba(18, 25, 16, 0.76);
             }
 
+            .message.agent.interrupted {
+                border-color: rgba(221, 181, 93, 0.42);
+                background:
+                    linear-gradient(180deg, rgba(221, 181, 93, 0.12), rgba(221, 181, 93, 0.05)),
+                    rgba(33, 27, 14, 0.76);
+            }
+
             .message.system {
                 max-width: 100%;
                 color: var(--muted);
@@ -1404,6 +1411,25 @@
                 }
                 if (msg.action === 'streamEnd') {
                     finishAgentStream();
+                    return;
+                }
+                if (msg.action === 'interrupted') {
+                    interaction = null;
+                    document.querySelectorAll('.ask-card button, .ask-card input, .confirm-card button').forEach((element) => {
+                        element.disabled = true;
+                    });
+                    if (currentAgentMessage) {
+                        currentAgentMessage.classList.remove('pending');
+                        currentAgentMessage.classList.add('interrupted');
+                        currentAgentMessage.textContent = `${currentAgentMessage.textContent}\n\n[本轮已中断]`.trim();
+                    } else {
+                        addMessage('本轮已中断', 'agent interrupted');
+                    }
+                    currentAgentMessage = null;
+                    pending = false;
+                    setStreamState(false);
+                    setInputEnabled();
+                    signalPill.textContent = 'interrupted';
                     return;
                 }
                 if (msg.action === 'agent') {

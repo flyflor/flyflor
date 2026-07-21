@@ -23,4 +23,8 @@ export interface AgentInput {
     text: string;
     speakerId: string;
     stimulusId?: string;
+    /** Attention relation selected by Awareness; absent means a new turn. */
+    relation?: 'same' | 'new';
+    targetTurnId?: string;
+    signal?: AbortSignal;
 }

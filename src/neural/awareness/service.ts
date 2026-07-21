@@ -6,25 +6,58 @@ import { Config, Inject, Prompt, PromptService, Singleton } from '@/core';
 import { FService } from '@/core/ioc';
 import { parse } from '@/agent/json';
 import type { Synapse } from '@/neural/synapse';
+import type { InteractionResponse } from '@/neural/types';
 import { AgentChatRole } from '@/agent/types';
-import { DispositionAction, type Disposition, type Mouthful, type ScheduleVerdict, type Stimulus } from './types';
+import {
+    DispositionRelation,
+    type AttentionInstruction,
+    type Disposition,
+    type Stimulus,
+} from './types';
 
 interface BufferedChunk {
     speakerId: string;
+    streamId?: string;
     chunks: string[];
     streamEnd: boolean;
 }
 
+interface Mouthful {
+    speakerId: string;
+    text: string;
+}
+
 /**
- * EN: Awareness is the life-form's thalamus + reticular activating system.
- * It owns every stimulus until it reaches the cortex, decides what is salient,
- * and schedules one conscious thought at a time. Background workers run in
- * parallel, but the mouth is strictly serial.
- * ZH: Awareness 是生命体的丘脑 + 网状激活系统。它持有所有到达皮层之前的刺激、
- * 决定显著性、一次只安排一个意识内容。后台 worker 可并行运行,但嘴严格串行。
+ * The small protocol Awareness needs from the cortex.  `revise` and `cancel`
+ * are optional while Synapse is being migrated; the attention instruction is
+ * also attached to the routed stimulus so an older cortex can safely ignore
+ * the extra argument and a newer one can route it to Context.revise().
+ */
+interface AwarenessCortex {
+    attend(stimulus: Stimulus, instruction?: AttentionInstruction): Promise<void> | void;
+    revise?(stimulus: Stimulus, targetTurnId: string): Promise<void> | void;
+    cancel?(turnId: string): Promise<void> | void;
+    forgetSpeaker?(speakerId: string): Promise<void> | void;
+    answer(turnId: string, id: string, response: InteractionResponse, speakerId?: string): void;
+    deliver(speakerId: string, packet: SocketPacket): void;
+}
+
+/**
+ * EN: Awareness is the life-form's attention gate.  It keeps one bounded,
+ * serial foreground stream: pending stimuli stay FIFO, a same-thread stimulus
+ * revises an existing semantic Turn, and only an explicitly urgent stimulus
+ * may request pre-emption.  There are no cross-stimulus background workers.
+ * ZH: Awareness 是生命体的注意门。它维护一条有界、串行的前台流：待处理刺激保持
+ * FIFO，同线程刺激原地修订已有语义 Turn，只有明确的紧急刺激才能请求抢占。
+ * 不再为不同外部刺激启动后台 worker。
  */
 @Singleton()
 export class Awareness extends FService {
+    /** Default transient sensory capacity used when older config files omit it. */
+    public static readonly DefaultPendingCapacity = 32;
+    public static readonly QueueBackpressureMessage = 'Attention queue is full; retry after the current work settles.';
+    public static readonly WorkspaceBackpressureMessage = 'Semantic workspace is full; revise existing work or retry later.';
+
     @Config()
     public config!: ConfigService;
 
@@ -37,28 +70,43 @@ export class Awareness extends FService {
     @Prompt('prompts/awareness')
     public prompt!: PromptService;
 
-    private cortex?: Synapse;
+    private cortex?: AwarenessCortex;
     private sequence = 0;
     private stimuli: Stimulus[] = [];
     private pendingMain?: Stimulus;
-    private runningWorkers = 0;
     private mouthOwner?: string;
     private mouthQueue: Mouthful[] = [];
     private bufferedChunks = new Map<string, BufferedChunk>();
+    private streamState = new Map<string, { speakerId: string; streamId?: string; ended: boolean }>();
     private preemptFlags = new Set<string>();
+    private forgottenSpeakers = new Set<string>();
     private batchTimer?: ReturnType<typeof setTimeout>;
     private scheduling = false;
+    private scheduleAgain = false;
 
     public attend(cortex: Synapse): void {
-        this.cortex = cortex;
+        this.cortex = cortex as unknown as AwarenessCortex;
     }
 
     /**
-     * EN: One speaker said something. The connection has already provided the
-     * speakerId; we only record the stimulus and schedule attention soon.
-     * ZH: 一个说话人说了话。连接已经提供 speakerId;我们只记录刺激并稍后调度注意。
+     * Record one external stimulus.  Arrival order is the default ordering;
+     * the scheduler can only promote an entry when it marks it urgent.
      */
-    public perceive(input: { speakerId: string; text: string }): Stimulus {
+    public perceive(input: { speakerId: string; text: string }): Stimulus | undefined {
+        const capacity = this.pendingCapacity();
+        if (this.stimuli.length >= capacity) {
+            this.log.warn('awareness.backpressure', {
+                speakerId: input.speakerId,
+                pending: this.stimuli.length,
+                capacity,
+            });
+            this.deliver(input.speakerId, {
+                action: 'error',
+                data: Awareness.QueueBackpressureMessage,
+            });
+            return undefined;
+        }
+        this.forgottenSpeakers.delete(input.speakerId);
         this.sequence += 1;
         const stimulus: Stimulus = { id: `stim_${this.sequence}`, ...input, ts: Date.now() };
         this.stimuli.push(stimulus);
@@ -67,27 +115,64 @@ export class Awareness extends FService {
     }
 
     /**
-     * EN: A connection closed. Drop the speaker's pending stimuli and any
-     * mouth output waiting for them; the life-form stops talking to someone
-     * who has left.
-     * ZH: 连接关闭。丢弃该说话人的待处理刺激和等待发给他的嘴输出;
-     * 生命体不再对一个已经离开的人说话。
+     * Drop all pending/output state belonging to a disconnected speaker. An
+     * active working turn is retained until its cancellation callback settles,
+     * so Context does not race the cortex's interrupt/settle path; inactive
+     * turns are removed immediately.
      */
     public forget(speakerId: string): void {
-        this.stimuli = this.stimuli.filter((s) => s.speakerId !== speakerId);
-        this.mouthQueue = this.mouthQueue.filter((m) => m.speakerId !== speakerId);
+        this.forgottenSpeakers.add(speakerId);
+        this.stimuli = this.stimuli.filter((stimulus) => stimulus.speakerId !== speakerId);
+        this.mouthQueue = this.mouthQueue.filter((mouthful) => mouthful.speakerId !== speakerId);
+        const ownedMouth = this.mouthOwner
+            && (this.streamState.get(this.mouthOwner)?.speakerId === speakerId
+                || this.context?.turns.find((turn) => turn.id === this.mouthOwner)?.speakerId === speakerId)
+            ? this.mouthOwner
+            : undefined;
         for (const [turnId, buffer] of this.bufferedChunks) {
             if (buffer.speakerId === speakerId) this.bufferedChunks.delete(turnId);
         }
+        for (const [turnId, state] of this.streamState) {
+            if (state.speakerId === speakerId) this.streamState.delete(turnId);
+        }
+        const active = this.foregroundTurn();
+        if (active?.speakerId === speakerId && active.status === 'working') {
+            this.preemptFlags.add(active.id);
+            void this.cortex?.cancel?.(active.id);
+            void this.cortex?.forgetSpeaker?.(speakerId);
+        } else {
+            // A waiting Turn may already own the mouth even though it no longer
+            // counts as working. Release that lock before deleting its Context
+            // state, or every later speaker would remain buffered forever.
+            if (ownedMouth !== undefined) {
+                this.terminateInterruptedStream(ownedMouth);
+                this.bufferedChunks.delete(ownedMouth);
+                this.mouthOwner = undefined;
+                this.flushBufferedChunks();
+                this.flushMouthQueue();
+            }
+            // Let the cortex reject any interaction waiter before removing its
+            // Context turn; otherwise a disconnected waiting turn can leave a
+            // promise unresolved forever.
+            void this.cortex?.forgetSpeaker?.(speakerId);
+            this.context?.forgetSpeaker(speakerId);
+        }
+        this.pruneStreamState();
+        this.releaseForgottenSpeaker(speakerId);
+        this.scheduleSoon();
     }
 
     /**
-     * EN: An answer to a pending ask/confirm arrived. These bypass the
-     * scheduler entirely because the cortex is already waiting for them.
-     * ZH: pending ask/confirm 的回答到达。这些完全绕过调度器,因为皮层正在等它们。
+     * An answer to a pending ask/confirm bypasses stimulus scheduling.  New
+     * socket adapters may pass the connection speakerId; when present we
+     * enforce ownership before forwarding it to the cortex.
      */
-    public answer(turnId: string, id: string, response: unknown): void {
-        this.cortex?.answer(turnId, id, response as never);
+    public answer(turnId: string, id: string, response: unknown, speakerId?: string): void {
+        if (speakerId !== undefined) {
+            const turn = this.context?.turns.find((candidate) => candidate.id === turnId);
+            if (!turn || turn.speakerId !== speakerId) throw Error(`Answer does not belong to speaker: ${turnId}`);
+        }
+        this.cortex?.answer(turnId, id, response as InteractionResponse, speakerId);
     }
 
     public preempted(turnId: string): boolean {
@@ -95,235 +180,410 @@ export class Awareness extends FService {
     }
 
     /**
-     * EN: Called by the cortex when a turn has been interrupted and its partial
-     * summary is already settled. We clear the flag, release the mouth, and
-     * re-schedule the merged re-think.
-     * ZH: 皮层通知某 turn 已被打断且部分摘要已结算。我们清除标志、释放嘴、
-     * 重新调度合并后的重想。
+     * Called by the cortex after it has compacted an interrupted Turn.  A
+     * stream cannot be retracted, so an interruption is explicitly terminated
+     * on the wire before the next foreground stream is released.
      */
     public turnInterrupted(turnId: string): void {
         this.preemptFlags.delete(turnId);
-        if (this.mouthOwner === turnId) {
-            this.mouthOwner = undefined;
-            this.flushMouthQueue();
+        const interrupted = this.context?.turns.find((turn) => turn.id === turnId);
+        if (this.pendingMain && this.context?.turnForStimulus(this.pendingMain.id)?.id === turnId) {
+            this.pendingMain = undefined;
         }
+        this.terminateInterruptedStream(turnId);
+        this.bufferedChunks.delete(turnId);
+        if (this.mouthOwner === turnId) this.mouthOwner = undefined;
+        this.flushBufferedChunks();
+        this.flushMouthQueue();
+        if (interrupted && this.forgottenSpeakers.has(interrupted.speakerId)) {
+            this.context?.forgetSpeaker(interrupted.speakerId);
+        }
+        this.pruneStreamState();
+        if (interrupted) this.releaseForgottenSpeaker(interrupted.speakerId);
         this.scheduleSoon();
     }
 
     public turnSettled(turnId: string): void {
+        const turn = this.context?.turns.find((candidate) => candidate.id === turnId || candidate.stimulusId === turnId);
+        // If normal completion won a race with an urgent request, discard the
+        // stale flag so it cannot survive as hidden state after this Turn ends.
+        if (!turn || turn.status === 'completed' || turn.status === 'suspended') this.preemptFlags.delete(turn?.id ?? turnId);
+        if (turn && this.forgottenSpeakers.has(turn.speakerId)) this.context?.forgetSpeaker(turn.speakerId);
+        this.pruneStreamState();
+        if (turn) this.releaseForgottenSpeaker(turn.speakerId);
         this.scheduleSoon();
     }
 
-    public turnPaused(turnId: string): void {
+    public turnPaused(_turnId: string): void {
+        // The attend promise remains the foreground lock while an interaction
+        // is waiting.  Scheduling here only lets a pending urgent verdict be
+        // considered after the interaction is resumed.
         this.scheduleSoon();
     }
 
     /**
-     * EN: Mouth arbitration: one turn may stream at a time. Chunks for another
-     * turn are buffered until the current speaker finishes. `chunk === null`
-     * marks the end of the stream.
-     * ZH: 嘴的仲裁：同一时刻只有一个 turn 能流式输出。另一个 turn 的分片先缓冲,
-     * 等当前说话人说完。`chunk === null` 表示流结束。
+     * One turn may stream at a time.  Chunks from another turn are retained in
+     * arrival order until the current stream ends.
      */
-    public speak(turnId: string, speakerId: string, chunk: string | null): void {
+    public speak(turnId: string, speakerId: string, chunk: string | null, streamId?: string): void {
+        // A disconnected speaker is tombstoned until its active Turn has
+        // finished cancellation. Late provider chunks must be discarded before
+        // they can reacquire the single mouth and strand every other speaker.
+        if (this.forgottenSpeakers.has(speakerId)) return;
+        const owner = this.context?.turns.find((turn) => turn.id === turnId);
+        if (owner && owner.speakerId !== speakerId) {
+            this.log.warn('awareness.speaker_mismatch', { turnId, speakerId });
+            return;
+        }
+        const previous = this.streamState.get(turnId);
+        if (previous?.speakerId !== undefined && previous.speakerId !== speakerId) {
+            this.log.warn('awareness.stream_speaker_mismatch', { turnId, speakerId });
+            return;
+        }
+        if (previous?.ended) {
+            // A Turn id survives same-thread revision. A new stream generation
+            // must therefore reopen the mouth; a repeated terminal packet from
+            // the old generation remains ignored.
+            if (streamId !== undefined && previous.streamId === streamId) return;
+            if (streamId === undefined && chunk === null) return;
+            this.bufferedChunks.delete(turnId);
+        } else if (previous && streamId !== undefined && previous.streamId !== undefined && previous.streamId !== streamId) {
+            // A late chunk from an older generation must not corrupt the active
+            // stream. The new generation is admitted after the old one ends.
+            return;
+        }
+        const state = previous?.ended
+            ? { speakerId, streamId, ended: false }
+            : previous ?? { speakerId, streamId, ended: false };
+        if (state.streamId === undefined && streamId !== undefined) state.streamId = streamId;
+        this.streamState.set(turnId, state);
+
         if (this.mouthOwner === undefined || this.mouthOwner === turnId) {
+            this.mouthOwner = turnId;
             if (chunk === null) {
                 this.deliver(speakerId, { action: 'streamEnd', data: true });
+                state.ended = true;
                 this.mouthOwner = undefined;
                 this.flushBufferedChunks();
                 this.flushMouthQueue();
                 return;
             }
-            this.mouthOwner = turnId;
             this.deliver(speakerId, { action: 'agent', data: chunk });
             return;
         }
-        const buffer: BufferedChunk = this.bufferedChunks.get(turnId) ?? { speakerId, chunks: [], streamEnd: false };
-        if (chunk === null) {
-            buffer.streamEnd = true;
-        } else {
-            buffer.chunks.push(chunk);
-        }
+
+        const buffer = this.bufferedChunks.get(turnId) ?? { speakerId, streamId: state.streamId, chunks: [], streamEnd: false };
+        if (chunk === null) buffer.streamEnd = true;
+        else buffer.chunks.push(chunk);
         this.bufferedChunks.set(turnId, buffer);
     }
 
+    private terminateInterruptedStream(turnId: string): void {
+        const state = this.streamState.get(turnId);
+        if (state?.ended) return;
+        const speakerId = state?.speakerId
+            ?? this.context?.turns.find((turn) => turn.id === turnId)?.speakerId
+            ?? (this.pendingMain?.id === turnId ? this.pendingMain.speakerId : undefined);
+        if (!speakerId) return;
+        const current = state ?? { speakerId, ended: false };
+        this.streamState.set(turnId, current);
+        this.deliver(speakerId, { action: 'interrupted', data: true });
+        this.deliver(speakerId, { action: 'streamEnd', data: true });
+        current.ended = true;
+    }
+
     private flushBufferedChunks(): void {
-        for (const [turnId, buffer] of this.bufferedChunks) {
-            for (const chunk of buffer.chunks) {
-                this.deliver(buffer.speakerId, { action: 'agent', data: chunk });
-            }
-            if (buffer.streamEnd) {
-                this.deliver(buffer.speakerId, { action: 'streamEnd', data: true });
-            }
-            this.bufferedChunks.delete(turnId);
+        if (this.mouthOwner !== undefined) return;
+        const next = this.bufferedChunks.entries().next().value as [string, BufferedChunk] | undefined;
+        if (!next) return;
+        const [turnId, buffer] = next;
+        this.bufferedChunks.delete(turnId);
+        this.mouthOwner = turnId;
+        const state = this.streamState.get(turnId) ?? { speakerId: buffer.speakerId, streamId: buffer.streamId, ended: false };
+        this.streamState.set(turnId, state);
+        for (const chunk of buffer.chunks) {
+            if (!state.ended) this.deliver(buffer.speakerId, { action: 'agent', data: chunk });
         }
+        if (buffer.streamEnd && !state.ended) {
+            this.deliver(buffer.speakerId, { action: 'streamEnd', data: true });
+            state.ended = true;
+        }
+        this.mouthOwner = undefined;
+        this.flushBufferedChunks();
+        this.flushMouthQueue();
     }
 
     /**
-     * EN: A background worker has a complete answer. It waits for the mouth
-     * the same way a thought waits to be spoken.
-     * ZH: 后台 worker 产出了完整答案。它像等待说出口的想法一样等嘴。
+     * Compatibility boundary for an already-computed full answer.  External
+     * stimuli never use this path for parallel thinking; it simply obeys the
+     * same one-mouth queue.
      */
     public say(speakerId: string, text: string): void {
+        if (this.forgottenSpeakers.has(speakerId)) return;
         this.mouthQueue.push({ speakerId, text });
         this.flushMouthQueue();
     }
 
     private deliver(speakerId: string, packet: SocketPacket): void {
+        if (this.forgottenSpeakers.has(speakerId)) return;
         this.cortex?.deliver(speakerId, packet);
     }
 
     private scheduleSoon(): void {
-        if (this.batchTimer) clearTimeout(this.batchTimer);
-        this.batchTimer = setTimeout(() => this.schedule(), this.config.awareness.batchWindowMs);
+        // Keep a fixed coalescing window. Resetting the timer for every arrival
+        // would let a sustained stimulus stream postpone attention forever.
+        if (this.batchTimer !== undefined) return;
+        const delay = this.config?.awareness?.batchWindowMs ?? 0;
+        this.batchTimer = setTimeout(() => {
+            this.batchTimer = undefined;
+            void this.schedule();
+        }, delay);
     }
 
     private async schedule(): Promise<void> {
-        if (this.scheduling) return;
+        if (this.scheduling) {
+            this.scheduleAgain = true;
+            return;
+        }
         this.scheduling = true;
         try {
             await this.runSchedule();
         } finally {
             this.scheduling = false;
+            if (this.scheduleAgain) {
+                this.scheduleAgain = false;
+                this.scheduleSoon();
+            }
         }
     }
 
     private async runSchedule(): Promise<void> {
-        if (!this.cortex) return;
-        const runnable = this.stimuli.filter((s) => this.canStart(s));
-        if (runnable.length === 0) return;
-
-        if (!this.isBusy() && runnable.length === 1) {
-            this.dispatchMain(runnable[0]!);
+        if (!this.cortex || this.pendingMain || this.stimuli.length === 0) return;
+        const runnable = [...this.stimuli];
+        const active = this.foregroundTurn();
+        const dispositions = await this.scheduleWithModel(runnable);
+        const live = runnable.filter((stimulus) => this.isPending(stimulus));
+        if (live.length === 0) return;
+        const decision = this.selectDisposition(live, dispositions, active);
+        if (active) {
+            if (decision?.disposition.urgent
+                && (active.status === 'working' || active.status === 'waiting')
+                && this.targets(active, decision.disposition)) {
+                this.preemptFlags.add(active.id);
+                void this.cortex.cancel?.(active.id);
+            }
             return;
         }
 
-        const verdict = await this.scheduleWithModel(runnable);
-        if (verdict === undefined) {
-            this.applyFallback(runnable);
+        if (!decision) {
+            this.dispatchMain(live[0]!, this.fallbackDisposition(live[0]!));
             return;
         }
-        this.applyVerdict(verdict);
+        this.applyIdleDisposition(decision.stimulus, decision.disposition);
     }
 
-    private canStart(stimulus: Stimulus): boolean {
-        if (this.pendingMain?.id === stimulus.id) return false;
-        return true;
+    private foregroundTurn() {
+        const turns = this.context?.turns ?? [];
+        return turns.findLast((turn) => turn.status === 'working' || turn.status === 'waiting');
     }
 
-    private isBusy(): boolean {
-        const active = this.context.working();
-        if (active) return true;
-        if (this.pendingMain === undefined) return false;
-        return this.context.turnForStimulus(this.pendingMain.id) === undefined;
-    }
-
-    private applyFallback(runnable: Stimulus[]): void {
-        if (this.isBusy()) return;
-        for (const stimulus of runnable) {
-            if (this.isBusy()) break;
-            this.dispatchMain(stimulus);
-        }
-    }
-
-    private async scheduleWithModel(runnable: Stimulus[]): Promise<Disposition[] | undefined> {
-        const working = this.context.turns.filter((t) => t.status === 'working');
+    private async scheduleWithModel(runnable: Stimulus[]): Promise<Disposition[]> {
+        const turns = this.context?.turns ?? [];
+        if (turns.length === 0 && runnable.length === 1) return [];
         const payload = {
-            working: working.map((t) => ({
-                turnId: t.id,
-                speakerId: t.speakerId,
-                intent: t.intent,
-                goal: t.goal,
-                paused: t.pause?.kind ?? null,
-                assistant: t.assistant,
-                evidence: t.summary?.evidence ?? [],
+            workspace: turns.map((turn) => ({
+                turnId: turn.id,
+                speakerId: turn.speakerId,
+                status: turn.status,
+                intent: turn.intent,
+                goal: turn.goal,
+                paused: turn.pause?.kind ?? null,
+                done: turn.done,
+                open: turn.open,
+                outcome: turn.summary ?? null,
             })),
-            stimuli: runnable.map((s) => ({ id: s.id, speakerId: s.speakerId, text: s.text, waitMs: Date.now() - s.ts })),
+            stimuli: runnable.map((stimulus) => ({ id: stimulus.id, speakerId: stimulus.speakerId, text: stimulus.text })),
         };
         try {
+            const controller = new AbortController();
             const raw = await this.withTimeout(
                 this.intelligence.completeText([
                     { role: AgentChatRole.System, content: this.prompt.section('SCHEDULE') },
                     { role: AgentChatRole.User, content: JSON.stringify(payload) },
-                ]),
-                this.config.awareness.scheduleTimeoutMs,
+                ], controller.signal),
+                this.config?.awareness?.scheduleTimeoutMs ?? 8000,
+                () => controller.abort(),
             );
-            return parse<ScheduleVerdict>(raw).dispositions;
+            const parsed = parse<unknown>(raw);
+            if (!this.isRecord(parsed) || !Array.isArray(parsed.dispositions)) return [];
+            const ids = new Set(runnable.map((stimulus) => stimulus.id));
+            const seen = new Set<string>();
+            return parsed.dispositions.flatMap((item) => {
+                const disposition = this.parseDisposition(item);
+                if (!disposition || !ids.has(disposition.stimulusId) || seen.has(disposition.stimulusId)) return [];
+                seen.add(disposition.stimulusId);
+                return [disposition];
+            });
         } catch (error) {
-            this.log.warn('awareness.schedule.timeout', error);
-            return undefined;
+            this.log.warn('awareness.schedule.timeout', { name: error instanceof Error ? error.name : 'UnknownError' });
+            return [];
         }
     }
 
-    private withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-        return Promise.race([
-            promise,
-            new Promise<never>((_, reject) => setTimeout(() => reject(Error('Awareness schedule timeout')), ms)),
-        ]);
+    private parseDisposition(value: unknown): Disposition | undefined {
+        if (!this.isRecord(value) || typeof value.stimulusId !== 'string') return undefined;
+        if (value.relation !== DispositionRelation.Same && value.relation !== DispositionRelation.New) return undefined;
+        if (value.targetTurnId !== undefined && typeof value.targetTurnId !== 'string') return undefined;
+        if (value.urgent !== undefined && typeof value.urgent !== 'boolean') return undefined;
+        if (value.relation === DispositionRelation.Same && typeof value.targetTurnId !== 'string') return undefined;
+        return {
+            stimulusId: value.stimulusId,
+            relation: value.relation,
+            targetTurnId: value.relation === DispositionRelation.Same ? value.targetTurnId : undefined,
+            urgent: value.urgent ?? false,
+            rationale: typeof value.rationale === 'string' ? value.rationale : undefined,
+        };
     }
 
-    private applyVerdict(dispositions: Disposition[]): void {
-        const byStimulus = new Map(dispositions.map((d) => [d.stimulusId, d]));
-        const ordered = [...this.stimuli]
-            .filter((s) => byStimulus.has(s.id))
-            .sort((a, b) => (byStimulus.get(b.id)?.priority ?? 0) - (byStimulus.get(a.id)?.priority ?? 0));
-        for (const stimulus of ordered) {
-            this.applyDisposition(stimulus, byStimulus.get(stimulus.id)!);
-        }
+    private withTimeout<T>(promise: Promise<T>, ms: number, onTimeout?: () => void): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+            const timer = setTimeout(() => {
+                onTimeout?.();
+                reject(Error('Awareness schedule timeout'));
+            }, ms);
+            promise.then(resolve, reject);
+            promise.then(
+                () => clearTimeout(timer),
+                () => clearTimeout(timer),
+            );
+        });
     }
 
-    private applyDisposition(stimulus: Stimulus, disposition: Disposition): void {
-        if (disposition.action === DispositionAction.Preempt) {
-            if (disposition.targetTurnId) this.preemptFlags.add(disposition.targetTurnId);
+    private selectDisposition(
+        stimuli: Stimulus[],
+        dispositions: Disposition[],
+        active?: { id: string; speakerId: string },
+    ): { stimulus: Stimulus; disposition: Disposition } | undefined {
+        const byId = new Map(dispositions.map((disposition) => [disposition.stimulusId, disposition]));
+        const canPreempt = (stimulus: Stimulus, disposition: Disposition | undefined): boolean => disposition?.urgent === true
+            && (active === undefined || disposition.targetTurnId === undefined || disposition.targetTurnId === active.id)
+            && (active === undefined || disposition.relation !== DispositionRelation.Same || stimulus.speakerId === active.speakerId);
+        const urgent = stimuli.find((stimulus) => canPreempt(stimulus, byId.get(stimulus.id)));
+        const eligible = active === undefined
+            ? stimuli[0]
+            : stimuli.find((stimulus) => !byId.get(stimulus.id)?.urgent || canPreempt(stimulus, byId.get(stimulus.id)));
+        const stimulus = urgent ?? eligible ?? stimuli[0];
+        if (!stimulus) return undefined;
+        const proposed = byId.get(stimulus.id) ?? this.fallbackDisposition(stimulus);
+        const disposition = active !== undefined && proposed.urgent && !canPreempt(stimulus, proposed)
+            ? { ...proposed, urgent: false }
+            : proposed;
+        return { stimulus, disposition };
+    }
+
+    private fallbackDisposition(stimulus: Stimulus): Disposition {
+        // A failed/ambiguous semantic judgment must not silently fuse unrelated
+        // goals merely because they came from the same connection.
+        return { stimulusId: stimulus.id, relation: DispositionRelation.New, urgent: false };
+    }
+
+    private applyIdleDisposition(stimulus: Stimulus, disposition: Disposition): void {
+        if (disposition.relation === DispositionRelation.Same) {
+            const target = disposition.targetTurnId ? this.context?.turns.find((turn) => turn.id === disposition.targetTurnId) : undefined;
+            if (!target || target.speakerId !== stimulus.speakerId) {
+                this.dispatchNew(stimulus, { stimulusId: stimulus.id, relation: DispositionRelation.New, urgent: disposition.urgent });
+                return;
+            }
+            if (target.status === 'working' || target.status === 'waiting') return;
+            this.dispatchMain(stimulus, disposition);
             return;
         }
-        if (disposition.action === DispositionAction.Concurrent) {
-            if (this.canRunConcurrent()) this.dispatchWorker(stimulus);
-            return;
-        }
-        if (this.isBusy()) return;
-        if (disposition.action === DispositionAction.Merge || disposition.action === DispositionAction.Queue || disposition.action === DispositionAction.AnswerFirst) {
-            if (disposition.queueAfter && this.context.turns.some((t) => t.id === disposition.queueAfter && t.status === 'working')) return;
-            this.dispatchMain(stimulus);
-        }
+        this.dispatchNew(stimulus, disposition);
     }
 
-    private dispatchMain(stimulus: Stimulus): void {
+    private dispatchNew(stimulus: Stimulus, disposition: Disposition): void {
+        if (this.context?.hasCapacity && !this.context.hasCapacity()) {
+            this.removeStimulus(stimulus.id);
+            this.log.warn('awareness.workspace_backpressure', {
+                speakerId: stimulus.speakerId,
+                stimulusId: stimulus.id,
+            });
+            this.deliver(stimulus.speakerId, {
+                action: 'error',
+                data: Awareness.WorkspaceBackpressureMessage,
+            });
+            this.scheduleSoon();
+            return;
+        }
+        this.dispatchMain(stimulus, disposition);
+    }
+
+    private dispatchMain(stimulus: Stimulus, disposition: Disposition): void {
+        if (!this.isPending(stimulus)) return;
         this.removeStimulus(stimulus.id);
         this.pendingMain = stimulus;
-        const promise = this.cortex?.attend(stimulus);
-        if (promise) {
-            promise.finally(() => {
+        const instruction: AttentionInstruction = {
+            relation: disposition.relation,
+            targetTurnId: disposition.targetTurnId,
+            urgent: disposition.urgent ?? false,
+        };
+        const routed = { ...stimulus, attention: instruction };
+        let operation: Promise<void> | void;
+        try {
+            if (disposition.relation === DispositionRelation.Same && disposition.targetTurnId && this.cortex?.revise) {
+                operation = this.cortex.revise(routed, disposition.targetTurnId);
+            } else {
+                operation = this.cortex?.attend(routed, instruction);
+            }
+        } catch (error) {
+            operation = Promise.reject(error);
+        }
+        Promise.resolve(operation)
+            .catch((error) => this.log.error('awareness.cortex', { name: error instanceof Error ? error.name : 'UnknownError' }))
+            .finally(() => {
                 if (this.pendingMain?.id === stimulus.id) this.pendingMain = undefined;
+                this.releaseForgottenSpeaker(stimulus.speakerId);
                 this.scheduleSoon();
             });
-        } else {
-            this.pendingMain = undefined;
-            this.scheduleSoon();
-        }
-    }
-
-    private dispatchWorker(stimulus: Stimulus): void {
-        this.removeStimulus(stimulus.id);
-        this.runningWorkers += 1;
-        const promise = this.cortex?.ponder(stimulus);
-        if (promise) {
-            promise.finally(() => {
-                this.runningWorkers -= 1;
-                this.scheduleSoon();
-            });
-        } else {
-            this.runningWorkers -= 1;
-            this.scheduleSoon();
-        }
     }
 
     private removeStimulus(id: string): void {
-        this.stimuli = this.stimuli.filter((s) => s.id !== id);
+        this.stimuli = this.stimuli.filter((stimulus) => stimulus.id !== id);
     }
 
-    private canRunConcurrent(): boolean {
-        return this.runningWorkers < this.config.awareness.maxConcurrentThoughts;
+    private isPending(stimulus: Stimulus): boolean {
+        return !this.forgottenSpeakers.has(stimulus.speakerId)
+            && this.stimuli.some((candidate) => candidate.id === stimulus.id);
+    }
+
+    private pruneStreamState(): void {
+        const activeTurnIds = new Set((this.context?.turns ?? []).map((turn) => turn.id));
+        for (const turnId of this.streamState.keys()) {
+            if (!activeTurnIds.has(turnId)) {
+                this.streamState.delete(turnId);
+                this.bufferedChunks.delete(turnId);
+            }
+        }
+    }
+
+    private releaseForgottenSpeaker(speakerId: string): void {
+        if (!this.forgottenSpeakers.has(speakerId)) return;
+        if (this.pendingMain?.speakerId === speakerId) return;
+        if ((this.context?.turns ?? []).some((turn) => turn.speakerId === speakerId)) return;
+        if ([...this.streamState.values()].some((state) => state.speakerId === speakerId)) return;
+        if (this.mouthQueue.some((mouthful) => mouthful.speakerId === speakerId)) return;
+        this.forgottenSpeakers.delete(speakerId);
+    }
+
+    private pendingCapacity(): number {
+        const configured = this.config?.awareness?.pendingCapacity;
+        return typeof configured === 'number' && Number.isFinite(configured)
+            ? Math.max(1, Math.floor(configured))
+            : Awareness.DefaultPendingCapacity;
+    }
+
+    private targets(active: { id: string }, disposition: Disposition): boolean {
+        return disposition.targetTurnId === undefined || disposition.targetTurnId === active.id;
     }
 
     private flushMouthQueue(): void {
@@ -332,5 +592,9 @@ export class Awareness extends FService {
             this.deliver(next.speakerId, { action: 'agent', data: next.text });
             this.deliver(next.speakerId, { action: 'streamEnd', data: true });
         }
+    }
+
+    private isRecord(value: unknown): value is Record<string, unknown> {
+        return typeof value === 'object' && value !== null && !Array.isArray(value);
     }
 }

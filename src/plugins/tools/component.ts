@@ -44,14 +44,17 @@ export class ToolComponent extends FTool {
         return record?.protocol.cwd === 'inject';
     }
 
-    public async run(call: ActionRequest): Promise<ToolRunResult> {
+    public async run(call: ActionRequest, signal?: AbortSignal): Promise<ToolRunResult> {
         try {
+            signal?.throwIfAborted();
             const record = (await this.records()).find(({ protocol }) => protocol.name === call.name);
             if (!record) throw Error(`Unknown tool: ${call.name}`);
-            const result = await record.atom.execute(call.arguments);
+            const result = await record.atom.execute(call.arguments, signal);
+            signal?.throwIfAborted();
             if (result.ok) return { ok: true, name: call.name, data: result.data };
             return { ok: false, name: call.name, error: result.error };
         } catch (error) {
+            if (signal?.aborted) throw error;
             return { ok: false, name: call.name, error: this.error(error) };
         }
     }

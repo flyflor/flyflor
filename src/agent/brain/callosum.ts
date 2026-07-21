@@ -8,6 +8,7 @@ export enum CallosumPrompt {
 }
 
 export enum CallosumSignalType {
+    /** @deprecated Long-term note writes are disabled; retained for wire compatibility. */
     Soul = 'soul',
     Reply = 'reply',
     Research = 'research',
@@ -47,8 +48,8 @@ export class Callosum extends FAgentAtom<string, CallosumSignal> {
     public intelligence!: Intelligence;
 
     /**
-     * EN: Classifies one user message into a reply / research / soul / coordinate route.
-     * ZH: 把一条用户消息分类为 reply / research / soul / coordinate 路由。
+     * EN: Classifies one user message into a reply / research / coordinate route.
+     * ZH: 把一条用户消息分类为 reply / research / coordinate 路由。
      *
      * EN: `coordinate` is returned when the user intent requires multiple agents to jointly
      * summarize and understand it. The cortex (Synapse) then dispatches the agent pool.
@@ -58,20 +59,19 @@ export class Callosum extends FAgentAtom<string, CallosumSignal> {
      * ZH: 路由输出非法时直接抛出；恢复由 `Brain` 的单一回合边界统一处理。
      */
     public async route(data: string): Promise<CallosumSignal> {
-        this.log.debug('callosum.start', data);
+        this.log.debug('callosum.start', { textLength: data.length });
         const raw = await this.intelligence.completeText([
             { role: AgentChatRole.System, content: this.prompt.section(CallosumPrompt.Route) },
             { role: AgentChatRole.User, content: `<latest_user_message>${data}</latest_user_message>` },
         ]);
         const type = parse<{ type?: CallosumSignalType }>(raw).type;
         if (
-            type === CallosumSignalType.Soul
-            || type === CallosumSignalType.Reply
-            || type === CallosumSignalType.Task
+            type === CallosumSignalType.Reply
             || type === CallosumSignalType.Coordinate
         ) {
             return { type, chunk: data };
         }
+        if (type === CallosumSignalType.Task) return { type: CallosumSignalType.Coordinate, chunk: data };
         return { type: CallosumSignalType.Research, chunk: data };
     }
 }

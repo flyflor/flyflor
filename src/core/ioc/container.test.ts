@@ -132,6 +132,15 @@ class ScopedHostWithChild {
     public child!: ScopedHostChild;
 }
 
+@Provide()
+/**
+ * EN: OptionalConstructorProvider class declaration.
+ * ZH: OptionalConstructorProvider class 声明。
+ */
+class OptionalConstructorProvider {
+    constructor(public value: object | undefined = undefined) {}
+}
+
 describe('@Scope', () => {
     test('resolves constructor args from the host scope', async () => {
         const config = { name: 'flyflor' };
@@ -159,5 +168,11 @@ describe('@Scope', () => {
         const host = await useContainer().getAsync(ScopedHostWithChild);
 
         expect(host.child.host).toBe(host);
+    });
+
+    test('allows an omitted constructor parameter with a default value', async () => {
+        const provider = await useContainer().getAsync(OptionalConstructorProvider);
+
+        expect(provider.value).toBeUndefined();
     });
 });

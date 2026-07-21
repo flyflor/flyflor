@@ -1,8 +1,11 @@
+import 'reflect-metadata';
 import { describe, expect, test } from 'bun:test';
 import type { AgentBrief } from '@/agent/context';
+import { Context } from '@/agent/context';
 import { Synapse } from './synapse';
 import { SynapseSignalType, type CoordinatePlan } from './types';
 import { CallosumSignalType } from '@/agent/brain/callosum';
+import { DispositionRelation } from './awareness/types';
 
 describe('SynapseSignalType', () => {
     test('exposes pause and resume as control signals', () => {
@@ -72,6 +75,63 @@ describe('Synapse coordinate', () => {
     });
 });
 
+describe('Synapse cancellation and speaker ownership', () => {
+    test('aborts an ingest that has not created a Context turn when its speaker disconnects', async () => {
+        let receivedSignal: AbortSignal | undefined;
+        let release: (() => void) | undefined;
+        const agent = {
+            next: async (input: unknown) => {
+                receivedSignal = (input as { signal?: AbortSignal }).signal;
+                await new Promise<void>((resolve) => { release = resolve; });
+            },
+        };
+        const synapse = setupSynapse(agent);
+        const operation = synapse.attend({ id: 'stim_1', speakerId: 'conn_1', text: 'hello', ts: Date.now() }, {
+            relation: DispositionRelation.New,
+            urgent: false,
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(receivedSignal?.aborted).toBe(false);
+        synapse.forgetSpeaker('conn_1');
+        expect(receivedSignal?.aborted).toBe(true);
+        release?.();
+        await operation;
+    });
+
+    test('keeps working turns while removing a disconnected speaker', () => {
+        const synapse = setupSynapse({ next: async () => undefined });
+        synapse.context.turns = [
+            {
+                id: 'turn_waiting', speakerId: 'conn_1', status: 'waiting', intent: 'reply', goal: 'wait',
+                constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
+            },
+            {
+                id: 'turn_working', speakerId: 'conn_1', status: 'working', intent: 'reply', goal: 'work',
+                constraints: [], refs: [], done: [], open: [], investigate: false, ts: 2,
+            },
+        ];
+
+        synapse.forgetSpeaker('conn_1');
+
+        expect(synapse.context.turns.map((turn) => turn.id)).toEqual(['turn_waiting', 'turn_working']);
+    });
+});
+
+function setupSynapse(agent: { next(input: unknown): Promise<void> }) {
+    const synapse = new Synapse();
+    synapse.agentPool = { main: agent as never };
+    synapse.active = 'main';
+    synapse.context = new Context();
+    synapse.awareness = {
+        preempted: () => false,
+        turnSettled: () => undefined,
+        turnInterrupted: () => undefined,
+        say: () => undefined,
+    } as never;
+    return synapse;
+}
+
 function coordinateHarness(plan: CoordinatePlan): Synapse & {
     workerBriefs: AgentBrief[];
     seenReviewBrief?: AgentBrief;
@@ -98,12 +158,16 @@ function coordinateHarness(plan: CoordinatePlan): Synapse & {
             goal: 'turn goal',
             constraints: [],
             refs: [],
-            recentSummaries: [],
+            done: [],
+            open: [],
+            workspace: [],
         }),
+        turn: () => ({ status: 'completed' }),
         settle: async () => undefined,
     } as never;
     synapse.planPrompt = { section: () => 'plan prompt' } as never;
     synapse.synthesisPrompt = { section: () => 'synthesis prompt' } as never;
+    synapse.awareness = { preempted: () => false } as never;
     let call = 0;
     synapse.intelligence = {
         completeText: async (messages: Array<{ content: string }>) => {

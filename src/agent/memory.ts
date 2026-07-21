@@ -5,16 +5,16 @@ import { AgentChatRole, type AgentMemory } from './types';
 export { AgentChatRole, type AgentMemory } from './types';
 
 export enum SoulSection {
-    /** EN: Agent identity / constitution layer loaded from `SOUL.md`. ZH: 来自 `SOUL.md` 的智能体身份/人格层。 */
+    /** EN: Static agent identity / constitution loaded from `SOUL.md`. ZH: 来自 `SOUL.md` 的静态智能体身份/人格层。 */
     Soul = 'SOUL',
 
-    /** EN: User profile loaded from `USER.md`. ZH: 来自 `USER.md` 的用户画像。 */
+    /** EN: Legacy user-profile placeholder; never loaded by the active runtime. ZH: 用户画像占位；活跃运行时永不加载。 */
     User = 'USER',
 
     /** EN: Fixed protocol-package constitution loaded from `AGENTS.md`. ZH: 来自 `AGENTS.md` 的固定协议包宪法。 */
     Agents = 'AGENTS',
 
-    /** EN: Agent extension/capability summary loaded from `EXTENSION.md`. ZH: 来自 `EXTENSION.md` 的扩展/能力摘要。 */
+    /** EN: Static agent extension/capability summary loaded from `EXTENSION.md`. ZH: 来自 `EXTENSION.md` 的静态扩展/能力摘要。 */
     Extension = 'EXTENSION',
 }
 
@@ -36,6 +36,8 @@ export class Memory extends FAgentAtom {
     /** EN: Private notes kept by this agent. ZH: 该 agent 保留的私有笔记。 */
     public notes: MemoryNote[] = [];
 
+    private noteSequence = 0;
+
     /** EN: Seeds the memory cache with the Context brief for the current task. ZH: 用当前任务的 Context 简报初始化记忆缓存。 */
     public ingestBrief(brief: AgentBrief): void {
         this.notes = [];
@@ -43,22 +45,31 @@ export class Memory extends FAgentAtom {
             `turn ${brief.turnId}: intent=${brief.intent}, goal=${brief.goal}, constraints=[${brief.constraints.join('; ')}]`,
             'brief',
         );
+        if (brief.done?.length > 0) this.remember(`done: ${brief.done.join('; ')}`, 'brief');
+        if (brief.open?.length > 0) this.remember(`open: ${brief.open.join('; ')}`, 'brief');
         if (brief.persona) this.remember(`persona: ${brief.persona}`, 'brief');
         for (const ref of brief.refs) {
             this.remember(`${ref.type}: ${ref.value}`, 'brief');
+        }
+        for (const turn of brief.workspace ?? []) {
+            if (turn.turnId === brief.turnId || turn.outcome === undefined) continue;
+            this.remember(`workspace ${turn.turnId}: ${turn.goal} -> ${turn.outcome.result}`, 'brief');
         }
     }
 
     /** EN: Adds one note to the agent's private cache, dropping oldest notes when over capacity. ZH: 向 agent 私有缓存添加一条笔记，超出容量时丢弃最旧的笔记。 */
     public remember(content: string, source: MemoryNote['source']): void {
-        this.notes.push({ id: `note_${this.notes.length + 1}`, content, source, ts: Date.now() });
+        this.noteSequence += 1;
+        this.notes.push({ id: `note_${this.noteSequence}`, content: content.slice(0, 1024), source, ts: Date.now() });
         if (this.notes.length > this.capacity) {
             this.notes = this.notes.slice(-this.capacity);
         }
     }
 
     public buildMessage(): AgentMemory[] {
-        const system = this.prompt.render({ kind: 'sections', sections: this.agentConfig.promptSections });
+        const sections = this.agentConfig.promptSections?.filter((section) => section !== SoulSection.User)
+            ?? [SoulSection.Soul, SoulSection.Extension];
+        const system = this.prompt.render({ kind: 'sections', sections });
         const messages: AgentMemory[] = system.trim().length === 0 ? [] : [{ role: AgentChatRole.System, content: system }];
         if (this.notes.length > 0) {
             messages.push({

@@ -17,20 +17,22 @@ export class Filesystem extends FToolAtom<FilesystemInput, FilesystemOutput> {
         return input.action !== 'read';
     }
 
-    public override onPipe(input: FilesystemInput) {
+    public override onPipe(input: FilesystemInput, signal?: AbortSignal) {
+        signal?.throwIfAborted();
         const action = this.action(input.action);
-        if (action === 'read') return this.read(input);
-        if (action === 'write') return this.write(input);
-        if (action === 'edit') return this.edit(input);
-        return this.remove(input);
+        if (action === 'read') return this.read(input, signal);
+        if (action === 'write') return this.write(input, signal);
+        if (action === 'edit') return this.edit(input, signal);
+        return this.remove(input, signal);
     }
 
-    private read(input: FilesystemInput) {
+    private read(input: FilesystemInput, signal?: AbortSignal) {
         const path = this.path(input.path, input.cwd);
         const offsetLines = this.number(input.offsetLines, 'offsetLines', 0);
         const limitLines = this.number(input.limitLines, 'limitLines', 200);
         const limitBytes = this.number(input.limitBytes, 'limitBytes', 20000);
         const content = readFileSync(path, 'utf-8');
+        signal?.throwIfAborted();
         const sliced = content.split(/\r?\n/).slice(offsetLines, offsetLines + limitLines).join('\n');
         const limited = Buffer.byteLength(sliced) > limitBytes ? sliced.slice(0, limitBytes) : sliced;
         return {
@@ -46,11 +48,12 @@ export class Filesystem extends FToolAtom<FilesystemInput, FilesystemOutput> {
         } as const;
     }
 
-    private write(input: FilesystemInput) {
+    private write(input: FilesystemInput, signal?: AbortSignal) {
         const path = this.path(input.path, input.cwd);
         const content = this.text(input.content, 'content');
         mkdirSync(dirname(path), { recursive: true });
         writeFileSync(path, content, 'utf-8');
+        signal?.throwIfAborted();
         return {
             ok: true,
             data: { action: 'write', path, bytes: Buffer.byteLength(content) },
@@ -58,7 +61,7 @@ export class Filesystem extends FToolAtom<FilesystemInput, FilesystemOutput> {
         } as const;
     }
 
-    private edit(input: FilesystemInput) {
+    private edit(input: FilesystemInput, signal?: AbortSignal) {
         const path = this.path(input.path, input.cwd);
         const oldText = this.text(input.oldText, 'oldText');
         const newText = this.text(input.newText, 'newText');
@@ -66,6 +69,7 @@ export class Filesystem extends FToolAtom<FilesystemInput, FilesystemOutput> {
         if (!content.includes(oldText)) throw Error('oldText not found');
         const updated = content.replace(oldText, newText);
         writeFileSync(path, updated, 'utf-8');
+        signal?.throwIfAborted();
         return {
             ok: true,
             data: { action: 'edit', path, replacements: 1, bytes: Buffer.byteLength(updated) },
@@ -73,11 +77,12 @@ export class Filesystem extends FToolAtom<FilesystemInput, FilesystemOutput> {
         } as const;
     }
 
-    private remove(input: FilesystemInput) {
+    private remove(input: FilesystemInput, signal?: AbortSignal) {
         const path = this.path(input.path, input.cwd);
         const stat = statSync(path);
         if (!stat.isFile()) throw Error('delete only supports files');
         unlinkSync(path);
+        signal?.throwIfAborted();
         return {
             ok: true,
             data: { action: 'delete', path },

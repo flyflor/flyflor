@@ -10,26 +10,33 @@ export interface Stimulus {
     speakerId: string;
     text: string;
     ts: number;
+    attention?: AttentionInstruction;
 }
 
 /**
- * EN: How the life-form decides to treat one stimulus.
- * ZH: 生命体决定如何对待一条刺激的方式。
- *
- * EN: Semantics follow biological priors; the scheduler LLM makes the call.
- * ZH: 语义遵循生物先验；由调度 LLM 做判断。
+ * EN: The only two relationships the attention gate needs to distinguish.
+ * `same` revises an existing semantic Turn; `new` starts a fresh Turn after
+ * the foreground is free.  Urgency is a separate, boolean interruption
+ * signal, rather than another queueing mode.
+ * ZH: 注意门只需区分两种关系。
+ * `same` 原地修订已有语义 Turn；`new` 在前台空闲后开启新 Turn。
+ * 紧急程度是独立的布尔打断信号，而不是另一种排队模式。
  */
-export enum DispositionAction {
-    /** EN: Same speaker, same thread — fold in right after that turn. ZH: 同一说话人同一线程，紧随该 turn 之后。 */
-    Merge = 'merge',
-    /** EN: Related thought — serialize on the main attention thread. ZH: 相关思考，在主注意线程上串行排队。 */
-    Queue = 'queue',
-    /** EN: Unrelated matter — background worker thinks, result waits for the mouth. ZH: 无关的事，后台 worker 思考，结果等嘴。 */
-    Concurrent = 'concurrent',
-    /** EN: Urgent or contradicting — interrupt the current turn and re-think. ZH: 紧急或否定当前方向，打断当前 turn 重想。 */
-    Preempt = 'preempt',
-    /** EN: Set the current thought aside and answer this first. ZH: 手头事先放一放，先回答这个。 */
-    AnswerFirst = 'answer-first',
+export enum DispositionRelation {
+    Same = 'same',
+    New = 'new',
+}
+
+/**
+ * EN: Routing metadata attached by Awareness when a stimulus enters the
+ * cortex. It is not user input and is never persisted as memory.
+ * ZH: 刺激进入皮层时由 Awareness 附加的路由元数据。它不是用户输入，也不会被
+ * 持久化为记忆。
+ */
+export interface AttentionInstruction {
+    relation: DispositionRelation;
+    targetTurnId?: string;
+    urgent: boolean;
 }
 
 /**
@@ -38,10 +45,9 @@ export enum DispositionAction {
  */
 export interface Disposition {
     stimulusId: string;
-    action: DispositionAction;
+    relation: DispositionRelation;
     targetTurnId?: string;
-    queueAfter?: string;
-    priority?: number;
+    urgent?: boolean;
     rationale?: string;
 }
 
@@ -51,13 +57,4 @@ export interface Disposition {
  */
 export interface ScheduleVerdict {
     dispositions: Disposition[];
-}
-
-/**
- * EN: One full answer produced by background thinking, waiting for the mouth.
- * ZH: 后台思考产出的一条完整回答，正在等嘴。
- */
-export interface Mouthful {
-    speakerId: string;
-    text: string;
 }

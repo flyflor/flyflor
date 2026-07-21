@@ -62,4 +62,15 @@ describe('IpcClientBridge', () => {
         expect(html).not.toMatch(/Flyflor|FlyFlor|FLYFLOR/);
         expect(html).not.toContain('/Users/yihuaqing/');
     });
+
+    test('drops a stale interaction when the active Turn is interrupted', () => {
+        const html = readFileSync(join(process.cwd(), 'web/client.html'), 'utf8');
+        const interrupted = html.slice(
+            html.indexOf("if (msg.action === 'interrupted')"),
+            html.indexOf("if (msg.action === 'agent')"),
+        );
+
+        expect(interrupted).toContain('interaction = null');
+        expect(interrupted).toContain(".confirm-card button");
+    });
 });

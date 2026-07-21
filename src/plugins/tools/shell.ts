@@ -16,13 +16,15 @@ export class Shell extends FToolAtom<ShellInput, ShellOutput> {
         return true;
     }
 
-    public override async onPipe(input: ShellInput) {
+    public override async onPipe(input: ShellInput, signal?: AbortSignal) {
+        signal?.throwIfAborted();
         const cwd = input.cwd === undefined ? this.config.path.cwd : this.text(input.cwd, 'cwd');
         const command = this.text(input.command, 'command');
         const args = this.args(input.args);
         const timeoutMs = this.timeout(input.timeoutMs);
         const proc = spawn(command, args, {
             cwd,
+            detached: process.platform !== 'win32',
             stdio: ['ignore', 'pipe', 'pipe'],
         });
         let stdout = '';
@@ -32,14 +34,18 @@ export class Shell extends FToolAtom<ShellInput, ShellOutput> {
         proc.stderr.on('data', (chunk) => { stderr += String(chunk); });
         const timer = setTimeout(() => {
             timedOut = true;
-            proc.kill();
+            this.kill(proc);
         }, timeoutMs);
+        const abort = () => { this.kill(proc); };
+        signal?.addEventListener('abort', abort, { once: true });
+        if (signal?.aborted) this.kill(proc);
 
         try {
             const exitCode = await new Promise<number | null>((resolve, reject) => {
                 proc.on('error', reject);
                 proc.on('close', resolve);
             });
+            signal?.throwIfAborted();
             return {
                 ok: true,
                 data: { action: 'shell', cwd, command, args, exitCode, stdout, stderr, timedOut },
@@ -47,6 +53,7 @@ export class Shell extends FToolAtom<ShellInput, ShellOutput> {
             } as const;
         } finally {
             clearTimeout(timer);
+            signal?.removeEventListener('abort', abort);
         }
     }
 
@@ -61,6 +68,18 @@ export class Shell extends FToolAtom<ShellInput, ShellOutput> {
             '</shell_runtime>',
         ];
         return lines.join('\n').trim();
+    }
+
+    private kill(proc: ReturnType<typeof spawn>): void {
+        if (process.platform !== 'win32' && proc.pid !== undefined) {
+            try {
+                process.kill(-proc.pid, 'SIGTERM');
+                return;
+            } catch {
+                // The process may have already exited; fall back to its handle.
+            }
+        }
+        proc.kill();
     }
 
     private text(value: unknown, name: string): string {

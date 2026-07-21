@@ -28,7 +28,7 @@ export class Intelligence extends FService {
 
     public config: FModelConfiguration;
 
-    constructor(private readonly profile?: FAgentProfileConfiguration) {
+    constructor(private readonly profile: FAgentProfileConfiguration | undefined = undefined) {
         super();
         this.config = {} as FModelConfiguration;
     }
@@ -52,23 +52,30 @@ export class Intelligence extends FService {
      * Opens one streaming provider request.
      * Callers receive structured provider events and do not need to know protocol details.
      */
-    public reader(messages: ProviderMessage[], tools?: IntelligenceToolDefinition[]) {
-        const abortController = new AbortController();
-        return createIntelligenceRequestStream(this.config, messages, abortController.signal, tools).getReader();
+    public reader(messages: ProviderMessage[], tools?: IntelligenceToolDefinition[], signal?: AbortSignal) {
+        const requestSignal = signal ?? new AbortController().signal;
+        return createIntelligenceRequestStream(this.config, messages, requestSignal, tools).getReader();
     }
 
     /**
      * Streams one text provider request, forwarding only visible text deltas.
      * 中文：业务对象只关心 chunk；reader 生命周期留在 Intelligence 内部统一处理。
      */
-    public async stream(messages: ProviderMessage[], next: (chunk: string) => void): Promise<void> {
-        const reader = this.reader(messages);
+    public async stream(messages: ProviderMessage[], next: (chunk: string) => void, signal?: AbortSignal): Promise<void> {
+        const reader = this.reader(messages, undefined, signal);
         try {
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
                 if (value?.type === 'text_delta' && value.text.length > 0) next(value.text);
             }
+        } catch (error) {
+            try {
+                await reader.cancel(error);
+            } catch {
+                // Preserve the provider/caller error when a closed reader rejects cancellation.
+            }
+            throw error;
         } finally {
             reader.releaseLock();
         }
@@ -76,10 +83,10 @@ export class Intelligence extends FService {
 
     /**
      * Runs one full text provider request, concatenating visible text deltas.
-     * Used by route classification and soul write planning, which expect a plain string answer.
+     * Used by compact semantic classification and planning calls, which expect a plain string answer.
      */
-    public async completeText(messages: ProviderMessage[]): Promise<string> {
-        const result = await this.runRequest(messages);
+    public async completeText(messages: ProviderMessage[], signal?: AbortSignal): Promise<string> {
+        const result = await this.runRequest(messages, undefined, signal);
         return result.text;
     }
 
@@ -87,16 +94,16 @@ export class Intelligence extends FService {
      * Runs one full provider request, optionally advertising tools, and assembles the structured result.
      * The research loop uses action requests to drive tool execution before continuing.
      */
-    public async runRequest(messages: ProviderMessage[], tools?: IntelligenceToolDefinition[]): Promise<IntelligenceResult> {
-        return this.consume(this.reader(messages, tools));
+    public async runRequest(messages: ProviderMessage[], tools?: IntelligenceToolDefinition[], signal?: AbortSignal): Promise<IntelligenceResult> {
+        return this.consume(this.reader(messages, tools, signal));
     }
 
     /**
      * Streams one research request, forwarding text deltas live while collecting action requests.
      * Lets the loop surface a streamed answer and act on tool requests from the same response cycle.
      */
-    public async streamRequest(messages: ProviderMessage[], tools: IntelligenceToolDefinition[] | undefined, onText: (chunk: string) => void): Promise<IntelligenceResult> {
-        return this.consume(this.reader(messages, tools), onText);
+    public async streamRequest(messages: ProviderMessage[], tools: IntelligenceToolDefinition[] | undefined, onText: (chunk: string) => void, signal?: AbortSignal): Promise<IntelligenceResult> {
+        return this.consume(this.reader(messages, tools, signal), onText);
     }
 
     /**
@@ -112,6 +119,13 @@ export class Intelligence extends FService {
                 this.reduce(value, result, onText);
             }
             return result;
+        } catch (error) {
+            try {
+                await reader.cancel(error);
+            } catch {
+                // Preserve the provider/caller error when a closed reader rejects cancellation.
+            }
+            throw error;
         } finally {
             reader.releaseLock();
         }

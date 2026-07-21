@@ -25,6 +25,7 @@ export enum SocketEvent {
     Agent = 'agent',
     Data = 'data',
     StreamEnd = 'streamEnd',
+    Interrupted = 'interrupted',
     Drain = 'drain',
     Handshake = 'handshake',
     End = 'end',

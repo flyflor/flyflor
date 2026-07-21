@@ -1,30 +1,23 @@
-# Summarize the Latest User Request
+# Understand one incoming stimulus
 
-Read the JSON input, understand the user's active intent from `latest`, and return only compact JSON.
-
-Input shape:
-
-- `latest`: the newest user message and the only source for new requested work.
-- `current`: the previous active understanding, if any.
-- `recent`: compact Context-owned turn records with user text, assistant text, status, summary, and pause.
+Read the JSON input and return only compact JSON. `latest` is the new sensory
+stimulus. `current` and `workspace` are semantic projections used to resolve a
+follow-up; they are not a transcript and must not be copied into the result.
 
 Schema:
 
-{"intent":"reply|research|soul","goal":"short goal","cwd":"optional working directory for latest","constraints":[],"output":"optional output shape","refs":[],"done":[],"open":[],"investigate":false}
+```json
+{"intent":"reply|research|coordinate","goal":"short semantic goal","cwd":"optional","constraints":[],"output":"optional answer shape (max 256 chars)","refs":[],"done":[],"open":[],"investigate":false}
+```
 
 Rules:
 
-- Do not include `userText`; it is added later.
-- Understand only `latest` as the new user request. Do not invent prior history.
-- Use `recent` only to keep continuity, resolve pronouns, and avoid mixing similar projects.
-- If `latest` contradicts `recent`, trust `latest`.
-- Set `cwd` when `latest` explicitly names the directory or project path to work in.
-- Also set `cwd` when `latest` itself refers to one previously named project or directory, such as "this project", "that project", "here", or "continue", and `current` or `recent` can resolve that reference to exactly one working directory.
-- Use `current` and `recent` only as semantic evidence for resolving the latest message. Do not treat them as a default source of `cwd`.
-- If `latest` has no project/directory reference, or more than one working directory could match, leave `cwd` empty.
-- Use `research` when code, files, external evidence, or clarification is needed.
-- Use `soul` only for long-term assistant, user, profile, preference, or ability-note changes.
-- Use `reply` only when a direct answer is enough.
-- `refs` items use `{ "type": "path|error|command|symbol|text", "value": "..." }`.
-- Put explicit project names, roots, paths, commands, symbols, and error text from `latest` into `refs`.
-- Return valid JSON only.
+- Preserve the user's requested scope and explicit paths/commands in `refs`.
+- Use `reply` for a direct answer, `research` when files/tools/evidence are
+  needed, and `coordinate` when the work benefits from the existing temporary
+  multi-agent pass.
+- Do not return user text, assistant text, a transcript, tool messages, or a
+  long-term memory instruction.
+- `done` and `open` are short task-state labels, not an archive.
+- If the latest stimulus corrects the current goal, update the semantic fields
+  to the corrected goal instead of preserving stale wording.

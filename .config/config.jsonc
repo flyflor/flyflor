@@ -252,22 +252,8 @@
     // - `sqlDir`: directory holding `NNN-*.sql` schema-init scripts.
     "promptsDir": "./prompts",
     "sqlDir": "./sql",
-    // 记忆系统配置。
-    // 这些值在 ConfigService 中已有默认值，通常不需要配置；需要覆盖时取消注释。
-    // memoryEnabled: 是否启用长期记忆。
-    // userProfileEnabled: 是否启用用户画像记忆。
-    // memoryCharLimit: 单次记忆内容字符预算。
-    // userCharLimit: 用户画像内容字符预算。
-    // nudgeInterval: 记忆写入/整理提示间隔。
-    // flushMinTurns: 触发记忆 flush 的最少对话轮数。
-    // "memory": {
-    //     "memoryEnabled": true,
-    //     "userProfileEnabled": true,
-    //     "memoryCharLimit": 2200,
-    //     "userCharLimit": 1375,
-    //     "nudgeInterval": 10,
-    //     "flushMinTurns": 6,
-    // },
+    // 长期记忆和用户画像写入在当前研发阶段关闭。
+    // 若迁移配置仍包含 memory block，ConfigService 会忽略它。
     // 当前启用的 agent profile 名称。
     // ConfigService 默认值为 main；需要切换多 agent profile 时取消注释。
     // "agent": "main",

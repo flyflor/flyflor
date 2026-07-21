@@ -75,7 +75,9 @@ describe('Memory', () => {
             persona: 'temporary evidence specialist',
             constraints: [],
             refs: [],
-            recentSummaries: [],
+            done: [],
+            open: [],
+            workspace: [],
         });
 
         const messages = memory.buildMessage();

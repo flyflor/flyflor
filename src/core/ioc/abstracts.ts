@@ -362,7 +362,7 @@ export abstract class FCortex<T extends CortexSignal = CortexSignal> extends FMo
 
 export interface FAgentSynapseBus {
     emit(type: string, data: unknown): unknown;
-    coordinate?(signal: unknown, turnId: string): Promise<void>;
+    coordinate?(signal: unknown, turnId: string, abortSignal?: AbortSignal, streamId?: string): Promise<void>;
     interact?(request: { turnId: string; id: string; kind: 'ask' | 'confirm'; data: unknown }): Promise<unknown>;
     preempted?(turnId: string): boolean;
 }
@@ -405,7 +405,7 @@ export abstract class FTool extends FService {}
 export abstract class FToolAtom<TInput = unknown, TOutput = unknown> extends Observable<TInput, ToolResult<TOutput>> {
     private promptService?: PromptService<ToolPromptSection>;
 
-    public abstract override onPipe(data: TInput): ToolResult<TOutput> | Promise<ToolResult<TOutput>>;
+    public abstract override onPipe(data: TInput, signal?: AbortSignal): ToolResult<TOutput> | Promise<ToolResult<TOutput>>;
 
     public confirm(_input: TInput): boolean {
         return false;
@@ -415,8 +415,11 @@ export abstract class FToolAtom<TInput = unknown, TOutput = unknown> extends Obs
      * EN: Runs the tool once with explicit input.
      * ZH: 用显式输入执行一次工具。
      */
-    public async execute(input: TInput): Promise<ToolResult<TOutput>> {
-        return await this.onPipe(input);
+    public async execute(input: TInput, signal?: AbortSignal): Promise<ToolResult<TOutput>> {
+        signal?.throwIfAborted();
+        const result = await this.onPipe(input, signal);
+        signal?.throwIfAborted();
+        return result;
     }
 
     /**

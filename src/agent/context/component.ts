@@ -2,20 +2,21 @@ import { AgentChatRole } from '@/agent/types';
 import { FComponent, Inject, Prompt, PromptService, Singleton } from '@/core';
 import { Intelligence } from '@/agent/brain/intelligence/service';
 import { parse } from '@/agent/json';
-import type { AgentBrief, Ingest, Pause, Settle, Summary, Turn, TurnDraft } from './types';
+import type { AgentBrief, Ingest, Pause, Settle, Summary, Turn, TurnBrief, TurnDraft } from './types';
 
 @Singleton()
 /**
- * EN: Context owns every turn the life-form has ever heard.
- * ZH: Context 持有这个生命体听到过的每一条 turn。
+ * EN: Context owns the life-form's bounded semantic working set.
+ * ZH: Context 持有生命体有界的语义工作集。
  *
- * EN: `current` is the latest active turn; `turns` is the durable record.
- * Settlement flips `status` and writes `summary` directly on the turn — no
- * parallel completed array, no separate snapshot file.
- * ZH: `current` 是当前活动 turn,`turns` 是持久记录。settle 直接翻 status 并把
- * summary 写在 turn 上 — 不维护平行 completed 数组,也不写 snapshot 文件。
+ * EN: A Turn is understood content, not a transcript or an archive.
+ * ZH: Turn 是理解后的内容，不是 transcript，也不是历史账本。
  */
 export class Context extends FComponent {
+    public static readonly Capacity = 4;
+    /** Bound the emergency compaction path so a cancelled thought cannot hold the gate forever. */
+    public static readonly InterruptTimeoutMs = 3000;
+
     private sequence = 0;
 
     @Inject()
@@ -34,6 +35,10 @@ export class Context extends FComponent {
         return structuredClone(this.turns.slice(-limit));
     }
 
+    public hasCapacity(): boolean {
+        return this.turns.length < Context.Capacity || this.turns.some((turn) => turn.status === 'completed');
+    }
+
     public turn(id: string): Turn {
         const turn = this.turns.find((candidate) => candidate.id === id);
         if (!turn) throw Error(`Turn not found: ${id}`);
@@ -41,14 +46,16 @@ export class Context extends FComponent {
     }
 
     /**
-     * EN: The turn the life-form is actively thinking about right now. A paused
-     * turn (waiting for an ask/confirm answer) is not thinking, so it does not
-     * block new thought; only one active thought may exist at a time.
-     * ZH: 生命体此刻正在主动思考的 turn。暂停的 turn(在等待 ask/confirm 回答)
-     * 不在思考,因此不阻塞新思考;同一时刻只能有一个主动思考。
+     * EN: The one Turn currently occupying the foreground workspace.
+     * ZH: 当前占据前台工作空间的唯一 Turn。
      */
     public working(): Turn | undefined {
         return this.turns.findLast((turn) => turn.status === 'working' && !turn.pause);
+    }
+
+    /** The single foreground slot, including a Turn waiting on an interaction. */
+    public foreground(): Turn | undefined {
+        return this.turns.findLast((turn) => turn.status === 'working' || turn.status === 'waiting');
     }
 
     /**
@@ -60,12 +67,12 @@ export class Context extends FComponent {
     }
 
     /**
-     * EN: Produces a scoped briefing for one agent. It contains only the current
-     * turn understanding and recent completed summaries, not the raw conversation.
-     * ZH: 为一个 agent 生成范围简报。只包含当前 turn 理解和最近完成的摘要，不含原始对话。
+     * EN: Produces a scoped briefing for one agent. It contains semantic Turn
+     * projections from the bounded workspace, never the raw conversation.
+     * ZH: 为一个 agent 生成范围简报。只包含有界工作集的语义 Turn 投影，不含原始对话。
      */
     public brief(turnId?: string): AgentBrief {
-        const current = turnId ? this.turn(turnId) : this.working();
+        const current = turnId === 'none' ? undefined : turnId ? this.turn(turnId) : this.foreground();
         if (!current) {
             return {
                 turnId: 'none',
@@ -73,7 +80,9 @@ export class Context extends FComponent {
                 goal: '',
                 constraints: [],
                 refs: [],
-                recentSummaries: this.doneSummaries(),
+                done: [],
+                open: [],
+                workspace: this.turns.map((turn) => this.briefTurn(turn)),
             };
         }
         return {
@@ -83,96 +92,168 @@ export class Context extends FComponent {
             constraints: [...current.constraints],
             refs: current.refs.map((ref) => ({ ...ref })),
             cwd: current.cwd,
-            recentSummaries: this.doneSummaries(),
+            done: [...current.done],
+            open: [...current.open],
+            workspace: this.turns.map((turn) => this.briefTurn(turn)),
         };
     }
 
-    private doneSummaries(): Summary[] {
-        return structuredClone(this.turns
-            .filter((turn) => (turn.status === 'completed' || turn.status === 'interrupted') && turn.summary !== undefined)
-            .map((turn) => turn.summary as Summary));
+    private briefTurn(turn: Turn): TurnBrief {
+        return {
+            turnId: turn.id,
+            intent: turn.intent,
+            goal: turn.goal,
+            constraints: [...turn.constraints],
+            refs: turn.refs.map((ref) => ({ ...ref })),
+            cwd: turn.cwd,
+            done: [...turn.done],
+            open: [...turn.open],
+            outcome: turn.summary ? structuredClone(turn.summary) : undefined,
+        };
     }
 
-    public async ingest(input: Ingest): Promise<Turn> {
+    public async ingest(input: Ingest, signal?: AbortSignal): Promise<Turn> {
+        const active = this.foreground();
+        if (active) throw Error(`Another turn is already occupying the foreground: ${active.id}`);
         const raw = await this.intelligence.completeText([
             { role: AgentChatRole.System, content: this.prompt.section('INGEST') },
-            { role: AgentChatRole.User, content: JSON.stringify({ latest: input.text, current: this.working(), recent: this.recent() }) },
-        ]);
-        const draft = this.draft(parse<unknown>(raw), input.text);
+            { role: AgentChatRole.User, content: JSON.stringify({ latest: input.text, current: active ? this.briefTurn(active) : null, workspace: this.brief().workspace }) },
+        ], signal);
+        signal?.throwIfAborted();
+        const draft = this.draft(parse<unknown>(raw));
         return this.begin(draft, input);
+    }
+
+    public async revise(turnId: string, input: Ingest, signal?: AbortSignal): Promise<Turn> {
+        const target = this.turn(turnId);
+        if (target.speakerId !== input.speakerId) throw Error(`Turn belongs to another speaker: ${turnId}`);
+        if (target.status === 'waiting') throw Error(`Turn is waiting for an interaction: ${turnId}`);
+        const active = this.foreground();
+        if (active && active.id !== turnId) throw Error(`Another turn is already occupying the foreground: ${active.id}`);
+        const expectedStatus = target.status;
+        const raw = await this.intelligence.completeText([
+            { role: AgentChatRole.System, content: this.prompt.section('INGEST') },
+            { role: AgentChatRole.User, content: JSON.stringify({ latest: input.text, current: this.briefTurn(target), workspace: this.brief().workspace }) },
+        ], signal);
+        signal?.throwIfAborted();
+        const draft = this.draft(parse<unknown>(raw));
+        const current = this.turn(turnId);
+        const foreground = this.foreground();
+        if (current !== target || current.status !== expectedStatus || (foreground && foreground.id !== turnId)) {
+            throw Error(`Turn changed while revising: ${turnId}`);
+        }
+        Object.assign(target, draft, { status: 'working', stimulusId: input.stimulusId, updated: Date.now() });
+        delete target.summary;
+        delete target.pause;
+        this.touch(target);
+        return target;
     }
 
     public pause(turnId: string, input: Pause): void {
         const turn = this.turn(turnId);
         if (turn.status !== 'working') throw Error(`Turn is not working: ${turnId}`);
         turn.pause = input;
+        turn.status = 'waiting';
         turn.updated = Date.now();
     }
 
-    public resume(turnId: string, pauseId: string): void {
+    public resume(turnId: string, pauseId?: string): void {
+        const turn = this.turn(turnId);
+        if (turn.status !== 'waiting' && turn.status !== 'suspended') throw Error(`Turn is not resumable: ${turnId}`);
+        const active = this.foreground();
+        if (active && active.id !== turnId) throw Error(`Another turn is already occupying the foreground: ${active.id}`);
+        if (turn.status === 'waiting' && (pauseId === undefined || turn.pause?.id !== pauseId)) {
+            throw Error(`Pause does not match turn: ${turnId}`);
+        }
+        if (turn.status === 'suspended' && pauseId !== undefined && turn.pause?.id !== pauseId) {
+            throw Error(`Pause does not match turn: ${turnId}`);
+        }
+        delete turn.pause;
+        turn.status = 'working';
+        turn.updated = Date.now();
+    }
+
+    public suspend(turnId: string): void {
         const turn = this.turn(turnId);
         if (turn.status !== 'working') throw Error(`Turn is not working: ${turnId}`);
-        if (turn.pause?.id !== pauseId) throw Error(`Pause does not match turn: ${turnId}`);
-        delete turn.pause;
+        turn.status = 'suspended';
         turn.updated = Date.now();
     }
 
-    public async settle(turnId: string, input: Settle): Promise<Summary> {
+    public async settle(turnId: string, input: Settle, signal?: AbortSignal): Promise<Summary> {
         const turn = this.turn(turnId);
         if (turn.status !== 'working') throw Error(`Turn is not working: ${turnId}`);
         const raw = await this.intelligence.completeText([
             { role: AgentChatRole.System, content: this.prompt.section('SETTLE') },
             {
                 role: AgentChatRole.User,
-                content: JSON.stringify({ ...input, current: turn, recent: this.recent() }),
+                content: JSON.stringify({ ...input, current: this.briefTurn(turn), workspace: this.brief().workspace }),
             },
-        ]);
-        const summary = { ...parse<Omit<Summary, 'createdAt'>>(raw), createdAt: Date.now() };
+        ], signal);
+        signal?.throwIfAborted();
+        const summary = { ...this.compactSummary(parse<unknown>(raw)), createdAt: Date.now() };
         const target = this.turn(turnId);
         if (target !== turn || target.status !== 'working') throw Error(`Turn changed while settling: ${turnId}`);
         target.status = 'completed';
         target.summary = summary;
-        target.assistant = input.assistant;
         delete target.pause;
         target.updated = summary.createdAt;
+        this.touch(target);
         return summary;
     }
 
     /**
-     * EN: Partially settles a preempted turn. The usable part of the thought —
-     * partial answer, evidence, remaining work — is summarized and kept as an
-     * interrupted record, so the next ingest on this thread re-consolidates it
-     * instead of losing it. This is memory reconsolidation, not deletion.
-     * ZH: 部分结算一个被抢占的 turn。思考中可用的部分——半截回答、证据、
-     * 未完成事项——被摘要保留为 interrupted 记录,使该线程的下一次 ingest
-     * 能重新巩固它而不是丢失它。这是记忆再巩固,不是删除。
+     * EN: Keeps a compact outcome when a foreground Turn yields.
+     * ZH: 前台 Turn 让位时保留紧凑 outcome，供后续目标恢复使用。
      */
-    public async interrupt(turnId: string, input: Settle): Promise<Summary> {
+    public async interrupt(turnId: string, input: Settle, signal?: AbortSignal): Promise<Summary> {
         const turn = this.turn(turnId);
         if (turn.status !== 'working') throw Error(`Turn is not working: ${turnId}`);
-        const raw = await this.intelligence.completeText([
+        if (signal?.aborted) return this.suspendWithSummary(turnId, turn, input);
+        const messages = [
             { role: AgentChatRole.System, content: this.prompt.section('SETTLE') },
             {
                 role: AgentChatRole.User,
-                content: JSON.stringify({ ...input, interrupted: true, current: turn, recent: this.recent() }),
+                content: JSON.stringify({ ...input, interrupted: true, current: this.briefTurn(turn), workspace: this.brief().workspace }),
             },
-        ]);
-        const summary = { ...parse<Omit<Summary, 'createdAt'>>(raw), createdAt: Date.now() };
-        const target = this.turn(turnId);
-        if (target !== turn || target.status !== 'working') throw Error(`Turn changed while interrupting: ${turnId}`);
-        target.status = 'interrupted';
-        target.summary = summary;
-        target.assistant = input.assistant;
-        delete target.pause;
-        target.updated = summary.createdAt;
-        return summary;
+        ];
+        const requestController = new AbortController();
+        const abortRequest = () => requestController.abort();
+        signal?.addEventListener('abort', abortRequest, { once: true });
+        const timer = setTimeout(() => requestController.abort(), Context.InterruptTimeoutMs);
+        let raceTimer: ReturnType<typeof setTimeout> | undefined;
+        const request = this.intelligence.completeText(messages, requestController.signal);
+        // A provider may ignore cancellation; observing the rejection prevents a
+        // late promise from becoming an unhandled error after the fallback wins.
+        request.catch(() => undefined);
+        try {
+            const raw = await Promise.race([
+                request,
+                new Promise<never>((_, reject) => {
+                    raceTimer = setTimeout(() => reject(Error('Context interruption timed out')), Context.InterruptTimeoutMs);
+                }),
+            ]);
+            if (signal?.aborted) return this.suspendWithSummary(turnId, turn, input);
+            const summary = { ...this.compactSummary(parse<unknown>(raw)), createdAt: Date.now() };
+            return this.suspendWithSummary(turnId, turn, input, summary);
+        } catch {
+            return this.suspendWithSummary(turnId, turn, input);
+        } finally {
+            clearTimeout(timer);
+            if (raceTimer !== undefined) clearTimeout(raceTimer);
+            signal?.removeEventListener('abort', abortRequest);
+        }
     }
 
-    private draft(value: unknown, user: string): TurnDraft {
+    public forgetSpeaker(speakerId: string): void {
+        this.turns = this.turns.filter((turn) => turn.speakerId !== speakerId);
+    }
+
+    private draft(value: unknown): TurnDraft {
         if (typeof value !== 'object' || value === null || Array.isArray(value)) throw Error('INGEST output must be an object');
         const data = value as Record<string, unknown>;
         const intent = data.intent;
-        if (intent !== 'reply' && intent !== 'research' && intent !== 'soul') throw Error('INGEST intent is invalid');
+        if (intent !== 'reply' && intent !== 'research' && intent !== 'coordinate') throw Error('INGEST intent is invalid');
         if (typeof data.goal !== 'string') throw Error('INGEST goal is invalid');
         if (!Array.isArray(data.constraints) || !data.constraints.every((item) => typeof item === 'string')) throw Error('INGEST constraints are invalid');
         if (!Array.isArray(data.refs) || !data.refs.every((item) => this.reference(item))) throw Error('INGEST refs are invalid');
@@ -180,17 +261,19 @@ export class Context extends FComponent {
         if (!Array.isArray(data.open) || !data.open.every((item) => typeof item === 'string')) throw Error('INGEST open is invalid');
         if (typeof data.investigate !== 'boolean') throw Error('INGEST investigate is invalid');
         if (data.cwd !== undefined && typeof data.cwd !== 'string') throw Error('INGEST cwd is invalid');
-        if (data.output !== undefined && typeof data.output !== 'string') throw Error('INGEST output is invalid');
+        if (data.output !== undefined && (typeof data.output !== 'string' || data.output.length > 256)) throw Error('INGEST output is invalid');
         return {
-            user,
             intent,
-            goal: data.goal,
-            cwd: data.cwd as string | undefined,
-            constraints: [...data.constraints],
-            output: data.output as string | undefined,
-            refs: data.refs.map((item) => ({ ...(item as { type: TurnDraft['refs'][number]['type']; value: string }) })),
-            done: [...data.done],
-            open: [...data.open],
+            goal: this.compactText(data.goal, 512),
+            cwd: typeof data.cwd === 'string' ? this.compactText(data.cwd, 1024) : undefined,
+            constraints: this.compactList(data.constraints),
+            output: typeof data.output === 'string' ? this.compactText(data.output, 256) : undefined,
+            refs: data.refs.slice(0, 32).map((item) => {
+                const ref = item as { type: TurnDraft['refs'][number]['type']; value: string };
+                return { type: ref.type, value: this.compactText(ref.value, 512) };
+            }),
+            done: this.compactList(data.done),
+            open: this.compactList(data.open),
             investigate: data.investigate,
         };
     }
@@ -203,7 +286,8 @@ export class Context extends FComponent {
     }
 
     private begin(current: TurnDraft, meta: Pick<Ingest, 'speakerId' | 'stimulusId'>): Turn {
-        if (this.working()) throw Error('A turn is already being thought about');
+        if (this.foreground()) throw Error('A turn is already occupying the foreground');
+        this.evictForCapacity();
         const now = Date.now();
         this.sequence += 1;
         const turn: Turn = {
@@ -216,6 +300,66 @@ export class Context extends FComponent {
         };
         this.turns.push(turn);
         return turn;
+    }
+
+    private evictForCapacity(): void {
+        while (this.turns.length >= Context.Capacity) {
+            const index = this.turns.findIndex((turn) => turn.status === 'completed');
+            if (index < 0) throw Error('Context working set is full');
+            this.turns.splice(index, 1);
+        }
+    }
+
+    private touch(turn: Turn): void {
+        const index = this.turns.indexOf(turn);
+        if (index >= 0 && index !== this.turns.length - 1) {
+            this.turns.splice(index, 1);
+            this.turns.push(turn);
+        }
+    }
+
+    private suspendWithSummary(turnId: string, expected: Turn, input: Settle, summary?: Summary): Summary {
+        const target = this.turn(turnId);
+        if (target !== expected || target.status !== 'working') throw Error(`Turn changed while interrupting: ${turnId}`);
+        const compact = summary ?? {
+            goal: this.compactText(target.goal, 512),
+            result: input.assistant.length > 0 ? this.compactText(input.assistant, 2000) : 'Turn interrupted before a final answer.',
+            changedFiles: [],
+            decisions: this.compactList(input.decisions),
+            evidence: this.compactList(input.evidence),
+            remaining: this.compactList(input.remaining ?? target.open),
+            createdAt: Date.now(),
+        };
+        target.status = 'suspended';
+        target.summary = compact;
+        delete target.pause;
+        target.updated = compact.createdAt;
+        this.touch(target);
+        return compact;
+    }
+
+    private compactSummary(value: unknown): Omit<Summary, 'createdAt'> {
+        const data = typeof value === 'object' && value !== null && !Array.isArray(value)
+            ? value as Record<string, unknown>
+            : {};
+        return {
+            goal: typeof data.goal === 'string' ? this.compactText(data.goal, 512) : '',
+            result: typeof data.result === 'string' ? this.compactText(data.result, 2000) : '',
+            changedFiles: this.compactList(data.changedFiles, 256, 32),
+            decisions: this.compactList(data.decisions, 256, 32),
+            evidence: this.compactList(data.evidence, 256, 32),
+            remaining: this.compactList(data.remaining, 256, 32),
+        };
+    }
+
+    private compactText(value: string, maxLength: number): string {
+        return value.slice(0, maxLength);
+    }
+
+    private compactList(value: unknown, maxLength = 256, maxItems = 32): string[] {
+        return Array.isArray(value)
+            ? value.filter((entry): entry is string => typeof entry === 'string').slice(0, maxItems).map((entry) => this.compactText(entry, maxLength))
+            : [];
     }
 
 }
