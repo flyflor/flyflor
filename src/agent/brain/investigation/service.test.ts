@@ -4,7 +4,6 @@ import { Context } from '@/agent/context';
 import { SynapseSignalType } from '@/neural/types';
 import type { ActionRequest } from '@/plugins';
 import type { IntelligenceToolDefinition, ProviderMessage } from '../intelligence/types';
-import { CallosumSignalType } from '../callosum';
 import { Investigation } from './service';
 
 /**
@@ -89,7 +88,6 @@ describe('Investigation', () => {
         const { instance, events } = mockInvestigation(context, [{ text: '直接答案', actionRequests: [] }]);
 
         const outcome = await instance.run(
-            { type: CallosumSignalType.Research, chunk: '调查工具层' },
             [{ role: AgentChatRole.User, content: '调查工具层' }],
         );
 
@@ -101,7 +99,6 @@ describe('Investigation', () => {
         const { instance, events } = mockInvestigation(context, [{ text: '静默答案', actionRequests: [] }]);
 
         const outcome = await instance.run(
-            { type: CallosumSignalType.Research, chunk: '调查工具层' },
             [{ role: AgentChatRole.User, content: '调查工具层' }],
             { emitReply: false },
         );
@@ -117,7 +114,6 @@ describe('Investigation', () => {
         ]);
 
         const outcome = await instance.run(
-            { type: CallosumSignalType.Research, chunk: '调查工具层' },
             [{ role: AgentChatRole.User, content: '调查工具层' }],
         );
 
@@ -139,7 +135,6 @@ describe('Investigation', () => {
         ]);
 
         await instance.run(
-            { type: CallosumSignalType.Research, chunk: '调查工具层' },
             [{ role: AgentChatRole.User, content: '调查工具层' }],
         );
 
@@ -161,7 +156,6 @@ describe('Investigation', () => {
         ]);
 
         await instance.run(
-            { type: CallosumSignalType.Research, chunk: '调查工具层' },
             [{ role: AgentChatRole.User, content: '调查工具层' }],
             { cwd: turn.cwd },
         );
@@ -177,7 +171,6 @@ describe('Investigation', () => {
 
         const turn = context.working()!;
         const outcome = await instance.run(
-            { type: CallosumSignalType.Research, chunk: '调查工具层' },
             [{ role: AgentChatRole.User, content: '调查工具层' }],
             { turnId: turn.id, cwd: turn.cwd },
         );

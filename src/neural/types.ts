@@ -24,6 +24,36 @@ export enum SynapseSignalType {
 }
 
 /**
+ * EN: Activity event kinds emitted inside an outbound Event signal while a
+ * turn thinks: provider steps and tool action boundaries.
+ * ZH: turn 思考期间随出站 Event 信号发出的活动事件类别:provider 步进与
+ * 工具 action 边界。
+ */
+export enum AgentEventType {
+    /** EN: One provider request step began. ZH: 一次 provider 请求步进开始。 */
+    LlmRequest = 'llm_request',
+    /** EN: One tool action started executing. ZH: 一个工具 action 开始执行。 */
+    ActionStart = 'action_start',
+    /** EN: One tool action produced its result. ZH: 一个工具 action 产出了结果。 */
+    ActionResult = 'action_result',
+}
+
+/**
+ * EN: One activity event payload carried by an Event signal.
+ * ZH: Event 信号携带的一条活动事件载荷。
+ */
+export interface AgentEvent {
+    /** EN: Turn that produced this event; resolves the speaker via Context. ZH: 产生本事件的 Turn；经 Context 解析说话人。 */
+    turnId?: string;
+    /** EN: Activity kind of this event. ZH: 本事件的活动类别。 */
+    type: AgentEventType;
+    /** EN: Short human-readable label of the event. ZH: 事件的短可读标签。 */
+    chunk: string;
+    /** EN: Optional structured payload attached to the event. ZH: 挂在事件上的可选结构化负载。 */
+    data?: unknown;
+}
+
+/**
  * EN: Signal envelope emitted through the neural bus.
  * ZH: 通过 neural bus 发出的信号包裹。
  */
@@ -98,6 +128,32 @@ export type InteractionResponse =
         /** EN: Whether the speaker approved the pending action. ZH: 说话人是否批准了待批准的操作。 */
         approved: boolean;
     };
+
+/**
+ * EN: Outcome of one coordination slice. Slices run in parallel as
+ * unconscious processors; a failed slice is isolated with `failed` and a
+ * reason instead of dragging the whole turn down.
+ * ZH: 一个协同切片的结果。切片作为无意识处理器并行运行;失败的切片用
+ * `failed` 与原因隔离记录,而不是拖垮整个 turn。
+ */
+export interface CoordinateOutcome {
+    /** EN: Agent profile that worked this slice. ZH: 处理本切片的 agent 配置名。 */
+    profile: string;
+    /** EN: Temporary persona the worker adopted. ZH: worker 采用的临时人设。 */
+    persona: string;
+    /** EN: The user-message slice this worker covered. ZH: 本 worker 负责的用户消息切片。 */
+    slice: string;
+    /** EN: Goal brief handed to the worker. ZH: 交给 worker 的目标简述。 */
+    brief: string;
+    /** EN: Worker result text; empty when the slice failed. ZH: worker 的结果文本;切片失败时为空。 */
+    result: string;
+    /** EN: Evidence lines collected by the worker. ZH: worker 收集的证据行。 */
+    evidence: string[];
+    /** EN: Whether this slice failed and was isolated. ZH: 本切片是否失败并被隔离。 */
+    failed?: boolean;
+    /** EN: Failure reason when the slice was isolated. ZH: 切片被隔离时的失败原因。 */
+    reason?: string;
+}
 
 /**
  * EN: Plan produced by the cortex for multi-agent understanding.

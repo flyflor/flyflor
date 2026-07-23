@@ -10,12 +10,15 @@
 ```
 
 `workspace` 是语义 Turn 投影，不是 transcript；`stimuli` 按到达顺序给出，每项含
-id、说话人和文本。
+id、说话人和文本。`master` 是已离开有界工作空间的旧 turn 固化而来的会话级摘要；
+可以用它识别对更早工作的追问，但绝不能把它当作 transcript。
 
 规则：
 
 - 只有同一说话人、确实是指定 Turn 的追问时才使用 `same`。皮层会原地修订该
   Turn，保留身份并替换当前理解。
+- 来自不同说话人的刺激一律使用 `new`，即使文本与已有 turn 极其相似。
+  对话线程属于说话人，不属于话题。
 - 独立请求使用 `new`。新请求保持 FIFO；不要用数字优先级重新排序。
 - 只有明确纠正、安全问题或要求停止/改变方向时才设 `urgent: true`。紧急只要求
   当前前台让位，不会产生并行思维。
@@ -38,9 +41,10 @@ id、说话人和文本。
     "open":[],
     "outcome":null
   }],
-  "stimuli":[{"id":"stim_2","speakerId":"conn_2","text":"..."}]
+  "stimuli":[{"id":"stim_2","speakerId":"conn_2","text":"..."}],
+  "master":[{"speakerId":"conn_1","intent":"research","goal":"更早的目标","result":"更早的结果","remaining":[]}]
 }
 ```
 
-有歧义时，对最早刺激选择 `new` 且 `urgent: false`。容量和 FIFO 由确定性的注意门
-负责，而不是由本提示词负责。
+有歧义时，对最早刺激选择 `new` 且 `urgent: false`。容量、排序与跨说话人公平由
+确定性的调度器负责，而不是由本提示词负责。

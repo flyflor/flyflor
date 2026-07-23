@@ -1,31 +1,25 @@
 import { AgentChatRole, type AgentInput } from '@/agent/types';
-import { Context } from '@/agent/context';
+import { Context, type Intent } from '@/agent/context';
 import { SynapseSignalType, TurnPreempted } from '@/neural/types';
 import { FAgentAtom, Inject, Provide, Scope, type IObservable } from '@/core';
 import { Memory } from '../memory';
-import { Callosum } from './callosum';
-import { CallosumSignalType, type CallosumSignal } from './callosum';
 import { Intelligence } from './intelligence/service';
 import { Investigation } from './investigation';
 import type { InvestigationOutcome } from './investigation/types';
 import type { AgentBrief } from '@/agent/context/types';
 
 /**
- * EN: Brain receives the semantic intent extracted by Context. Callosum remains
- * a compatibility boundary for callers that still use the legacy route API.
- * ZH: Brain 接收 Context 提取的语义意图。Callosum 仅作为仍使用旧 route API
- * 的调用方兼容边界保留。
- *
- * EN: `reply` and `research` are handled locally; `coordinate` is forwarded
- * to Synapse so the cortex can dispatch the agent pool.
- * ZH: `reply`、`research` 在本地处理；`coordinate` 转发给 Synapse，由皮层派发 agent pool。
+ * EN: Brain receives the semantic intent extracted by Context. Intent
+ * classification lives solely in `Context.ingest` — understanding is one
+ * cortical act, not two competing routers. `reply` and `research` are handled
+ * locally; `coordinate` is forwarded to Synapse so the cortex can dispatch
+ * the agent pool.
+ * ZH: Brain 接收 Context 提取的语义意图。意图分类唯一归属 `Context.ingest`——
+ * 理解是一次皮层行为，不是两个互相竞争的路由器。`reply`、`research` 在本地处理；
+ * `coordinate` 转发给 Synapse，由皮层派发 agent pool。
  */
 @Provide()
-export class Brain extends FAgentAtom<AgentInput, CallosumSignal> implements IObservable<AgentInput, CallosumSignal> {
-    @Scope()
-    /** EN: Retained as a compatibility boundary; the active path uses Context.intent directly. ZH: 作为兼容边界保留；活跃路径直接使用 Context.intent。 */
-    public callosum!: Callosum;
-
+export class Brain extends FAgentAtom<AgentInput, string> implements IObservable<AgentInput, string> {
     @Scope()
     /** EN: Provider-facing intelligence service scoped to this agent. ZH: 该 agent 作用域内面向 provider 的智能服务。 */
     public intelligence!: Intelligence;
@@ -47,9 +41,9 @@ export class Brain extends FAgentAtom<AgentInput, CallosumSignal> implements IOb
      * ZH: 在单一错误边界内运行一整个用户回合。
      *
      * EN: ingest, route, and the chosen handler all throw freely; the single error boundary in
-     * `Synapse.input` (the call site of `agent.next`) receives the rejection and decides what the
+     * `Synapse.runStimulus` (the call site of `agent.next`) receives the rejection and decides what the
      * user sees. `Brain` does not catch.
-     * ZH: ingest、route 和选中的 handler 都可自由抛出;唯一错误边界在 `Synapse.input`
+     * ZH: ingest、route 和选中的 handler 都可自由抛出;唯一错误边界在 `Synapse.runStimulus`
      * (调 `agent.next` 的地方),由它接住拒绝并决定给用户看什么。`Brain` 不做 catch。
      */
     public override async onPipe(data: AgentInput) {
@@ -59,35 +53,26 @@ export class Brain extends FAgentAtom<AgentInput, CallosumSignal> implements IOb
             : await this.context.ingest(input, data.signal);
         data.signal?.throwIfAborted();
         this.memory.ingestBrief?.(this.context.brief(turn.id));
-        await this.handle(this.signalFor(turn.intent, data.text), turn.id, data.signal, data.stimulusId);
+        await this.handle(turn.intent, data.text, turn.id, data.signal, data.stimulusId);
     }
 
-    private handle(signal: CallosumSignal, turnId: string, abortSignal?: AbortSignal, streamId?: string): Promise<void> {
-        if (signal.type === CallosumSignalType.Reply) return this.reply(signal, turnId, abortSignal, streamId);
-        if (signal.type === CallosumSignalType.Coordinate) {
+    private handle(intent: Intent, chunk: string, turnId: string, abortSignal?: AbortSignal, streamId?: string): Promise<void> {
+        if (intent === 'reply') return this.reply(chunk, turnId, abortSignal, streamId);
+        if (intent === 'coordinate') {
             if (!this.synapse.coordinate) throw Error('Coordinate boundary is missing');
-            return this.synapse.coordinate(signal, turnId, abortSignal, streamId);
+            return this.synapse.coordinate(chunk, turnId, abortSignal, streamId);
         }
-        return this.research(signal, turnId, abortSignal, streamId);
+        return this.research(chunk, turnId, abortSignal, streamId);
     }
 
-    private signalFor(intent: 'reply' | 'research' | 'coordinate', chunk: string): CallosumSignal {
-        const type = intent === 'reply'
-            ? CallosumSignalType.Reply
-            : intent === 'coordinate'
-                ? CallosumSignalType.Coordinate
-                : CallosumSignalType.Research;
-        return { type, chunk };
-    }
-
-    private async reply(signal: CallosumSignal, turnId: string, abortSignal?: AbortSignal, streamId?: string): Promise<void> {
+    private async reply(chunk: string, turnId: string, abortSignal?: AbortSignal, streamId?: string): Promise<void> {
         let assistant = '';
-        const messages = [...this.memory.buildMessage(), { role: AgentChatRole.User, content: String(signal.chunk) }];
+        const messages = [...this.memory.buildMessage(), { role: AgentChatRole.User, content: chunk }];
         try {
-            await this.intelligence.stream(messages, (chunk) => {
+            await this.intelligence.stream(messages, (delta) => {
                 if (this.synapse.preempted?.(turnId)) throw new TurnPreempted(turnId);
-                assistant += chunk;
-                this.synapse.emit(SynapseSignalType.Reply, { turnId, ...(streamId ? { streamId } : {}), chunk });
+                assistant += delta;
+                this.synapse.emit(SynapseSignalType.Reply, { turnId, ...(streamId ? { streamId } : {}), chunk: delta });
             }, abortSignal);
         } catch (error) {
             if ((error instanceof TurnPreempted && error.turnId === turnId) || (abortSignal?.aborted && this.synapse.preempted?.(turnId))) {
@@ -109,10 +94,10 @@ export class Brain extends FAgentAtom<AgentInput, CallosumSignal> implements IOb
         this.synapse.emit(SynapseSignalType.Reply, { turnId, ...(streamId ? { streamId } : {}), chunk: null });
     }
 
-    private async research(signal: CallosumSignal, turnId: string, abortSignal?: AbortSignal, streamId?: string): Promise<void> {
-        const messages = [...this.memory.buildMessage(), { role: AgentChatRole.User, content: String(signal.chunk) }];
+    private async research(chunk: string, turnId: string, abortSignal?: AbortSignal, streamId?: string): Promise<void> {
+        const messages = [...this.memory.buildMessage(), { role: AgentChatRole.User, content: chunk }];
         const turn = this.context.turn(turnId);
-        const outcome = await this.investigation.run(signal, messages, {
+        const outcome = await this.investigation.run(messages, {
             turnId,
             ...(streamId ? { streamId } : {}),
             cwd: turn.cwd,
@@ -142,11 +127,7 @@ export class Brain extends FAgentAtom<AgentInput, CallosumSignal> implements IOb
     public async understand(brief: AgentBrief, signal?: AbortSignal): Promise<InvestigationOutcome | undefined> {
         this.memory.ingestBrief(brief);
         const messages = this.memory.buildMessage();
-        const outcome = await this.investigation.run(
-            { type: CallosumSignalType.Research, chunk: brief.goal },
-            messages,
-            { emitReply: false, cwd: brief.cwd, signal },
-        );
+        const outcome = await this.investigation.run(messages, { emitReply: false, cwd: brief.cwd, signal });
         if (outcome.paused) return undefined;
         return outcome;
     }

@@ -2,7 +2,8 @@ import { AgentChatRole } from '@/agent/types';
 import { FComponent, Inject, Prompt, PromptService, Singleton } from '@/core';
 import { Intelligence } from '@/agent/brain/intelligence/service';
 import { parse } from '@/agent/json';
-import type { AgentBrief, Ingest, Pause, Settle, Summary, Turn, TurnBrief, TurnDraft } from './types';
+import { MasterContext } from './master';
+import type { AgentBrief, Ingest, MasterProjection, Pause, Settle, Summary, Turn, TurnBrief, TurnDraft } from './types';
 
 /**
  * EN: Context owns the life-form's bounded semantic working set.
@@ -23,6 +24,10 @@ export class Context extends FComponent {
     @Inject()
     /** EN: Intelligence service used for understanding and settlement calls. ZH: 用于理解与结算调用的智能服务。 */
     public intelligence!: Intelligence;
+
+    @Inject()
+    /** EN: Session-level situation model that settled turns consolidate into. ZH: 已结算 turn 固化升格进入的会话级情境模型。 */
+    public master!: MasterContext;
 
     /** EN: Tracked semantic turns held inside the bounded workspace. ZH: 有界工作空间内被跟踪的语义 turn 列表。 */
     public turns: Turn[];
@@ -93,6 +98,15 @@ export class Context extends FComponent {
     }
 
     /**
+     * EN: Session-level master-context projection; empty when the master is
+     * not wired (direct construction in tests).
+     * ZH: 会话级 master context 投影;master 未接线时(测试中直接构造)返回空。
+     */
+    public masterProjection(): MasterProjection {
+        return this.master?.projection() ?? [];
+    }
+
+    /**
      * EN: Produces a scoped briefing for one agent. It contains semantic Turn
      * projections from the bounded workspace, never the raw conversation.
      * ZH: 为一个 agent 生成范围简报。只包含有界工作集的语义 Turn 投影，不含原始对话。
@@ -109,6 +123,7 @@ export class Context extends FComponent {
                 done: [],
                 open: [],
                 workspace: this.turns.map((turn) => this.briefTurn(turn)),
+                master: this.masterProjection(),
             };
         }
         return {
@@ -121,6 +136,7 @@ export class Context extends FComponent {
             done: [...current.done],
             open: [...current.open],
             workspace: this.turns.map((turn) => this.briefTurn(turn)),
+            master: this.masterProjection(),
         };
     }
 
@@ -147,7 +163,7 @@ export class Context extends FComponent {
         if (active) throw Error(`Another turn is already occupying the foreground: ${active.id}`);
         const raw = await this.intelligence.completeText([
             { role: AgentChatRole.System, content: this.prompt.section('INGEST') },
-            { role: AgentChatRole.User, content: JSON.stringify({ latest: input.text, current: active ? this.briefTurn(active) : null, workspace: this.brief().workspace }) },
+            { role: AgentChatRole.User, content: JSON.stringify({ latest: input.text, current: active ? this.briefTurn(active) : null, workspace: this.brief().workspace, master: this.masterProjection() }) },
         ], signal);
         signal?.throwIfAborted();
         const draft = this.draft(parse<unknown>(raw));
@@ -167,7 +183,7 @@ export class Context extends FComponent {
         const expectedStatus = target.status;
         const raw = await this.intelligence.completeText([
             { role: AgentChatRole.System, content: this.prompt.section('INGEST') },
-            { role: AgentChatRole.User, content: JSON.stringify({ latest: input.text, current: this.briefTurn(target), workspace: this.brief().workspace }) },
+            { role: AgentChatRole.User, content: JSON.stringify({ latest: input.text, current: this.briefTurn(target), workspace: this.brief().workspace, master: this.masterProjection() }) },
         ], signal);
         signal?.throwIfAborted();
         const draft = this.draft(parse<unknown>(raw));
@@ -237,7 +253,7 @@ export class Context extends FComponent {
             { role: AgentChatRole.System, content: this.prompt.section('SETTLE') },
             {
                 role: AgentChatRole.User,
-                content: JSON.stringify({ ...input, current: this.briefTurn(turn), workspace: this.brief().workspace }),
+                content: JSON.stringify({ ...input, current: this.briefTurn(turn), workspace: this.brief().workspace, master: this.masterProjection() }),
             },
         ], signal);
         signal?.throwIfAborted();
@@ -249,6 +265,7 @@ export class Context extends FComponent {
         delete target.pause;
         target.updated = summary.createdAt;
         this.touch(target);
+        this.master?.promote(target, summary);
         return summary;
     }
 
@@ -301,6 +318,7 @@ export class Context extends FComponent {
      */
     public forgetSpeaker(speakerId: string): void {
         this.turns = this.turns.filter((turn) => turn.speakerId !== speakerId);
+        this.master?.dropSpeaker(speakerId);
     }
 
     private draft(value: unknown): TurnDraft {
@@ -360,7 +378,10 @@ export class Context extends FComponent {
         while (this.turns.length >= Context.Capacity) {
             const index = this.turns.findIndex((turn) => turn.status === 'completed');
             if (index < 0) throw Error('Context working set is full');
-            this.turns.splice(index, 1);
+            const [evicted] = this.turns.splice(index, 1);
+            // Consolidation before eviction: a completed turn graduates into
+            // the session-level situation model instead of vanishing silently.
+            if (evicted?.summary) this.master?.promote(evicted, evicted.summary);
         }
     }
 

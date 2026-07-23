@@ -36,14 +36,15 @@ flowchart TB
     PluginModule --> Tools["ToolComponent<br/>ask, confirm, filesystem, shell, execute"]
 
     Synapse --> Socket["FSocket<br/>Bun IPC listener"]
-    Socket --> Awareness["Awareness<br/>共享 FIFO 注意门"]
+    Socket --> Awareness["Awareness<br/>注意门 + 唯一的嘴"]
+    Awareness --> Scheduler["Scheduler<br/>中央执行器:队列、公平、抢占"]
     Socket <--> Packet["IPCPacket<br/>8-byte length + JSON"]
     Socket <--> Client["web/client.ts<br/>browser bridge"]
 
     Synapse --> Agent["Agent<br/>scoped Brain + Memory"]
     Agent --> Brain["Brain<br/>turn orchestration"]
-    Brain --> Callosum["Callosum<br/>兼容 classifier 边界"]
     Brain --> Context["Context<br/>四槽语义工作集"]
+    Context --> MasterContext["MasterContext<br/>会话级情境模型"]
     Brain --> Memory["Memory<br/>private agent notes"]
     Brain --> Investigation["Investigation<br/>local action loop"]
     Brain --> Intelligence["Intelligence<br/>provider stream boundary"]
@@ -75,7 +76,7 @@ flowchart LR
 ```mermaid
 flowchart TD
     User["IPC packet<br/>action=user 或 answer"] --> Decode["FSocket -> IPCPacket.decode"]
-    Decode --> Gate["Awareness.perceive()<br/>共享 FIFO + same/new + urgent"]
+    Decode --> Gate["Awareness.perceive() -> Scheduler<br/>跨说话人轮转公平 + same/new + urgent"]
     Gate --> AgentNext["active Agent.next(input)"]
     AgentNext --> Ingest["Context.ingest() 或 revise()<br/>语义 Turn 理解"]
 
@@ -95,13 +96,13 @@ flowchart TD
     FinalAnswer --> Settle2["Context.settle(evidence)"]
 
     Choice -- coordinate --> Coordinate["Synapse.coordinate()<br/>LLM 规划临时 persona"]
-    Coordinate --> Workers["静默 worker understand() 调用"]
+    Coordinate --> Workers["并行静默 worker understand() 调用<br/>失败切片隔离"]
     Workers --> Review["静默 reviewer understand() 调用"]
     Review --> Synthesis["综合 outcomes + review"]
     Synthesis --> Settle4["Context.settle(evidence)"]
 ```
 
-`Context` 是四槽语义工作集，不是 durable archive。容量不足时只淘汰 completed Turn，不使用墙上时间 TTL。`Memory` 是从 `Context.brief()` 初始化的有界 agent 私有笔记缓存；活跃运行时没有长期记忆写入路径。
+`Context` 是四槽语义工作集，不是 durable archive。容量不足时只淘汰 completed Turn，不使用墙上时间 TTL。已结算的 Turn 会固化(“升格”)进 `MasterContext`——进程内、有界的会话级情境模型——让理解与调度能看到四槽之外的前情,同时不构成长期记忆。`Memory` 是从 `Context.brief()` 初始化的有界 agent 私有笔记缓存；活跃运行时没有长期记忆写入路径。
 
 ## IPC 协议
 
@@ -153,8 +154,8 @@ src/bootstrap.ts                       process entrypoint
 src/app.module.ts                      root @Module
 src/configuration.ts                   ConfigService 和 runtime config types
 src/core/                              decorators、IOC、base classes、prompt、logger、tool contracts
-src/neural/                            Synapse、IPC socket、packet codec、controller
-src/agent/                             Agent、Brain、Callosum、Context、Memory、Investigation、Intelligence
+src/neural/                            Synapse、Awareness、Scheduler、IPC socket、packet codec、controller
+src/agent/                             Agent、Brain、Context、MasterContext、Memory、Investigation、Intelligence
 src/plugins/                           plugin boundary 和 local tools
 src/entities/                          entity/repository classes；MemoryRepo 当前只返回 SQL statements
 web/                                   本地 browser-to-IPC bridge 和测试页
@@ -245,8 +246,10 @@ scripts/check.script.ts                仓库镜像和 prompt-term checks
 | 层 | 职责 |
 | --- | --- |
 | `FSocket` / `Connection` | 解码带长度帧的 IPC、分配 speaker id，并在某个 coalesced packet 格式错误后继续处理下一包。 |
-| `Awareness` | 限制待处理刺激、校验调度输出、执行 FIFO/urgent 与 speaker ownership，并持有单嘴锁。 |
-| `Context` | 持有四槽语义工作集和 Turn 生命周期。 |
+| `Awareness` | 感知刺激、持有说话人墓碑与单嘴锁,并为调度器接线皮层边界。 |
+| `Scheduler` | 持有刺激准入、跨说话人轮转公平(说话人内部 FIFO)、LLM 判决咨询与校验后的紧急抢占。 |
+| `Context` | 持有四槽语义工作集和 Turn 生命周期,并把已结算 Turn 固化升格进 master context。 |
+| `MasterContext` | 持有有界的会话级情境模型(固化 turn outcome);仅限进程内,绝不是长期记忆。 |
 | `Synapse` | 执行一个前台刺激、取消它、把输出寻址给所属说话人，并协调临时 worker。 |
 | `Brain` | 摄取或修订 Turn，执行 reply、research 或 coordinate 意图。 |
 | `Memory` | 保存由 brief 初始化的有界 agent 草稿；它不是持久化层。 |

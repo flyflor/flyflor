@@ -4,7 +4,7 @@
 
 输入格式:
 
-- `outcomes`: worker 结果数组。每项包含 `profile`、`persona`、`slice`、`brief`、`result` 和 `evidence`。
+- `outcomes`: worker 结果数组。每项包含 `profile`、`persona`、`slice`、`brief`、`result` 和 `evidence`。切片是并发执行的;某项可能带有 `failed: true` 与 `reason`——把它视为缺失的证据,必要时指出缺口,绝不要编造其内容。
 - `review`: reviewer 结果，包含 `profile`、`persona`、`result` 和 `evidence`。
 - `hint`: planning 阶段给出的简短说明，用于指导如何融合结果。
 

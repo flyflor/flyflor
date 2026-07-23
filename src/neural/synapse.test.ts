@@ -4,7 +4,6 @@ import type { AgentBrief } from '@/agent/context';
 import { Context } from '@/agent/context';
 import { Synapse } from './synapse';
 import { SynapseSignalType, type CoordinatePlan } from './types';
-import { CallosumSignalType } from '@/agent/brain/callosum';
 import { DispositionRelation } from './awareness/types';
 
 describe('SynapseSignalType', () => {
@@ -38,10 +37,7 @@ describe('Synapse coordinate', () => {
             replies.push(signal.data);
         });
 
-        await (synapse as unknown as { coordinate: (signal: { type: CallosumSignalType; chunk: string }) => Promise<void> }).coordinate({
-            type: CallosumSignalType.Coordinate,
-            chunk: 'latest request',
-        });
+        await (synapse as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1');
 
         expect(synapse.workerBriefs.map((brief) => brief.goal)).toEqual(['study intent', 'study risk']);
         expect(synapse.workerBriefs.map((brief) => brief.persona)).toEqual(['intent analyst', 'risk analyst']);
@@ -50,7 +46,7 @@ describe('Synapse coordinate', () => {
         const synthesis = JSON.parse(synapse.synthesisInput) as { outcomes: Array<{ result: string }>; review: { result: string } };
         expect(synthesis.outcomes.map((outcome) => outcome.result)).toEqual(['worker answer', 'worker answer']);
         expect(synthesis.review.result).toBe('review answer');
-        expect(replies).toEqual([{ turnId: undefined, chunk: 'final answer' }, { turnId: undefined, chunk: null }]);
+        expect(replies).toEqual([{ turnId: 'turn_1', chunk: 'final answer' }, { turnId: 'turn_1', chunk: null }]);
     });
 
     test('uses the active profile when the plan has no slices and still runs review', async () => {
@@ -63,15 +59,137 @@ describe('Synapse coordinate', () => {
         };
         const synapse = coordinateHarness(plan);
 
-        await (synapse as unknown as { coordinate: (signal: { type: CallosumSignalType; chunk: string }) => Promise<void> }).coordinate({
-            type: CallosumSignalType.Coordinate,
-            chunk: 'latest request',
-        });
+        await (synapse as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1');
 
         expect(synapse.activeNextCalls).toBe(0);
         expect(synapse.activeUnderstandCalls).toBe(0);
         expect(synapse.workerBriefs).toHaveLength(1);
         expect(synapse.seenReviewBrief?.persona).toBe('single pass reviewer');
+    });
+
+    test('runs slices in parallel as unconscious processors', async () => {
+        const plan: CoordinatePlan = {
+            intent: 'two independent parts',
+            strategy: 'parallel',
+            slices: [
+                { profile: 'worker', persona: 'one', brief: 'study one', slice: 'one' },
+                { profile: 'worker', persona: 'two', brief: 'study two', slice: 'two' },
+            ],
+            review: { profile: 'reviewer', persona: 'reviewer', brief: 'review', focus: 'coverage' },
+            synthesisHint: 'merge',
+        };
+        const synapse = coordinateHarness(plan);
+        const started: string[] = [];
+        const gates: Array<() => void> = [];
+        let spawns = 0;
+        synapse.spawnWorker = async () => {
+            spawns += 1;
+            const isReviewer = spawns > 2;
+            return {
+                understand: async (brief: AgentBrief) => {
+                    if (isReviewer) return { answer: 'review answer', steps: 1, completed: true, paused: false, evidence: [] };
+                    started.push(brief.goal);
+                    await new Promise<void>((resolve) => gates.push(resolve));
+                    return { answer: `answer ${brief.goal}`, steps: 1, completed: true, paused: false, evidence: [] };
+                },
+            } as never;
+        };
+
+        const run = (synapse as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1');
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        // Both slices started before either finished: true concurrency.
+        expect(started).toEqual(['study one', 'study two']);
+        for (const release of gates) release();
+        await run;
+    });
+
+    test('isolates a failed slice and still synthesizes from the survivors', async () => {
+        const plan: CoordinatePlan = {
+            intent: 'two parts, one doomed',
+            strategy: 'parallel',
+            slices: [
+                { profile: 'worker', persona: 'healthy', brief: 'study ok', slice: 'ok' },
+                { profile: 'worker', persona: 'doomed', brief: 'study fail', slice: 'fail' },
+            ],
+            review: { profile: 'reviewer', persona: 'reviewer', brief: 'review', focus: 'coverage' },
+            synthesisHint: 'merge',
+        };
+        const synapse = coordinateHarness(plan);
+        synapse.spawnWorker = async (profile: string) => {
+            if (profile === 'reviewer') {
+                return { understand: async () => ({ answer: 'review answer', steps: 1, completed: true, paused: false, evidence: [] }) } as never;
+            }
+            return {
+                understand: async (brief: AgentBrief) => {
+                    if (brief.persona === 'doomed') throw Error('worker exploded');
+                    return { answer: 'worker answer', steps: 1, completed: true, paused: false, evidence: ['e'] };
+                },
+            } as never;
+        };
+        const replies: unknown[] = [];
+        synapse.on(SynapseSignalType.Reply, (signal: { data: unknown }) => {
+            replies.push(signal.data);
+        });
+
+        await (synapse as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1');
+
+        const synthesis = JSON.parse(synapse.synthesisInput) as { outcomes: Array<{ result: string; failed?: boolean; reason?: string }> };
+        expect(synthesis.outcomes).toHaveLength(2);
+        expect(synthesis.outcomes.find((outcome) => outcome.failed)?.reason).toBe('worker exploded');
+        expect(replies).toEqual([{ turnId: 'turn_1', chunk: 'final answer' }, { turnId: 'turn_1', chunk: null }]);
+    });
+
+    test('throws into the turn error boundary when every slice fails', async () => {
+        const plan: CoordinatePlan = {
+            intent: 'all doomed',
+            strategy: 'parallel',
+            slices: [
+                { profile: 'worker', persona: 'one', brief: 'study one', slice: 'one' },
+                { profile: 'worker', persona: 'two', brief: 'study two', slice: 'two' },
+            ],
+            review: { profile: 'reviewer', persona: 'reviewer', brief: 'review', focus: 'coverage' },
+            synthesisHint: 'merge',
+        };
+        const synapse = coordinateHarness(plan);
+        synapse.spawnWorker = async () => ({
+            understand: async () => {
+                throw Error('boom');
+            },
+        } as never);
+
+        await expect(
+            (synapse as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1'),
+        ).rejects.toThrow('Every coordinate slice failed');
+    });
+
+    test('propagates the main abort instead of isolating it as a slice failure', async () => {
+        const plan: CoordinatePlan = {
+            intent: 'abort wins',
+            strategy: 'parallel',
+            slices: [
+                { profile: 'worker', persona: 'one', brief: 'study one', slice: 'one' },
+                { profile: 'worker', persona: 'two', brief: 'study two', slice: 'two' },
+            ],
+            review: { profile: 'reviewer', persona: 'reviewer', brief: 'review', focus: 'coverage' },
+            synthesisHint: 'merge',
+        };
+        const synapse = coordinateHarness(plan);
+        const controller = new AbortController();
+        synapse.spawnWorker = async () => ({
+            understand: async (_brief: AgentBrief, signal?: AbortSignal) => {
+                await new Promise<never>((_, reject) => {
+                    signal?.addEventListener('abort', () => reject(Error('aborted')), { once: true });
+                });
+            },
+        } as never);
+
+        const run = (synapse as unknown as { coordinate: (chunk: string, turnId: string, signal?: AbortSignal) => Promise<void> })
+            .coordinate('latest request', 'turn_1', controller.signal);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        controller.abort();
+
+        await expect(run).rejects.toThrow('aborted');
     });
 });
 

@@ -7,6 +7,8 @@ JSON：
 {"goal":"简短目标","result":"发生了什么","changedFiles":[],"decisions":[],"evidence":[],"remaining":[]}
 ```
 
-该摘要是进程内工作集 outcome，不是 transcript 或长期记忆记录。不要包含原始工具
-载荷、provider role、action id、连接/session 信息或逐字对话。若 Turn 被中断，只记
-录可挽救的进展和未完成工作；网络流由 Awareness 单独终止。
+该摘要是进程内工作集 outcome，不是 transcript 或长期记忆记录。它可能固化升格进
+会话级情境模型,供后续 turn 作为背景阅读;因此要写得让未来的 turn 不看对话也能
+重建已完成的事与遗留的事。不要包含原始工具载荷、provider role、action id、连接/
+session 信息或逐字对话。若 Turn 被中断，只记录可挽救的进展和未完成工作;网络流由
+Awareness 单独终止。

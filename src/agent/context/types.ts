@@ -79,6 +79,51 @@ export interface Summary {
 }
 
 /**
+ * EN: One consolidated record in the session-level master context: the
+ * tombstone projection of a settled turn. Session-scoped only — it is not
+ * long-term memory and is never persisted.
+ * ZH: 会话级 master context 里的一条固化记录:已结算 turn 的 tombstone 投影。
+ * 仅限会话级——它不是长期记忆,也从不落盘。
+ */
+export interface MasterRecord {
+    /** EN: Identifier of the turn this record consolidated from. ZH: 本记录固化来源的 turn 标识。 */
+    turnId: string;
+    /** EN: Speaker who owned the turn. ZH: 拥有该 turn 的说话人。 */
+    speakerId: string;
+    /** EN: Classified intent of the turn. ZH: 该 turn 的分类意图。 */
+    intent: Intent;
+    /** EN: Goal the turn pursued. ZH: 该 turn 追求的目标。 */
+    goal: string;
+    /** EN: Compact outcome consolidated from the turn. ZH: 从该 turn 固化下来的紧凑 outcome。 */
+    summary: Summary;
+    /** EN: Consolidation timestamp. ZH: 固化时间戳。 */
+    ts: number;
+}
+
+/**
+ * EN: One compact master-context entry for prompt injection.
+ * ZH: 用于注入 prompt 的一条紧凑 master context 条目。
+ */
+export interface MasterProjectionEntry {
+    /** EN: Speaker who owned the consolidated turn. ZH: 被固化 turn 的说话人。 */
+    speakerId: string;
+    /** EN: Classified intent of the consolidated turn. ZH: 被固化 turn 的分类意图。 */
+    intent: Intent;
+    /** EN: Truncated goal of the consolidated turn. ZH: 被固化 turn 的截断目标。 */
+    goal: string;
+    /** EN: Truncated result of the consolidated turn. ZH: 被固化 turn 的截断结果。 */
+    result: string;
+    /** EN: Open work left by the consolidated turn. ZH: 被固化 turn 遗留的未完成事项。 */
+    remaining: string[];
+}
+
+/**
+ * EN: Prompt-ready projection of the session-level master context.
+ * ZH: 可直接注入 prompt 的会话级 master context 投影。
+ */
+export type MasterProjection = MasterProjectionEntry[];
+
+/**
  * EN: A concise briefing of the current turn understanding handed to one agent.
  * This is not a conversation transcript; it is the organism's current grasp of
  * user intent, scoped for the receiving agent.
@@ -106,6 +151,8 @@ export interface AgentBrief {
     open: string[];
     /** EN: Semantic projections of every turn in the bounded workspace. ZH: 有界工作空间内全部 turn 的语义投影。 */
     workspace: TurnBrief[];
+    /** EN: Session-level master-context projection beyond the bounded workspace. ZH: 超越有界工作空间的会话级 master context 投影。 */
+    master?: MasterProjection;
 }
 
 /**

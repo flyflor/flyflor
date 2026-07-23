@@ -36,14 +36,15 @@ flowchart TB
     PluginModule --> Tools["ToolComponent<br/>ask, confirm, filesystem, shell, execute"]
 
     Synapse --> Socket["FSocket<br/>Bun IPC listener"]
-    Socket --> Awareness["Awareness<br/>shared FIFO attention gate"]
+    Socket --> Awareness["Awareness<br/>attention gate + one mouth"]
+    Awareness --> Scheduler["Scheduler<br/>central executive: queue, fairness, pre-emption"]
     Socket <--> Packet["IPCPacket<br/>8-byte length + JSON"]
     Socket <--> Client["web/client.ts<br/>browser bridge"]
 
     Synapse --> Agent["Agent<br/>scoped Brain + Memory"]
     Agent --> Brain["Brain<br/>turn orchestration"]
-    Brain --> Callosum["Callosum<br/>legacy classifier boundary"]
     Brain --> Context["Context<br/>four-slot semantic workspace"]
+    Context --> MasterContext["MasterContext<br/>session-level situation model"]
     Brain --> Memory["Memory<br/>private agent notes"]
     Brain --> Investigation["Investigation<br/>local action loop"]
     Brain --> Intelligence["Intelligence<br/>provider stream boundary"]
@@ -75,7 +76,7 @@ Only the IOC container should construct application classes. Singleton classes a
 ```mermaid
 flowchart TD
     User["IPC packet<br/>action=user or answer"] --> Decode["FSocket -> IPCPacket.decode"]
-    Decode --> Gate["Awareness.perceive()<br/>shared FIFO + same/new + urgent"]
+    Decode --> Gate["Awareness.perceive() -> Scheduler<br/>round-robin fairness + same/new + urgent"]
     Gate --> AgentNext["active Agent.next(input)"]
     AgentNext --> Ingest["Context.ingest() or revise()<br/>semantic Turn understanding"]
 
@@ -95,13 +96,13 @@ flowchart TD
     FinalAnswer --> Settle2["Context.settle(evidence)"]
 
     Choice -- coordinate --> Coordinate["Synapse.coordinate()<br/>LLM plan with temporary personas"]
-    Coordinate --> Workers["silent worker understand() calls"]
+    Coordinate --> Workers["parallel silent worker understand() calls<br/>failed slices isolated"]
     Workers --> Review["silent reviewer understand() call"]
     Review --> Synthesis["synthesize outcomes + review"]
     Synthesis --> Settle4["Context.settle(evidence)"]
 ```
 
-`Context` is a four-slot semantic working set, not a durable archive. It evicts only completed Turns when capacity is needed and has no wall-clock TTL. `Memory` is a bounded private note cache seeded from a `Context.brief()`; the active runtime has no long-term memory write path.
+`Context` is a four-slot semantic working set, not a durable archive. It evicts only completed Turns when capacity is needed and has no wall-clock TTL. Settled Turns consolidate ("promote") into `MasterContext`, a bounded in-process session-level situation model, so understanding and scheduling can see beyond the four slots without becoming long-term memory. `Memory` is a bounded private note cache seeded from a `Context.brief()`; the active runtime has no long-term memory write path.
 
 ## IPC Contract
 
@@ -153,8 +154,8 @@ src/bootstrap.ts                       process entrypoint
 src/app.module.ts                      root @Module
 src/configuration.ts                   ConfigService and runtime config types
 src/core/                              decorators, IOC, base classes, prompt, logger, tool contracts
-src/neural/                            Synapse, IPC socket, packet codec, controller
-src/agent/                             Agent, Brain, Callosum, Context, Memory, Investigation, Intelligence
+src/neural/                            Synapse, Awareness, Scheduler, IPC socket, packet codec, controller
+src/agent/                             Agent, Brain, Context, MasterContext, Memory, Investigation, Intelligence
 src/plugins/                           plugin boundary and local tools
 src/entities/                          entity/repository classes; MemoryRepo currently returns SQL statements
 web/                                   local browser-to-IPC bridge and test page
@@ -265,8 +266,10 @@ conscious.
 | Layer | Responsibility |
 | --- | --- |
 | `FSocket` / `Connection` | Decode framed IPC, assign speaker ids, and continue after an individually malformed coalesced packet. |
-| `Awareness` | Bound pending stimuli, validate scheduler output, enforce FIFO/urgency and speaker ownership, and own the one-mouth lock. |
-| `Context` | Own the four-slot semantic working set and Turn lifecycle. |
+| `Awareness` | Perceive stimuli, own speaker tombstones and the one-mouth lock, and wire the cortex boundary for the scheduler. |
+| `Scheduler` | Own stimulus admission, cross-speaker round-robin fairness with per-speaker FIFO, LLM verdict consultation, and validated urgent pre-emption. |
+| `Context` | Own the four-slot semantic working set and Turn lifecycle, and consolidate settled Turns into the master context. |
+| `MasterContext` | Hold the bounded session-level situation model of consolidated turn outcomes; in-process only, never long-term memory. |
 | `Synapse` | Run one foreground stimulus, cancel it, address output to its speaker, and coordinate temporary workers. |
 | `Brain` | Ingest or revise a Turn and execute reply, research, or coordinate intent. |
 | `Memory` | Hold bounded per-agent scratch notes seeded from a brief; it is not a persistence layer. |

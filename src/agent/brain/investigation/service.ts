@@ -1,9 +1,8 @@
 import { AgentChatRole, type AgentMemory } from '@/agent/types';
 import { FAgentAtom, Inject, Provide, Scope } from '@/core';
 import { Context } from '@/agent/context';
-import { SynapseSignalType, TurnPreempted } from '@/neural/types';
+import { SynapseSignalType, TurnPreempted, AgentEventType } from '@/neural/types';
 import { type ActionRequest, ToolComponent } from '@/plugins';
-import { CallosumSignalType, type CallosumSignal } from '../callosum';
 import { Intelligence } from '../intelligence/service';
 import type { ProviderActionRequestMessage, ProviderActionResultMessage, ProviderMessage } from '../intelligence/types';
 import type { InvestigationOutcome, InvestigationRunOptions } from './types';
@@ -34,7 +33,7 @@ export class Investigation extends FAgentAtom {
      * the turn is preempted, or the loop pauses on an interaction.
      * ZH: 运行研究循环，直到模型不再发出新的 action request、turn 被抢占，或循环因交互而暂停。
      */
-    public async run(_signal: CallosumSignal, baseMessages: AgentMemory[], options: InvestigationRunOptions = {}): Promise<InvestigationOutcome> {
+    public async run(baseMessages: AgentMemory[], options: InvestigationRunOptions = {}): Promise<InvestigationOutcome> {
         const messages: ProviderMessage[] = [...baseMessages];
         const evidence: string[] = [];
         const emitReply = options.emitReply !== false;
@@ -45,7 +44,7 @@ export class Investigation extends FAgentAtom {
             }
             options.signal?.throwIfAborted();
             step += 1;
-            this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: CallosumSignalType.LlmRequest, chunk: String(step), data: { step } });
+            this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: AgentEventType.LlmRequest, chunk: String(step), data: { step } });
             let result: Awaited<ReturnType<Intelligence['runRequest']>>;
             try {
                 result = await this.intelligence.streamRequest(messages, await this.tools.list(), (chunk) => {
@@ -85,10 +84,10 @@ export class Investigation extends FAgentAtom {
                         continue;
                     }
                 }
-                this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: CallosumSignalType.ActionStart, chunk: request.name, data: request.arguments });
+                this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: AgentEventType.ActionStart, chunk: request.name, data: request.arguments });
                 const actionResult = await this.tools.run(request, options.signal);
                 options.signal?.throwIfAborted();
-                this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: CallosumSignalType.ActionResult, chunk: request.name, data: actionResult });
+                this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: AgentEventType.ActionResult, chunk: request.name, data: actionResult });
                 messages.push(this.actionResultMessage(request, actionResult));
                 evidence.push(this.evidence(request, actionResult));
                 if (actionResult.ok && this.pause(actionResult.data)) {

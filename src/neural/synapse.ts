@@ -5,13 +5,13 @@ import type { ConfigService } from '@/configuration';
 import { Config, FCortex, Init, Inject, Module, Prompt, PromptService, Scope, useContainer } from '@/core';
 import { Intelligence } from '@/agent/brain/intelligence/service';
 import { parse } from '@/agent/json';
-import type { CallosumSignal } from '@/agent/brain/callosum';
 import { Awareness } from '@/neural/awareness';
 import { DispositionRelation, type AttentionInstruction, type Stimulus } from '@/neural/awareness/types';
 import { FSocket } from './ipc';
 import {
     SynapseSignalType,
     TurnPreempted,
+    type CoordinateOutcome,
     type CoordinatePlan,
     type InteractionRequest,
     type InteractionResponse,
@@ -365,28 +365,50 @@ export class Synapse extends FCortex<SynapseSignal> {
 
     /**
      * EN: Cortex dispatch. The Turn intent needs multi-agent joint understanding.
-     * This single path plans, dispatches the agent pool,
-     * and synthesizes the final reply through Synapse signals.
-     * ZH: 皮层派发。Turn intent 判断需要多 agent 协同理解。本条路径一次性
-     * 完成计划、派发 agent pool、合成最终回复，并通过 Synapse 信号输出。
+     * Slices run in parallel as unconscious processors (GWT): each gets its own
+     * abort handle chained to the turn signal, a failed slice is isolated with a
+     * reason instead of dragging the whole turn down, and only a total failure
+     * reaches the turn error boundary. Review and synthesis stay serial — the
+     * conscious stream — and everything settles into the one originating Turn.
+     * ZH: 皮层派发。Turn intent 判断需要多 agent 协同理解。切片作为无意识处理器
+     * 并行运行(GWT):每个切片持有级联到 turn 信号的独立中止句柄;失败的切片
+     * 带原因隔离记录而不是拖垮整轮,只有全部失败才进入 turn 错误边界。审核与
+     * 合成保持串行——即意识流——一切结算回发起它们的同一个 Turn。
      */
-    public async coordinate(signal: CallosumSignal, turnId: string, abortSignal?: AbortSignal, streamId?: string): Promise<void> {
+    public async coordinate(chunk: string, turnId: string, abortSignal?: AbortSignal, streamId?: string): Promise<void> {
         const brief = this.context.brief(turnId);
         const plan = parse<CoordinatePlan>(await this.intelligence.completeText([
             { role: AgentChatRole.System, content: this.planPrompt.section('plan') },
-            { role: AgentChatRole.User, content: `${JSON.stringify(brief)}\n<latest_user_message>${signal.chunk}</latest_user_message>` },
+            { role: AgentChatRole.User, content: `${JSON.stringify(brief)}\n<latest_user_message>${chunk}</latest_user_message>` },
         ], abortSignal));
 
-        const outcomes: Array<{ profile: string; persona: string; slice: string; brief: string; result: string; evidence: string[] }> = [];
+        abortSignal?.throwIfAborted();
         const slices = plan.slices.length === 0
-            ? [{ profile: this.active, persona: '', brief: this.context.brief(turnId).goal, slice: String(signal.chunk) }]
+            ? [{ profile: this.active, persona: '', brief: this.context.brief(turnId).goal, slice: chunk }]
             : plan.slices;
-        for (const slice of slices) {
-            abortSignal?.throwIfAborted();
-            const agent = await this.spawnWorker(slice.profile);
-            const outcome = await agent.understand(this.workerBrief(slice, turnId), abortSignal);
-            if (!outcome) throw Error(`Worker paused without an interaction boundary: ${slice.profile}`);
-            outcomes.push({ profile: slice.profile, persona: slice.persona, slice: slice.slice, brief: slice.brief, result: outcome.answer, evidence: outcome.evidence });
+        const outcomes: CoordinateOutcome[] = await Promise.all(slices.map(async (slice): Promise<CoordinateOutcome> => {
+            const controller = new AbortController();
+            const chainAbort = () => controller.abort();
+            abortSignal?.addEventListener('abort', chainAbort, { once: true });
+            try {
+                const agent = await this.spawnWorker(slice.profile);
+                const outcome = await agent.understand(this.workerBrief(slice, turnId), controller.signal);
+                if (!outcome) throw Error(`Worker paused without an interaction boundary: ${slice.profile}`);
+                return { profile: slice.profile, persona: slice.persona, slice: slice.slice, brief: slice.brief, result: outcome.answer, evidence: outcome.evidence };
+            } catch (error) {
+                // The main abort owns the turn: propagate instead of isolating.
+                if (abortSignal?.aborted) throw error;
+                const reason = error instanceof Error ? error.message : String(error);
+                this.log.warn('synapse.coordinate.slice_failed', { profile: slice.profile, reason });
+                return { profile: slice.profile, persona: slice.persona, slice: slice.slice, brief: slice.brief, result: '', evidence: [], failed: true, reason };
+            } finally {
+                abortSignal?.removeEventListener('abort', chainAbort);
+            }
+        }));
+        if (outcomes.every((outcome) => outcome.failed)) {
+            throw Object.assign(Error('Every coordinate slice failed'), {
+                detail: { reasons: outcomes.map((outcome) => outcome.reason) },
+            });
         }
 
         const reviewer = await this.spawnWorker(plan.review.profile);
@@ -431,7 +453,7 @@ export class Synapse extends FCortex<SynapseSignal> {
 
     private reviewBrief(
         plan: CoordinatePlan,
-        outcomes: Array<{ profile: string; persona: string; slice: string; brief: string; result: string; evidence: string[] }>,
+        outcomes: CoordinateOutcome[],
         turnId: string,
     ): AgentBrief {
         const brief = this.context.brief(turnId);

@@ -4,7 +4,7 @@ Several workers have independently investigated slices of the user request. A re
 
 Input format:
 
-- `outcomes`: an array of worker results. Each item has `profile`, `persona`, `slice`, `brief`, `result`, and `evidence`.
+- `outcomes`: an array of worker results. Each item has `profile`, `persona`, `slice`, `brief`, `result`, and `evidence`. Slices ran concurrently; an item may instead carry `failed: true` with a `reason` — treat it as missing evidence, note the gap if it matters, and never invent its content.
 - `review`: the reviewer result, with `profile`, `persona`, `result`, and `evidence`.
 - `hint`: a short instruction from the planning stage on how to fuse the results.
 

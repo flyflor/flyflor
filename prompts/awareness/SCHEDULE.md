@@ -11,13 +11,18 @@ Return only JSON:
 ```
 
 `workspace` contains semantic Turn projections, not a transcript. `stimuli` is
-in arrival order and each item has an id, speaker id, and text.
+in arrival order and each item has an id, speaker id, and text. `master`
+contains graduated session-level summaries of turns that already left the
+bounded workspace; use it to recognize a follow-up to older work, but never
+treat it as a transcript.
 
 Rules:
 
 - Use `same` only when the stimulus is a follow-up to the named Turn and has
   the same speaker. The cortex will revise that Turn in place, preserving its
   identity and replacing its working understanding.
+- A stimulus from a different speaker is always `new`, even when its text
+  closely resembles an existing turn. Threads belong to speakers, not topics.
 - Use `new` for a distinct request. New requests remain FIFO; never reorder
   them with a numeric priority.
 - Set `urgent: true` only for an explicit correction, safety issue, or request
@@ -43,9 +48,11 @@ Input shape:
     "open":[],
     "outcome":null
   }],
-  "stimuli":[{"id":"stim_2","speakerId":"conn_2","text":"..."}]
+  "stimuli":[{"id":"stim_2","speakerId":"conn_2","text":"..."}],
+  "master":[{"speakerId":"conn_1","intent":"research","goal":"older goal","result":"older result","remaining":[]}]
 }
 ```
 
 If the input is ambiguous, choose `new` with `urgent: false` for the oldest
-stimulus. The deterministic gate, not this prompt, owns capacity and FIFO.
+stimulus. The deterministic scheduler, not this prompt, owns capacity,
+ordering, and cross-speaker fairness.

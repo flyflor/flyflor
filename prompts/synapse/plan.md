@@ -32,7 +32,7 @@ Rules:
 
 - Decide from the request whether shared work is useful. Use multiple slices only when the work has independent parts, viewpoints, or evidence needs.
 - If one worker is enough, return `"slices": []`; the caller will still run review before final synthesis.
-- `strategy` must be `"parallel"` for now.
+- `strategy` must be `"parallel"`; slices run concurrently, so each slice must be fully independent.
 - Use only configured profile names. The default worker profile is `"worker"` and the default review profile is `"reviewer"`.
 - Do not create static expert profile names. Put the needed expertise in `persona`.
 - Each `persona` is temporary for this turn only and must not describe a saved identity.

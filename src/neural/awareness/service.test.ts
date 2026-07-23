@@ -5,6 +5,7 @@ import { Context } from '@/agent/context';
 import type { Intelligence } from '@/agent/brain/intelligence';
 import type { PromptService } from '@/core';
 import { Awareness } from './service';
+import { Scheduler } from './scheduler';
 import { DispositionRelation, type ScheduleVerdict, type Stimulus } from './types';
 import type { Synapse } from '@/neural/synapse';
 import type { SocketPacket } from '@/neural/ipc';
@@ -43,19 +44,24 @@ class MockCortex {
     }
 }
 
-function mockAwareness(verdict: ScheduleVerdict = { dispositions: [] }): { awareness: Awareness; cortex: MockCortex } {
+function mockAwareness(verdict: ScheduleVerdict = { dispositions: [] }): { awareness: Awareness; scheduler: Scheduler; cortex: MockCortex } {
     const awareness = new Awareness();
+    const scheduler = new Scheduler();
+    const context = new Context();
     awareness.config = {
         awareness: { scheduleTimeoutMs: 5000, batchWindowMs: 0 },
     } as ConfigService;
-    awareness.context = new Context();
-    awareness.prompt = { section: () => 'schedule prompt' } as unknown as PromptService;
-    awareness.intelligence = {
+    awareness.context = context;
+    awareness.scheduler = scheduler;
+    scheduler.config = awareness.config;
+    scheduler.context = context;
+    scheduler.prompt = { section: () => 'schedule prompt' } as unknown as PromptService;
+    scheduler.intelligence = {
         completeText: async () => JSON.stringify(verdict),
     } as unknown as Intelligence;
     const cortex = new MockCortex();
     awareness.attend(cortex as unknown as Synapse);
-    return { awareness, cortex };
+    return { awareness, scheduler, cortex };
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
@@ -73,16 +79,16 @@ describe('Awareness', () => {
     });
 
     test('keeps the original batch deadline when more stimuli arrive', () => {
-        const { awareness } = mockAwareness();
-        awareness.config = {
+        const { scheduler } = mockAwareness();
+        scheduler.config = {
             awareness: { scheduleTimeoutMs: 5000, batchWindowMs: 1000 },
         } as ConfigService;
 
-        awareness.perceive({ speakerId: 'conn_1', text: 'a' });
-        const firstTimer = (awareness as unknown as { batchTimer?: ReturnType<typeof setTimeout> }).batchTimer;
-        awareness.perceive({ speakerId: 'conn_2', text: 'b' });
+        scheduler.enqueue({ id: 'stim_1', speakerId: 'conn_1', text: 'a', ts: Date.now() });
+        const firstTimer = (scheduler as unknown as { batchTimer?: ReturnType<typeof setTimeout> }).batchTimer;
+        scheduler.enqueue({ id: 'stim_2', speakerId: 'conn_2', text: 'b', ts: Date.now() });
 
-        expect((awareness as unknown as { batchTimer?: ReturnType<typeof setTimeout> }).batchTimer).toBe(firstTimer);
+        expect((scheduler as unknown as { batchTimer?: ReturnType<typeof setTimeout> }).batchTimer).toBe(firstTimer);
         if (firstTimer !== undefined) clearTimeout(firstTimer);
     });
 
@@ -100,8 +106,8 @@ describe('Awareness', () => {
     });
 
     test('applies explicit backpressure when the transient queue is full', async () => {
-        const { awareness, cortex } = mockAwareness();
-        awareness.config = {
+        const { awareness, scheduler, cortex } = mockAwareness();
+        scheduler.config = {
             awareness: { scheduleTimeoutMs: 5000, batchWindowMs: 0, pendingCapacity: 1 },
         } as ConfigService;
 
@@ -115,12 +121,12 @@ describe('Awareness', () => {
         expect(cortex.attended.map((stimulus) => stimulus.text)).toEqual(['active']);
         expect(cortex.delivered.at(-1)).toEqual({
             speakerId: 'conn_3',
-            packet: { action: 'error', data: Awareness.QueueBackpressureMessage },
+            packet: { action: 'error', data: Scheduler.QueueBackpressureMessage },
         });
     });
 
     test('rejects a new stimulus when all four semantic slots are protected', async () => {
-        const { awareness, cortex } = mockAwareness();
+        const { awareness, scheduler, cortex } = mockAwareness();
         awareness.context.turns = Array.from({ length: 4 }, (_, index) => ({
             id: `turn_${index + 1}`,
             speakerId: `conn_${index + 1}`,
@@ -136,9 +142,9 @@ describe('Awareness', () => {
         expect(cortex.attended).toHaveLength(0);
         expect(cortex.delivered.at(-1)).toEqual({
             speakerId: 'conn_5',
-            packet: { action: 'error', data: Awareness.WorkspaceBackpressureMessage },
+            packet: { action: 'error', data: Scheduler.WorkspaceBackpressureMessage },
         });
-        expect((awareness as unknown as { stimuli: Stimulus[] }).stimuli).toHaveLength(0);
+        expect((scheduler as unknown as { stimuli: Stimulus[] }).stimuli).toHaveLength(0);
     });
 
     test('revises a same-speaker semantic turn in place', async () => {
@@ -208,12 +214,12 @@ describe('Awareness', () => {
     });
 
     test('clears a pre-emption flag when settlement is reported by stimulus id', () => {
-        const { awareness } = mockAwareness();
+        const { awareness, scheduler } = mockAwareness();
         awareness.context.turns = [{
             id: 'turn_1', speakerId: 'conn_1', stimulusId: 'stim_1', status: 'completed', intent: 'reply', goal: 'g',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
-        (awareness as unknown as { preemptFlags: Set<string> }).preemptFlags.add('turn_1');
+        (scheduler as unknown as { preemptFlags: Set<string> }).preemptFlags.add('turn_1');
 
         awareness.turnSettled('stim_1');
 
@@ -343,13 +349,13 @@ describe('Awareness', () => {
     });
 
     test('does not dispatch a stimulus removed while the scheduler is awaiting', async () => {
-        const { awareness, cortex } = mockAwareness();
+        const { awareness, scheduler, cortex } = mockAwareness();
         let resolveSchedule!: (value: string) => void;
         awareness.context.turns = [{
             id: 'turn_done', speakerId: 'old', status: 'completed', intent: 'reply', goal: 'done',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
-        awareness.intelligence = {
+        scheduler.intelligence = {
             completeText: () => new Promise<string>((resolve) => { resolveSchedule = resolve; }),
         } as unknown as Intelligence;
 
