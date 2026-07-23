@@ -3,7 +3,8 @@ import { anthropicMessagesAdapter, awsBedrockConverseAdapter, cohereChatAdapter,
 import type { IntelligenceEvent, IntelligenceToolDefinition, LlmByteStreamReader, ProtocolAdapter, ProtocolBuildContext, ProtocolStreamState, ProviderMessage } from './types';
 
 /**
- * Protocol adapters are plain composition objects. The factory owns transport, adapters own wire shapes.
+ * EN: Protocol adapters are plain composition objects. The factory owns transport, adapters own wire shapes.
+ * ZH: protocol adapter 是纯 composition 对象。factory 负责传输，adapter 负责线协议形态。
  */
 const PROTOCOLS = new Map<FModelProtocolName, ProtocolAdapter>([
     [FModelProtocolName.AnthropicMessages, anthropicMessagesAdapter],
@@ -19,8 +20,9 @@ const PROTOCOLS = new Map<FModelProtocolName, ProtocolAdapter>([
 ]);
 
 /**
- * Creates a fresh per-request streaming-accumulation state.
+ * EN: Creates a fresh per-request streaming-accumulation state.
  * The two maps route interleaved provider wire tool-call deltas to the right internal action request.
+ * ZH: 为单次请求创建新的流式累积状态。两个 map 把交错的 provider 线协议工具调用 delta 路由到正确的内部 action request。
  */
 export const createProtocolStreamState = (): ProtocolStreamState => ({
     buffer: '',
@@ -31,8 +33,9 @@ export const createProtocolStreamState = (): ProtocolStreamState => ({
 });
 
 /**
- * Creates a cancellable structured event stream for one provider-facing LLM request.
+ * EN: Creates a cancellable structured event stream for one provider-facing LLM request.
  * Provider wire tool calls are normalized into action events before callers see the stream.
+ * ZH: 为一次面向 provider 的 LLM 请求创建可取消的结构化事件流。provider 线协议工具调用在调用方看到流之前已被规范化为 action 事件。
  */
 export const createIntelligenceRequestStream = (
     config: FModelConfiguration,
@@ -49,8 +52,8 @@ export const createIntelligenceRequestStream = (
 };
 
 /**
- * EN: start function declaration.
- * ZH: start function 声明。
+ * EN: Stream start callback that funnels provider errors into the stream error channel.
+ * ZH: stream 启动回调，把 provider 错误汇入 stream 的错误通道。
  */
 async function start(controller: ReadableStreamDefaultController<IntelligenceEvent>, config: FModelConfiguration, messages: ProviderMessage[], signal: AbortSignal, tools?: IntelligenceToolDefinition[]): Promise<void> {
     try {
@@ -61,8 +64,8 @@ async function start(controller: ReadableStreamDefaultController<IntelligenceEve
 }
 
 /**
- * EN: requestLlm function declaration.
- * ZH: requestLlm function 声明。
+ * EN: Attempts each configured protocol endpoint in order until one streams a terminal event.
+ * ZH: 按顺序尝试配置的各个 protocol 端点，直到其中一个流出终止事件。
  */
 async function requestLlm(controller: ReadableStreamDefaultController<IntelligenceEvent>, config: FModelConfiguration, messages: ProviderMessage[], signal: AbortSignal, tools?: IntelligenceToolDefinition[]): Promise<void> {
     const errors: Array<Record<string, unknown>> = [];
@@ -120,8 +123,8 @@ async function requestLlm(controller: ReadableStreamDefaultController<Intelligen
 }
 
 /**
- * EN: protocolMatchFailureMessage function declaration.
- * ZH: protocolMatchFailureMessage function 声明。
+ * EN: Builds the failure message listing every attempted protocol endpoint.
+ * ZH: 构造列出所有已尝试 protocol 端点的失败消息。
  */
 function protocolMatchFailureMessage(provider: string, errors: Array<Record<string, unknown>>): string {
     if (errors.length === 0) return 'LLM provider protocol matching failed';
@@ -130,8 +133,8 @@ function protocolMatchFailureMessage(provider: string, errors: Array<Record<stri
 }
 
 /**
- * EN: protocols function declaration.
- * ZH: protocols function 声明。
+ * EN: Returns the configured protocol list, throwing when none is configured.
+ * ZH: 返回已配置的 protocol 列表；未配置任何 protocol 时抛错。
  */
 function protocols(config: FModelConfiguration) {
     if (config.protocols.length === 0) throw Error('LLM provider protocols are missing');
@@ -139,8 +142,8 @@ function protocols(config: FModelConfiguration) {
 }
 
 /**
- * EN: headers function declaration.
- * ZH: headers function 声明。
+ * EN: Builds protocol-local auth headers from environment-held API keys.
+ * ZH: 用环境变量中保存的 API key 构造 protocol 本地的认证头。
  */
 function headers(context: ProtocolBuildContext): Record<string, string> {
     // Auth stays protocol-local because compatible providers differ on header names.
@@ -173,8 +176,8 @@ function headers(context: ProtocolBuildContext): Record<string, string> {
 }
 
 /**
- * EN: urls function declaration.
- * ZH: urls function 声明。
+ * EN: Builds the candidate endpoint URLs, including the optional `/v1` fallback.
+ * ZH: 构造候选端点 URL 列表，包含可选的 `/v1` 回退。
  */
 function urls(context: ProtocolBuildContext): string[] {
     const baseUrl = (context.protocol.baseUrl ?? context.config.baseUrl).replace(/\/+$/, '');
@@ -187,8 +190,8 @@ function urls(context: ProtocolBuildContext): string[] {
 }
 
 /**
- * EN: joinEndpoint function declaration.
- * ZH: joinEndpoint function 声明。
+ * EN: Joins a base URL and a protocol path into one endpoint URL.
+ * ZH: 把 base URL 与 protocol 路径拼接成一个端点 URL。
  */
 function joinEndpoint(baseUrl: string, path: string): string {
     if (/^https?:\/\//.test(path)) return path;
@@ -196,24 +199,24 @@ function joinEndpoint(baseUrl: string, path: string): string {
 }
 
 /**
- * EN: replaceModel function declaration.
- * ZH: replaceModel function 声明。
+ * EN: Substitutes the `{model}` placeholder inside a protocol path.
+ * ZH: 替换 protocol 路径中的 `{model}` 占位符。
  */
 function replaceModel(path: string, model: string): string {
     return path.replaceAll('{model}', encodeURIComponent(model));
 }
 
 /**
- * EN: canTryNextProtocol function declaration.
- * ZH: canTryNextProtocol function 声明。
+ * EN: Whether an HTTP status usually means the endpoint shape is wrong, so the next protocol may be tried.
+ * ZH: 判断 HTTP 状态码是否通常意味着端点形态不匹配，从而可以尝试下一个 protocol。
  */
 function canTryNextProtocol(status: number): boolean {
     return [400, 404, 405, 415, 422, 501].includes(status);
 }
 
 /**
- * EN: isJsonResponse function declaration.
- * ZH: isJsonResponse function 声明。
+ * EN: Whether the response should be treated as a non-streaming JSON payload.
+ * ZH: 判断响应是否应按非流式 JSON 负载处理。
  */
 function isJsonResponse(context: ProtocolBuildContext, contentType: string): boolean {
     if (context.protocol.acceptsJsonStream === true) return false;
@@ -221,8 +224,8 @@ function isJsonResponse(context: ProtocolBuildContext, contentType: string): boo
 }
 
 /**
- * EN: responsesText function declaration.
- * ZH: responsesText function 声明。
+ * EN: Extracts visible text from a non-streaming Responses JSON payload.
+ * ZH: 从非流式 Responses JSON 负载中提取可见文本。
  */
 function responsesText(json: unknown): string {
     // Responses non-streaming JSON is folded back into the same text event contract.
@@ -244,8 +247,8 @@ function responsesText(json: unknown): string {
 }
 
 /**
- * EN: readStreamingContent function declaration.
- * ZH: readStreamingContent function 声明。
+ * EN: Reads the provider byte stream, buffering split UTF-8 bytes and lines until a terminal event.
+ * ZH: 读取 provider 字节流，缓冲被拆分的 UTF-8 字节与行，直到出现终止事件。
  */
 async function readStreamingContent(controller: ReadableStreamDefaultController<IntelligenceEvent>, reader: LlmByteStreamReader, context: ProtocolBuildContext): Promise<void> {
     // Providers may split UTF-8 bytes and SSE/JSON lines across chunks, so decoding is buffered.
@@ -267,8 +270,8 @@ async function readStreamingContent(controller: ReadableStreamDefaultController<
 }
 
 /**
- * EN: drainStreamingLines function declaration.
- * ZH: drainStreamingLines function 声明。
+ * EN: Feeds complete buffered lines to the adapter and closes the stream on a terminal event.
+ * ZH: 把缓冲中完整的行交给 adapter 解析，遇到终止事件时关闭 stream。
  */
 async function drainStreamingLines(controller: ReadableStreamDefaultController<IntelligenceEvent>, reader: LlmByteStreamReader, state: ProtocolStreamState, adapter: ProtocolAdapter, flush = false): Promise<void> {
     const lines = state.buffer.split('\n');

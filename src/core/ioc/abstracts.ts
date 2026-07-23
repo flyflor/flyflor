@@ -27,17 +27,20 @@ export abstract class FlyFlor {
 export abstract class FService extends FlyFlor {}
 
 /**
- * Base class for stateful components that own local state or a lifecycle (e.g. the global config component).
+ * EN: Base class for stateful components that own local state or a lifecycle (e.g. the global config component).
+ * ZH: 持有本地状态或生命周期的有状态组件基类(例如全局配置组件)。
  */
 export abstract class FComponent extends FService {}
 
 /**
- * Base class for module boundaries declared with `@Module()`.
+ * EN: Base class for module boundaries declared with `@Module()`.
+ * ZH: 使用 `@Module()` 声明的 module 边界基类。
  */
 export abstract class FModule extends FComponent {}
 
 /**
- * Base class for data repositories under `src/entities` (classes decorated with `@Repo()`).
+ * EN: Base class for data repositories under `src/entities` (classes decorated with `@Repo()`).
+ * ZH: `src/entities` 下数据 repository(使用 `@Repo()` 装饰的类)的基类。
  */
 export abstract class FRepo extends FService {}
 
@@ -86,6 +89,7 @@ export enum ObservableState {
  * ZH: 运行时通用的最小 observable 契约。
  */
 export interface IObservable<T = unknown, R = T> {
+    /** EN: Optional callback pipe invoked when the observable handles one value. ZH: observable 处理单个值时调用的可选回调管道。 */
     onPipe?(data: T): ObservablePipeResult<R> | Promise<ObservablePipeResult<R>>;
 }
 
@@ -94,14 +98,18 @@ export interface IObservable<T = unknown, R = T> {
  * ZH: 带管道、过滤器和订阅器的轻量 observable 管线。
  */
 export class Observable<T = unknown, R = T> extends FlyFlor implements IObservable<T, R> {
+    /** EN: Optional callback pipe invoked when the observable handles one value. ZH: observable 处理单个值时调用的可选回调管道。 */
     public onPipe?(data: T): ObservablePipeResult<R> | Promise<ObservablePipeResult<R>>;
+    /** EN: Delivery filters that may drop a value before subscribers see it. ZH: 可在订阅者收到值之前丢弃该值的投递过滤器集合。 */
     public readonly filters: Set<ObservableFilter<R>>;
+    /** EN: Registered pipe stages, either callback pipes or child observables. ZH: 已注册的管道阶段集合，可为回调管道或子 observable。 */
     public readonly pipes: Set<any>;
+    /** EN: Terminal subscribers that receive each delivered value. ZH: 接收每个投递值的终端订阅者集合。 */
     public readonly subscribers: Set<ObservableSubscriber<R>>;
     private readonly values: T[];
-    private state = ObservableState.Open;
+    private state: ObservableState;
     private last?: R;
-    private waiters: Array<(value: R | undefined) => void> = [];
+    private waiters: Array<(value: R | undefined) => void>;
 
     /**
      * EN: Seeds the stream with optional initial values.
@@ -113,6 +121,8 @@ export class Observable<T = unknown, R = T> extends FlyFlor implements IObservab
         this.pipes = new Set<any>();
         this.subscribers = new Set<ObservableSubscriber<R>>();
         this.values = values;
+        this.state = ObservableState.Open;
+        this.waiters = [];
         this?.onPipe && this.pipe(this.onPipe.bind(this));
     }
 
@@ -273,7 +283,9 @@ export enum CortexSignalType {
  * ZH: cortex 对象发出的规范化信号包裹。
  */
 export interface CortexSignal<T extends string = string, D = unknown> {
+    /** EN: Signal kind used for listener routing. ZH: 用于监听器路由的信号种类。 */
     type: T;
+    /** EN: Signal payload carried to listeners. ZH: 传递给监听器的信号载荷。 */
     data: D;
 }
 
@@ -282,7 +294,16 @@ export interface CortexSignal<T extends string = string, D = unknown> {
  * ZH: 高层运行时编排使用的信号中枢基类。
  */
 export abstract class FCortex<T extends CortexSignal = CortexSignal> extends FModule {
-    private readonly signals = new Map<T['type'], Set<(signal: T) => void | Promise<void>>>();
+    private readonly signals: Map<T['type'], Set<(signal: T) => void | Promise<void>>>;
+
+    /**
+     * EN: Initializes the empty signal listener registry.
+     * ZH: 初始化空的信号监听器注册表。
+     */
+    constructor() {
+        super();
+        this.signals = new Map<T['type'], Set<(signal: T) => void | Promise<void>>>();
+    }
 
     /**
      * EN: Registers a listener for one signal type.
@@ -360,26 +381,42 @@ export abstract class FCortex<T extends CortexSignal = CortexSignal> extends FMo
     }
 }
 
+/**
+ * EN: Minimal synapse bus surface exposed to agent atoms.
+ * ZH: 暴露给 agent 原子的最小 synapse 总线接口。
+ */
 export interface FAgentSynapseBus {
+    /** EN: Emits one typed signal with its payload. ZH: 发出一个带载荷的具型信号。 */
     emit(type: string, data: unknown): unknown;
+    /** EN: Optionally coordinates one signal for a turn, honoring abort and stream ids. ZH: 可选地为某个 turn 协调一个信号，遵循 abort 和 stream id。 */
     coordinate?(signal: unknown, turnId: string, abortSignal?: AbortSignal, streamId?: string): Promise<void>;
+    /** EN: Optionally runs one ask/confirm interaction and resolves with the answer. ZH: 可选地执行一次 ask/confirm 交互并返回答复。 */
     interact?(request: { turnId: string; id: string; kind: 'ask' | 'confirm'; data: unknown }): Promise<unknown>;
+    /** EN: Optionally reports whether a turn has been preempted. ZH: 可选地报告某个 turn 是否已被抢占。 */
     preempted?(turnId: string): boolean;
 }
 
 /**
- * Base class for autonomous agents.
+ * EN: Base class for autonomous agents.
+ * ZH: 自治 agent 的基类。
  *
- * Parallel to `FService`: an agent is not a stateless service. It owns its own memory, scoped
+ * EN: Parallel to `FService`: an agent is not a stateless service. It owns its own memory, scoped
  * cognition objects, and runtime subscriptions. The observable input surface is the canonical
  * interaction boundary for the active profile.
+ * ZH: 与 `FService` 平行:agent 不是无状态服务。它拥有自己的记忆、作用域认知对象和运行时订阅。
+ * observable 输入面是活动 profile 的标准交互边界。
  */
 export abstract class FAgentAtom<T = object | number | string | boolean | undefined, R = T> extends Observable<T, R> {
     /**
      * EN: Binds the atom to one active agent profile and synapse bus.
      * ZH: 把当前原子对象绑定到一个活动 agent 配置和 synapse 总线。
      */
-    constructor(public agentConfig: FAgentProfileConfiguration, public synapse: FAgentSynapseBus) {
+    constructor(
+        /** EN: Active agent profile this atom is bound to. ZH: 当前原子绑定的活动 agent 配置。 */
+        public agentConfig: FAgentProfileConfiguration,
+        /** EN: Synapse bus used for signal emission and coordination. ZH: 用于信号发射和协调的 synapse 总线。 */
+        public synapse: FAgentSynapseBus,
+    ) {
         super();
     }
 }
@@ -390,6 +427,10 @@ export abstract class FAgentAtom<T = object | number | string | boolean | undefi
  */
 export abstract class FAgent<T, R = T> extends FAgentAtom<T, R> {}
 
+/**
+ * EN: Section key type of the shared tool prompt package.
+ * ZH: 共享工具提示词包的 section 键类型。
+ */
 export type ToolPromptSection = string;
 
 /**
@@ -405,8 +446,16 @@ export abstract class FTool extends FService {}
 export abstract class FToolAtom<TInput = unknown, TOutput = unknown> extends Observable<TInput, ToolResult<TOutput>> {
     private promptService?: PromptService<ToolPromptSection>;
 
+    /**
+     * EN: Executes the tool behavior for one input, honoring cancellation.
+     * ZH: 对单个输入执行工具行为，遵循取消信号。
+     */
     public abstract override onPipe(data: TInput, signal?: AbortSignal): ToolResult<TOutput> | Promise<ToolResult<TOutput>>;
 
+    /**
+     * EN: Reports whether this tool run requires user confirmation; defaults to false.
+     * ZH: 报告本次工具执行是否需要用户确认；默认返回 false。
+     */
     public confirm(_input: TInput): boolean {
         return false;
     }

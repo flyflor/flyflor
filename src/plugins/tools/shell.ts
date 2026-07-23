@@ -3,19 +3,28 @@ import { Config, FToolAtom, Tool } from '@/core';
 import { spawn } from 'node:child_process';
 import type { ShellInput, ShellOutput } from './types';
 
-@Tool()
 /**
- * EN: Shell class declaration.
- * ZH: Shell class 声明。
+ * EN: Tool atom that executes one shell command directly with timeout and abort support.
+ * ZH: 直接执行单条 shell 命令（带超时与中止支持）的工具原子。
  */
+@Tool()
 export class Shell extends FToolAtom<ShellInput, ShellOutput> {
+    /** EN: Runtime configuration providing the default working directory. ZH: 提供默认工作目录的运行时配置。 */
     @Config()
     public config!: ConfigService;
 
+    /**
+     * EN: Always requires user confirmation because it runs arbitrary commands.
+     * ZH: 因会执行任意命令，始终要求用户确认。
+     */
     public override confirm(): boolean {
         return true;
     }
 
+    /**
+     * EN: Spawns the command, captures stdout/stderr, and kills the process group on timeout or abort.
+     * ZH: 启动命令并捕获 stdout/stderr；超时或中止时终止整个进程组。
+     */
     public override async onPipe(input: ShellInput, signal?: AbortSignal) {
         signal?.throwIfAborted();
         const cwd = input.cwd === undefined ? this.config.path.cwd : this.text(input.cwd, 'cwd');
@@ -57,6 +66,10 @@ export class Shell extends FToolAtom<ShellInput, ShellOutput> {
         }
     }
 
+    /**
+     * EN: Appends runtime platform metadata and usage boundaries to the base prompt description.
+     * ZH: 在基础提示词描述后追加运行时平台信息与使用边界说明。
+     */
     public description(base: string): string {
         const lines = [
             base.trim(),

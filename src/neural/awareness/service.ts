@@ -28,17 +28,26 @@ interface Mouthful {
 }
 
 /**
- * The small protocol Awareness needs from the cortex.  `revise` and `cancel`
+ * EN: The small protocol Awareness needs from the cortex.  `revise` and `cancel`
  * are optional while Synapse is being migrated; the attention instruction is
  * also attached to the routed stimulus so an older cortex can safely ignore
  * the extra argument and a newer one can route it to Context.revise().
+ * ZH: Awareness 需要皮层提供的最小协议。在 Synapse 迁移期间 `revise` 与 `cancel`
+ * 为可选；注意指令也会附加在路由出去的刺激上，旧皮层可以安全忽略这个额外参数，
+ * 新皮层则可以将其路由到 Context.revise()。
  */
 interface AwarenessCortex {
+    /** EN: Routes one attended stimulus into the cortex's foreground stream. ZH: 把一条已注意的刺激路由进皮层的前台流。 */
     attend(stimulus: Stimulus, instruction?: AttentionInstruction): Promise<void> | void;
+    /** EN: Routes a same-thread revision to an existing Turn. ZH: 把同线程修订路由到已有 Turn。 */
     revise?(stimulus: Stimulus, targetTurnId: string): Promise<void> | void;
+    /** EN: Cancels provider work for a Turn marked urgent. ZH: 取消被标记紧急的 Turn 的提供方工作。 */
     cancel?(turnId: string): Promise<void> | void;
+    /** EN: Releases cortex-side state of a disconnected speaker. ZH: 释放已断开说话人在皮层侧的状态。 */
     forgetSpeaker?(speakerId: string): Promise<void> | void;
+    /** EN: Forwards a speaker's answer to a pending interaction. ZH: 把说话人的答复转发给待处理的交互。 */
     answer(turnId: string, id: string, response: InteractionResponse, speakerId?: string): void;
+    /** EN: Motor output: writes one packet back to a speaker. ZH: 运动输出：向说话人写回一个包。 */
     deliver(speakerId: string, packet: SocketPacket): void;
 }
 
@@ -53,44 +62,80 @@ interface AwarenessCortex {
  */
 @Singleton()
 export class Awareness extends FService {
-    /** Default transient sensory capacity used when older config files omit it. */
+    /** EN: Fallback pending-stimulus capacity when config omits it. ZH: 配置缺省时的待处理刺激容量兜底值。 */
     public static readonly DefaultPendingCapacity = 32;
+    /** EN: Backpressure notice sent when the attention queue is full. ZH: 注意队列满时发送的背压提示。 */
     public static readonly QueueBackpressureMessage = 'Attention queue is full; retry after the current work settles.';
+    /** EN: Backpressure notice sent when the semantic workspace is full. ZH: 语义工作区满时发送的背压提示。 */
     public static readonly WorkspaceBackpressureMessage = 'Semantic workspace is full; revise existing work or retry later.';
 
+    /** EN: Runtime configuration injected from the IOC container. ZH: 由 IOC 容器注入的运行时配置。 */
     @Config()
     public config!: ConfigService;
 
+    /** EN: Semantic workspace consulted for Turn state and capacity. ZH: 用于查询 Turn 状态与容量的语义工作区。 */
     @Inject()
     public context!: Context;
 
+    /** EN: Intelligence provider used for scheduling verdicts. ZH: 用于生成调度判决的智能提供方。 */
     @Inject()
     public intelligence!: Intelligence;
 
+    /** EN: Prompt template for the scheduler LLM. ZH: 调度 LLM 的提示词模板。 */
     @Prompt('prompts/awareness')
     public prompt!: PromptService;
 
     private cortex?: AwarenessCortex;
-    private sequence = 0;
-    private stimuli: Stimulus[] = [];
+    private sequence: number;
+    private stimuli: Stimulus[];
     private pendingMain?: Stimulus;
     private mouthOwner?: string;
-    private mouthQueue: Mouthful[] = [];
-    private bufferedChunks = new Map<string, BufferedChunk>();
-    private streamState = new Map<string, { speakerId: string; streamId?: string; ended: boolean }>();
-    private preemptFlags = new Set<string>();
-    private forgottenSpeakers = new Set<string>();
+    private mouthQueue: Mouthful[];
+    private bufferedChunks: Map<string, BufferedChunk>;
+    private streamState: Map<string, { speakerId: string; streamId?: string; ended: boolean }>;
+    private preemptFlags: Set<string>;
+    private forgottenSpeakers: Set<string>;
     private batchTimer?: ReturnType<typeof setTimeout>;
-    private scheduling = false;
-    private scheduleAgain = false;
+    private scheduling: boolean;
+    private scheduleAgain: boolean;
 
+    constructor() {
+        super();
+        // EN: Monotonic id source for perceived stimuli. ZH: 感知刺激的单调 id 来源。
+        this.sequence = 0;
+        // EN: FIFO queue of stimuli awaiting a scheduling verdict. ZH: 等待调度判决的刺激 FIFO 队列。
+        this.stimuli = [];
+        // EN: Full texts waiting for the single mouth to free up. ZH: 等待单口空闲的完整文本队列。
+        this.mouthQueue = [];
+        // EN: Chunks held while another Turn owns the mouth. ZH: 其他 Turn 占用单口时暂存的分片。
+        this.bufferedChunks = new Map();
+        // EN: Per-Turn stream generation and ended state. ZH: 每个 Turn 的流代次与结束状态。
+        this.streamState = new Map();
+        // EN: Turn ids marked urgent and awaiting cancellation. ZH: 被标记紧急、等待取消的 Turn id。
+        this.preemptFlags = new Set();
+        // EN: Tombstoned speakers whose work is still settling. ZH: 已离开但工作仍在收尾的说话人墓碑。
+        this.forgottenSpeakers = new Set();
+        // EN: Reentrancy guard for the async scheduler. ZH: 异步调度器的重入守卫。
+        this.scheduling = false;
+        // EN: Requests one more scheduling pass after the current run. ZH: 请求本轮调度结束后再跑一轮。
+        this.scheduleAgain = false;
+    }
+
+    /**
+     * EN: Attaches the cortex so Awareness can route attended stimuli, cancels,
+     * answers, and motor output through it.
+     * ZH: 挂载皮层，使 Awareness 经它路由已注意的刺激、取消、答复和运动输出。
+     */
     public attend(cortex: Synapse): void {
         this.cortex = cortex as unknown as AwarenessCortex;
     }
 
     /**
-     * Record one external stimulus.  Arrival order is the default ordering;
-     * the scheduler can only promote an entry when it marks it urgent.
+     * EN: Records one external stimulus. Arrival order is the default ordering;
+     * the scheduler can only promote an entry when it marks it urgent. Returns
+     * undefined when the pending queue is at capacity (backpressure).
+     * ZH: 记录一条外部刺激。到达顺序即默认排序；调度器只能在标记紧急时提升某条。
+     * 待处理队列满（背压）时返回 undefined。
      */
     public perceive(input: { speakerId: string; text: string }): Stimulus | undefined {
         const capacity = this.pendingCapacity();
@@ -115,10 +160,12 @@ export class Awareness extends FService {
     }
 
     /**
-     * Drop all pending/output state belonging to a disconnected speaker. An
+     * EN: Drops all pending/output state belonging to a disconnected speaker. An
      * active working turn is retained until its cancellation callback settles,
      * so Context does not race the cortex's interrupt/settle path; inactive
      * turns are removed immediately.
+     * ZH: 丢弃某个已断开说话人的全部待处理/输出状态。活跃的进行中 Turn 会保留到
+     * 其取消回调收尾，避免 Context 与皮层的打断/收尾路径竞争；非活跃 Turn 立即移除。
      */
     public forget(speakerId: string): void {
         this.forgottenSpeakers.add(speakerId);
@@ -163,9 +210,11 @@ export class Awareness extends FService {
     }
 
     /**
-     * An answer to a pending ask/confirm bypasses stimulus scheduling.  New
-     * socket adapters may pass the connection speakerId; when present we
-     * enforce ownership before forwarding it to the cortex.
+     * EN: Forwards an answer to a pending ask/confirm, bypassing stimulus
+     * scheduling. New socket adapters may pass the connection speakerId; when
+     * present ownership is enforced before forwarding to the cortex.
+     * ZH: 转发待处理 ask/confirm 的答复，绕过刺激调度。新的 socket 适配器可传入连接
+     * 的 speakerId；传入时会先校验归属再转发给皮层。
      */
     public answer(turnId: string, id: string, response: unknown, speakerId?: string): void {
         if (speakerId !== undefined) {
@@ -175,14 +224,17 @@ export class Awareness extends FService {
         this.cortex?.answer(turnId, id, response as InteractionResponse, speakerId);
     }
 
+    /** EN: Whether the Turn has been marked urgent and is awaiting cancellation. ZH: 该 Turn 是否已被标记紧急、正等待取消。 */
     public preempted(turnId: string): boolean {
         return this.preemptFlags.has(turnId);
     }
 
     /**
-     * Called by the cortex after it has compacted an interrupted Turn.  A
+     * EN: Called by the cortex after it has compacted an interrupted Turn. A
      * stream cannot be retracted, so an interruption is explicitly terminated
      * on the wire before the next foreground stream is released.
+     * ZH: 皮层压缩完被打断的 Turn 后调用。流无法撤回，因此在释放下一条前台流之前，
+     * 必须先在线上显式终止被打断的流。
      */
     public turnInterrupted(turnId: string): void {
         this.preemptFlags.delete(turnId);
@@ -203,6 +255,12 @@ export class Awareness extends FService {
         this.scheduleSoon();
     }
 
+    /**
+     * EN: Notifies the gate that a Turn settled; clears stale urgent flags,
+     * releases forgotten-speaker tombstones, and schedules the next pass.
+     * ZH: 通知注意门某个 Turn 已收尾；清除过期的紧急标记、释放已离开说话人的墓碑，
+     * 并调度下一轮。
+     */
     public turnSettled(turnId: string): void {
         const turn = this.context?.turns.find((candidate) => candidate.id === turnId || candidate.stimulusId === turnId);
         // If normal completion won a race with an urgent request, discard the
@@ -214,6 +272,13 @@ export class Awareness extends FService {
         this.scheduleSoon();
     }
 
+    /**
+     * EN: Notifies the gate that a Turn paused at an interaction boundary; the
+     * attend promise remains the foreground lock, so this only lets a pending
+     * urgent verdict be considered after the interaction resumes.
+     * ZH: 通知注意门某个 Turn 在交互边界暂停；attend promise 仍是前台锁，因此这里只是
+     * 让待处理的紧急判决在交互恢复后可被考虑。
+     */
     public turnPaused(_turnId: string): void {
         // The attend promise remains the foreground lock while an interaction
         // is waiting.  Scheduling here only lets a pending urgent verdict be
@@ -222,8 +287,11 @@ export class Awareness extends FService {
     }
 
     /**
-     * One turn may stream at a time.  Chunks from another turn are retained in
-     * arrival order until the current stream ends.
+     * EN: One turn may stream at a time. Chunks from another turn are retained
+     * in arrival order until the current stream ends. `chunk === null` ends the
+     * owning stream and releases the mouth to buffered chunks and the queue.
+     * ZH: 同一时刻只允许一个 Turn 推流。其他 Turn 的分片按到达顺序保留，直到当前流
+     * 结束。`chunk === null` 结束持有者的流，并把单口让给缓冲分片和队列。
      */
     public speak(turnId: string, speakerId: string, chunk: string | null, streamId?: string): void {
         // A disconnected speaker is tombstoned until its active Turn has
@@ -314,9 +382,11 @@ export class Awareness extends FService {
     }
 
     /**
-     * Compatibility boundary for an already-computed full answer.  External
+     * EN: Compatibility boundary for an already-computed full answer. External
      * stimuli never use this path for parallel thinking; it simply obeys the
      * same one-mouth queue.
+     * ZH: 已算好完整答复的兼容边界。外部刺激不会用这条路径做并行思考；它只是遵守
+     * 同一个单口队列。
      */
     public say(speakerId: string, text: string): void {
         if (this.forgottenSpeakers.has(speakerId)) return;

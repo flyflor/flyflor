@@ -8,7 +8,8 @@ const CONSTRUCTOR_PARAM_METADATA_KEY = 'design:paramtypes';
  */
 export class Container {
     /**
-     * 依赖注入容器单例实例
+     * EN: Process-wide container singleton instance.
+     * ZH: 进程级 container 单例实例。
      */
     protected static instance: Container;
     /** EN: Singleton instance cache keyed by class or symbol. ZH: 按 class 或 symbol 索引的 singleton 实例缓存。 */
@@ -50,7 +51,8 @@ export class Container {
         if (isSingleton) this.singletons.set(Module, clz);
         try {
             /**
-             * 提前注入 register 实例
+             * EN: Runs early instance injections registered by `@Config()`/`@Prompt()`.
+             * ZH: 提前执行 `@Config()`/`@Prompt()` 注册的实例注入。
              */
             const injectInstances: InjectInstanceMetadata[] = getMetadata(INJECT_METADATA_INSTANCE_KEY, Module) || [];
             for (const inject of injectInstances) {
@@ -58,8 +60,9 @@ export class Container {
                 clz[inject.propertyKey] = instance;
             }
             /**
-             * 通过 INJECT_METADATA_KEY 注入依赖
-             * 为实例化 new Module
+             * EN: Resolves dependencies registered under INJECT_METADATA_KEY
+             * and assigns them onto the freshly constructed instance.
+             * ZH: 解析 INJECT_METADATA_KEY 下注册的依赖，并赋值到刚构造的实例上。
              */
             const injects: InjectMetadata[] = getMetadata(INJECT_METADATA_KEY, Module) || [];
             for (const inject of injects) {
@@ -75,8 +78,8 @@ export class Container {
                 clz[inject.propertyKey] = instance;
             }
             /**
-             * 判断是否有 @Init
-             * 如果有 执行 @Init 方法
+             * EN: Runs the `@Init()` lifecycle method when one is registered.
+             * ZH: 存在已注册的 `@Init()` 生命周期方法时执行它。
              */
             const actionPropertyKey = getMetadata(INIT_METADATA_KEY, Module.prototype);
             if (actionPropertyKey) await clz[actionPropertyKey]?.apply(clz, props);

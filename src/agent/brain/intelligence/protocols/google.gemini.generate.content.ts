@@ -2,6 +2,10 @@ import { FModelProtocolName } from '@/configuration';
 import type { ProtocolAdapter, ProtocolBuildContext, ProviderMessage } from '../types';
 import { AgentChatRole } from '@/agent/types';
 
+/**
+ * EN: Protocol adapter for the Google Gemini generateContent SSE wire format.
+ * ZH: Google Gemini generateContent SSE 线协议适配器。
+ */
 export const googleGeminiGenerateContentAdapter: ProtocolAdapter = {
     name: FModelProtocolName.GoogleGeminiGenerateContent,
     body: (context: ProtocolBuildContext) => {
@@ -30,8 +34,8 @@ export const googleGeminiGenerateContentAdapter: ProtocolAdapter = {
 };
 
 /**
- * EN: geminiRequest function declaration.
- * ZH: geminiRequest function 声明。
+ * EN: Projects provider-local messages into Gemini contents plus an optional system instruction.
+ * ZH: 把 provider-local 消息投影为 Gemini contents，并附带可选的 system instruction。
  */
 function geminiRequest(messages: ProviderMessage[]): {
     contents: Array<{ role: string; parts: Array<{ text: string }> }>;
@@ -57,8 +61,8 @@ function geminiRequest(messages: ProviderMessage[]): {
 }
 
 /**
- * EN: sseData function declaration.
- * ZH: sseData function 声明。
+ * EN: Extracts the JSON payload from one SSE `data:` line.
+ * ZH: 从一行 SSE `data:` 中提取 JSON 负载。
  */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();

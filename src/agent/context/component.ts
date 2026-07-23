@@ -4,7 +4,6 @@ import { Intelligence } from '@/agent/brain/intelligence/service';
 import { parse } from '@/agent/json';
 import type { AgentBrief, Ingest, Pause, Settle, Summary, Turn, TurnBrief, TurnDraft } from './types';
 
-@Singleton()
 /**
  * EN: Context owns the life-form's bounded semantic working set.
  * ZH: Context 持有生命体有界的语义工作集。
@@ -12,33 +11,60 @@ import type { AgentBrief, Ingest, Pause, Settle, Summary, Turn, TurnBrief, TurnD
  * EN: A Turn is understood content, not a transcript or an archive.
  * ZH: Turn 是理解后的内容，不是 transcript，也不是历史账本。
  */
+@Singleton()
 export class Context extends FComponent {
+    /** EN: Upper bound of the bounded working set. ZH: 有界工作集的容量上限。 */
     public static readonly Capacity = 4;
-    /** Bound the emergency compaction path so a cancelled thought cannot hold the gate forever. */
+    /** EN: Bound the emergency compaction path so a cancelled thought cannot hold the gate forever. ZH: 限制紧急压缩路径的时长，避免被取消的思考永远占住闸门。 */
     public static readonly InterruptTimeoutMs = 3000;
 
-    private sequence = 0;
+    private sequence: number;
 
     @Inject()
+    /** EN: Intelligence service used for understanding and settlement calls. ZH: 用于理解与结算调用的智能服务。 */
     public intelligence!: Intelligence;
 
-    public turns: Turn[] = [];
+    /** EN: Tracked semantic turns held inside the bounded workspace. ZH: 有界工作空间内被跟踪的语义 turn 列表。 */
+    public turns: Turn[];
 
     @Prompt('prompts/context')
+    /** EN: Prompt package backing the INGEST and SETTLE sections. ZH: 提供 INGEST 与 SETTLE section 的提示词包。 */
     public prompt!: PromptService;
 
+    constructor() {
+        super();
+        this.sequence = 0;
+        this.turns = [];
+    }
+
+    /**
+     * EN: Loads a prepared turn draft into the workspace as the new foreground turn.
+     * ZH: 把准备好的 turn 草稿载入工作空间，成为新的前台 turn。
+     */
     public load(current: TurnDraft, meta: Pick<Ingest, 'speakerId' | 'stimulusId'> = { speakerId: 'unknown' }): Turn {
         return this.begin(current, meta);
     }
 
+    /**
+     * EN: Returns a deep copy of the most recent turns, newest last.
+     * ZH: 返回最近若干条 turn 的深拷贝，最新者排在最后。
+     */
     public recent(limit = 4): Turn[] {
         return structuredClone(this.turns.slice(-limit));
     }
 
+    /**
+     * EN: Whether the bounded workspace can still accept another turn.
+     * ZH: 有界工作空间是否还能容纳新的 turn。
+     */
     public hasCapacity(): boolean {
         return this.turns.length < Context.Capacity || this.turns.some((turn) => turn.status === 'completed');
     }
 
+    /**
+     * EN: Returns the tracked turn by id; throws when the id is unknown.
+     * ZH: 按 id 返回被跟踪的 turn；id 未知时直接抛错。
+     */
     public turn(id: string): Turn {
         const turn = this.turns.find((candidate) => candidate.id === id);
         if (!turn) throw Error(`Turn not found: ${id}`);
@@ -53,7 +79,7 @@ export class Context extends FComponent {
         return this.turns.findLast((turn) => turn.status === 'working' && !turn.pause);
     }
 
-    /** The single foreground slot, including a Turn waiting on an interaction. */
+    /** EN: The single foreground slot, including a Turn waiting on an interaction. ZH: 唯一的前台槽位，包括正在等待交互的 Turn。 */
     public foreground(): Turn | undefined {
         return this.turns.findLast((turn) => turn.status === 'working' || turn.status === 'waiting');
     }
@@ -112,6 +138,10 @@ export class Context extends FComponent {
         };
     }
 
+    /**
+     * EN: Understands one stimulus through the provider and begins a new foreground turn.
+     * ZH: 通过 provider 理解一条刺激，并开启一个新的前台 turn。
+     */
     public async ingest(input: Ingest, signal?: AbortSignal): Promise<Turn> {
         const active = this.foreground();
         if (active) throw Error(`Another turn is already occupying the foreground: ${active.id}`);
@@ -124,6 +154,10 @@ export class Context extends FComponent {
         return this.begin(draft, input);
     }
 
+    /**
+     * EN: Re-understands an existing turn with fresh input from the same speaker.
+     * ZH: 用同一说话者的新输入重新理解一条已存在的 turn。
+     */
     public async revise(turnId: string, input: Ingest, signal?: AbortSignal): Promise<Turn> {
         const target = this.turn(turnId);
         if (target.speakerId !== input.speakerId) throw Error(`Turn belongs to another speaker: ${turnId}`);
@@ -149,6 +183,10 @@ export class Context extends FComponent {
         return target;
     }
 
+    /**
+     * EN: Parks a working turn on an interaction request until the user answers.
+     * ZH: 把进行中的 turn 挂到一次交互请求上，等待用户答复。
+     */
     public pause(turnId: string, input: Pause): void {
         const turn = this.turn(turnId);
         if (turn.status !== 'working') throw Error(`Turn is not working: ${turnId}`);
@@ -157,6 +195,10 @@ export class Context extends FComponent {
         turn.updated = Date.now();
     }
 
+    /**
+     * EN: Resumes a waiting or suspended turn once its interaction is answered.
+     * ZH: 交互得到答复后，恢复等待中或已挂起的 turn。
+     */
     public resume(turnId: string, pauseId?: string): void {
         const turn = this.turn(turnId);
         if (turn.status !== 'waiting' && turn.status !== 'suspended') throw Error(`Turn is not resumable: ${turnId}`);
@@ -173,6 +215,10 @@ export class Context extends FComponent {
         turn.updated = Date.now();
     }
 
+    /**
+     * EN: Suspends a working turn without discarding its workspace slot.
+     * ZH: 挂起进行中的 turn，但保留其工作空间槽位。
+     */
     public suspend(turnId: string): void {
         const turn = this.turn(turnId);
         if (turn.status !== 'working') throw Error(`Turn is not working: ${turnId}`);
@@ -180,6 +226,10 @@ export class Context extends FComponent {
         turn.updated = Date.now();
     }
 
+    /**
+     * EN: Settles a working turn into a completed turn with a compact summary.
+     * ZH: 把进行中的 turn 结算为完成态，并保留一份紧凑摘要。
+     */
     public async settle(turnId: string, input: Settle, signal?: AbortSignal): Promise<Summary> {
         const turn = this.turn(turnId);
         if (turn.status !== 'working') throw Error(`Turn is not working: ${turnId}`);
@@ -245,6 +295,10 @@ export class Context extends FComponent {
         }
     }
 
+    /**
+     * EN: Drops every tracked turn owned by one speaker.
+     * ZH: 丢弃某个说话者拥有的全部被跟踪 turn。
+     */
     public forgetSpeaker(speakerId: string): void {
         this.turns = this.turns.filter((turn) => turn.speakerId !== speakerId);
     }

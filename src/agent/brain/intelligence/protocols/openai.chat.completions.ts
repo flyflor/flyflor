@@ -4,21 +4,26 @@ import type { IntelligenceEvent, ProtocolAdapter, ProtocolBuildContext, Protocol
 import { FModelProtocolName } from '@/configuration';
 
 /**
- * EN: WireActionDelta interface declaration.
- * ZH: WireActionDelta interface 声明。
+ * EN: One streamed OpenAI `tool_calls[]` delta fragment.
+ * ZH: 一个 OpenAI `tool_calls[]` 流式 delta 片段。
  */
 interface WireActionDelta {
+    /** EN: Provider-side tool call index. ZH: provider 侧的工具调用序号。 */
     index?: number;
+    /** EN: Provider-side tool call identifier. ZH: provider 侧的工具调用标识。 */
     id?: string;
+    /** EN: Function name and argument fragment. ZH: 函数名与参数片段。 */
     function?: { name?: string; arguments?: string };
 }
 
 /**
- * EN: ChatCompletionChunk interface declaration.
- * ZH: ChatCompletionChunk interface 声明。
+ * EN: Minimal shape of one OpenAI chat-completion stream chunk.
+ * ZH: 单个 OpenAI chat-completion 流式 chunk 的最小形态。
  */
 interface ChatCompletionChunk {
+    /** EN: Error payload carried by the chunk. ZH: chunk 携带的错误负载。 */
     error?: ProviderErrorShape;
+    /** EN: Streamed choices with deltas and finish reasons. ZH: 携带增量与结束原因的流式 choice 列表。 */
     choices?: Array<{
         delta?: {
             content?: string;
@@ -29,6 +34,12 @@ interface ChatCompletionChunk {
     }>;
 }
 
+/**
+ * EN: Protocol adapter for the OpenAI chat-completions SSE wire format,
+ * including streamed `tool_calls` normalization into action events.
+ * ZH: OpenAI chat-completions SSE 线协议适配器，包括把流式 `tool_calls`
+ * 规范化为 action 事件。
+ */
 export const openAIChatCompletionsAdapter: ProtocolAdapter = {
     name: FModelProtocolName.OpenAIChatCompletions,
     body: (context: ProtocolBuildContext) => {
@@ -104,8 +115,8 @@ function accumulateActionRequest(controller: ReadableStreamDefaultController<Int
 }
 
 /**
- * EN: resolveActionRequest function declaration.
- * ZH: resolveActionRequest function 声明。
+ * EN: Resolves the internal action request for one wire delta, creating it on first sight.
+ * ZH: 为一个线协议 delta 解析出对应的内部 action request，首次出现时创建。
  */
 function resolveActionRequest(state: ProtocolStreamState, delta: WireActionDelta): StreamingActionRequest {
     const providerIndex = typeof delta.index === 'number' ? delta.index : undefined;
@@ -183,16 +194,16 @@ function chatMessages(messages: ProviderMessage[]): Array<Record<string, unknown
 }
 
 /**
- * EN: hasActionHistory function declaration.
- * ZH: hasActionHistory function 声明。
+ * EN: Whether the message list already carries action request/result replay.
+ * ZH: 消息列表是否已携带 action request/result 回放。
  */
 function hasActionHistory(messages: ProviderMessage[]): boolean {
     return messages.some((message) => message.role === 'action' || (message.role === AgentChatRole.Assistant && 'actionRequests' in message));
 }
 
 /**
- * EN: sseData function declaration.
- * ZH: sseData function 声明。
+ * EN: Extracts the JSON payload from one SSE `data:` line.
+ * ZH: 从一行 SSE `data:` 中提取 JSON 负载。
  */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();
@@ -201,8 +212,8 @@ function sseData(line: string): string | undefined {
 }
 
 /**
- * EN: providerErrorMessage function declaration.
- * ZH: providerErrorMessage function 声明。
+ * EN: Formats a provider error payload into one readable message.
+ * ZH: 把 provider 错误负载格式化为一条可读消息。
  */
 function providerErrorMessage(error: ProviderErrorShape | undefined, fallback: string): string {
     return error?.code ? `${error.code}: ${error.message ?? error.type ?? fallback}` : error?.message ?? error?.type ?? fallback;

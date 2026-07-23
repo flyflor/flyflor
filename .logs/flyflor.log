@@ -346,3 +346,97 @@
 [DEBUG]  2026-07-06T09:41:57.763Z  Controller
   | cwd
   | /tmp/absolute-root
+[INFO ]  2026-07-23T14:32:56.330Z  Synapse
+  | input
+  | {
+  |   relation: 'new',
+  |   speakerId: 'conn_1',
+  |   stimulusId: 'stim_1',
+  |   textLength: 5
+  | }
+[WARN ]  2026-07-23T14:32:56.410Z  Awareness
+  | awareness.backpressure
+  | {
+  |   capacity: 1,
+  |   pending: 1,
+  |   speakerId: 'conn_3'
+  | }
+[WARN ]  2026-07-23T14:32:56.413Z  Awareness
+  | awareness.workspace_backpressure
+  | {
+  |   speakerId: 'conn_5',
+  |   stimulusId: 'stim_1'
+  | }
+[DEBUG]  2026-07-23T14:32:56.534Z  Controller
+  | cwd
+  | workspace
+[DEBUG]  2026-07-23T14:32:56.534Z  Controller
+  | cwd
+  | /tmp/absolute-root
+[WARN ]  2026-07-23T14:32:56.551Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'user',
+  |   name: 'Error',
+  |   speakerId: 'conn_5'
+  | }
+[WARN ]  2026-07-23T14:32:56.553Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'cwd',
+  |   name: 'Error',
+  |   speakerId: 'conn_6'
+  | }
+[INFO ]  2026-07-23T14:32:56.557Z  FSocket
+  | close
+  | {
+  |   error: undefined,
+  |   speakerId: 'conn_10'
+  | }
+[INFO ]  2026-07-23T14:56:03.410Z  Synapse
+  | input
+  | {
+  |   relation: 'new',
+  |   speakerId: 'conn_1',
+  |   stimulusId: 'stim_1',
+  |   textLength: 5
+  | }
+[WARN ]  2026-07-23T14:56:04.745Z  Awareness
+  | awareness.backpressure
+  | {
+  |   capacity: 1,
+  |   pending: 1,
+  |   speakerId: 'conn_3'
+  | }
+[WARN ]  2026-07-23T14:56:04.748Z  Awareness
+  | awareness.workspace_backpressure
+  | {
+  |   speakerId: 'conn_5',
+  |   stimulusId: 'stim_1'
+  | }
+[DEBUG]  2026-07-23T14:56:04.862Z  Controller
+  | cwd
+  | workspace
+[DEBUG]  2026-07-23T14:56:04.862Z  Controller
+  | cwd
+  | /tmp/absolute-root
+[WARN ]  2026-07-23T14:56:04.870Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'user',
+  |   name: 'Error',
+  |   speakerId: 'conn_5'
+  | }
+[WARN ]  2026-07-23T14:56:04.870Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'cwd',
+  |   name: 'Error',
+  |   speakerId: 'conn_6'
+  | }
+[INFO ]  2026-07-23T14:56:04.873Z  FSocket
+  | close
+  | {
+  |   error: undefined,
+  |   speakerId: 'conn_10'
+  | }

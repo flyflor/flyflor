@@ -14,6 +14,8 @@ This file contains only Flyflor-specific additions. If the project-local skill a
 6. `index.ts` is a barrel only. It re-exports local module surfaces and must not own behavior.
 7. Do not introduce generic `utils`, `manager`, `parser`, `compiler`, or `diagnostic` files unless a real object boundary and sustained size justify that object.
 8. Use `@/*` imports for cross-domain source imports. Relative imports are preferred inside the same directory boundary.
+9. Instance fields are declared without an initializer and assigned in the constructor. Exemptions: `static` fields, decorator-injected fields (`@Inject()`/`@Config()`/`@Prompt()` style `!: Type` declarations), and function-valued properties.
+10. Every public class property/method and every exported interface/type-literal member must carry an EN/ZH bilingual JSDoc (`EN: ... / ZH: ...`). The class-level doc comment sits above the decorators, never between a decorator and the class declaration. `bun run check` enforces rules 9-10.
 
 ## Runtime Boundaries
 

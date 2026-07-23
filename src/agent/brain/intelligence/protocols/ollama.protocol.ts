@@ -1,6 +1,10 @@
 import { FModelProtocolName } from '@/configuration';
 import type { ProtocolAdapter, ProtocolBuildContext } from '../types';
 
+/**
+ * EN: Protocol adapter for the Ollama chat/generate JSON-lines wire format.
+ * ZH: Ollama chat/generate JSON 行线协议适配器。
+ */
 export const ollamaAdapter: ProtocolAdapter = {
     name: FModelProtocolName.Ollama,
     body: (context: ProtocolBuildContext) => ({
@@ -24,8 +28,8 @@ export const ollamaAdapter: ProtocolAdapter = {
 };
 
 /**
- * EN: sseData function declaration.
- * ZH: sseData function 声明。
+ * EN: Extracts the JSON payload from one SSE `data:` line.
+ * ZH: 从一行 SSE `data:` 中提取 JSON 负载。
  */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();

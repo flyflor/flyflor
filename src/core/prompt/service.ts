@@ -9,6 +9,7 @@ import { basename, extname, join } from 'path';
  * ZH: prompt 包 section 清单。
  */
 export interface IPrompt<TSection extends string> {
+    /** EN: Ordered section names declared by the package. ZH: 包声明的有序 section 名列表。 */
     sections: TSection[];
 }
 
@@ -17,10 +18,15 @@ export interface IPrompt<TSection extends string> {
  * ZH: 协议包 XML 快照中的单个上下文区块。
  */
 export interface IPromptProtocolPackageContextBlock<TSection extends string = string, TFile extends string = string> {
+    /** EN: Section key this block renders from, or `config` for the package config. ZH: 该 block 渲染来源的 section 键，或表示包配置的 `config`。 */
     key: TSection | 'config';
+    /** EN: XML tag name used when rendering this block. ZH: 渲染该 block 时使用的 XML 标签名。 */
     tag: string;
+    /** EN: Backing file name inside the package directory. ZH: 包目录内的支撑文件名。 */
     file: TFile;
+    /** EN: Optional semantic role stamped onto the rendered tag. ZH: 可选的语义角色，会写入渲染后的标签。 */
     role?: 'policy' | 'rules' | 'assistant_notes' | 'user_notes' | 'capabilities';
+    /** EN: Optional note stamped onto the rendered tag. ZH: 可选备注，会写入渲染后的标签。 */
     note?: string;
 }
 
@@ -29,7 +35,9 @@ export interface IPromptProtocolPackageContextBlock<TSection extends string = st
  * ZH: 长期 prompt 协议包上下文的 XML 渲染计划。
  */
 export interface IPromptProtocolPackageContext<TSection extends string = string, TFile extends string = string> {
+    /** EN: XML root tag name of the rendered document. ZH: 渲染文档的 XML 根标签名。 */
     root: string;
+    /** EN: Ordered context blocks rendered inside the root. ZH: 在根标签内按序渲染的上下文 block 列表。 */
     blocks: IPromptProtocolPackageContextBlock<TSection, TFile>[];
 }
 
@@ -38,9 +46,13 @@ export interface IPromptProtocolPackageContext<TSection extends string = string,
  * ZH: 单个 prompt 包的可编辑/锁定/运行时忽略策略。
  */
 export interface IPromptProtocolPackage<TSection extends string = string, TFile extends string = string> {
+    /** EN: Files the runtime/model is allowed to rewrite. ZH: 运行时/模型允许重写的文件列表。 */
     editable: TFile[];
+    /** EN: Files that are readable but never writable. ZH: 可读但永远不可写的文件列表。 */
     locked: TFile[];
+    /** EN: Files skipped when rendering sections for the model. ZH: 面向模型渲染 sections 时被跳过的文件列表。 */
     runtimeIgnored: TFile[];
+    /** EN: XML rendering plan for the durable protocol-package context. ZH: 长期协议包上下文的 XML 渲染计划。 */
     context: IPromptProtocolPackageContext<TSection, TFile>;
 }
 
@@ -49,9 +61,13 @@ export interface IPromptProtocolPackage<TSection extends string = string, TFile 
  * ZH: 顶层 prompt 包配置文件结构。
  */
 export interface IPromptConfig<TSection extends string, TFile extends string = string> {
+    /** EN: Package config schema version. ZH: 包配置的 schema 版本。 */
     version: number;
+    /** EN: Human-readable package description. ZH: 面向人的包描述。 */
     description: string;
+    /** EN: Section manifest of the package. ZH: 包的 section 清单。 */
     prompt: IPrompt<TSection>;
+    /** EN: Edit/lock/render policy of the protocol package. ZH: 协议包的编辑/锁定/渲染策略。 */
     protocolPackage: IPromptProtocolPackage<TSection, TFile>;
 }
 
@@ -64,8 +80,22 @@ export interface IPromptConfig<TSection extends string, TFile extends string = s
  * ZH: `sections` 拼接有序 prompt 文件;`document` 输出带属性的 XML 快照(唯一 XML 输出)。两者输入均缺省取包配置。
  */
 export type PromptRender<TSection extends string = string> =
-    | { kind: 'sections'; sections?: TSection[]; separator?: string }
-    | { kind: 'document'; context?: IPromptProtocolPackageContext<TSection>; attributes?: Record<string, string> };
+    | {
+        /** EN: Selects the plain concatenated-sections rendering. ZH: 选择纯拼接 sections 的渲染方式。 */
+        kind: 'sections';
+        /** EN: Sections to render; defaults to the package section order. ZH: 待渲染的 sections；缺省取包的 section 顺序。 */
+        sections?: TSection[];
+        /** EN: Separator joined between sections. ZH: sections 之间的拼接分隔符。 */
+        separator?: string;
+    }
+    | {
+        /** EN: Selects the attributed XML document rendering. ZH: 选择带属性的 XML 文档渲染方式。 */
+        kind: 'document';
+        /** EN: Context plan; defaults to the package protocol context. ZH: 上下文计划；缺省取包协议上下文。 */
+        context?: IPromptProtocolPackageContext<TSection>;
+        /** EN: Extra attributes stamped onto the XML root tag. ZH: 写入 XML 根标签的额外属性。 */
+        attributes?: Record<string, string>;
+    };
 
 /**
  * EN: In-memory mapping from section name to loaded prompt file service.
@@ -73,11 +103,11 @@ export type PromptRender<TSection extends string = string> =
  */
 export type PromptPackageData<TSection extends string> = Partial<Record<TSection, PromptService<string, string>>>;
 
-@Service()
 /**
- * EN: PromptService class declaration.
- * ZH: PromptService class 声明。
+ * EN: Service that loads one prompt file or a whole prompt package, then renders and updates it.
+ * ZH: 加载单个 prompt 文件或整个 prompt 包，并提供渲染与更新能力的服务。
  */
+@Service()
 export class PromptService<TSection extends string = string, TData = PromptPackageData<TSection>> extends FService {
     /**
      * EN: Parsed `config.jsonc` when this service points at a package directory.
@@ -95,14 +125,18 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
      * EN: Whether runtime updates may rewrite this prompt file.
      * ZH: 运行时更新是否允许重写当前 prompt 文件。
      */
-    public writable = true;
+    public writable: boolean;
 
     /**
      * EN: Loads either one prompt file or an entire prompt package directory.
      * ZH: 加载单个 prompt 文件或整个 prompt 包目录。
      */
-    constructor(public readonly path: string) {
+    constructor(
+        /** EN: Absolute path of the prompt file or package directory. ZH: prompt 文件或包目录的绝对路径。 */
+        public readonly path: string,
+    ) {
         super();
+        this.writable = true;
         if (statSync(path).isDirectory()) {
             this.data = {} as TData;
             const entries = readdirSync(path);
@@ -135,7 +169,8 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
      */
     public set(content: string): void {
         if (this.config !== undefined) throw Error('Prompt package cannot be written as a file');
-        // 中文：协议包里的只读文件仍可被读取和注入，但不能通过 set 改写。
+        // EN: Read-only files in a protocol package stay readable and injectable, but cannot be rewritten via set().
+        // ZH: 协议包里的只读文件仍可被读取和注入，但不能通过 set() 改写。
         if (!this.writable) throw Object.assign(Error('Prompt file is locked'), { detail: { path: this.path } });
         if (typeof content !== 'string') throw Error('Prompt content must be a string');
         writeFileSync(this.path, content, 'utf-8');

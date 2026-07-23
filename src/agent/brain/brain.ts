@@ -23,19 +23,23 @@ import type { AgentBrief } from '@/agent/context/types';
 @Provide()
 export class Brain extends FAgentAtom<AgentInput, CallosumSignal> implements IObservable<AgentInput, CallosumSignal> {
     @Scope()
-    /** Retained as a compatibility boundary; the active path uses Context.intent directly. */
+    /** EN: Retained as a compatibility boundary; the active path uses Context.intent directly. ZH: 作为兼容边界保留；活跃路径直接使用 Context.intent。 */
     public callosum!: Callosum;
 
     @Scope()
+    /** EN: Provider-facing intelligence service scoped to this agent. ZH: 该 agent 作用域内面向 provider 的智能服务。 */
     public intelligence!: Intelligence;
 
     @Inject()
+    /** EN: Shared bounded semantic working set. ZH: 共享的有界语义工作集。 */
     public context!: Context;
 
     @Scope()
+    /** EN: Private memory cache scoped to this agent. ZH: 该 agent 私有的作用域记忆缓存。 */
     public memory!: Memory;
 
     @Scope()
+    /** EN: Tool-using research loop scoped to this agent. ZH: 该 agent 作用域内使用工具的研究循环。 */
     public investigation!: Investigation;
 
     /**

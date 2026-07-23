@@ -2,6 +2,10 @@ import { FModelProtocolName } from '@/configuration';
 import type { ProtocolAdapter, ProtocolBuildContext, ProviderMessage } from '../types';
 import { AgentChatRole } from '@/agent/types';
 
+/**
+ * EN: Protocol adapter for the AWS Bedrock Converse JSON-lines wire format.
+ * ZH: AWS Bedrock Converse JSON 行线协议适配器。
+ */
 export const awsBedrockConverseAdapter: ProtocolAdapter = {
     name: FModelProtocolName.AWSBedrockConverse,
     body: (context: ProtocolBuildContext) => {
@@ -28,8 +32,8 @@ export const awsBedrockConverseAdapter: ProtocolAdapter = {
 };
 
 /**
- * EN: bedrockMessages function declaration.
- * ZH: bedrockMessages function 声明。
+ * EN: Splits provider-local messages into Bedrock system prompts and conversation turns.
+ * ZH: 把 provider-local 消息拆分为 Bedrock system 提示与对话回合。
  */
 function bedrockMessages(messages: ProviderMessage[]): {
     system: string[];
@@ -52,8 +56,8 @@ function bedrockMessages(messages: ProviderMessage[]): {
 }
 
 /**
- * EN: sseData function declaration.
- * ZH: sseData function 声明。
+ * EN: Extracts the JSON payload from one SSE `data:` line.
+ * ZH: 从一行 SSE `data:` 中提取 JSON 负载。
  */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();

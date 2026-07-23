@@ -1,4 +1,5 @@
-import { FAgentAtom, Prompt, PromptService, Provide, type PromptPackageData } from '@/core';
+import { FAgentAtom, Prompt, PromptService, Provide, type FAgentSynapseBus, type PromptPackageData } from '@/core';
+import type { FAgentProfileConfiguration } from '@/configuration';
 import type { AgentBrief, MemoryNote } from '@/agent/context/types';
 import { AgentChatRole, type AgentMemory } from './types';
 
@@ -28,15 +29,23 @@ export enum SoulSection {
 @Provide()
 export class Memory extends FAgentAtom {
     @Prompt((prop: Memory) => prop.agentConfig.promptPackage ?? `.config/agents/${prop.agentConfig.name}`)
+    /** EN: Prompt package holding this agent's persona sections. ZH: 持有该 agent 人格 section 的提示词包。 */
     public prompt!: PromptService<string> & PromptPackageData<string>;
 
     /** EN: Max number of notes this agent can hold. ZH: 该 agent 可持有的最大笔记数。 */
-    public capacity = 16;
+    public capacity: number;
 
     /** EN: Private notes kept by this agent. ZH: 该 agent 保留的私有笔记。 */
-    public notes: MemoryNote[] = [];
+    public notes: MemoryNote[];
 
-    private noteSequence = 0;
+    private noteSequence: number;
+
+    constructor(agentConfig: FAgentProfileConfiguration, synapse: FAgentSynapseBus | undefined = undefined) {
+        super(agentConfig, synapse as FAgentSynapseBus);
+        this.capacity = 16;
+        this.notes = [];
+        this.noteSequence = 0;
+    }
 
     /** EN: Seeds the memory cache with the Context brief for the current task. ZH: 用当前任务的 Context 简报初始化记忆缓存。 */
     public ingestBrief(brief: AgentBrief): void {
@@ -66,6 +75,7 @@ export class Memory extends FAgentAtom {
         }
     }
 
+    /** EN: Builds the provider message list from persona prompt sections and cached notes. ZH: 由人格提示词 section 与缓存笔记构建发往 provider 的消息列表。 */
     public buildMessage(): AgentMemory[] {
         const sections = this.agentConfig.promptSections?.filter((section) => section !== SoulSection.User)
             ?? [SoulSection.Soul, SoulSection.Extension];

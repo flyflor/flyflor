@@ -21,7 +21,10 @@ export class Factory {
      * EN: Creates a proxy that forwards unknown properties to the underlying container.
      * ZH: 创建一个会把未知属性转发到底层 container 的代理。
      */
-    constructor(public container: Container) {
+    constructor(
+        /** EN: Underlying IOC container this factory proxies. ZH: 当前 factory 代理的底层 IOC container。 */
+        public container: Container,
+    ) {
         return new Proxy(this, {
             get: (target, key, receiver) => {
                 const value = Reflect.get(target, key, receiver) ?? Reflect.get(container, key, container);

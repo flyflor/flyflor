@@ -14,19 +14,31 @@ interface ExecuteTask {
     timeoutMs: number;
 }
 
-@Tool()
 /**
- * EN: Execute class declaration.
- * ZH: Execute class 声明。
+ * EN: Tool atom that runs batches of python/sh script tasks serially or with bounded parallelism.
+ * ZH: 以串行或受限并行方式运行 python/sh 脚本任务批次的工具原子。
  */
+@Tool()
 export class Execute extends FToolAtom<ExecuteInput, ExecuteOutput> {
+    /** EN: Runtime configuration used to resolve the default working directory. ZH: 用于解析默认工作目录的运行时配置。 */
     @Config()
     public config!: ConfigService;
 
+    /**
+     * EN: Always requires user confirmation because tasks spawn arbitrary processes.
+     * ZH: 因任务会启动任意进程，始终要求用户确认。
+     */
     public override confirm(): boolean {
         return true;
     }
 
+    /**
+     * EN: Validates the batch input, then runs every task and aggregates per-task results.
+     * ZH: 校验批次输入，随后运行全部任务并聚合逐任务结果。
+     *
+     * EN: Honors abort signals; single-task failures are captured as failed results instead of throwing.
+     * ZH: 遵循中止信号；单任务失败会记录为失败结果而不是抛出。
+     */
     public override async onPipe(input: ExecuteInput, signal?: AbortSignal) {
         signal?.throwIfAborted();
         const cwd = this.cwd(input.cwd, this.config.path.cwd);

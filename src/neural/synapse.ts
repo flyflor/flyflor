@@ -19,7 +19,12 @@ import {
     type SynapseSignal,
 } from './types';
 
+/**
+ * EN: Registry of cached agents, keyed by agent profile name.
+ * ZH: 按 agent 配置名索引的已缓存 agent 注册表。
+ */
 export interface AgentPool {
+    /** EN: Cached agent instance for this profile name. ZH: 该配置名对应的已缓存 agent 实例。 */
     [name: string]: Agent;
 }
 
@@ -32,44 +37,70 @@ export interface AgentPool {
  */
 @Module()
 export class Synapse extends FCortex<SynapseSignal> {
+    /** EN: Runtime configuration injected from the IOC container. ZH: 由 IOC 容器注入的运行时配置。 */
     @Config()
     public readonly config!: ConfigService;
 
+    /** EN: Unix socket surface used for motor output. ZH: 用于运动输出的 Unix socket 表面。 */
     @Scope()
     public socket!: FSocket;
 
+    /** EN: Semantic workspace that owns Turn lifecycle. ZH: 持有 Turn 生命周期的语义工作区。 */
     @Inject()
     public context!: Context;
 
+    /** EN: Intelligence provider used for plan and synthesis completions. ZH: 用于计划与合成补全的智能提供方。 */
     @Inject()
     public intelligence!: Intelligence;
 
+    /** EN: Attention gate that routes stimuli into this cortex. ZH: 将刺激路由进本皮层的注意门。 */
     @Inject()
     public awareness!: Awareness;
 
+    /** EN: Prompt template for multi-agent coordination planning. ZH: 多 agent 协同计划的提示词模板。 */
     @Prompt('prompts/synapse')
     public planPrompt!: PromptService;
 
+    /** EN: Prompt template for synthesizing the final coordinated reply. ZH: 合成最终协同回复的提示词模板。 */
     @Prompt('prompts/synapse')
     public synthesisPrompt!: PromptService;
 
+    /** EN: Cached agents by profile name; spawned lazily on demand. ZH: 按配置名缓存的 agent；按需惰性 spawn。 */
     public agentPool: AgentPool;
+    /** EN: Name of the currently active agent profile. ZH: 当前活跃 agent 配置名。 */
     public active: string;
-    private interactions = new Map<string, { request: InteractionRequest; resolve: (response: InteractionResponse) => void; reject: (error: Error) => void }>();
-    private turnControllers = new Map<string, AbortController>();
-    /** Controllers remain addressable before Context has created a Turn. */
-    private stimulusControllers = new Map<string, { controller: AbortController; speakerId: string }>();
+    /** EN: Pending ask/confirm waiters keyed by Turn id. ZH: 按 Turn id 索引的待答复 ask/confirm 等待者。 */
+    private interactions: Map<string, { request: InteractionRequest; resolve: (response: InteractionResponse) => void; reject: (error: Error) => void }>;
+    /** EN: Abort handles for in-flight Turns keyed by Turn id. ZH: 按 Turn id 索引的在途 Turn 中止句柄。 */
+    private turnControllers: Map<string, AbortController>;
+    /** EN: Abort handles keyed by stimulus id, addressable before Context has created a Turn. ZH: 按刺激 id 索引的中止句柄，在 Context 创建 Turn 之前即可寻址。 */
+    private stimulusControllers: Map<string, { controller: AbortController; speakerId: string }>;
 
+    /** EN: The agent instance behind the active profile name. ZH: 当前活跃配置名对应的 agent 实例。 */
     public get agent() {
         return this.agentPool[this.active]!;
     }
 
     constructor() {
         super();
+        // EN: Agent cache starts empty and fills on demand. ZH: agent 缓存初始为空，按需填充。
         this.agentPool = {};
+        // EN: No active profile until init() reads the config. ZH: init() 读取配置前没有活跃配置。
         this.active = '';
+        // EN: Pending ask/confirm waiters keyed by Turn id. ZH: 按 Turn id 索引的待答复 ask/confirm 等待者。
+        this.interactions = new Map();
+        // EN: Abort handles for in-flight Turns keyed by Turn id. ZH: 按 Turn id 索引的在途 Turn 中止句柄。
+        this.turnControllers = new Map();
+        // EN: Abort handles keyed by stimulus id, before a Turn exists. ZH: 按刺激 id 索引的中止句柄，早于 Turn 创建。
+        this.stimulusControllers = new Map();
     }
 
+    /**
+     * EN: Lifecycle init: resolve the configured active agent, spawn it, attend
+     * to Awareness, and wire every Synapse signal type to its motor output.
+     * ZH: 生命周期初始化：解析配置的活跃 agent 并 spawn，接入 Awareness，
+     * 并将每种 Synapse 信号类型接到对应的运动输出。
+     */
     @Init()
     public async init() {
         const active = this.config.agent;
@@ -85,6 +116,12 @@ export class Synapse extends FCortex<SynapseSignal> {
         return true;
     }
 
+    /**
+     * EN: Returns the cached agent for a profile, spawning and caching it on
+     * first use. Missing profiles throw with the configured names as detail.
+     * ZH: 返回某配置对应的已缓存 agent，首次使用时 spawn 并缓存。配置缺失时抛出
+     * 携带已配置名单的错误。
+     */
     public async spawnAgent(name: string): Promise<Agent> {
         const existing = this.agentPool[name];
         if (existing) return existing;
@@ -135,7 +172,10 @@ export class Synapse extends FCortex<SynapseSignal> {
         await this.runStimulus(stimulus, instruction);
     }
 
-    /** Awareness uses the same foreground boundary for a same-thread revision. */
+    /**
+     * EN: Awareness uses the same foreground boundary for a same-thread revision.
+     * ZH: Awareness 对同线程修订复用同一个前台边界。
+     */
     public async revise(stimulus: Stimulus, targetTurnId: string): Promise<void> {
         await this.runStimulus(stimulus, {
             relation: DispositionRelation.Same,
@@ -203,7 +243,12 @@ export class Synapse extends FCortex<SynapseSignal> {
         }
     }
 
-    /** Cancel provider work for a turn after Awareness has marked it urgent. */
+    /**
+     * EN: Cancels provider work for a Turn after Awareness has marked it urgent:
+     * rejects any pending interaction waiter and aborts the Turn's controller.
+     * ZH: 在 Awareness 标记紧急后取消 Turn 的提供方工作：拒绝所有待处理的
+     * 交互等待者并中止该 Turn 的控制器。
+     */
     public cancel(turnId: string): void {
         const turn = this.context.turns.find((candidate) => candidate.id === turnId);
         const interaction = this.interactions.get(turnId);
@@ -223,7 +268,13 @@ export class Synapse extends FCortex<SynapseSignal> {
         controller?.abort();
     }
 
-    /** Release interaction waiters and non-active Context turns for a departed speaker. */
+    /**
+     * EN: Releases interaction waiters and non-active Context turns for a
+     * departed speaker; working turns are cancelled first to avoid racing the
+     * interrupt/settle path.
+     * ZH: 为已离开的说话人释放交互等待者和非活跃的 Context turn；进行中的 turn
+     * 先取消，避免与打断/收尾路径竞争。
+     */
     public forgetSpeaker(speakerId: string): void {
         for (const [turnId, interaction] of this.interactions) {
             const turn = this.context.turns.find((candidate) => candidate.id === turnId);
@@ -245,6 +296,12 @@ export class Synapse extends FCortex<SynapseSignal> {
         }
     }
 
+    /**
+     * EN: Motor output for one streamed reply chunk: resolves the speaker from
+     * the Turn in Context and hands the chunk to Awareness' one-mouth stream.
+     * ZH: 一个流式回复分片的运动输出：从 Context 的 Turn 解析说话人，并把分片交给
+     * Awareness 的单口流。
+     */
     public async output(data: unknown) {
         const { turnId, chunk, streamId } = data as ReplyChunk;
         const turn = this.context.turns.find((t) => t.id === turnId);
@@ -255,6 +312,12 @@ export class Synapse extends FCortex<SynapseSignal> {
         this.awareness.speak(turnId, turn.speakerId, chunk, streamId);
     }
 
+    /**
+     * EN: Pauses the Turn, emits an ask/confirm plus pause signal to the speaker,
+     * and returns a promise that resolves when the speaker answers.
+     * ZH: 暂停 Turn，向说话人发出 ask/confirm 及 pause 信号，并返回一个在说话人
+     * 答复时兑现的 promise。
+     */
     public async interact(request: InteractionRequest): Promise<InteractionResponse> {
         if (this.interactions.has(request.turnId)) throw Error('An interaction is already pending for this turn');
         this.context.pause(request.turnId, { id: request.id, kind: request.kind, prompt: JSON.stringify(request.data) });
@@ -270,6 +333,12 @@ export class Synapse extends FCortex<SynapseSignal> {
         });
     }
 
+    /**
+     * EN: Resolves a pending interaction: validates id/speaker/kind against the
+     * stored request, resumes the Turn in Context, and emits a resume signal.
+     * ZH: 兑现一个待处理的交互：按存储的请求校验 id/说话人/类型，恢复 Context 中的
+     * Turn，并发出 resume 信号。
+     */
     public answer(turnId: string, id: string, response: InteractionResponse, speakerId?: string): void {
         const interaction = this.interactions.get(turnId);
         if (!interaction || interaction.request.id !== id) {

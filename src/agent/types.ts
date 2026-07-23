@@ -1,6 +1,13 @@
+/**
+ * EN: Chat roles Flyflor uses when talking to a provider.
+ * ZH: Flyflor 与 provider 对话时使用的聊天角色。
+ */
 export enum AgentChatRole {
+    /** EN: System instruction message. ZH: 系统指令消息。 */
     System = 'system',
+    /** EN: User input message. ZH: 用户输入消息。 */
     User = 'user',
+    /** EN: Assistant output message. ZH: assistant 输出消息。 */
     Assistant = 'assistant',
 }
 
@@ -9,7 +16,9 @@ export enum AgentChatRole {
  * ZH: 面向 agent 的一条纯短期记忆消息。
  */
 export interface AgentMemory {
+    /** EN: Chat role of the message. ZH: 消息的聊天角色。 */
     role: AgentChatRole.System | AgentChatRole.User | AgentChatRole.Assistant;
+    /** EN: Text content of the message. ZH: 消息的文本内容。 */
     content: string;
 }
 
@@ -20,11 +29,16 @@ export interface AgentMemory {
  * 无 session:身份只有 speaker id。
  */
 export interface AgentInput {
+    /** EN: Raw stimulus text. ZH: 原始刺激文本。 */
     text: string;
+    /** EN: Identity of the speaker who produced the stimulus. ZH: 产生该刺激的说话者身份。 */
     speakerId: string;
+    /** EN: Identifier of the stimulus this input grew from. ZH: 该输入源自的刺激标识。 */
     stimulusId?: string;
-    /** Attention relation selected by Awareness; absent means a new turn. */
+    /** EN: Attention relation selected by Awareness; absent means a new turn. ZH: Awareness 选出的注意力关系；缺省表示开启新回合。 */
     relation?: 'same' | 'new';
+    /** EN: Turn to revise when the relation is `same`. ZH: 关系为 `same` 时要修订的 turn。 */
     targetTurnId?: string;
+    /** EN: Cancellation signal for the whole input pipeline. ZH: 整条输入管线的取消信号。 */
     signal?: AbortSignal;
 }

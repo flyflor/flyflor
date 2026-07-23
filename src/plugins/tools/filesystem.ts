@@ -4,19 +4,28 @@ import { mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'no
 import { dirname, isAbsolute, resolve } from 'node:path';
 import type { FilesystemInput, FilesystemInputAction, FilesystemOutput } from './types';
 
-@Tool()
 /**
- * EN: Filesystem class declaration.
- * ZH: Filesystem class 声明。
+ * EN: Tool atom that performs read/write/edit/delete file operations with line and byte limits.
+ * ZH: 执行带行数与字节上限的 read/write/edit/delete 文件操作的工具原子。
  */
+@Tool()
 export class Filesystem extends FToolAtom<FilesystemInput, FilesystemOutput> {
+    /** EN: Runtime configuration used to resolve relative paths against the process cwd. ZH: 用于将相对路径解析到进程 cwd 的运行时配置。 */
     @Config()
     public config!: ConfigService;
 
+    /**
+     * EN: Requires user confirmation for every action except read.
+     * ZH: 除 read 外的所有操作都要求用户确认。
+     */
     public override confirm(input: FilesystemInput): boolean {
         return input.action !== 'read';
     }
 
+    /**
+     * EN: Validates the requested action and dispatches to read, write, edit, or delete handling.
+     * ZH: 校验请求的 action 并分发到 read、write、edit 或 delete 处理。
+     */
     public override onPipe(input: FilesystemInput, signal?: AbortSignal) {
         signal?.throwIfAborted();
         const action = this.action(input.action);

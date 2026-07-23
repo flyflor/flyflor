@@ -17,8 +17,13 @@ import { Brain } from './brain';
 @Provide()
 export class Agent extends FAgent<AgentInput, string> implements IObservable<AgentInput, string> {
     @Scope()
+    /** EN: Scoped brain that drives this agent's turns. ZH: 驱动该 agent 回合的作用域 Brain。 */
     public brain!: Brain;
 
+    /**
+     * EN: Observable entry for one agent input; logs metadata only and delegates to the brain.
+     * ZH: 接收一条 agent 输入的 observable 入口；只记录元数据日志并委派给 brain。
+     */
     public override async onPipe(data: AgentInput) {
         // Keep diagnostics metadata-only; the active runtime must not turn its
         // log file into a transcript or a second memory store.

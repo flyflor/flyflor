@@ -8,21 +8,32 @@ import { Intelligence } from '../intelligence/service';
 import type { ProviderActionRequestMessage, ProviderActionResultMessage, ProviderMessage } from '../intelligence/types';
 import type { InvestigationOutcome, InvestigationRunOptions } from './types';
 
-@Provide()
 /**
- * EN: Investigation class declaration.
- * ZH: Investigation class 声明。
+ * EN: Investigation runs the tool-using research loop for one turn. It streams
+ * provider answers live, executes model-requested actions through the tool
+ * boundary, and collects evidence until the model stops asking for tools.
+ * ZH: Investigation 运行单个 turn 的工具研究循环。它实时流出 provider 答案，
+ * 通过工具边界执行模型请求的 action，并收集证据，直到模型不再请求工具。
  */
+@Provide()
 export class Investigation extends FAgentAtom {
     @Scope()
+    /** EN: Provider-facing intelligence service scoped to this agent. ZH: 该 agent 作用域内面向 provider 的智能服务。 */
     public intelligence!: Intelligence;
 
     @Inject()
+    /** EN: Shared bounded semantic working set. ZH: 共享的有界语义工作集。 */
     public context!: Context;
 
     @Inject()
+    /** EN: Tool boundary used to list, confirm, and run actions. ZH: 用于列举、确认与执行 action 的工具边界。 */
     public tools!: ToolComponent;
 
+    /**
+     * EN: Runs the research loop until the model answers without new action requests,
+     * the turn is preempted, or the loop pauses on an interaction.
+     * ZH: 运行研究循环，直到模型不再发出新的 action request、turn 被抢占，或循环因交互而暂停。
+     */
     public async run(_signal: CallosumSignal, baseMessages: AgentMemory[], options: InvestigationRunOptions = {}): Promise<InvestigationOutcome> {
         const messages: ProviderMessage[] = [...baseMessages];
         const evidence: string[] = [];

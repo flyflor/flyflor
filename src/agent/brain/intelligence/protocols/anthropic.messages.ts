@@ -2,6 +2,10 @@ import { FModelProtocolName } from '@/configuration';
 import type { ProtocolAdapter, ProtocolBuildContext, ProviderErrorShape, ProviderMessage } from '../types';
 import { AgentChatRole } from '@/agent/types';
 
+/**
+ * EN: Protocol adapter for the Anthropic Messages SSE wire format.
+ * ZH: Anthropic Messages SSE 线协议适配器。
+ */
 export const anthropicMessagesAdapter: ProtocolAdapter = {
     name: FModelProtocolName.AnthropicMessages,
     body: (context: ProtocolBuildContext) => {
@@ -42,8 +46,8 @@ export const anthropicMessagesAdapter: ProtocolAdapter = {
 };
 
 /**
- * EN: anthropicMessages function declaration.
- * ZH: anthropicMessages function 声明。
+ * EN: Splits provider-local messages into Anthropic system blocks and conversation turns.
+ * ZH: 把 provider-local 消息拆分为 Anthropic system 块与对话回合。
  */
 function anthropicMessages(messages: ProviderMessage[]): { system: string[]; messages: Array<{ role: string; content: string }> } {
     const system: string[] = [];
@@ -60,8 +64,8 @@ function anthropicMessages(messages: ProviderMessage[]): { system: string[]; mes
 }
 
 /**
- * EN: sseData function declaration.
- * ZH: sseData function 声明。
+ * EN: Extracts the JSON payload from one SSE `data:` line.
+ * ZH: 从一行 SSE `data:` 中提取 JSON 负载。
  */
 function sseData(line: string): string | undefined {
     const trimmed = line.trim();
@@ -70,8 +74,8 @@ function sseData(line: string): string | undefined {
 }
 
 /**
- * EN: providerErrorMessage function declaration.
- * ZH: providerErrorMessage function 声明。
+ * EN: Formats a provider error payload into one readable message.
+ * ZH: 把 provider 错误负载格式化为一条可读消息。
  */
 function providerErrorMessage(error: ProviderErrorShape | undefined, fallback: string): string {
     return error?.code ? `${error.code}: ${error.message ?? error.type ?? fallback}` : error?.message ?? error?.type ?? fallback;

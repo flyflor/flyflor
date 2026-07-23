@@ -1,12 +1,19 @@
 import { FToolAtom, Tool } from '@/core';
 import type { AskInput, AskOption, AskOutput, AskQuestion } from './types';
 
-@Tool()
 /**
- * EN: Ask class declaration.
- * ZH: Ask class 声明。
+ * EN: Tool atom that turns raw model questions into a structured ask interaction.
+ * ZH: 将模型的原始提问转换为结构化 ask 交互的工具原子。
  */
+@Tool()
 export class Ask extends FToolAtom<AskInput, AskOutput> {
+    /**
+     * EN: Validates the raw questions payload and emits one ask effect.
+     * ZH: 校验原始 questions 载荷并发出一个 ask effect。
+     *
+     * EN: A custom "other" option is appended to every question so the user can answer freely.
+     * ZH: 每个问题都会追加自定义 "other" 选项，允许用户自由作答。
+     */
     public override onPipe(input: AskInput) {
         if (!Array.isArray(input.questions) || input.questions.length === 0) throw Error('questions is required');
         const questions = input.questions.map((item) => this.question(item));

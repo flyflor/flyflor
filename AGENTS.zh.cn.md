@@ -14,6 +14,8 @@ Flyflor 默认使用项目内 `.agents/skills/oop-code-redlines/SKILL.md` skill 
 6. `index.ts` 只能做 barrel re-export，不能承载行为。
 7. 不要新增泛化的 `utils`、`manager`、`parser`、`compiler` 或 `diagnostic` 文件，除非真的出现对象边界并且代码规模持续需要。
 8. 跨 source domain import 使用 `@/*`。同一目录边界内优先使用相对 import。
+9. 实例字段声明处不赋值，一律在 constructor 中赋值。例外：`static` 字段、装饰器注入字段（`@Inject()`/`@Config()`/`@Prompt()` 形式的 `!: Type` 声明）和函数值属性。
+10. 每个 public class 属性/方法、每个导出的 interface/type-literal 成员都必须有 EN/ZH 双语 JSDoc（`EN: ... / ZH: ...`）。类级文档注释放在装饰器上方，不允许夹在装饰器与 class 声明之间。`bun run check` 会强制检查第 9-10 条。
 
 ## 运行时边界
 

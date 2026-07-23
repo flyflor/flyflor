@@ -38,6 +38,7 @@ export type ModuleReference = Ctor;
  * ZH: `imports` 描述当前 module 的 DI 子树必须可达的类。
  */
 export interface ModuleMetadata {
+    /** EN: Classes that must be reachable from this module's DI subtree. ZH: 当前 module 的 DI 子树必须可达的类列表。 */
     imports?: ModuleReference[];
 }
 
