@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { describe, expect, test } from 'bun:test';
 import type { ConfigService } from '@/configuration';
-import { Context } from '@/neural/context';
+import { Workspace } from '@/neural/workspace';
 import type { Intelligence } from '@/neural/brain/intelligence';
 import type { PromptService } from '@/core';
 import { Scheduler, type SchedulerHost } from './scheduler';
@@ -46,7 +46,7 @@ function mockScheduler(verdict: ScheduleVerdict = { dispositions: [] }): { sched
     scheduler.config = {
         awareness: { scheduleTimeoutMs: 50, batchWindowMs: 0 },
     } as ConfigService;
-    scheduler.context = new Context();
+    scheduler.workspace = new Workspace();
     scheduler.prompt = { section: () => 'schedule prompt' } as unknown as PromptService;
     scheduler.intelligence = {
         completeText: async () => JSON.stringify(verdict),
@@ -120,7 +120,7 @@ describe('Scheduler', () => {
 
     test('falls back to a new disposition when the advisor times out', async () => {
         const { scheduler, host } = mockScheduler();
-        scheduler.context.turns = [{
+        scheduler.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'completed', intent: 'reply', goal: 'old',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
@@ -139,7 +139,7 @@ describe('Scheduler', () => {
         const { scheduler, host } = mockScheduler({
             dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.New, urgent: true, targetTurnId: 'turn_1' }],
         });
-        scheduler.context.turns = [{
+        scheduler.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'working', intent: 'reply', goal: 'g',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
@@ -156,7 +156,7 @@ describe('Scheduler', () => {
         const { scheduler, host } = mockScheduler({
             dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.Same, targetTurnId: 'turn_1', urgent: true }],
         });
-        scheduler.context.turns = [{
+        scheduler.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'working', intent: 'reply', goal: 'g',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
@@ -172,7 +172,7 @@ describe('Scheduler', () => {
         const { scheduler, host } = mockScheduler({
             dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.New, urgent: true, targetTurnId: 'turn_1' }],
         });
-        scheduler.context.turns = [{
+        scheduler.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'working', intent: 'reply', goal: 'g',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
@@ -180,7 +180,7 @@ describe('Scheduler', () => {
         await tick();
         expect(scheduler.preempted('turn_1')).toBe(true);
 
-        scheduler.context.turns[0]!.status = 'suspended';
+        scheduler.workspace.turns[0]!.status = 'suspended';
         scheduler.interrupted('turn_1');
 
         expect(scheduler.preempted('turn_1')).toBe(false);
@@ -188,7 +188,7 @@ describe('Scheduler', () => {
 
     test('delivers workspace backpressure when every semantic slot is protected', async () => {
         const { scheduler, host } = mockScheduler();
-        scheduler.context.turns = Array.from({ length: 4 }, (_, index) => ({
+        scheduler.workspace.turns = Array.from({ length: 4 }, (_, index) => ({
             id: `turn_${index + 1}`,
             speakerId: `conn_${index + 1}`,
             status: 'suspended' as const,
@@ -204,14 +204,14 @@ describe('Scheduler', () => {
         expect(host.errors).toEqual([{ speakerId: 'conn_5', message: Scheduler.WorkspaceBackpressureMessage }]);
     });
 
-    test('includes the master projection in the advisor payload', async () => {
+    test('includes the situation projection in the advisor payload', async () => {
         const { scheduler } = mockScheduler();
         let payload = '';
-        scheduler.context.turns = [{
+        scheduler.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'completed', intent: 'reply', goal: 'old',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
-        scheduler.context.masterProjection = () => [{ speakerId: 'conn_1', intent: 'reply', goal: 'graduated', result: 'done', remaining: [] }];
+        scheduler.workspace.situationProjection = () => [{ speakerId: 'conn_1', intent: 'reply', goal: 'graduated', result: 'done', remaining: [] }];
         scheduler.intelligence = {
             completeText: async (messages: Array<{ content: string }>) => {
                 payload = messages.at(-1)?.content ?? '';
@@ -222,6 +222,6 @@ describe('Scheduler', () => {
         scheduler.enqueue(stimulus('stim_1', 'conn_2', 'follow up'));
         await tick();
 
-        expect(JSON.parse(payload)).toMatchObject({ master: [{ goal: 'graduated' }] });
+        expect(JSON.parse(payload)).toMatchObject({ situation: [{ goal: 'graduated' }] });
     });
 });

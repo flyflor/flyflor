@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { ConfigService } from '@/configuration';
 import { FToolAtom, useContainer } from '@/core';
-import { Context } from '@/neural/context';
+import { Workspace } from '@/neural/workspace';
 import { Ask, Execute, Filesystem, Shell, ToolComponent } from '@/plugins';
 
 async function component(): Promise<ToolComponent> {
@@ -24,9 +24,9 @@ describe('ToolComponent', () => {
         other = mkdtempSync(join(tmpdir(), 'flyflor-tools-other-'));
         ConfigService.path = { ...ConfigService.path, cwd: root };
         process.chdir(other);
-        const context = new Context();
-        context.prompt = { section: () => 'system placeholder' } as never;
-        context.intelligence = {
+        const workspace = new Workspace();
+        workspace.prompt = { section: () => 'system placeholder' } as never;
+        workspace.intelligence = {
             completeText: async (messages: Array<{ role: string; content: string }>) => {
                 const user = messages.find((m) => m.role === 'user')?.content ?? '';
                 const match = /cwd=([^\s,"}]+)/.exec(user);
@@ -42,7 +42,7 @@ describe('ToolComponent', () => {
                 });
             },
         } as never;
-        await context.ingest({ text: `调查当前环境 cwd=${other}`, speakerId: 'test' });
+        await workspace.ingest({ text: `调查当前环境 cwd=${other}`, speakerId: 'test' });
     });
 
     afterEach(() => {

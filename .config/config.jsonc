@@ -245,13 +245,6 @@
     //         },
     //     },
     // },
-    // Canonical repo-relative locations Flyflor reads/writes at runtime.
-    // All paths are relative (rule 7) and resolved against `rootPath` via `resolveFromRoot()` in `paths.ts`.
-    // - `configFile`: the single JSONC config file, needed to bootstrap config loading before config is known.
-    // - `promptsDir`: directory holding canonical `<name>.md` prompt sources.
-    // - `sqlDir`: directory holding `NNN-*.sql` schema-init scripts.
-    "promptsDir": "./prompts",
-    "sqlDir": "./sql",
     // 长期记忆和用户画像写入在当前研发阶段关闭。
     // 若迁移配置仍包含 memory block，ConfigService 会忽略它。
     // 单一心智的人格提示词包配置。

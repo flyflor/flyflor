@@ -38,8 +38,8 @@ export abstract class FComponent extends FService {}
 export abstract class FModule extends FComponent {}
 
 /**
- * EN: Base class for data repositories under `src/entities` (classes decorated with `@Repo()`).
- * ZH: `src/entities` 下数据 repository(使用 `@Repo()` 装饰的类)的基类。
+ * EN: Base class for application data repositories decorated with `@Repo()`.
+ * ZH: 使用 `@Repo()` 装饰的应用数据 repository 基类。
  */
 export abstract class FRepo extends FService {}
 

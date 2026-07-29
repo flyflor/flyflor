@@ -1,6 +1,6 @@
-import { ChatRole, type MemoryMessage } from '@/neural/brain/types';
+import { ChatRole, type MindMessage } from '@/neural/brain/types';
 import { FNeuron, Inject, Provide } from '@/core';
-import { Context } from '@/neural/context';
+import { Workspace } from '@/neural/workspace';
 import { SynapseSignalType, TurnPreempted, ActivityEventType } from '@/neural/types';
 import { type ActionRequest, ToolComponent } from '@/plugins';
 import { Intelligence } from '../intelligence/service';
@@ -22,7 +22,7 @@ export class Investigation extends FNeuron {
 
     @Inject()
     /** EN: Shared bounded semantic working set. ZH: 共享的有界语义工作集。 */
-    public context!: Context;
+    public workspace!: Workspace;
 
     @Inject()
     /** EN: Tool boundary used to list, confirm, and run actions. ZH: 用于列举、确认与执行 action 的工具边界。 */
@@ -33,7 +33,7 @@ export class Investigation extends FNeuron {
      * the turn is preempted, or the loop pauses on an interaction.
      * ZH: 运行研究循环，直到模型不再发出新的 action request、turn 被抢占，或循环因交互而暂停。
      */
-    public async run(baseMessages: MemoryMessage[], options: InvestigationRunOptions = {}): Promise<InvestigationOutcome> {
+    public async run(baseMessages: MindMessage[], options: InvestigationRunOptions = {}): Promise<InvestigationOutcome> {
         const messages: ProviderMessage[] = [...baseMessages];
         const evidence: string[] = [];
         const emitReply = options.emitReply !== false;

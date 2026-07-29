@@ -31,14 +31,14 @@ describe('Brain', () => {
                 return undefined;
             },
         });
-        brain.memory = { buildMessage: () => [{ role: ChatRole.System, content: 'system' }] } as never;
+        brain.scratchpad = { buildMessages: () => [{ role: ChatRole.System, content: 'system' }] } as never;
         brain.intelligence = {
             stream: async (messages: unknown, onChunk: (chunk: string) => void) => {
                 seen.push(messages);
                 onChunk('PONG1');
             },
         } as never;
-        brain.context = { settle: async () => undefined, turn: () => ({ cwd: undefined }) } as never;
+        brain.workspace = { settle: async () => undefined, turn: () => ({ cwd: undefined }) } as never;
 
         await (brain as unknown as { reply: (chunk: string, turnId: string) => Promise<void> }).reply(
             '请只回复这五个字符：PONG1',
@@ -55,14 +55,14 @@ describe('Brain', () => {
         const brain = new Brain({
             emit: () => undefined,
         } as never);
-        brain.memory = { buildMessage: () => [{ role: ChatRole.System, content: 'system' }] } as never;
+        brain.scratchpad = { buildMessages: () => [{ role: ChatRole.System, content: 'system' }] } as never;
         brain.investigation = {
             run: async (messages: unknown) => {
                 seen.push(messages);
                 return { answer: 'done', steps: 1, completed: true, paused: false, evidence: [] };
             },
         } as never;
-        brain.context = { settle: async () => undefined, turn: () => ({ cwd: undefined }) } as never;
+        brain.workspace = { settle: async () => undefined, turn: () => ({ cwd: undefined }) } as never;
 
         await (brain as unknown as { research: (chunk: string, turnId: string) => Promise<void> }).research(
             '请读取 package.json',
@@ -77,9 +77,9 @@ describe('Brain', () => {
         const brain = new Brain({
             emit: () => undefined,
         } as never);
-        brain.memory = {
+        brain.scratchpad = {
             ingestBrief: () => undefined,
-            buildMessage: () => [{ role: ChatRole.System, content: 'thread base' }, { role: ChatRole.User, content: 'study this slice' }],
+            buildMessages: () => [{ role: ChatRole.System, content: 'thread base' }, { role: ChatRole.User, content: 'study this slice' }],
         } as never;
         brain.investigation = {
             run: async (messages: unknown, options: unknown) => {
@@ -114,11 +114,11 @@ describe('Brain', () => {
             },
             preempted: () => preempted,
         });
-        brain.memory = { buildMessage: () => [] } as never;
+        brain.scratchpad = { buildMessages: () => [] } as never;
         brain.intelligence = {
             stream: async (_messages: unknown, onChunk: (chunk: string) => void) => onChunk('answer'),
         } as never;
-        brain.context = {
+        brain.workspace = {
             settle: async (_turnId: string, _input: unknown, signal?: AbortSignal) => {
                 expect(signal).toBe(controller.signal);
                 preempted = true;

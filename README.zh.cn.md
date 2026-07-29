@@ -42,12 +42,12 @@ flowchart TB
     Socket <--> Client["web/client.ts<br/>browser bridge"]
 
     Synapse --> Brain["Brain<br/>单一心智：turn 编排"]
-    Brain --> Context["Context<br/>四槽语义工作集"]
-    Context --> MasterContext["MasterContext<br/>会话级情境模型"]
-    Brain --> Memory["Memory<br/>私有工作记忆笔记"]
+    Brain --> Workspace["Workspace<br/>四槽语义工作集"]
+    Workspace --> SituationModel["SituationModel<br/>进程内情境模型"]
+    Brain --> Scratchpad["Scratchpad<br/>私有临时笔记"]
     Brain --> Investigation["Investigation<br/>local action loop"]
     Brain --> Intelligence["Intelligence<br/>provider stream boundary"]
-    Context --> Intelligence
+    Workspace --> Intelligence
     Investigation --> Tools
     Investigation --> Intelligence
     Intelligence --> Protocols["Protocol adapters<br/>OpenAI, Anthropic, Gemini, Bedrock,<br/>Cohere, HuggingFace, Ollama, vLLM, LM Studio"]
@@ -77,12 +77,12 @@ flowchart TD
     User["IPC packet<br/>action=user 或 answer"] --> Decode["FSocket -> IPCPacket.decode"]
     Decode --> Gate["Awareness.perceive() -> Scheduler<br/>跨说话人轮转公平 + same/new + urgent"]
     Gate --> AgentNext["Brain.next(input)"]
-    AgentNext --> Ingest["Context.ingest() 或 revise()<br/>语义 Turn 理解"]
+    AgentNext --> Ingest["Workspace.ingest() 或 revise()<br/>语义 Turn 理解"]
 
     Ingest --> Choice{"Turn intent"}
-    Choice -- reply --> Reply["Brain.reply()<br/>有界 Memory notes 经过 Intelligence stream"]
+    Choice -- reply --> Reply["Brain.reply()<br/>有界 Scratchpad notes 经过 Intelligence stream"]
     Reply --> ReplyOut["Synapse reply chunks<br/>然后 streamEnd"]
-    ReplyOut --> Settle1["Context.settle()"]
+    ReplyOut --> Settle1["Workspace.settle()"]
 
     Choice -- research --> Research["Investigation.run()"]
     Research --> LlmTools["Intelligence.streamRequest()<br/>with tool definitions"]
@@ -92,16 +92,16 @@ flowchart TD
     RunTool --> Pause{"ask / confirm?"}
     Pause -- yes --> UserPause["emit ask 或 confirm<br/>标记 active turn paused"]
     Pause -- no --> LlmTools
-    FinalAnswer --> Settle2["Context.settle(evidence)"]
+    FinalAnswer --> Settle2["Workspace.settle(evidence)"]
 
     Choice -- coordinate --> Coordinate["Synapse.coordinate()<br/>LLM 规划并行思维切片"]
     Coordinate --> Workers["并行静默思维线程 understand() 调用<br/>失败切片隔离"]
     Workers --> Review["静默自我审核 understand() 调用"]
     Review --> Synthesis["综合 outcomes + review"]
-    Synthesis --> Settle4["Context.settle(evidence)"]
+    Synthesis --> Settle4["Workspace.settle(evidence)"]
 ```
 
-`Context` 是四槽语义工作集，不是 durable archive。容量不足时只淘汰 completed Turn，不使用墙上时间 TTL。已结算的 Turn 会固化(“升格”)进 `MasterContext`——进程内、有界的会话级情境模型——让理解与调度能看到四槽之外的前情,同时不构成长期记忆。`Memory` 是从 `Context.brief()` 初始化的有界私有工作记忆缓存；活跃运行时没有长期记忆写入路径。
+`Workspace` 是四槽语义工作集，不是 durable archive。容量不足时只淘汰 completed Turn，不使用墙上时间 TTL。已结算的 Turn 会固化(“升格”)进 `SituationModel`——有界的进程内情境模型——让理解与调度能看到四槽之外的前情,同时不构成长期记忆。`Scratchpad` 是从 `Workspace.brief()` 初始化的有界私有临时笔记缓存；活跃运行时没有长期记忆写入路径。
 
 ## IPC 协议
 
@@ -138,7 +138,7 @@ kernel socket 上每个 packet 都是 8-byte unsigned big-endian JSON body lengt
 - `shell`：运行一个 command + args，有有界 timeout。
 - `execute`：串行或并行运行 `python` / `sh` script tasks，可带 per-task cwd、env、timeout。
 
-`Investigation` 拥有 tool loop。tool request/result replay 只留在 provider messages 里，不写入 `Context.turns`。
+`Investigation` 拥有 tool loop。tool request/result replay 只留在 provider messages 里，不写入 `Workspace.turns`。
 
 ## Prompt Runtime
 
@@ -154,21 +154,20 @@ src/app.module.ts                      root @Module
 src/configuration.ts                   ConfigService 和 runtime config types
 src/core/                              decorators、IOC、base classes、prompt、logger、tool contracts
 src/neural/                            Synapse、Awareness、Scheduler、IPC socket、packet codec、controller
-src/neural/brain/                      Brain、Memory、Investigation、Intelligence
-src/neural/context/                    Context、MasterContext
+src/neural/brain/                      Brain、Scratchpad、Investigation、Intelligence
+src/neural/workspace/                  Workspace 和 Turn 生命周期
+src/neural/situation/                  有界的进程内 SituationModel
 src/plugins/                           plugin boundary 和 local tools
-src/entities/                          entity/repository classes；MemoryRepo 当前只返回 SQL statements
 web/                                   本地 browser-to-IPC bridge 和测试页
 prompts/                               prompt packages 和 zh.cn mirrors
-.config/                              runtime config 和 persona prompt package
-sql/                                   schema files
+.config/                               runtime config 和 persona prompt package
 pakcages/                              bundled sqlite-vec helper/native assets；不在当前 agent turn path
 scripts/check.script.ts                仓库镜像和 prompt-term checks
 ```
 
 ## 当前边界
 
-`MemoryRepo`、`sql/001-core-schema.sql` 和 native vector 资产保留为未来 persistence boundary 占位，但没有接入当前 `Brain`、`Context` 或 `Memory` 路径。config file 也声明了 skills 和 MCP shapes，但当前代码还没有把 runtime MCP client 或 skill loader 接进 turn loop。
+active tree 中不存在持续记忆 repository 和 schema。bundled sqlite-vec native assets 仍未接入 `Brain`、`Workspace`、`SituationModel` 或 `Scratchpad`。config file 也声明了 skills 和 MCP shapes，但当前代码还没有把 runtime MCP client 或 skill loader 接进 turn loop。
 
 ## 无 session 生命体设计
 
@@ -217,14 +216,14 @@ scripts/check.script.ts                仓库镜像和 prompt-term checks
 ### 运行时不变量
 
 1. 连接只是说话人身份（`conn_N`）。所有说话人进入同一个 singleton `Awareness`
-   和 singleton `Context`；不存在 session 对象。
-2. `Context` 最多保存四个语义 Turn 投影。Turn 包含目标、约束、引用、done/open 标签和
+   和 singleton `Workspace`；不存在 session 对象。
+2. `Workspace` 最多保存四个语义 Turn 投影。Turn 包含目标、约束、引用、done/open 标签和
    紧凑 outcome；绝不保存 user/assistant transcript 或工具回放缓冲。
 3. Turn 状态是 `working`、`waiting`、`suspended`、`completed`。容量压力下只可淘汰
    最早的 completed Turn，不使用墙上时间过期。
 4. 临时感觉队列独立有界（默认 32）。队列满时明确向最新刺激返回背压错误；若四个语义
    槽都受保护，被判为 `new` 的刺激同样明确拒绝。两种情况都不会静默丢弃或无限保留。
-5. 同一说话人的追问若判定为 `same`，调用 `Context.revise()` 并保留 Turn id；独立刺激
+5. 同一说话人的追问若判定为 `same`，调用 `Workspace.revise()` 并保留 Turn id；独立刺激
    是 `new`，保持 FIFO。确定性代码拒绝跨说话人修订。
 6. 外部刺激串行执行。单个 Turn 可以使用并行思维切片与自我审核通道，但它不会形成
    第二条外部注意流。
@@ -237,7 +236,7 @@ scripts/check.script.ts                仓库镜像和 prompt-term checks
 9. answer、interaction、stream 与断连清理都校验所属 `speakerId`。遗忘说话人的迟到输出，
    以及同一 Turn 上旧 stream generation 的迟到分片，会被丢弃。
 10. active prompt 只读取静态 `SOUL.md` 与 `EXTENSION.md`。`USER.md`、运行时 prompt 写入、
-    SQL/vector repository、episodic archive 和后台 replay 都不在 active path。
+    持久 repository、episodic archive 和后台 replay 都不在 active path。
 11. 诊断只包含 speaker/stimulus id、relation、text length 等路由元数据，不把刺激或回答
     原文持久化成影子 transcript。
 
@@ -248,11 +247,11 @@ scripts/check.script.ts                仓库镜像和 prompt-term checks
 | `FSocket` / `Connection` | 解码带长度帧的 IPC、分配 speaker id，并在某个 coalesced packet 格式错误后继续处理下一包。 |
 | `Awareness` | 感知刺激、持有说话人墓碑与单嘴锁,并为调度器接线皮层边界。 |
 | `Scheduler` | 持有刺激准入、跨说话人轮转公平(说话人内部 FIFO)、LLM 判决咨询与校验后的紧急抢占。 |
-| `Context` | 持有四槽语义工作集和 Turn 生命周期,并把已结算 Turn 固化升格进 master context。 |
-| `MasterContext` | 持有有界的会话级情境模型(固化 turn outcome);仅限进程内,绝不是长期记忆。 |
+| `Workspace` | 持有四槽语义工作集和 Turn 生命周期,并把已结算 Turn 固化升格进 situation model。 |
+| `SituationModel` | 持有有界的进程内情境模型(固化 turn outcome);仅限进程内,绝不是长期记忆。 |
 | `Synapse` | 执行一个前台刺激、取消它、把输出寻址给所属说话人，并协调并行思维线程。 |
 | `Brain` | 摄取或修订 Turn，执行 reply、research 或 coordinate 意图。 |
-| `Memory` | 保存由 brief 初始化的有界私有笔记；它不是持久化层。 |
+| `Scratchpad` | 保存由 brief 初始化的有界私有笔记；它不是持久化层。 |
 | `ToolComponent` | 在确认与取消边界后执行本地能力。 |
 
 调度模型只能提出 `same|new`、`targetTurnId` 和布尔 `urgent`。身份、容量、有效抢占目标、
@@ -262,8 +261,8 @@ contract；`SCHEDULE.zh.cn.md` 只是人类镜像。
 
 ### 明确不做的事
 
-- 本阶段不保存持久用户画像、不写 SQL/native-vector、不建 episodic archive、不做自动
-  跨 session recall，也不允许隐藏的 provider/tool transcript cache。
+- 本阶段不保存持久用户画像、不写 native-vector、不建 episodic archive、不做自动
+  跨进程 recall，也不允许隐藏的 provider/tool transcript cache。
 - 不宣称四槽、丘脑门控类比、蓝斑语言或前台广播边界可以证明意识。
 - 在没有测量依据和更强所有权模型前，不并行处理相互独立的外部刺激。
 - 不承诺撤销取消前已经完成的外部副作用。

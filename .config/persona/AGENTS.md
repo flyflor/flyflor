@@ -17,8 +17,8 @@ notes. This file is read-only and is not loaded into ordinary agent messages.
 - Load only `SOUL.md` and `EXTENSION.md`.
 - Keep `USER.md` out of the active context.
 - Reject all runtime package writes.
-- Keep temporary task state in the bounded in-process Context and private agent
-  scratch notes; do not create a durable user profile or conversation archive.
+- Keep temporary task state in the bounded in-process Workspace and per-thread
+  Scratchpad; do not create a durable user profile or conversation archive.
 
-The package files remain placeholders for a future persistence phase, which is
-explicitly disabled in the current runtime.
+The unused `USER.md` file remains only for package compatibility. Persistence is
+outside the current runtime contract.

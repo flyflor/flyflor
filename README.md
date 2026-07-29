@@ -42,12 +42,12 @@ flowchart TB
     Socket <--> Client["web/client.ts<br/>browser bridge"]
 
     Synapse --> Brain["Brain<br/>single mind: turn orchestration"]
-    Brain --> Context["Context<br/>four-slot semantic workspace"]
-    Context --> MasterContext["MasterContext<br/>session-level situation model"]
-    Brain --> Memory["Memory<br/>private working-memory notes"]
+    Brain --> Workspace["Workspace<br/>four-slot semantic workspace"]
+    Workspace --> SituationModel["SituationModel<br/>in-process situation model"]
+    Brain --> Scratchpad["Scratchpad<br/>private temporary notes"]
     Brain --> Investigation["Investigation<br/>local action loop"]
     Brain --> Intelligence["Intelligence<br/>provider stream boundary"]
-    Context --> Intelligence
+    Workspace --> Intelligence
     Investigation --> Tools
     Investigation --> Intelligence
     Intelligence --> Protocols["Protocol adapters<br/>OpenAI, Anthropic, Gemini, Bedrock,<br/>Cohere, HuggingFace, Ollama, vLLM, LM Studio"]
@@ -77,12 +77,12 @@ flowchart TD
     User["IPC packet<br/>action=user or answer"] --> Decode["FSocket -> IPCPacket.decode"]
     Decode --> Gate["Awareness.perceive() -> Scheduler<br/>round-robin fairness + same/new + urgent"]
     Gate --> AgentNext["Brain.next(input)"]
-    AgentNext --> Ingest["Context.ingest() or revise()<br/>semantic Turn understanding"]
+    AgentNext --> Ingest["Workspace.ingest() or revise()<br/>semantic Turn understanding"]
 
     Ingest --> Choice{"Turn intent"}
-    Choice -- reply --> Reply["Brain.reply()<br/>stream bounded Memory notes through Intelligence"]
+    Choice -- reply --> Reply["Brain.reply()<br/>stream bounded Scratchpad notes through Intelligence"]
     Reply --> ReplyOut["Synapse reply chunks<br/>then streamEnd"]
-    ReplyOut --> Settle1["Context.settle()"]
+    ReplyOut --> Settle1["Workspace.settle()"]
 
     Choice -- research --> Research["Investigation.run()"]
     Research --> LlmTools["Intelligence.streamRequest()<br/>with tool definitions"]
@@ -92,16 +92,16 @@ flowchart TD
     RunTool --> Pause{"ask / confirm?"}
     Pause -- yes --> UserPause["emit ask or confirm<br/>mark active turn paused"]
     Pause -- no --> LlmTools
-    FinalAnswer --> Settle2["Context.settle(evidence)"]
+    FinalAnswer --> Settle2["Workspace.settle(evidence)"]
 
     Choice -- coordinate --> Coordinate["Synapse.coordinate()<br/>LLM plan of parallel thought slices"]
     Coordinate --> Workers["parallel silent thought-thread understand() calls<br/>failed slices isolated"]
     Workers --> Review["silent self-review understand() call"]
     Review --> Synthesis["synthesize outcomes + review"]
-    Synthesis --> Settle4["Context.settle(evidence)"]
+    Synthesis --> Settle4["Workspace.settle(evidence)"]
 ```
 
-`Context` is a four-slot semantic working set, not a durable archive. It evicts only completed Turns when capacity is needed and has no wall-clock TTL. Settled Turns consolidate ("promote") into `MasterContext`, a bounded in-process session-level situation model, so understanding and scheduling can see beyond the four slots without becoming long-term memory. `Memory` is a bounded private note cache seeded from a `Context.brief()`; the active runtime has no long-term memory write path.
+`Workspace` is a four-slot semantic working set, not a durable archive. It evicts only completed Turns when capacity is needed and has no wall-clock TTL. Settled Turns consolidate ("promote") into `SituationModel`, a bounded in-process situation model, so understanding and scheduling can see beyond the four slots without becoming long-term memory. `Scratchpad` is a bounded private note cache seeded from a `Workspace.brief()`; the active runtime has no long-term memory write path.
 
 ## IPC Contract
 
@@ -138,7 +138,7 @@ The current model-visible tools are loaded from `prompts/tools/config.jsonc` and
 - `shell`: runs one command with args and a bounded timeout.
 - `execute`: runs serial or parallel `python` / `sh` script tasks with optional per-task cwd, env, and timeout.
 
-`Investigation` owns the tool loop. Tool request/result replay stays inside provider messages and is not written into `Context.turns`.
+`Investigation` owns the tool loop. Tool request/result replay stays inside provider messages and is not written into `Workspace.turns`.
 
 ## Prompt Runtime
 
@@ -154,21 +154,20 @@ src/app.module.ts                      root @Module
 src/configuration.ts                   ConfigService and runtime config types
 src/core/                              decorators, IOC, base classes, prompt, logger, tool contracts
 src/neural/                            Synapse, Awareness, Scheduler, IPC socket, packet codec, controller
-src/neural/brain/                      Brain, Memory, Investigation, Intelligence
-src/neural/context/                    Context, MasterContext
+src/neural/brain/                      Brain, Scratchpad, Investigation, Intelligence
+src/neural/workspace/                  Workspace and Turn lifecycle
+src/neural/situation/                  bounded in-process SituationModel
 src/plugins/                           plugin boundary and local tools
-src/entities/                          entity/repository classes; MemoryRepo currently returns SQL statements
 web/                                   local browser-to-IPC bridge and test page
 prompts/                               prompt packages plus zh.cn mirrors
-.config/                              runtime config and persona prompt package
-sql/                                   schema files
+.config/                               runtime config and persona prompt package
 pakcages/                              bundled sqlite-vec helper/native assets; not in the current agent turn path
 scripts/check.script.ts                repository mirror and prompt-term checks
 ```
 
 ## Current Edges
 
-`MemoryRepo`, `sql/001-core-schema.sql`, and native vector assets remain placeholders for a future persistence boundary, but they are not connected to the current `Brain`, `Context`, or `Memory` path. The config file also declares skills and MCP shapes, but this codebase does not yet include a runtime MCP client or skill loader wired into the turn loop.
+Durable-memory repositories and schemas are absent from the active tree. Bundled sqlite-vec native assets remain disconnected from `Brain`, `Workspace`, `SituationModel`, and `Scratchpad`. The config file also declares skills and MCP shapes, but this codebase does not yet include a runtime MCP client or skill loader wired into the turn loop.
 
 ## Session-less Organism Design
 
@@ -225,9 +224,9 @@ conscious.
 ### Runtime Invariants
 
 1. A connection is only a speaker identity (`conn_N`). All speakers enter one
-   singleton `Awareness` and one singleton `Context`; there is no session
+   singleton `Awareness` and one singleton `Workspace`; there is no session
    object.
-2. `Context` stores at most four semantic Turn projections. A Turn contains a
+2. `Workspace` stores at most four semantic Turn projections. A Turn contains a
    goal, constraints, references, done/open labels, and a compact outcome; it
    never contains a user/assistant transcript or tool replay buffer.
 3. Turn states are `working`, `waiting`, `suspended`, and `completed`. Capacity
@@ -237,7 +236,7 @@ conscious.
    is full, the newest stimulus is rejected with an explicit backpressure error.
    A stimulus classified as `new` is likewise rejected when all four semantic
    slots are protected; neither case is silently dropped or retained forever.
-5. A same-speaker follow-up judged `same` calls `Context.revise()` and preserves
+5. A same-speaker follow-up judged `same` calls `Workspace.revise()` and preserves
    the Turn id. A distinct stimulus is `new` and remains FIFO. Cross-speaker
    revision is rejected by deterministic code.
 6. External stimuli are serial. A single Turn may use parallel thought slices
@@ -256,7 +255,7 @@ conscious.
    the owning `speakerId`. Late output from a forgotten speaker or an older
    same-Turn stream generation is discarded.
 10. Only static `SOUL.md` and `EXTENSION.md` enter the active prompt. `USER.md`,
-    runtime prompt writes, SQL/vector repositories, episodic archives, and
+    runtime prompt writes, durable repositories, episodic archives, and
     background replay are outside the active path.
 11. Diagnostics contain routing metadata such as speaker/stimulus ids,
     relation, and text length. They do not persist stimulus or answer text as a
@@ -269,11 +268,11 @@ conscious.
 | `FSocket` / `Connection` | Decode framed IPC, assign speaker ids, and continue after an individually malformed coalesced packet. |
 | `Awareness` | Perceive stimuli, own speaker tombstones and the one-mouth lock, and wire the cortex boundary for the scheduler. |
 | `Scheduler` | Own stimulus admission, cross-speaker round-robin fairness with per-speaker FIFO, LLM verdict consultation, and validated urgent pre-emption. |
-| `Context` | Own the four-slot semantic working set and Turn lifecycle, and consolidate settled Turns into the master context. |
-| `MasterContext` | Hold the bounded session-level situation model of consolidated turn outcomes; in-process only, never long-term memory. |
+| `Workspace` | Own the four-slot semantic working set and Turn lifecycle, and consolidate settled Turns into the situation model. |
+| `SituationModel` | Hold the bounded in-process situation model of consolidated turn outcomes; in-process only, never long-term memory. |
 | `Synapse` | Run one foreground stimulus, cancel it, address output to its speaker, and coordinate parallel thought threads. |
 | `Brain` | Ingest or revise a Turn and execute reply, research, or coordinate intent. |
-| `Memory` | Hold bounded per-thread scratch notes seeded from a brief; it is not a persistence layer. |
+| `Scratchpad` | Hold bounded per-thread scratch notes seeded from a brief; it is not a persistence layer. |
 | `ToolComponent` | Execute local capabilities behind confirmation and cancellation boundaries. |
 
 The scheduler model may propose only `same|new`, `targetTurnId`, and a boolean
@@ -285,8 +284,8 @@ falls back to the oldest pending stimulus as `new`, never to an implicit merge.
 
 ### Deliberate Non-goals
 
-- No durable user profile, SQL/native-vector write, episodic archive, automatic
-  cross-session recall, or hidden provider/tool transcript cache in this phase.
+- No durable user profile, native-vector write, episodic archive, automatic
+  cross-process recall, or hidden provider/tool transcript cache in this phase.
 - No claim that four slots, a thalamic gate analogy, locus-coeruleus language,
   or a foreground broadcast boundary proves consciousness.
 - No parallel processing of independent external stimuli until measurements

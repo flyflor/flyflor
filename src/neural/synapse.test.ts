@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { describe, expect, test } from 'bun:test';
-import type { ContextBrief } from '@/neural/context';
-import { Context } from '@/neural/context';
+import type { WorkspaceBrief } from '@/neural/workspace';
+import { Workspace } from '@/neural/workspace';
 import { Synapse } from './synapse';
 import { SynapseSignalType, type CoordinatePlan } from './types';
 import { DispositionRelation } from './awareness/types';
@@ -84,7 +84,7 @@ describe('Synapse coordinate', () => {
             spawns += 1;
             const isReviewer = spawns > 2;
             return {
-                understand: async (brief: ContextBrief) => {
+                understand: async (brief: WorkspaceBrief) => {
                     if (isReviewer) return { answer: 'review answer', steps: 1, completed: true, paused: false, evidence: [] };
                     started.push(brief.goal);
                     await new Promise<void>((resolve) => gates.push(resolve));
@@ -119,7 +119,7 @@ describe('Synapse coordinate', () => {
             spawns += 1;
             const isReviewer = spawns > 2;
             return {
-                understand: async (brief: ContextBrief) => {
+                understand: async (brief: WorkspaceBrief) => {
                     if (isReviewer) return { answer: 'review answer', steps: 1, completed: true, paused: false, evidence: [] };
                     if (brief.goal === 'study fail') throw Error('worker exploded');
                     return { answer: 'worker answer', steps: 1, completed: true, paused: false, evidence: ['e'] };
@@ -176,7 +176,7 @@ describe('Synapse coordinate', () => {
         const synapse = coordinateHarness(plan);
         const controller = new AbortController();
         synapse.spawnThought = async () => ({
-            understand: async (_brief: ContextBrief, signal?: AbortSignal) => {
+            understand: async (_brief: WorkspaceBrief, signal?: AbortSignal) => {
                 await new Promise<never>((_, reject) => {
                     signal?.addEventListener('abort', () => reject(Error('aborted')), { once: true });
                 });
@@ -193,7 +193,7 @@ describe('Synapse coordinate', () => {
 });
 
 describe('Synapse cancellation and speaker ownership', () => {
-    test('aborts an ingest that has not created a Context turn when its speaker disconnects', async () => {
+    test('aborts an ingest that has not created a Workspace turn when its speaker disconnects', async () => {
         let receivedSignal: AbortSignal | undefined;
         let release: (() => void) | undefined;
         const brain = {
@@ -218,7 +218,7 @@ describe('Synapse cancellation and speaker ownership', () => {
 
     test('keeps working turns while removing a disconnected speaker', () => {
         const synapse = setupSynapse({ next: async () => undefined });
-        synapse.context.turns = [
+        synapse.workspace.turns = [
             {
                 id: 'turn_waiting', speakerId: 'conn_1', status: 'waiting', intent: 'reply', goal: 'wait',
                 constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
@@ -231,14 +231,14 @@ describe('Synapse cancellation and speaker ownership', () => {
 
         synapse.forgetSpeaker('conn_1');
 
-        expect(synapse.context.turns.map((turn) => turn.id)).toEqual(['turn_waiting', 'turn_working']);
+        expect(synapse.workspace.turns.map((turn) => turn.id)).toEqual(['turn_waiting', 'turn_working']);
     });
 });
 
 function setupSynapse(brain: { next(input: unknown): Promise<void> }) {
     const synapse = new Synapse();
     synapse.brain = brain as never;
-    synapse.context = new Context();
+    synapse.workspace = new Workspace();
     synapse.awareness = {
         preempted: () => false,
         turnSettled: () => undefined,
@@ -249,18 +249,18 @@ function setupSynapse(brain: { next(input: unknown): Promise<void> }) {
 }
 
 function coordinateHarness(plan: CoordinatePlan): Synapse & {
-    workerBriefs: ContextBrief[];
-    seenReviewBrief?: ContextBrief;
+    workerBriefs: WorkspaceBrief[];
+    seenReviewBrief?: WorkspaceBrief;
     synthesisInput: string;
 } {
     const synapse = new Synapse() as Synapse & {
-        workerBriefs: ContextBrief[];
-        seenReviewBrief?: ContextBrief;
+        workerBriefs: WorkspaceBrief[];
+        seenReviewBrief?: WorkspaceBrief;
         synthesisInput: string;
     };
     synapse.workerBriefs = [];
     synapse.synthesisInput = '';
-    synapse.context = {
+    synapse.workspace = {
         brief: (turnId?: string) => ({
             turnId: turnId ?? 'turn_1',
             intent: 'research',
@@ -291,7 +291,7 @@ function coordinateHarness(plan: CoordinatePlan): Synapse & {
         spawned += 1;
         const index = spawned;
         return {
-            understand: async (brief: ContextBrief) => {
+            understand: async (brief: WorkspaceBrief) => {
                 if (index > Math.max(plan.slices.length, 1)) {
                     synapse.seenReviewBrief = brief;
                     return { answer: 'review answer', steps: 1, completed: true, paused: false, evidence: ['review evidence'] };

@@ -10,7 +10,7 @@
 ```
 
 `workspace` 是语义 Turn 投影，不是 transcript；`stimuli` 按到达顺序给出，每项含
-id、说话人和文本。`master` 是已离开有界工作空间的旧 turn 固化而来的会话级摘要；
+id、说话人和文本。`situation` 是已离开有界工作空间的旧 turn 固化而来的进程内情境摘要；
 可以用它识别对更早工作的追问，但绝不能把它当作 transcript。
 
 规则：
@@ -42,7 +42,7 @@ id、说话人和文本。`master` 是已离开有界工作空间的旧 turn 固
     "outcome":null
   }],
   "stimuli":[{"id":"stim_2","speakerId":"conn_2","text":"..."}],
-  "master":[{"speakerId":"conn_1","intent":"research","goal":"更早的目标","result":"更早的结果","remaining":[]}]
+  "situation":[{"speakerId":"conn_1","intent":"research","goal":"更早的目标","result":"更早的结果","remaining":[]}]
 }
 ```
 

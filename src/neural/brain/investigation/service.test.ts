@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { ChatRole, type MemoryMessage } from '@/neural/brain/types';
-import { Context } from '@/neural/context';
+import { ChatRole, type MindMessage } from '@/neural/brain/types';
+import { Workspace } from '@/neural/workspace';
 import { SynapseSignalType } from '@/neural/types';
 import type { ActionRequest } from '@/plugins';
 import type { IntelligenceToolDefinition, ProviderMessage } from '../intelligence/types';
@@ -14,7 +14,7 @@ import { Investigation } from './service';
  * real control flow with a request whose arguments omit `cwd`.
  */
 
-function mockInvestigation(context: Context, responses: Array<{ text: string; actionRequests: ActionRequest[] }>) {
+function mockInvestigation(workspace: Workspace, responses: Array<{ text: string; actionRequests: ActionRequest[] }>) {
     const events: Array<{ type: SynapseSignalType; data: unknown }> = [];
     const seenMessages: ProviderMessage[][] = [];
     const calls: ActionRequest[] = [];
@@ -22,9 +22,9 @@ function mockInvestigation(context: Context, responses: Array<{ text: string; ac
         {
             emit: (type: SynapseSignalType, data: unknown) => { events.push({ type, data }); },
             interact: async (request: { turnId: string; id: string; kind: 'ask' | 'confirm'; data: unknown }) => {
-                context.pause(request.turnId, { id: request.id, kind: request.kind, prompt: JSON.stringify(request.data) });
+                workspace.pause(request.turnId, { id: request.id, kind: request.kind, prompt: JSON.stringify(request.data) });
                 events.push({ type: request.kind === 'ask' ? SynapseSignalType.Ask : SynapseSignalType.Confirm, data: request.data });
-                context.resume(request.turnId, request.id);
+                workspace.resume(request.turnId, request.id);
                 return request.kind === 'ask'
                     ? { kind: 'ask', answers: [{ question: 'Pick?', answer: 'a' }] }
                     : { kind: 'confirm', approved: true };
@@ -32,7 +32,7 @@ function mockInvestigation(context: Context, responses: Array<{ text: string; ac
         } as never,
     );
     let index = 0;
-    instance.context = context;
+    instance.workspace = workspace;
     instance.tools = {
         list: async () => [{ name: 'filesystem', description: 'filesystem', parameters: {} }, { name: 'ask', description: 'ask', parameters: {} }] as IntelligenceToolDefinition[],
         cwd: async (name: string) => name !== 'ask',
@@ -74,17 +74,17 @@ function ingestMock() {
 }
 
 describe('Investigation', () => {
-    let context: Context;
+    let workspace: Workspace;
 
     beforeEach(async () => {
-        context = new Context();
-        context.prompt = { section: () => 'system placeholder' } as never;
-        context.intelligence = ingestMock() as never;
-        await context.ingest({ text: '调查工具层 cwd=/tmp/semantic', speakerId: 'test' });
+        workspace = new Workspace();
+        workspace.prompt = { section: () => 'system placeholder' } as never;
+        workspace.intelligence = ingestMock() as never;
+        await workspace.ingest({ text: '调查工具层 cwd=/tmp/semantic', speakerId: 'test' });
     });
 
     test('returns a final answer when the local loop ends without further action requests', async () => {
-        const { instance, events } = mockInvestigation(context, [{ text: '直接答案', actionRequests: [] }]);
+        const { instance, events } = mockInvestigation(workspace, [{ text: '直接答案', actionRequests: [] }]);
 
         const outcome = await instance.run(
             [{ role: ChatRole.User, content: '调查工具层' }],
@@ -95,7 +95,7 @@ describe('Investigation', () => {
     });
 
     test('can finish silently for worker and reviewer runs', async () => {
-        const { instance, events } = mockInvestigation(context, [{ text: '静默答案', actionRequests: [] }]);
+        const { instance, events } = mockInvestigation(workspace, [{ text: '静默答案', actionRequests: [] }]);
 
         const outcome = await instance.run(
             [{ role: ChatRole.User, content: '调查工具层' }],
@@ -107,7 +107,7 @@ describe('Investigation', () => {
     });
 
     test('streams text, replays the local action buffer into the next request, and emits one evidence line', async () => {
-        const { instance, events, seenMessages, calls } = mockInvestigation(context, [
+        const { instance, events, seenMessages, calls } = mockInvestigation(workspace, [
             { text: '我先读文件', actionRequests: [{ id: 'tool_1', name: 'filesystem', arguments: { action: 'read' } }] },
             { text: '综合答案', actionRequests: [] },
         ]);
@@ -120,15 +120,15 @@ describe('Investigation', () => {
         expect(outcome.evidence.join('\n')).toContain('filesystem');
         expect(outcome.evidence.join('\n')).toContain('/tmp/demo.ts');
         expect(events.map((event) => event.type)).toContain(SynapseSignalType.Event);
-        expect(JSON.stringify(context.turns)).not.toContain('tool_call_id');
-        expect(JSON.stringify(context.turns)).not.toContain('"role":"tool"');
+        expect(JSON.stringify(workspace.turns)).not.toContain('tool_call_id');
+        expect(JSON.stringify(workspace.turns)).not.toContain('"role":"tool"');
         expect(seenMessages).toHaveLength(2);
         expect(seenMessages[1]?.some((message) => message.role === 'action')).toBe(true);
         expect(JSON.stringify(seenMessages)).toContain('filesystem');
     });
 
     test('leaves an explicit cwd alone when the tool already carries one', async () => {
-        const { instance, calls } = mockInvestigation(context, [
+        const { instance, calls } = mockInvestigation(workspace, [
             { text: '我先读文件', actionRequests: [{ id: 'tool_1', name: 'filesystem', arguments: { action: 'read', cwd: '/tmp/explicit' } }] },
             { text: '综合答案', actionRequests: [] },
         ]);
@@ -142,8 +142,8 @@ describe('Investigation', () => {
 
     test('injects the active turn cwd into shell and execute requests that do not carry one', async () => {
         const cwd = '/tmp/semantic';
-        const turn = context.working()!;
-        const { instance, calls } = mockInvestigation(context, [
+        const turn = workspace.working()!;
+        const { instance, calls } = mockInvestigation(workspace, [
             {
                 text: '跑工具',
                 actionRequests: [
@@ -163,12 +163,12 @@ describe('Investigation', () => {
     });
 
     test('ask action resumes the same investigation with a structured answer', async () => {
-        const { instance, events, seenMessages } = mockInvestigation(context, [
+        const { instance, events, seenMessages } = mockInvestigation(workspace, [
             { text: '需要确认', actionRequests: [{ id: 'tool_1', name: 'ask', arguments: { questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] } }] },
             { text: '继续完成', actionRequests: [] },
         ]);
 
-        const turn = context.working()!;
+        const turn = workspace.working()!;
         const outcome = await instance.run(
             [{ role: ChatRole.User, content: '调查工具层' }],
             { turnId: turn.id, cwd: turn.cwd },
@@ -179,8 +179,8 @@ describe('Investigation', () => {
             data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] },
         });
         expect(JSON.stringify(seenMessages.at(-1))).toContain('\\"kind\\":\\"ask\\"');
-        expect(JSON.stringify(context.turns)).not.toContain('"pause"');
-        expect(JSON.stringify(context)).not.toContain('pending');
-        expect(JSON.stringify(context.turns)).not.toContain('tool_call_id');
+        expect(JSON.stringify(workspace.turns)).not.toContain('"pause"');
+        expect(JSON.stringify(workspace)).not.toContain('pending');
+        expect(JSON.stringify(workspace.turns)).not.toContain('tool_call_id');
     });
 });

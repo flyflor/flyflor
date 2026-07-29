@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { describe, expect, test } from 'bun:test';
 import type { ConfigService } from '@/configuration';
-import { Context } from '@/neural/context';
+import { Workspace } from '@/neural/workspace';
 import type { Intelligence } from '@/neural/brain/intelligence';
 import type { PromptService } from '@/core';
 import { Awareness } from './service';
@@ -47,14 +47,14 @@ class MockCortex {
 function mockAwareness(verdict: ScheduleVerdict = { dispositions: [] }): { awareness: Awareness; scheduler: Scheduler; cortex: MockCortex } {
     const awareness = new Awareness();
     const scheduler = new Scheduler();
-    const context = new Context();
+    const workspace = new Workspace();
     awareness.config = {
         awareness: { scheduleTimeoutMs: 5000, batchWindowMs: 0 },
     } as ConfigService;
-    awareness.context = context;
+    awareness.workspace = workspace;
     awareness.scheduler = scheduler;
     scheduler.config = awareness.config;
-    scheduler.context = context;
+    scheduler.workspace = workspace;
     scheduler.prompt = { section: () => 'schedule prompt' } as unknown as PromptService;
     scheduler.intelligence = {
         completeText: async () => JSON.stringify(verdict),
@@ -127,7 +127,7 @@ describe('Awareness', () => {
 
     test('rejects a new stimulus when all four semantic slots are protected', async () => {
         const { awareness, scheduler, cortex } = mockAwareness();
-        awareness.context.turns = Array.from({ length: 4 }, (_, index) => ({
+        awareness.workspace.turns = Array.from({ length: 4 }, (_, index) => ({
             id: `turn_${index + 1}`,
             speakerId: `conn_${index + 1}`,
             status: 'suspended' as const,
@@ -155,7 +155,7 @@ describe('Awareness', () => {
         const { awareness, cortex } = mockAwareness({
             dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.Same, targetTurnId: turn.id }],
         });
-        awareness.context.turns = [turn];
+        awareness.workspace.turns = [turn];
 
         awareness.perceive({ speakerId: 'conn_1', text: 'follow up' });
         await tick();
@@ -166,7 +166,7 @@ describe('Awareness', () => {
 
     test('falls back to a new Turn when semantic scheduling has no valid verdict', async () => {
         const { awareness, cortex } = mockAwareness();
-        awareness.context.turns = [{
+        awareness.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'completed', intent: 'reply', goal: 'old goal',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
@@ -182,7 +182,7 @@ describe('Awareness', () => {
         const { awareness, cortex } = mockAwareness({
             dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.New, urgent: true, targetTurnId: 'turn_1' }],
         });
-        awareness.context.turns = [{
+        awareness.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'working', intent: 'reply', goal: 'g',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
@@ -201,7 +201,7 @@ describe('Awareness', () => {
         const { awareness, cortex } = mockAwareness({
             dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.Same, targetTurnId: 'turn_1', urgent: true }],
         });
-        awareness.context.turns = [{
+        awareness.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'working', intent: 'reply', goal: 'g',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
@@ -215,7 +215,7 @@ describe('Awareness', () => {
 
     test('clears a pre-emption flag when settlement is reported by stimulus id', () => {
         const { awareness, scheduler } = mockAwareness();
-        awareness.context.turns = [{
+        awareness.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', stimulusId: 'stim_1', status: 'completed', intent: 'reply', goal: 'g',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
@@ -230,7 +230,7 @@ describe('Awareness', () => {
         const { awareness, cortex } = mockAwareness({
             dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.New, urgent: true }],
         });
-        awareness.context.turns = [{
+        awareness.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'waiting', intent: 'reply', goal: 'waiting',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
@@ -244,7 +244,7 @@ describe('Awareness', () => {
 
     test('answers are forwarded only for the owning speaker when supplied', () => {
         const { awareness, cortex } = mockAwareness();
-        awareness.context.turns = [{
+        awareness.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'waiting', intent: 'reply', goal: 'g',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
@@ -268,20 +268,20 @@ describe('Awareness', () => {
 
     test('defers active-turn cleanup until interruption settles', () => {
         const { awareness } = mockAwareness();
-        awareness.context.turns = [{
+        awareness.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'working', intent: 'reply', goal: 'g',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
 
         awareness.forget('conn_1');
-        expect(awareness.context.turns).toHaveLength(1);
+        expect(awareness.workspace.turns).toHaveLength(1);
         awareness.turnInterrupted('turn_1');
-        expect(awareness.context.turns).toHaveLength(0);
+        expect(awareness.workspace.turns).toHaveLength(0);
     });
 
     test('drops late chunks from a disconnected active speaker before they seize the mouth', () => {
         const { awareness, cortex } = mockAwareness();
-        awareness.context.turns = [{
+        awareness.workspace.turns = [{
             id: 'turn_a', speakerId: 'conn_a', status: 'working', intent: 'reply', goal: 'work',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
@@ -331,7 +331,7 @@ describe('Awareness', () => {
 
     test('releases a waiting speaker mouth when the connection closes', () => {
         const { awareness, cortex } = mockAwareness();
-        awareness.context.turns = [{
+        awareness.workspace.turns = [{
             id: 'turn_a', speakerId: 'conn_a', status: 'waiting', intent: 'reply', goal: 'wait',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
@@ -351,7 +351,7 @@ describe('Awareness', () => {
     test('does not dispatch a stimulus removed while the scheduler is awaiting', async () => {
         const { awareness, scheduler, cortex } = mockAwareness();
         let resolveSchedule!: (value: string) => void;
-        awareness.context.turns = [{
+        awareness.workspace.turns = [{
             id: 'turn_done', speakerId: 'old', status: 'completed', intent: 'reply', goal: 'done',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];

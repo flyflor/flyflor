@@ -17,8 +17,8 @@ notes. `AGENTS.md` remains a read-only reference.
 - Load only the static `SOUL.md` and `EXTENSION.md` sections.
 - Do not load `USER.md` into the active agent context.
 - Do not write any package file from a user turn.
-- Keep temporary task state in the bounded in-process Context and agent scratch
-  notes; do not convert it into a durable profile or archive.
+- Keep temporary task state in the bounded in-process Workspace and per-thread
+  Scratchpad; do not convert it into a durable profile or archive.
 
-The files remain as placeholders for a future persistence phase. That phase is
-not part of the current runtime contract.
+The unused `USER.md` file remains only for package compatibility. Persistence is
+outside the current runtime contract.

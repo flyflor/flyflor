@@ -2,7 +2,7 @@
 
 读取 JSON 输入，只返回紧凑 JSON。`latest` 是新的感知刺激；`current` 和
 `workspace` 是用来判断追问的语义投影，不是 transcript，也不能原样复制到结果。
-`master` 是工作空间之外的旧 turn 固化摘要;只作为情境背景使用,绝不作为可引用内容。
+`situation` 是工作空间之外的旧 turn 固化摘要;只作为情境背景使用,绝不作为可引用内容。
 
 结构：
 

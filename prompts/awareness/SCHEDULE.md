@@ -11,8 +11,8 @@ Return only JSON:
 ```
 
 `workspace` contains semantic Turn projections, not a transcript. `stimuli` is
-in arrival order and each item has an id, speaker id, and text. `master`
-contains graduated session-level summaries of turns that already left the
+in arrival order and each item has an id, speaker id, and text. `situation`
+contains graduated in-process outcomes of turns that already left the
 bounded workspace; use it to recognize a follow-up to older work, but never
 treat it as a transcript.
 
@@ -49,7 +49,7 @@ Input shape:
     "outcome":null
   }],
   "stimuli":[{"id":"stim_2","speakerId":"conn_2","text":"..."}],
-  "master":[{"speakerId":"conn_1","intent":"research","goal":"older goal","result":"older result","remaining":[]}]
+  "situation":[{"speakerId":"conn_1","intent":"research","goal":"older goal","result":"older result","remaining":[]}]
 }
 ```
 

@@ -2,18 +2,18 @@ import { ChatRole } from '@/neural/brain/types';
 import { FComponent, Inject, Prompt, PromptService, Singleton } from '@/core';
 import { Intelligence } from '@/neural/brain/intelligence/service';
 import { parse } from '@/neural/json';
-import { MasterContext } from './master';
-import type { ContextBrief, Ingest, MasterProjection, Pause, Settle, Summary, Turn, TurnBrief, TurnDraft } from './types';
+import { SituationModel, type SituationProjection } from '@/neural/situation';
+import type { WorkspaceBrief, Ingest, Pause, Settle, TurnOutcome, Turn, TurnBrief, TurnDraft } from './types';
 
 /**
- * EN: Context owns the life-form's bounded semantic working set.
- * ZH: Context 持有生命体有界的语义工作集。
+ * EN: Workspace owns the life-form's bounded semantic working set.
+ * ZH: Workspace 持有生命体有界的语义工作集。
  *
  * EN: A Turn is understood content, not a transcript or an archive.
  * ZH: Turn 是理解后的内容，不是 transcript，也不是历史账本。
  */
 @Singleton()
-export class Context extends FComponent {
+export class Workspace extends FComponent {
     /** EN: Upper bound of the bounded working set. ZH: 有界工作集的容量上限。 */
     public static readonly Capacity = 4;
     /** EN: Bound the emergency compaction path so a cancelled thought cannot hold the gate forever. ZH: 限制紧急压缩路径的时长，避免被取消的思考永远占住闸门。 */
@@ -26,13 +26,13 @@ export class Context extends FComponent {
     public intelligence!: Intelligence;
 
     @Inject()
-    /** EN: Session-level situation model that settled turns consolidate into. ZH: 已结算 turn 固化升格进入的会话级情境模型。 */
-    public master!: MasterContext;
+    /** EN: In-process situation model that settled turns consolidate into. ZH: 已结算 turn 固化升格进入的进程内情境模型。 */
+    public situation!: SituationModel;
 
     /** EN: Tracked semantic turns held inside the bounded workspace. ZH: 有界工作空间内被跟踪的语义 turn 列表。 */
     public turns: Turn[];
 
-    @Prompt('prompts/context')
+    @Prompt('prompts/workspace')
     /** EN: Prompt package backing the INGEST and SETTLE sections. ZH: 提供 INGEST 与 SETTLE section 的提示词包。 */
     public prompt!: PromptService;
 
@@ -63,7 +63,7 @@ export class Context extends FComponent {
      * ZH: 有界工作空间是否还能容纳新的 turn。
      */
     public hasCapacity(): boolean {
-        return this.turns.length < Context.Capacity || this.turns.some((turn) => turn.status === 'completed');
+        return this.turns.length < Workspace.Capacity || this.turns.some((turn) => turn.status === 'completed');
     }
 
     /**
@@ -98,12 +98,12 @@ export class Context extends FComponent {
     }
 
     /**
-     * EN: Session-level master-context projection; empty when the master is
+     * EN: In-process situation projection; empty when the situation is
      * not wired (direct construction in tests).
-     * ZH: 会话级 master context 投影;master 未接线时(测试中直接构造)返回空。
+     * ZH: 进程内情境投影;situation 未接线时(测试中直接构造)返回空。
      */
-    public masterProjection(): MasterProjection {
-        return this.master?.projection() ?? [];
+    public situationProjection(): SituationProjection {
+        return this.situation?.projection() ?? [];
     }
 
     /**
@@ -111,7 +111,7 @@ export class Context extends FComponent {
      * projections from the bounded workspace, never the raw conversation.
      * ZH: 为一个 agent 生成范围简报。只包含有界工作集的语义 Turn 投影，不含原始对话。
      */
-    public brief(turnId?: string): ContextBrief {
+    public brief(turnId?: string): WorkspaceBrief {
         const current = turnId === 'none' ? undefined : turnId ? this.turn(turnId) : this.foreground();
         if (!current) {
             return {
@@ -123,7 +123,7 @@ export class Context extends FComponent {
                 done: [],
                 open: [],
                 workspace: this.turns.map((turn) => this.briefTurn(turn)),
-                master: this.masterProjection(),
+                situation: this.situationProjection(),
             };
         }
         return {
@@ -136,7 +136,7 @@ export class Context extends FComponent {
             done: [...current.done],
             open: [...current.open],
             workspace: this.turns.map((turn) => this.briefTurn(turn)),
-            master: this.masterProjection(),
+            situation: this.situationProjection(),
         };
     }
 
@@ -150,7 +150,7 @@ export class Context extends FComponent {
             cwd: turn.cwd,
             done: [...turn.done],
             open: [...turn.open],
-            outcome: turn.summary ? structuredClone(turn.summary) : undefined,
+            outcome: turn.outcome ? structuredClone(turn.outcome) : undefined,
         };
     }
 
@@ -163,7 +163,7 @@ export class Context extends FComponent {
         if (active) throw Error(`Another turn is already occupying the foreground: ${active.id}`);
         const raw = await this.intelligence.completeText([
             { role: ChatRole.System, content: this.prompt.section('INGEST') },
-            { role: ChatRole.User, content: JSON.stringify({ latest: input.text, current: active ? this.briefTurn(active) : null, workspace: this.brief().workspace, master: this.masterProjection() }) },
+            { role: ChatRole.User, content: JSON.stringify({ latest: input.text, current: active ? this.briefTurn(active) : null, workspace: this.brief().workspace, situation: this.situationProjection() }) },
         ], signal);
         signal?.throwIfAborted();
         const draft = this.draft(parse<unknown>(raw));
@@ -183,7 +183,7 @@ export class Context extends FComponent {
         const expectedStatus = target.status;
         const raw = await this.intelligence.completeText([
             { role: ChatRole.System, content: this.prompt.section('INGEST') },
-            { role: ChatRole.User, content: JSON.stringify({ latest: input.text, current: this.briefTurn(target), workspace: this.brief().workspace, master: this.masterProjection() }) },
+            { role: ChatRole.User, content: JSON.stringify({ latest: input.text, current: this.briefTurn(target), workspace: this.brief().workspace, situation: this.situationProjection() }) },
         ], signal);
         signal?.throwIfAborted();
         const draft = this.draft(parse<unknown>(raw));
@@ -193,7 +193,7 @@ export class Context extends FComponent {
             throw Error(`Turn changed while revising: ${turnId}`);
         }
         Object.assign(target, draft, { status: 'working', stimulusId: input.stimulusId, updated: Date.now() });
-        delete target.summary;
+        delete target.outcome;
         delete target.pause;
         this.touch(target);
         return target;
@@ -243,40 +243,40 @@ export class Context extends FComponent {
     }
 
     /**
-     * EN: Settles a working turn into a completed turn with a compact summary.
+     * EN: Settles a working turn into a completed turn with a compact outcome.
      * ZH: 把进行中的 turn 结算为完成态，并保留一份紧凑摘要。
      */
-    public async settle(turnId: string, input: Settle, signal?: AbortSignal): Promise<Summary> {
+    public async settle(turnId: string, input: Settle, signal?: AbortSignal): Promise<TurnOutcome> {
         const turn = this.turn(turnId);
         if (turn.status !== 'working') throw Error(`Turn is not working: ${turnId}`);
         const raw = await this.intelligence.completeText([
             { role: ChatRole.System, content: this.prompt.section('SETTLE') },
             {
                 role: ChatRole.User,
-                content: JSON.stringify({ ...input, current: this.briefTurn(turn), workspace: this.brief().workspace, master: this.masterProjection() }),
+                content: JSON.stringify({ ...input, current: this.briefTurn(turn), workspace: this.brief().workspace, situation: this.situationProjection() }),
             },
         ], signal);
         signal?.throwIfAborted();
-        const summary = { ...this.compactSummary(parse<unknown>(raw)), createdAt: Date.now() };
+        const outcome = { ...this.compactOutcome(parse<unknown>(raw)), createdAt: Date.now() };
         const target = this.turn(turnId);
         if (target !== turn || target.status !== 'working') throw Error(`Turn changed while settling: ${turnId}`);
         target.status = 'completed';
-        target.summary = summary;
+        target.outcome = outcome;
         delete target.pause;
-        target.updated = summary.createdAt;
+        target.updated = outcome.createdAt;
         this.touch(target);
-        this.master?.promote(target, summary);
-        return summary;
+        this.situation?.promote(target, outcome);
+        return outcome;
     }
 
     /**
      * EN: Keeps a compact outcome when a foreground Turn yields.
      * ZH: 前台 Turn 让位时保留紧凑 outcome，供后续目标恢复使用。
      */
-    public async interrupt(turnId: string, input: Settle, signal?: AbortSignal): Promise<Summary> {
+    public async interrupt(turnId: string, input: Settle, signal?: AbortSignal): Promise<TurnOutcome> {
         const turn = this.turn(turnId);
         if (turn.status !== 'working') throw Error(`Turn is not working: ${turnId}`);
-        if (signal?.aborted) return this.suspendWithSummary(turnId, turn, input);
+        if (signal?.aborted) return this.suspendWithOutcome(turnId, turn, input);
         const messages = [
             { role: ChatRole.System, content: this.prompt.section('SETTLE') },
             {
@@ -287,7 +287,7 @@ export class Context extends FComponent {
         const requestController = new AbortController();
         const abortRequest = () => requestController.abort();
         signal?.addEventListener('abort', abortRequest, { once: true });
-        const timer = setTimeout(() => requestController.abort(), Context.InterruptTimeoutMs);
+        const timer = setTimeout(() => requestController.abort(), Workspace.InterruptTimeoutMs);
         let raceTimer: ReturnType<typeof setTimeout> | undefined;
         const request = this.intelligence.completeText(messages, requestController.signal);
         // A provider may ignore cancellation; observing the rejection prevents a
@@ -297,14 +297,14 @@ export class Context extends FComponent {
             const raw = await Promise.race([
                 request,
                 new Promise<never>((_, reject) => {
-                    raceTimer = setTimeout(() => reject(Error('Context interruption timed out')), Context.InterruptTimeoutMs);
+                    raceTimer = setTimeout(() => reject(Error('Workspace interruption timed out')), Workspace.InterruptTimeoutMs);
                 }),
             ]);
-            if (signal?.aborted) return this.suspendWithSummary(turnId, turn, input);
-            const summary = { ...this.compactSummary(parse<unknown>(raw)), createdAt: Date.now() };
-            return this.suspendWithSummary(turnId, turn, input, summary);
+            if (signal?.aborted) return this.suspendWithOutcome(turnId, turn, input);
+            const outcome = { ...this.compactOutcome(parse<unknown>(raw)), createdAt: Date.now() };
+            return this.suspendWithOutcome(turnId, turn, input, outcome);
         } catch {
-            return this.suspendWithSummary(turnId, turn, input);
+            return this.suspendWithOutcome(turnId, turn, input);
         } finally {
             clearTimeout(timer);
             if (raceTimer !== undefined) clearTimeout(raceTimer);
@@ -318,7 +318,7 @@ export class Context extends FComponent {
      */
     public forgetSpeaker(speakerId: string): void {
         this.turns = this.turns.filter((turn) => turn.speakerId !== speakerId);
-        this.master?.dropSpeaker(speakerId);
+        this.situation?.dropSpeaker(speakerId);
     }
 
     private draft(value: unknown): TurnDraft {
@@ -375,13 +375,13 @@ export class Context extends FComponent {
     }
 
     private evictForCapacity(): void {
-        while (this.turns.length >= Context.Capacity) {
+        while (this.turns.length >= Workspace.Capacity) {
             const index = this.turns.findIndex((turn) => turn.status === 'completed');
-            if (index < 0) throw Error('Context working set is full');
+            if (index < 0) throw Error('Workspace working set is full');
             const [evicted] = this.turns.splice(index, 1);
             // Consolidation before eviction: a completed turn graduates into
-            // the session-level situation model instead of vanishing silently.
-            if (evicted?.summary) this.master?.promote(evicted, evicted.summary);
+            // the in-process situation model instead of vanishing silently.
+            if (evicted?.outcome) this.situation?.promote(evicted, evicted.outcome);
         }
     }
 
@@ -393,10 +393,10 @@ export class Context extends FComponent {
         }
     }
 
-    private suspendWithSummary(turnId: string, expected: Turn, input: Settle, summary?: Summary): Summary {
+    private suspendWithOutcome(turnId: string, expected: Turn, input: Settle, outcome?: TurnOutcome): TurnOutcome {
         const target = this.turn(turnId);
         if (target !== expected || target.status !== 'working') throw Error(`Turn changed while interrupting: ${turnId}`);
-        const compact = summary ?? {
+        const compact = outcome ?? {
             goal: this.compactText(target.goal, 512),
             result: input.assistant.length > 0 ? this.compactText(input.assistant, 2000) : 'Turn interrupted before a final answer.',
             changedFiles: [],
@@ -406,14 +406,14 @@ export class Context extends FComponent {
             createdAt: Date.now(),
         };
         target.status = 'suspended';
-        target.summary = compact;
+        target.outcome = compact;
         delete target.pause;
         target.updated = compact.createdAt;
         this.touch(target);
         return compact;
     }
 
-    private compactSummary(value: unknown): Omit<Summary, 'createdAt'> {
+    private compactOutcome(value: unknown): Omit<TurnOutcome, 'createdAt'> {
         const data = typeof value === 'object' && value !== null && !Array.isArray(value)
             ? value as Record<string, unknown>
             : {};

@@ -1,4 +1,4 @@
-import { ChatRole, type MemoryMessage } from '@/neural/brain/types';
+import { ChatRole, type MindMessage } from '@/neural/brain/types';
 import { type FModelConfiguration, type FModelProtocolConfiguration, FModelProtocolName } from '@/configuration';
 import type { ActionRequest } from '@/plugins';
 
@@ -67,7 +67,7 @@ export interface ProviderActionResultMessage {
  * EN: Union of all message shapes Flyflor sends to a provider.
  * ZH: Flyflor 发送给 provider 的全部消息形态联合。
  */
-export type ProviderMessage = MemoryMessage | ProviderActionRequestMessage | ProviderActionResultMessage;
+export type ProviderMessage = MindMessage | ProviderActionRequestMessage | ProviderActionResultMessage;
 
 /**
  * EN: Reason a provider request ended.

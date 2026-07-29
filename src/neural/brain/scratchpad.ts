@@ -1,9 +1,9 @@
 import { Config, FNeuron, Prompt, PromptService, Provide, type FSynapseBus, type PromptPackageData } from '@/core';
 import type { ConfigService } from '@/configuration';
-import type { ContextBrief, MemoryNote } from '@/neural/context/types';
-import { ChatRole, type MemoryMessage } from './types';
+import type { WorkspaceBrief, ScratchNote } from '@/neural/workspace/types';
+import { ChatRole, type MindMessage } from './types';
 
-export { ChatRole, type MemoryMessage } from './types';
+export { ChatRole, type MindMessage } from './types';
 
 export enum SoulSection {
     /** EN: Static identity / constitution of the mind loaded from `SOUL.md`. ZH: 来自 `SOUL.md` 的静态心智身份/人格层。 */
@@ -20,19 +20,19 @@ export enum SoulSection {
 }
 
 /**
- * EN: Private working-memory cache owned by one thought thread. It is limited,
+ * EN: Private scratchpad owned by one thought thread. It is limited,
  * independent, and not a transcript of the conversation. The mind keeps only
  * the notes it needs to understand the current user intent.
- * ZH: 单个思维线程私有的工作记忆缓存。它有限、独立，不是对话副本。心智只保留
+ * ZH: 单个思维线程私有的临时笔记缓存。它有限、独立，不是对话副本。心智只保留
  * 理解当前用户意图所需的笔记。
  */
 @Provide()
-export class Memory extends FNeuron {
+export class Scratchpad extends FNeuron {
     @Config()
     /** EN: Root configuration service; injected before `@Prompt` so the persona package path is available. ZH: 根配置服务；先于 `@Prompt` 注入，保证 persona 包路径可用。 */
     public config!: ConfigService;
 
-    @Prompt((prop: Memory) => prop.config.persona.promptPackage ?? './prompts/agent')
+    @Prompt((prop: Scratchpad) => prop.config.persona.promptPackage ?? './prompts/agent')
     /** EN: Prompt package holding the persona sections. ZH: 持有人格 section 的提示词包。 */
     public prompt!: PromptService<string> & PromptPackageData<string>;
 
@@ -40,7 +40,7 @@ export class Memory extends FNeuron {
     public capacity: number;
 
     /** EN: Private notes kept by this thought thread. ZH: 该思维线程保留的私有笔记。 */
-    public notes: MemoryNote[];
+    public notes: ScratchNote[];
 
     private noteSequence: number;
 
@@ -51,8 +51,8 @@ export class Memory extends FNeuron {
         this.noteSequence = 0;
     }
 
-    /** EN: Seeds the memory cache with the Context brief for the current task. ZH: 用当前任务的 Context 简报初始化记忆缓存。 */
-    public ingestBrief(brief: ContextBrief): void {
+    /** EN: Seeds the scratchpad with the Workspace brief for the current task. ZH: 用当前任务的 Workspace 简报初始化临时笔记缓存。 */
+    public ingestBrief(brief: WorkspaceBrief): void {
         this.notes = [];
         this.remember(
             `turn ${brief.turnId}: intent=${brief.intent}, goal=${brief.goal}, constraints=[${brief.constraints.join('; ')}]`,
@@ -70,7 +70,7 @@ export class Memory extends FNeuron {
     }
 
     /** EN: Adds one note to the private cache, dropping oldest notes when over capacity. ZH: 向私有缓存添加一条笔记，超出容量时丢弃最旧的笔记。 */
-    public remember(content: string, source: MemoryNote['source']): void {
+    public remember(content: string, source: ScratchNote['source']): void {
         this.noteSequence += 1;
         this.notes.push({ id: `note_${this.noteSequence}`, content: content.slice(0, 1024), source, ts: Date.now() });
         if (this.notes.length > this.capacity) {
@@ -79,11 +79,11 @@ export class Memory extends FNeuron {
     }
 
     /** EN: Builds the provider message list from persona prompt sections and cached notes. ZH: 由人格提示词 section 与缓存笔记构建发往 provider 的消息列表。 */
-    public buildMessage(): MemoryMessage[] {
+    public buildMessages(): MindMessage[] {
         const sections = this.config.persona.promptSections?.filter((section) => section !== SoulSection.User)
             ?? [SoulSection.Soul, SoulSection.Extension];
         const system = this.prompt.render({ kind: 'sections', sections });
-        const messages: MemoryMessage[] = system.trim().length === 0 ? [] : [{ role: ChatRole.System, content: system }];
+        const messages: MindMessage[] = system.trim().length === 0 ? [] : [{ role: ChatRole.System, content: system }];
         if (this.notes.length > 0) {
             messages.push({
                 role: ChatRole.User,

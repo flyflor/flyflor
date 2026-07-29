@@ -1,21 +1,21 @@
 import { ChatRole, type BrainInput } from '@/neural/brain/types';
-import { Context, type Intent } from '@/neural/context';
+import { Workspace, type Intent } from '@/neural/workspace';
 import { SynapseSignalType, TurnPreempted } from '@/neural/types';
 import { FNeuron, Inject, Provide, Scope, type IObservable } from '@/core';
-import { Memory } from './memory';
+import { Scratchpad } from './scratchpad';
 import { Intelligence } from './intelligence/service';
 import { Investigation } from './investigation';
 import type { InvestigationOutcome } from './investigation/types';
-import type { ContextBrief } from '@/neural/context/types';
+import type { WorkspaceBrief } from '@/neural/workspace/types';
 
 /**
  * EN: Brain is the single mind. It receives the semantic intent extracted by
- * Context. Intent classification lives solely in `Context.ingest` —
+ * Workspace. Intent classification lives solely in `Workspace.ingest` —
  * understanding is one cortical act, not two competing routers. `reply` and
  * `research` are handled locally; `coordinate` is forwarded to Synapse so the
  * cortex can dispatch parallel thought threads.
- * ZH: Brain 是单一心智。它接收 Context 提取的语义意图。意图分类唯一归属
- * `Context.ingest`——理解是一次皮层行为，不是两个互相竞争的路由器。`reply`、
+ * ZH: Brain 是单一心智。它接收 Workspace 提取的语义意图。意图分类唯一归属
+ * `Workspace.ingest`——理解是一次皮层行为，不是两个互相竞争的路由器。`reply`、
  * `research` 在本地处理；`coordinate` 转发给 Synapse，由皮层派发并行思维线程。
  */
 @Provide()
@@ -26,11 +26,11 @@ export class Brain extends FNeuron<BrainInput, string> implements IObservable<Br
 
     @Inject()
     /** EN: Shared bounded semantic working set. ZH: 共享的有界语义工作集。 */
-    public context!: Context;
+    public workspace!: Workspace;
 
     @Scope()
-    /** EN: Private working-memory cache scoped to this thought thread. ZH: 该思维线程私有的作用域记忆缓存。 */
-    public memory!: Memory;
+    /** EN: Private scratchpad scoped to this thought thread. ZH: 该思维线程私有的作用域临时笔记缓存。 */
+    public scratchpad!: Scratchpad;
 
     @Scope()
     /** EN: Tool-using research loop scoped to this thought thread. ZH: 该思维线程作用域内使用工具的研究循环。 */
@@ -49,10 +49,10 @@ export class Brain extends FNeuron<BrainInput, string> implements IObservable<Br
     public override async onPipe(data: BrainInput) {
         const input = { text: data.text, speakerId: data.speakerId, stimulusId: data.stimulusId };
         const turn = data.relation === 'same' && data.targetTurnId
-            ? await this.context.revise(data.targetTurnId, input, data.signal)
-            : await this.context.ingest(input, data.signal);
+            ? await this.workspace.revise(data.targetTurnId, input, data.signal)
+            : await this.workspace.ingest(input, data.signal);
         data.signal?.throwIfAborted();
-        this.memory.ingestBrief?.(this.context.brief(turn.id));
+        this.scratchpad.ingestBrief?.(this.workspace.brief(turn.id));
         await this.handle(turn.intent, data.text, turn.id, data.signal, data.stimulusId);
     }
 
@@ -67,7 +67,7 @@ export class Brain extends FNeuron<BrainInput, string> implements IObservable<Br
 
     private async reply(chunk: string, turnId: string, abortSignal?: AbortSignal, streamId?: string): Promise<void> {
         let assistant = '';
-        const messages = [...this.memory.buildMessage(), { role: ChatRole.User, content: chunk }];
+        const messages = [...this.scratchpad.buildMessages(), { role: ChatRole.User, content: chunk }];
         try {
             await this.intelligence.stream(messages, (delta) => {
                 if (this.synapse.preempted?.(turnId)) throw new TurnPreempted(turnId);
@@ -76,27 +76,27 @@ export class Brain extends FNeuron<BrainInput, string> implements IObservable<Br
             }, abortSignal);
         } catch (error) {
             if ((error instanceof TurnPreempted && error.turnId === turnId) || (abortSignal?.aborted && this.synapse.preempted?.(turnId))) {
-                await this.context.interrupt(turnId, { assistant });
+                await this.workspace.interrupt(turnId, { assistant });
                 if (!(error instanceof TurnPreempted)) throw new TurnPreempted(turnId);
             }
             throw error;
         }
         if (abortSignal?.aborted || this.synapse.preempted?.(turnId)) {
-            await this.context.interrupt(turnId, { assistant });
+            await this.workspace.interrupt(turnId, { assistant });
             throw new TurnPreempted(turnId);
         }
-        await this.context.settle(turnId, { assistant }, abortSignal);
+        await this.workspace.settle(turnId, { assistant }, abortSignal);
         // If cancellation won before settlement, the settle call cannot leave a
         // working turn behind. If it did complete, completion won the race and
         // the terminal marker remains valid.
-        const settled = this.context.turn(turnId);
+        const settled = this.workspace.turn(turnId);
         if (settled.status === 'working' && (abortSignal?.aborted || this.synapse.preempted?.(turnId))) throw new TurnPreempted(turnId);
         this.synapse.emit(SynapseSignalType.Reply, { turnId, ...(streamId ? { streamId } : {}), chunk: null });
     }
 
     private async research(chunk: string, turnId: string, abortSignal?: AbortSignal, streamId?: string): Promise<void> {
-        const messages = [...this.memory.buildMessage(), { role: ChatRole.User, content: chunk }];
-        const turn = this.context.turn(turnId);
+        const messages = [...this.scratchpad.buildMessages(), { role: ChatRole.User, content: chunk }];
+        const turn = this.workspace.turn(turnId);
         const outcome = await this.investigation.run(messages, {
             turnId,
             ...(streamId ? { streamId } : {}),
@@ -104,30 +104,30 @@ export class Brain extends FNeuron<BrainInput, string> implements IObservable<Br
             ...(abortSignal ? { signal: abortSignal } : {}),
         });
         if (outcome.interrupted) {
-            await this.context.interrupt(turnId, { assistant: '', evidence: outcome.evidence });
+            await this.workspace.interrupt(turnId, { assistant: '', evidence: outcome.evidence });
             throw new TurnPreempted(turnId);
         }
         if (outcome.paused) return;
         if (abortSignal?.aborted || this.synapse.preempted?.(turnId)) {
-            await this.context.interrupt(turnId, { assistant: outcome.answer, evidence: outcome.evidence });
+            await this.workspace.interrupt(turnId, { assistant: outcome.answer, evidence: outcome.evidence });
             throw new TurnPreempted(turnId);
         }
-        await this.context.settle(turnId, { assistant: outcome.answer, evidence: outcome.evidence }, abortSignal);
-        const settled = this.context.turn(turnId);
+        await this.workspace.settle(turnId, { assistant: outcome.answer, evidence: outcome.evidence }, abortSignal);
+        const settled = this.workspace.turn(turnId);
         if (settled.status === 'working' && (abortSignal?.aborted || this.synapse.preempted?.(turnId))) throw new TurnPreempted(turnId);
         this.synapse.emit(SynapseSignalType.Reply, { turnId, ...(streamId ? { streamId } : {}), chunk: null });
     }
 
     /**
-     * EN: Parallel-thought understanding entry. Ingests the Context brief into
-     * this thought thread's private memory, then runs one investigation loop
-     * without touching Context.turns.
-     * ZH: 并行思维理解入口。把 Context 简报写入该思维线程的私有记忆，然后跑一轮
-     * investigation，不修改 Context.turns。
+     * EN: Parallel-thought understanding entry. Ingests the Workspace brief into
+     * this thought thread's private scratchpad, then runs one investigation loop
+     * without touching Workspace.turns.
+     * ZH: 并行思维理解入口。把 Workspace 简报写入该思维线程的私有临时笔记，然后跑一轮
+     * investigation，不修改 Workspace.turns。
      */
-    public async understand(brief: ContextBrief, signal?: AbortSignal): Promise<InvestigationOutcome | undefined> {
-        this.memory.ingestBrief(brief);
-        const messages = this.memory.buildMessage();
+    public async understand(brief: WorkspaceBrief, signal?: AbortSignal): Promise<InvestigationOutcome | undefined> {
+        this.scratchpad.ingestBrief(brief);
+        const messages = this.scratchpad.buildMessages();
         const outcome = await this.investigation.run(messages, { emitReply: false, cwd: brief.cwd, signal });
         if (outcome.paused) return undefined;
         return outcome;

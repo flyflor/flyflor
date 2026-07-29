@@ -35,6 +35,21 @@ const bannedPromptTerms = [
     /线协议/,
 ];
 const bannedHits: string[] = [];
+const architectureFiles = [
+    ...filesUnder('src').filter((file) => file.endsWith('.ts')),
+    ...filesUnder('prompts').filter((file) => file.endsWith('.md')),
+    'README.md',
+    'README.zh.cn.md',
+].filter(existsSync);
+const bannedArchitectureTerms = [
+    /\bMasterContext\b/,
+    /\bMemoryRepo\b/,
+    /\bmemories\b/,
+    /session-level situation model/i,
+    /会话级情境模型/,
+    /entities\/memory/,
+];
+const architectureHits: string[] = [];
 
 for (const root of roots) {
     if (!existsSync(root)) continue;
@@ -52,6 +67,13 @@ for (const file of promptFiles) {
     }
 }
 
+for (const file of architectureFiles) {
+    const content = readFileSync(file, 'utf-8');
+    for (const term of bannedArchitectureTerms) {
+        if (term.test(content)) architectureHits.push(`${file}: ${term}`);
+    }
+}
+
 if (missing.length > 0) {
     console.error(`Missing zh.cn mirrors:\n${missing.join('\n')}`);
     process.exit(1);
@@ -59,6 +81,11 @@ if (missing.length > 0) {
 
 if (bannedHits.length > 0) {
     console.error(`Banned prompt terms:\n${bannedHits.join('\n')}`);
+    process.exit(1);
+}
+
+if (architectureHits.length > 0) {
+    console.error(`Legacy architecture terms:\n${architectureHits.join('\n')}`);
     process.exit(1);
 }
 

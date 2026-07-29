@@ -43,7 +43,7 @@ export enum ActivityEventType {
  * ZH: Event 信号携带的一条活动事件载荷。
  */
 export interface ActivityEvent {
-    /** EN: Turn that produced this event; resolves the speaker via Context. ZH: 产生本事件的 Turn；经 Context 解析说话人。 */
+    /** EN: Turn that produced this event; resolves the speaker via Workspace. ZH: 产生本事件的 Turn；经 Workspace 解析说话人。 */
     turnId?: string;
     /** EN: Activity kind of this event. ZH: 本事件的活动类别。 */
     type: ActivityEventType;
@@ -80,12 +80,12 @@ export interface InteractionRequest {
 /**
  * EN: One streamed reply chunk, addressed to the speaker of one turn.
  * `chunk === null` ends the stream. The turn resolves the speaker through
- * Context; signals never carry connection state.
+ * Workspace; signals never carry connection state.
  * ZH: 一个流式回复分片,寻址到某个 turn 的说话人。`chunk === null` 表示
- * 流结束。说话人通过 Context 由 turn 解析;信号本身不携带连接状态。
+ * 流结束。说话人通过 Workspace 由 turn 解析;信号本身不携带连接状态。
  */
 export interface ReplyChunk {
-    /** EN: Turn that produced this chunk; resolves the speaker via Context. ZH: 产生本分片的 Turn；经 Context 解析说话人。 */
+    /** EN: Turn that produced this chunk; resolves the speaker via Workspace. ZH: 产生本分片的 Turn；经 Workspace 解析说话人。 */
     turnId: string;
     /** EN: Streamed text chunk; `null` terminates the stream. ZH: 流式文本分片；`null` 表示流结束。 */
     chunk: string | null;

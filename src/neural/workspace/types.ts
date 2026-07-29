@@ -1,3 +1,5 @@
+import type { SituationProjection } from '@/neural/situation/types';
+
 /**
  * EN: One normalized reference item from turn understanding.
  * ZH: turn understanding 里的单条规范化引用项。
@@ -61,7 +63,7 @@ export interface Settle {
  * EN: One compact outcome kept inside the bounded working set.
  * ZH: 有界工作集内保留的一条紧凑 outcome。
  */
-export interface Summary {
+export interface TurnOutcome {
     /** EN: Goal the turn pursued. ZH: 该 turn 追求的目标。 */
     goal: string;
     /** EN: Compact result of the turn. ZH: 该 turn 的紧凑结果。 */
@@ -74,54 +76,9 @@ export interface Summary {
     evidence: string[];
     /** EN: Work still open after the turn. ZH: 该 turn 之后仍未完成的工作。 */
     remaining: string[];
-    /** EN: Creation timestamp of the summary. ZH: 摘要的创建时间戳。 */
+    /** EN: Creation timestamp of the outcome. ZH: outcome 的创建时间戳。 */
     createdAt: number;
 }
-
-/**
- * EN: One consolidated record in the session-level master context: the
- * tombstone projection of a settled turn. Session-scoped only — it is not
- * long-term memory and is never persisted.
- * ZH: 会话级 master context 里的一条固化记录:已结算 turn 的 tombstone 投影。
- * 仅限会话级——它不是长期记忆,也从不落盘。
- */
-export interface MasterRecord {
-    /** EN: Identifier of the turn this record consolidated from. ZH: 本记录固化来源的 turn 标识。 */
-    turnId: string;
-    /** EN: Speaker who owned the turn. ZH: 拥有该 turn 的说话人。 */
-    speakerId: string;
-    /** EN: Classified intent of the turn. ZH: 该 turn 的分类意图。 */
-    intent: Intent;
-    /** EN: Goal the turn pursued. ZH: 该 turn 追求的目标。 */
-    goal: string;
-    /** EN: Compact outcome consolidated from the turn. ZH: 从该 turn 固化下来的紧凑 outcome。 */
-    summary: Summary;
-    /** EN: Consolidation timestamp. ZH: 固化时间戳。 */
-    ts: number;
-}
-
-/**
- * EN: One compact master-context entry for prompt injection.
- * ZH: 用于注入 prompt 的一条紧凑 master context 条目。
- */
-export interface MasterProjectionEntry {
-    /** EN: Speaker who owned the consolidated turn. ZH: 被固化 turn 的说话人。 */
-    speakerId: string;
-    /** EN: Classified intent of the consolidated turn. ZH: 被固化 turn 的分类意图。 */
-    intent: Intent;
-    /** EN: Truncated goal of the consolidated turn. ZH: 被固化 turn 的截断目标。 */
-    goal: string;
-    /** EN: Truncated result of the consolidated turn. ZH: 被固化 turn 的截断结果。 */
-    result: string;
-    /** EN: Open work left by the consolidated turn. ZH: 被固化 turn 遗留的未完成事项。 */
-    remaining: string[];
-}
-
-/**
- * EN: Prompt-ready projection of the session-level master context.
- * ZH: 可直接注入 prompt 的会话级 master context 投影。
- */
-export type MasterProjection = MasterProjectionEntry[];
 
 /**
  * EN: A concise briefing of the current turn understanding handed to one
@@ -130,7 +87,7 @@ export type MasterProjection = MasterProjectionEntry[];
  * ZH: 交给某个思维线程的当前 turn 理解简报。它不是对话原文，而是生命体对接收
  * 线程范围的当前意图理解。
  */
-export interface ContextBrief {
+export interface WorkspaceBrief {
     /** EN: Identifier of the turn this brief scopes to, or `none`. ZH: 该简报所属的 turn 标识，或 `none`。 */
     turnId: string;
     /** EN: Classified intent of the current turn. ZH: 当前 turn 的分类意图。 */
@@ -149,8 +106,8 @@ export interface ContextBrief {
     open: string[];
     /** EN: Semantic projections of every turn in the bounded workspace. ZH: 有界工作空间内全部 turn 的语义投影。 */
     workspace: TurnBrief[];
-    /** EN: Session-level master-context projection beyond the bounded workspace. ZH: 超越有界工作空间的会话级 master context 投影。 */
-    master?: MasterProjection;
+    /** EN: In-process situation projection beyond the bounded workspace. ZH: 超越有界工作空间的进程内情境投影。 */
+    situation?: SituationProjection;
 }
 
 /**
@@ -175,14 +132,14 @@ export interface TurnBrief {
     /** EN: Work still open in the turn. ZH: 该 turn 中仍未完成的工作。 */
     open: string[];
     /** EN: Compact outcome kept after the turn settled or yielded. ZH: 该 turn 结算或让位后保留的紧凑 outcome。 */
-    outcome?: Summary;
+    outcome?: TurnOutcome;
 }
 
 /**
- * EN: One note inside the mind's private memory cache.
- * ZH: 心智私有记忆缓存中的一条笔记。
+ * EN: One note inside a thought thread's private scratchpad.
+ * ZH: 思维线程私有 Scratchpad 中的一条笔记。
  */
-export interface MemoryNote {
+export interface ScratchNote {
     /** EN: Unique note identifier. ZH: 笔记的唯一标识。 */
     id: string;
     /** EN: Note text, truncated to the note size limit. ZH: 按笔记长度上限截断后的笔记文本。 */
@@ -234,7 +191,7 @@ export interface Turn extends TurnDraft {
     /** EN: Current lifecycle state of the turn. ZH: 该 turn 当前的生命周期状态。 */
     status: TurnStatus;
     /** EN: Compact outcome kept after settlement or interruption. ZH: 结算或中断后保留的紧凑 outcome。 */
-    summary?: Summary;
+    outcome?: TurnOutcome;
     /** EN: Pending interaction request parked on the turn. ZH: 挂在该 turn 上的待处理交互请求。 */
     pause?: Pause;
     /** EN: Creation timestamp of the turn. ZH: 该 turn 的创建时间戳。 */

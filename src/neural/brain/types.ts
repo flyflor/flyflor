@@ -12,10 +12,10 @@ export enum ChatRole {
 }
 
 /**
- * EN: One pure short-term memory message for the mind.
- * ZH: 面向心智的一条纯短期记忆消息。
+ * EN: One pure provider message produced by the mind.
+ * ZH: 心智生成的一条纯 provider 消息。
  */
-export interface MemoryMessage {
+export interface MindMessage {
     /** EN: Chat role of the message. ZH: 消息的聊天角色。 */
     role: ChatRole.System | ChatRole.User | ChatRole.Assistant;
     /** EN: Text content of the message. ZH: 消息的文本内容。 */

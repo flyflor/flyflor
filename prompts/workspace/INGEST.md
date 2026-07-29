@@ -3,7 +3,7 @@
 Read the JSON input and return only compact JSON. `latest` is the new sensory
 stimulus. `current` and `workspace` are semantic projections used to resolve a
 follow-up; they are not a transcript and must not be copied into the result.
-`master` holds graduated summaries of earlier turns beyond the workspace; use
+`situation` holds graduated summaries of earlier turns beyond the workspace; use
 it as situational background, never as quotable content.
 
 Schema:

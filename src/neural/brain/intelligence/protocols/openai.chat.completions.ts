@@ -166,9 +166,9 @@ function parseActionArguments(partialArgs: string): Record<string, unknown> {
  * EN: Projects provider-local messages to OpenAI chat messages.
  * ZH: 将 provider-local 消息投影为 OpenAI chat messages。
  *
- * EN: MemoryMessage stays pure; action request/result
+ * EN: MindMessage stays pure; action request/result
  * replay exists only in the research call stack and is mapped back to OpenAI wire fields here.
- * ZH: `MemoryMessage` 保持纯净；action request/result replay 只存在于 research 调用栈，并在这里映射回 OpenAI 线协议字段。
+ * ZH: `MindMessage` 保持纯净；action request/result replay 只存在于 research 调用栈，并在这里映射回 OpenAI 线协议字段。
  */
 function chatMessages(messages: ProviderMessage[]): Array<Record<string, unknown>> {
     return messages.map((message) => {

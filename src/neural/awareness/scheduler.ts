@@ -1,5 +1,5 @@
 import type { ConfigService } from '@/configuration';
-import { Context } from '@/neural/context';
+import { Workspace } from '@/neural/workspace';
 import { Intelligence } from '@/neural/brain/intelligence/service';
 import { Config, FComponent, Inject, Prompt, PromptService, Singleton } from '@/core';
 import { parse } from '@/neural/json';
@@ -56,7 +56,7 @@ export class Scheduler extends FComponent {
 
     /** EN: Semantic workspace consulted for Turn state and capacity. ZH: 用于查询 Turn 状态与容量的语义工作区。 */
     @Inject()
-    public context!: Context;
+    public workspace!: Workspace;
 
     /** EN: Intelligence provider used for scheduling verdicts. ZH: 用于生成调度判决的智能提供方。 */
     @Inject()
@@ -162,7 +162,7 @@ export class Scheduler extends FComponent {
      * 然后请求下一轮调度。
      */
     public settled(turnId: string): void {
-        const turn = this.context?.turns.find((candidate) => candidate.id === turnId || candidate.stimulusId === turnId);
+        const turn = this.workspace?.turns.find((candidate) => candidate.id === turnId || candidate.stimulusId === turnId);
         if (!turn || turn.status === 'completed' || turn.status === 'suspended') this.preemptFlags.delete(turn?.id ?? turnId);
         this.kick();
     }
@@ -175,7 +175,7 @@ export class Scheduler extends FComponent {
      */
     public interrupted(turnId: string): void {
         this.preemptFlags.delete(turnId);
-        if (this.pending && this.context?.turnForStimulus(this.pending.id)?.id === turnId) {
+        if (this.pending && this.workspace?.turnForStimulus(this.pending.id)?.id === turnId) {
             this.pending = undefined;
         }
         this.kick();
@@ -245,12 +245,12 @@ export class Scheduler extends FComponent {
     }
 
     private foregroundTurn() {
-        const turns = this.context?.turns ?? [];
+        const turns = this.workspace?.turns ?? [];
         return turns.findLast((turn) => turn.status === 'working' || turn.status === 'waiting');
     }
 
     private async scheduleWithModel(runnable: Stimulus[]): Promise<Disposition[]> {
-        const turns = this.context?.turns ?? [];
+        const turns = this.workspace?.turns ?? [];
         if (turns.length === 0 && runnable.length === 1) return [];
         const payload = {
             workspace: turns.map((turn) => ({
@@ -262,9 +262,9 @@ export class Scheduler extends FComponent {
                 paused: turn.pause?.kind ?? null,
                 done: turn.done,
                 open: turn.open,
-                outcome: turn.summary ?? null,
+                outcome: turn.outcome ?? null,
             })),
-            master: this.context?.masterProjection() ?? [],
+            situation: this.workspace?.situationProjection() ?? [],
             stimuli: runnable.map((stimulus) => ({ id: stimulus.id, speakerId: stimulus.speakerId, text: stimulus.text })),
         };
         try {
@@ -355,7 +355,7 @@ export class Scheduler extends FComponent {
 
     private applyIdleDisposition(stimulus: Stimulus, disposition: Disposition): void {
         if (disposition.relation === DispositionRelation.Same) {
-            const target = disposition.targetTurnId ? this.context?.turns.find((turn) => turn.id === disposition.targetTurnId) : undefined;
+            const target = disposition.targetTurnId ? this.workspace?.turns.find((turn) => turn.id === disposition.targetTurnId) : undefined;
             if (!target || target.speakerId !== stimulus.speakerId) {
                 this.dispatchNew(stimulus, { stimulusId: stimulus.id, relation: DispositionRelation.New, urgent: disposition.urgent });
                 return;
@@ -368,7 +368,7 @@ export class Scheduler extends FComponent {
     }
 
     private dispatchNew(stimulus: Stimulus, disposition: Disposition): void {
-        if (this.context?.hasCapacity && !this.context.hasCapacity()) {
+        if (this.workspace?.hasCapacity && !this.workspace.hasCapacity()) {
             this.removeStimulus(stimulus.id);
             this.log.warn('scheduler.workspace_backpressure', {
                 speakerId: stimulus.speakerId,

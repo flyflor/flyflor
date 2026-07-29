@@ -1,6 +1,6 @@
 import type { SocketPacket } from '@/neural/ipc';
 import type { ConfigService } from '@/configuration';
-import type { Context } from '@/neural/context';
+import type { Workspace } from '@/neural/workspace';
 import { Config, Inject, Singleton } from '@/core';
 import { FService } from '@/core/ioc';
 import type { Synapse } from '@/neural/synapse';
@@ -24,10 +24,10 @@ interface Mouthful {
  * EN: The small protocol Awareness needs from the cortex.  `revise` and `cancel`
  * are optional while Synapse is being migrated; the attention instruction is
  * also attached to the routed stimulus so an older cortex can safely ignore
- * the extra argument and a newer one can route it to Context.revise().
+ * the extra argument and a newer one can route it to Workspace.revise().
  * ZH: Awareness 需要皮层提供的最小协议。在 Synapse 迁移期间 `revise` 与 `cancel`
  * 为可选；注意指令也会附加在路由出去的刺激上，旧皮层可以安全忽略这个额外参数，
- * 新皮层则可以将其路由到 Context.revise()。
+ * 新皮层则可以将其路由到 Workspace.revise()。
  */
 interface AwarenessCortex {
     /** EN: Routes one attended stimulus into the cortex's foreground stream. ZH: 把一条已注意的刺激路由进皮层的前台流。 */
@@ -67,7 +67,7 @@ export class Awareness extends FService {
 
     /** EN: Semantic workspace consulted for Turn state and capacity. ZH: 用于查询 Turn 状态与容量的语义工作区。 */
     @Inject()
-    public context!: Context;
+    public workspace!: Workspace;
 
     /** EN: Central executive that owns stimulus queueing, ordering, and pre-emption policy. ZH: 持有刺激队列、排序与抢占策略的中央执行器。 */
     @Inject()
@@ -145,10 +145,10 @@ export class Awareness extends FService {
     /**
      * EN: Drops all pending/output state belonging to a disconnected speaker. An
      * active working turn is retained until its cancellation callback settles,
-     * so Context does not race the cortex's interrupt/settle path; inactive
+     * so Workspace does not race the cortex's interrupt/settle path; inactive
      * turns are removed immediately.
      * ZH: 丢弃某个已断开说话人的全部待处理/输出状态。活跃的进行中 Turn 会保留到
-     * 其取消回调收尾，避免 Context 与皮层的打断/收尾路径竞争；非活跃 Turn 立即移除。
+     * 其取消回调收尾，避免 Workspace 与皮层的打断/收尾路径竞争；非活跃 Turn 立即移除。
      */
     public forget(speakerId: string): void {
         this.forgottenSpeakers.add(speakerId);
@@ -156,7 +156,7 @@ export class Awareness extends FService {
         this.mouthQueue = this.mouthQueue.filter((mouthful) => mouthful.speakerId !== speakerId);
         const ownedMouth = this.mouthOwner
             && (this.streamState.get(this.mouthOwner)?.speakerId === speakerId
-                || this.context?.turns.find((turn) => turn.id === this.mouthOwner)?.speakerId === speakerId)
+                || this.workspace?.turns.find((turn) => turn.id === this.mouthOwner)?.speakerId === speakerId)
             ? this.mouthOwner
             : undefined;
         for (const [turnId, buffer] of this.bufferedChunks) {
@@ -172,7 +172,7 @@ export class Awareness extends FService {
             void this.cortex?.forgetSpeaker?.(speakerId);
         } else {
             // A waiting Turn may already own the mouth even though it no longer
-            // counts as working. Release that lock before deleting its Context
+            // counts as working. Release that lock before deleting its Workspace
             // state, or every later speaker would remain buffered forever.
             if (ownedMouth !== undefined) {
                 this.terminateInterruptedStream(ownedMouth);
@@ -182,10 +182,10 @@ export class Awareness extends FService {
                 this.flushMouthQueue();
             }
             // Let the cortex reject any interaction waiter before removing its
-            // Context turn; otherwise a disconnected waiting turn can leave a
+            // Workspace turn; otherwise a disconnected waiting turn can leave a
             // promise unresolved forever.
             void this.cortex?.forgetSpeaker?.(speakerId);
-            this.context?.forgetSpeaker(speakerId);
+            this.workspace?.forgetSpeaker(speakerId);
         }
         this.pruneStreamState();
         this.releaseForgottenSpeaker(speakerId);
@@ -201,7 +201,7 @@ export class Awareness extends FService {
      */
     public answer(turnId: string, id: string, response: unknown, speakerId?: string): void {
         if (speakerId !== undefined) {
-            const turn = this.context?.turns.find((candidate) => candidate.id === turnId);
+            const turn = this.workspace?.turns.find((candidate) => candidate.id === turnId);
             if (!turn || turn.speakerId !== speakerId) throw Error(`Answer does not belong to speaker: ${turnId}`);
         }
         this.cortex?.answer(turnId, id, response as InteractionResponse, speakerId);
@@ -221,14 +221,14 @@ export class Awareness extends FService {
      */
     public turnInterrupted(turnId: string): void {
         this.scheduler.interrupted(turnId);
-        const interrupted = this.context?.turns.find((turn) => turn.id === turnId);
+        const interrupted = this.workspace?.turns.find((turn) => turn.id === turnId);
         this.terminateInterruptedStream(turnId);
         this.bufferedChunks.delete(turnId);
         if (this.mouthOwner === turnId) this.mouthOwner = undefined;
         this.flushBufferedChunks();
         this.flushMouthQueue();
         if (interrupted && this.forgottenSpeakers.has(interrupted.speakerId)) {
-            this.context?.forgetSpeaker(interrupted.speakerId);
+            this.workspace?.forgetSpeaker(interrupted.speakerId);
         }
         this.pruneStreamState();
         if (interrupted) this.releaseForgottenSpeaker(interrupted.speakerId);
@@ -243,8 +243,8 @@ export class Awareness extends FService {
      */
     public turnSettled(turnId: string): void {
         this.scheduler.settled(turnId);
-        const turn = this.context?.turns.find((candidate) => candidate.id === turnId || candidate.stimulusId === turnId);
-        if (turn && this.forgottenSpeakers.has(turn.speakerId)) this.context?.forgetSpeaker(turn.speakerId);
+        const turn = this.workspace?.turns.find((candidate) => candidate.id === turnId || candidate.stimulusId === turnId);
+        if (turn && this.forgottenSpeakers.has(turn.speakerId)) this.workspace?.forgetSpeaker(turn.speakerId);
         this.pruneStreamState();
         if (turn) this.releaseForgottenSpeaker(turn.speakerId);
     }
@@ -275,7 +275,7 @@ export class Awareness extends FService {
         // finished cancellation. Late provider chunks must be discarded before
         // they can reacquire the single mouth and strand every other speaker.
         if (this.forgottenSpeakers.has(speakerId)) return;
-        const owner = this.context?.turns.find((turn) => turn.id === turnId);
+        const owner = this.workspace?.turns.find((turn) => turn.id === turnId);
         if (owner && owner.speakerId !== speakerId) {
             this.log.warn('awareness.speaker_mismatch', { turnId, speakerId });
             return;
@@ -324,7 +324,7 @@ export class Awareness extends FService {
     }
 
     private foregroundTurn() {
-        const turns = this.context?.turns ?? [];
+        const turns = this.workspace?.turns ?? [];
         return turns.findLast((turn) => turn.status === 'working' || turn.status === 'waiting');
     }
 
@@ -332,7 +332,7 @@ export class Awareness extends FService {
         const state = this.streamState.get(turnId);
         if (state?.ended) return;
         const speakerId = state?.speakerId
-            ?? this.context?.turns.find((turn) => turn.id === turnId)?.speakerId
+            ?? this.workspace?.turns.find((turn) => turn.id === turnId)?.speakerId
             ?? (this.scheduler.pending?.id === turnId ? this.scheduler.pending.speakerId : undefined);
         if (!speakerId) return;
         const current = state ?? { speakerId, ended: false };
@@ -382,7 +382,7 @@ export class Awareness extends FService {
     }
 
     private pruneStreamState(): void {
-        const activeTurnIds = new Set((this.context?.turns ?? []).map((turn) => turn.id));
+        const activeTurnIds = new Set((this.workspace?.turns ?? []).map((turn) => turn.id));
         for (const turnId of this.streamState.keys()) {
             if (!activeTurnIds.has(turnId)) {
                 this.streamState.delete(turnId);
@@ -394,7 +394,7 @@ export class Awareness extends FService {
     private releaseForgottenSpeaker(speakerId: string): void {
         if (!this.forgottenSpeakers.has(speakerId)) return;
         if (this.scheduler.pending?.speakerId === speakerId) return;
-        if ((this.context?.turns ?? []).some((turn) => turn.speakerId === speakerId)) return;
+        if ((this.workspace?.turns ?? []).some((turn) => turn.speakerId === speakerId)) return;
         if ([...this.streamState.values()].some((state) => state.speakerId === speakerId)) return;
         if (this.mouthQueue.some((mouthful) => mouthful.speakerId === speakerId)) return;
         this.forgottenSpeakers.delete(speakerId);

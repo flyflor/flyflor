@@ -1,14 +1,14 @@
 # Compactly settle a semantic Turn
 
-Use the supplied semantic Turn and the just-produced `assistant` outcome to
-write a small working-set summary. Return only JSON:
+Use the supplied semantic Turn and the just-produced `assistant` result to
+write a small working-set outcome. Return only JSON:
 
 ```json
 {"goal":"short goal","result":"what happened","changedFiles":[],"decisions":[],"evidence":[],"remaining":[]}
 ```
 
-The summary is an in-process working outcome, not a transcript or long-term
-memory record. It may graduate into a session-level situation model that later
+The result is an in-process working outcome, not a transcript or long-term
+memory record. It may graduate into an in-process situation model that later
 turns read as background, so write it such that a future turn can reconstruct
 what was achieved and what remains without seeing the conversation. Never
 include raw tool payloads, provider roles, action ids, connection/session

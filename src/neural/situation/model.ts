@@ -1,19 +1,18 @@
 import { FComponent, Singleton } from '@/core';
-import type { MasterProjection, MasterRecord, Summary, Turn } from './types';
+import type { Turn, TurnOutcome } from '@/neural/workspace/types';
+import type { SituationProjection, SituationRecord } from './types';
 
 /**
- * EN: MasterContext is the session-level situation model — the episodic
- * buffer in Baddeley's terms. Settled turns are consolidated ("promoted")
+ * EN: SituationModel is the bounded in-process situation model. Settled turns
+ * are consolidated ("promoted")
  * into this bounded store so understanding and scheduling can see beyond the
- * four-slot working set. It is strictly session-scoped and in-process: not
- * long-term memory, no recall ranking, no vector retrieval, no persistence.
- * ZH: MasterContext 是会话级情境模型——Baddeley 模型中的情景缓冲。已结算的
+ * four-slot working set. It has no recall ranking, vector retrieval, or persistence.
+ * ZH: SituationModel 是有界的进程内情境模型。已结算的
  * turn 被固化(“升格”)进这个有界存储,让理解与调度能看到四槽工作集之外的
- * 前情。它严格限定为进程内会话级:不是长期记忆,不做召回排序,不做向量检索,
- * 不落盘。
+ * 前情。它不做召回排序、向量检索，也不落盘。
  */
 @Singleton()
-export class MasterContext extends FComponent {
+export class SituationModel extends FComponent {
     /** EN: Upper bound of consolidated records. ZH: 固化记录的容量上限。 */
     public static readonly Capacity = 16;
     /** EN: Truncation bound for one projected goal. ZH: 单条投影目标的截断上限。 */
@@ -24,7 +23,7 @@ export class MasterContext extends FComponent {
     public static readonly RemainingMaxItems = 8;
 
     /** EN: Consolidated turn records, oldest first. ZH: 已固化的 turn 记录,最旧在前。 */
-    public records: MasterRecord[];
+    public records: SituationRecord[];
 
     constructor() {
         super();
@@ -39,25 +38,25 @@ export class MasterContext extends FComponent {
      * ZH: 把一个已结算 turn 固化进情境模型。按 turn id 幂等:重复升格会刷新记录
      * 并移到最新位置,因此 settle 与驱逐两条路径都可以安全地升格。
      */
-    public promote(turn: Turn, summary: Summary): MasterRecord {
+    public promote(turn: Turn, outcome: TurnOutcome): SituationRecord {
         const existing = this.records.find((record) => record.turnId === turn.id);
         if (existing) {
-            existing.summary = summary;
+            existing.outcome = outcome;
             existing.ts = Date.now();
             this.records.splice(this.records.indexOf(existing), 1);
             this.records.push(existing);
             return existing;
         }
-        const record: MasterRecord = {
+        const record: SituationRecord = {
             turnId: turn.id,
             speakerId: turn.speakerId,
             intent: turn.intent,
             goal: turn.goal,
-            summary,
+            outcome,
             ts: Date.now(),
         };
         this.records.push(record);
-        while (this.records.length > MasterContext.Capacity) this.records.shift();
+        while (this.records.length > SituationModel.Capacity) this.records.shift();
         return record;
     }
 
@@ -73,13 +72,13 @@ export class MasterContext extends FComponent {
      * EN: Prompt-ready compact projection of the situation model.
      * ZH: 可直接注入 prompt 的情境模型紧凑投影。
      */
-    public projection(): MasterProjection {
+    public projection(): SituationProjection {
         return this.records.map((record) => ({
             speakerId: record.speakerId,
             intent: record.intent,
-            goal: record.goal.slice(0, MasterContext.GoalMaxLength),
-            result: record.summary.result.slice(0, MasterContext.ResultMaxLength),
-            remaining: record.summary.remaining.slice(0, MasterContext.RemainingMaxItems),
+            goal: record.goal.slice(0, SituationModel.GoalMaxLength),
+            result: record.outcome.result.slice(0, SituationModel.ResultMaxLength),
+            remaining: record.outcome.remaining.slice(0, SituationModel.RemainingMaxItems),
         }));
     }
 }

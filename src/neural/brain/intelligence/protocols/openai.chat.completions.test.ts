@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ChatRole, type MemoryMessage } from '@/neural/brain/types';
+import { ChatRole, type MindMessage } from '@/neural/brain/types';
 import { createProtocolStreamState } from '../factory';
 import type { IntelligenceEvent, ProviderMessage } from '../types';
 import { openAIChatCompletionsAdapter } from './openai.chat.completions';
@@ -36,9 +36,9 @@ describe('openAIChatCompletionsAdapter', () => {
         });
     });
 
-    test('projects provider replay locally without polluting MemoryMessage', () => {
+    test('projects provider replay locally without polluting MindMessage', () => {
         const messages: ProviderMessage[] = [
-            { role: ChatRole.System, content: 'system' } satisfies MemoryMessage,
+            { role: ChatRole.System, content: 'system' } satisfies MindMessage,
             {
                 role: ChatRole.Assistant,
                 content: '我先读文件',

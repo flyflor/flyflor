@@ -1,23 +1,23 @@
 import { describe, expect, test } from 'bun:test';
 import { useContainer } from '@/core';
-import { ChatRole, Memory, type MemoryMessage } from './memory';
-import { Context } from '@/neural/context';
+import { ChatRole, Scratchpad, SoulSection, type MindMessage } from './scratchpad';
+import { Workspace } from '@/neural/workspace';
 
 /**
- * EN: Memory is no longer a pure projection of Context.turns. It is a private
- * working-memory cache seeded by an explicit Context brief. The test verifies
+ * EN: Scratchpad is no longer a pure projection of Workspace.turns. It is a private
+ * Scratchpad seeded by an explicit Workspace brief. The test verifies
  * that brief-derived notes (not the raw conversation) surface in the next model
  * call and that no tool replay buffers leak in.
- * ZH: Memory 不再是 Context.turns 的纯投影。它是由显式 Context 简报初始化的
- * 私有工作记忆缓存。本测试验证简报衍生的笔记（而非原始对话）出现在下一次模型
+ * ZH: Scratchpad 不再是 Workspace.turns 的纯投影。它是由显式 Workspace 简报初始化的
+ * 私有临时笔记。本测试验证简报衍生的笔记（而非原始对话）出现在下一次模型
  * 调用中，且没有工具回放缓冲区泄漏。
  */
-describe('Memory', () => {
+describe('Scratchpad', () => {
     test('surfaces brief-derived notes without leaking tool or transcript buffers', async () => {
-        const memory = await useContainer().getAsync(Memory);
-        const context = new Context();
-        context.prompt = { section: () => 'system placeholder' } as never;
-        context.intelligence = {
+        const scratchpad = await useContainer().getAsync(Scratchpad);
+        const workspace = new Workspace();
+        workspace.prompt = { section: () => 'system placeholder' } as never;
+        workspace.intelligence = {
             completeText: async () => JSON.stringify({
                 intent: 'research',
                 goal: 'ship the synapse changes',
@@ -31,16 +31,16 @@ describe('Memory', () => {
         } as never;
 
         const userMessage = '实现计划';
-        const turn = await context.ingest({ text: userMessage, speakerId: 'test' });
+        const turn = await workspace.ingest({ text: userMessage, speakerId: 'test' });
 
-        // EN: Seed the private working-memory cache from the Context brief.
-        // ZH: 用 Context 简报初始化私有工作记忆缓存。
-        memory.ingestBrief(context.brief());
+        // EN: Seed the private Scratchpad from the Workspace brief.
+        // ZH: 用 Workspace 简报初始化私有临时笔记。
+        scratchpad.ingestBrief(workspace.brief());
 
-        const messages = memory.buildMessage();
+        const messages = scratchpad.buildMessages();
         const system = messages[0]?.content ?? '';
         const user = messages[1]?.content ?? '';
-        const role: MemoryMessage['role'] = ChatRole.User;
+        const role: MindMessage['role'] = ChatRole.User;
 
         expect(role).toBe(ChatRole.User);
         expect(system).not.toContain('<agent_memory>');
@@ -58,11 +58,17 @@ describe('Memory', () => {
     });
 
     test('renders persona sections and brief notes from the configured package', async () => {
-        const memory = await useContainer().getAsync(Memory);
-        memory.config = { persona: {} } as never;
-        memory.prompt = { render: () => 'system persona' } as never;
+        const scratchpad = await useContainer().getAsync(Scratchpad);
+        let renderedSections: string[] = [];
+        scratchpad.config = { persona: { promptSections: [SoulSection.Soul, SoulSection.User, SoulSection.Extension] } } as never;
+        scratchpad.prompt = {
+            render: (input: { sections: string[] }) => {
+                renderedSections = input.sections;
+                return 'system persona';
+            },
+        } as never;
 
-        memory.ingestBrief({
+        scratchpad.ingestBrief({
             turnId: 'turn_1',
             intent: 'research',
             goal: 'inspect one slice',
@@ -73,8 +79,9 @@ describe('Memory', () => {
             workspace: [],
         });
 
-        const messages = memory.buildMessage();
+        const messages = scratchpad.buildMessages();
 
+        expect(renderedSections).toEqual([SoulSection.Soul, SoulSection.Extension]);
         expect(messages[0]?.content).toBe('system persona');
         expect(messages[1]?.content).toBe(`-[brief] turn turn_1: intent=research, goal=inspect one slice, constraints=[]`);
     });
