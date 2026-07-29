@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { AgentChatRole, type AgentMemory } from '@/agent/types';
-import { Context } from '@/agent/context';
+import { ChatRole, type MemoryMessage } from '@/neural/brain/types';
+import { Context } from '@/neural/context';
 import { SynapseSignalType } from '@/neural/types';
 import type { ActionRequest } from '@/plugins';
 import type { IntelligenceToolDefinition, ProviderMessage } from '../intelligence/types';
@@ -19,7 +19,6 @@ function mockInvestigation(context: Context, responses: Array<{ text: string; ac
     const seenMessages: ProviderMessage[][] = [];
     const calls: ActionRequest[] = [];
     const instance = new Investigation(
-        { name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 },
         {
             emit: (type: SynapseSignalType, data: unknown) => { events.push({ type, data }); },
             interact: async (request: { turnId: string; id: string; kind: 'ask' | 'confirm'; data: unknown }) => {
@@ -88,7 +87,7 @@ describe('Investigation', () => {
         const { instance, events } = mockInvestigation(context, [{ text: '直接答案', actionRequests: [] }]);
 
         const outcome = await instance.run(
-            [{ role: AgentChatRole.User, content: '调查工具层' }],
+            [{ role: ChatRole.User, content: '调查工具层' }],
         );
 
         expect(outcome).toMatchObject({ answer: '直接答案', completed: true, paused: false, steps: 1, evidence: [] });
@@ -99,7 +98,7 @@ describe('Investigation', () => {
         const { instance, events } = mockInvestigation(context, [{ text: '静默答案', actionRequests: [] }]);
 
         const outcome = await instance.run(
-            [{ role: AgentChatRole.User, content: '调查工具层' }],
+            [{ role: ChatRole.User, content: '调查工具层' }],
             { emitReply: false },
         );
 
@@ -114,7 +113,7 @@ describe('Investigation', () => {
         ]);
 
         const outcome = await instance.run(
-            [{ role: AgentChatRole.User, content: '调查工具层' }],
+            [{ role: ChatRole.User, content: '调查工具层' }],
         );
 
         expect(outcome).toMatchObject({ answer: '综合答案', completed: true, paused: false, steps: 2 });
@@ -135,7 +134,7 @@ describe('Investigation', () => {
         ]);
 
         await instance.run(
-            [{ role: AgentChatRole.User, content: '调查工具层' }],
+            [{ role: ChatRole.User, content: '调查工具层' }],
         );
 
         expect(calls[0]?.arguments.cwd).toBe('/tmp/explicit');
@@ -156,7 +155,7 @@ describe('Investigation', () => {
         ]);
 
         await instance.run(
-            [{ role: AgentChatRole.User, content: '调查工具层' }],
+            [{ role: ChatRole.User, content: '调查工具层' }],
             { cwd: turn.cwd },
         );
 
@@ -171,7 +170,7 @@ describe('Investigation', () => {
 
         const turn = context.working()!;
         const outcome = await instance.run(
-            [{ role: AgentChatRole.User, content: '调查工具层' }],
+            [{ role: ChatRole.User, content: '调查工具层' }],
             { turnId: turn.id, cwd: turn.cwd },
         );
         expect(outcome).toMatchObject({ answer: '继续完成', completed: true, paused: false, steps: 2 });

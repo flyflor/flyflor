@@ -1,27 +1,27 @@
-import { AgentChatRole, type AgentInput } from '@/agent/types';
-import { Context, type Intent } from '@/agent/context';
+import { ChatRole, type BrainInput } from '@/neural/brain/types';
+import { Context, type Intent } from '@/neural/context';
 import { SynapseSignalType, TurnPreempted } from '@/neural/types';
-import { FAgentAtom, Inject, Provide, Scope, type IObservable } from '@/core';
-import { Memory } from '../memory';
+import { FNeuron, Inject, Provide, Scope, type IObservable } from '@/core';
+import { Memory } from './memory';
 import { Intelligence } from './intelligence/service';
 import { Investigation } from './investigation';
 import type { InvestigationOutcome } from './investigation/types';
-import type { AgentBrief } from '@/agent/context/types';
+import type { ContextBrief } from '@/neural/context/types';
 
 /**
- * EN: Brain receives the semantic intent extracted by Context. Intent
- * classification lives solely in `Context.ingest` — understanding is one
- * cortical act, not two competing routers. `reply` and `research` are handled
- * locally; `coordinate` is forwarded to Synapse so the cortex can dispatch
- * the agent pool.
- * ZH: Brain 接收 Context 提取的语义意图。意图分类唯一归属 `Context.ingest`——
- * 理解是一次皮层行为，不是两个互相竞争的路由器。`reply`、`research` 在本地处理；
- * `coordinate` 转发给 Synapse，由皮层派发 agent pool。
+ * EN: Brain is the single mind. It receives the semantic intent extracted by
+ * Context. Intent classification lives solely in `Context.ingest` —
+ * understanding is one cortical act, not two competing routers. `reply` and
+ * `research` are handled locally; `coordinate` is forwarded to Synapse so the
+ * cortex can dispatch parallel thought threads.
+ * ZH: Brain 是单一心智。它接收 Context 提取的语义意图。意图分类唯一归属
+ * `Context.ingest`——理解是一次皮层行为，不是两个互相竞争的路由器。`reply`、
+ * `research` 在本地处理；`coordinate` 转发给 Synapse，由皮层派发并行思维线程。
  */
 @Provide()
-export class Brain extends FAgentAtom<AgentInput, string> implements IObservable<AgentInput, string> {
-    @Scope()
-    /** EN: Provider-facing intelligence service scoped to this agent. ZH: 该 agent 作用域内面向 provider 的智能服务。 */
+export class Brain extends FNeuron<BrainInput, string> implements IObservable<BrainInput, string> {
+    @Inject()
+    /** EN: Provider-facing intelligence service of the mind. ZH: 心智面向 provider 的智能服务。 */
     public intelligence!: Intelligence;
 
     @Inject()
@@ -29,11 +29,11 @@ export class Brain extends FAgentAtom<AgentInput, string> implements IObservable
     public context!: Context;
 
     @Scope()
-    /** EN: Private memory cache scoped to this agent. ZH: 该 agent 私有的作用域记忆缓存。 */
+    /** EN: Private working-memory cache scoped to this thought thread. ZH: 该思维线程私有的作用域记忆缓存。 */
     public memory!: Memory;
 
     @Scope()
-    /** EN: Tool-using research loop scoped to this agent. ZH: 该 agent 作用域内使用工具的研究循环。 */
+    /** EN: Tool-using research loop scoped to this thought thread. ZH: 该思维线程作用域内使用工具的研究循环。 */
     public investigation!: Investigation;
 
     /**
@@ -41,12 +41,12 @@ export class Brain extends FAgentAtom<AgentInput, string> implements IObservable
      * ZH: 在单一错误边界内运行一整个用户回合。
      *
      * EN: ingest, route, and the chosen handler all throw freely; the single error boundary in
-     * `Synapse.runStimulus` (the call site of `agent.next`) receives the rejection and decides what the
+     * `Synapse.runStimulus` (the call site of `brain.next`) receives the rejection and decides what the
      * user sees. `Brain` does not catch.
      * ZH: ingest、route 和选中的 handler 都可自由抛出;唯一错误边界在 `Synapse.runStimulus`
-     * (调 `agent.next` 的地方),由它接住拒绝并决定给用户看什么。`Brain` 不做 catch。
+     * (调 `brain.next` 的地方),由它接住拒绝并决定给用户看什么。`Brain` 不做 catch。
      */
-    public override async onPipe(data: AgentInput) {
+    public override async onPipe(data: BrainInput) {
         const input = { text: data.text, speakerId: data.speakerId, stimulusId: data.stimulusId };
         const turn = data.relation === 'same' && data.targetTurnId
             ? await this.context.revise(data.targetTurnId, input, data.signal)
@@ -67,7 +67,7 @@ export class Brain extends FAgentAtom<AgentInput, string> implements IObservable
 
     private async reply(chunk: string, turnId: string, abortSignal?: AbortSignal, streamId?: string): Promise<void> {
         let assistant = '';
-        const messages = [...this.memory.buildMessage(), { role: AgentChatRole.User, content: chunk }];
+        const messages = [...this.memory.buildMessage(), { role: ChatRole.User, content: chunk }];
         try {
             await this.intelligence.stream(messages, (delta) => {
                 if (this.synapse.preempted?.(turnId)) throw new TurnPreempted(turnId);
@@ -95,7 +95,7 @@ export class Brain extends FAgentAtom<AgentInput, string> implements IObservable
     }
 
     private async research(chunk: string, turnId: string, abortSignal?: AbortSignal, streamId?: string): Promise<void> {
-        const messages = [...this.memory.buildMessage(), { role: AgentChatRole.User, content: chunk }];
+        const messages = [...this.memory.buildMessage(), { role: ChatRole.User, content: chunk }];
         const turn = this.context.turn(turnId);
         const outcome = await this.investigation.run(messages, {
             turnId,
@@ -119,12 +119,13 @@ export class Brain extends FAgentAtom<AgentInput, string> implements IObservable
     }
 
     /**
-     * EN: Worker understanding entry. Ingests the Context brief into this agent's
-     * private memory, then runs one investigation loop without touching Context.turns.
-     * ZH: worker 理解入口。把 Context 简报写入该 agent 的私有记忆，然后跑一轮
+     * EN: Parallel-thought understanding entry. Ingests the Context brief into
+     * this thought thread's private memory, then runs one investigation loop
+     * without touching Context.turns.
+     * ZH: 并行思维理解入口。把 Context 简报写入该思维线程的私有记忆，然后跑一轮
      * investigation，不修改 Context.turns。
      */
-    public async understand(brief: AgentBrief, signal?: AbortSignal): Promise<InvestigationOutcome | undefined> {
+    public async understand(brief: ContextBrief, signal?: AbortSignal): Promise<InvestigationOutcome | undefined> {
         this.memory.ingestBrief(brief);
         const messages = this.memory.buildMessage();
         const outcome = await this.investigation.run(messages, { emitReply: false, cwd: brief.cwd, signal });

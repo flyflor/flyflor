@@ -1,10 +1,11 @@
-import { Agent, AgentChatRole } from '@/agent';
-import type { AgentInput } from '@/agent/types';
-import { Context, type AgentBrief } from '@/agent/context';
+import { Brain } from '@/neural/brain';
+import { ChatRole } from '@/neural/brain/types';
+import type { BrainInput } from '@/neural/brain/types';
+import { Context, type ContextBrief } from '@/neural/context';
 import type { ConfigService } from '@/configuration';
-import { Config, FCortex, Init, Inject, Module, Prompt, PromptService, Scope, useContainer } from '@/core';
-import { Intelligence } from '@/agent/brain/intelligence/service';
-import { parse } from '@/agent/json';
+import { Config, FCortex, Init, Inject, Module, Prompt, PromptService, useContainer } from '@/core';
+import { Intelligence } from '@/neural/brain/intelligence/service';
+import { parse } from '@/neural/json';
 import { Awareness } from '@/neural/awareness';
 import { DispositionRelation, type AttentionInstruction, type Stimulus } from '@/neural/awareness/types';
 import { FSocket } from './ipc';
@@ -20,20 +21,11 @@ import {
 } from './types';
 
 /**
- * EN: Registry of cached agents, keyed by agent profile name.
- * ZH: 按 agent 配置名索引的已缓存 agent 注册表。
- */
-export interface AgentPool {
-    /** EN: Cached agent instance for this profile name. ZH: 该配置名对应的已缓存 agent 实例。 */
-    [name: string]: Agent;
-}
-
-/**
- * EN: Synapse is the neural cortex. It routes signals, owns the active agent,
- * and dispatches the agent pool when the semantic Turn intent requires
- * multi-agent coordination.
- * ZH: Synapse 是神经皮层。它路由信号、持有 active agent，并在语义 Turn intent
- * 需要多 agent 协同理解时派发 agent pool。
+ * EN: Synapse is the neural cortex. It routes signals, owns the single Brain,
+ * and dispatches parallel thought threads when the semantic Turn intent
+ * requires coordinated understanding.
+ * ZH: Synapse 是神经皮层。它路由信号、持有单一的 Brain，并在语义 Turn intent
+ * 需要协同理解时派发并行思维线程。
  */
 @Module()
 export class Synapse extends FCortex<SynapseSignal> {
@@ -42,7 +34,7 @@ export class Synapse extends FCortex<SynapseSignal> {
     public readonly config!: ConfigService;
 
     /** EN: Unix socket surface used for motor output. ZH: 用于运动输出的 Unix socket 表面。 */
-    @Scope()
+    @Inject()
     public socket!: FSocket;
 
     /** EN: Semantic workspace that owns Turn lifecycle. ZH: 持有 Turn 生命周期的语义工作区。 */
@@ -57,7 +49,7 @@ export class Synapse extends FCortex<SynapseSignal> {
     @Inject()
     public awareness!: Awareness;
 
-    /** EN: Prompt template for multi-agent coordination planning. ZH: 多 agent 协同计划的提示词模板。 */
+    /** EN: Prompt template for parallel thought coordination planning. ZH: 并行思维协同计划的提示词模板。 */
     @Prompt('prompts/synapse')
     public planPrompt!: PromptService;
 
@@ -65,10 +57,8 @@ export class Synapse extends FCortex<SynapseSignal> {
     @Prompt('prompts/synapse')
     public synthesisPrompt!: PromptService;
 
-    /** EN: Cached agents by profile name; spawned lazily on demand. ZH: 按配置名缓存的 agent；按需惰性 spawn。 */
-    public agentPool: AgentPool;
-    /** EN: Name of the currently active agent profile. ZH: 当前活跃 agent 配置名。 */
-    public active: string;
+    /** EN: The single mind of the life-form, built during init. ZH: 生命体单一的心智，在 init 期间构建。 */
+    public brain!: Brain;
     /** EN: Pending ask/confirm waiters keyed by Turn id. ZH: 按 Turn id 索引的待答复 ask/confirm 等待者。 */
     private interactions: Map<string, { request: InteractionRequest; resolve: (response: InteractionResponse) => void; reject: (error: Error) => void }>;
     /** EN: Abort handles for in-flight Turns keyed by Turn id. ZH: 按 Turn id 索引的在途 Turn 中止句柄。 */
@@ -76,17 +66,8 @@ export class Synapse extends FCortex<SynapseSignal> {
     /** EN: Abort handles keyed by stimulus id, addressable before Context has created a Turn. ZH: 按刺激 id 索引的中止句柄，在 Context 创建 Turn 之前即可寻址。 */
     private stimulusControllers: Map<string, { controller: AbortController; speakerId: string }>;
 
-    /** EN: The agent instance behind the active profile name. ZH: 当前活跃配置名对应的 agent 实例。 */
-    public get agent() {
-        return this.agentPool[this.active]!;
-    }
-
     constructor() {
         super();
-        // EN: Agent cache starts empty and fills on demand. ZH: agent 缓存初始为空，按需填充。
-        this.agentPool = {};
-        // EN: No active profile until init() reads the config. ZH: init() 读取配置前没有活跃配置。
-        this.active = '';
         // EN: Pending ask/confirm waiters keyed by Turn id. ZH: 按 Turn id 索引的待答复 ask/confirm 等待者。
         this.interactions = new Map();
         // EN: Abort handles for in-flight Turns keyed by Turn id. ZH: 按 Turn id 索引的在途 Turn 中止句柄。
@@ -96,16 +77,14 @@ export class Synapse extends FCortex<SynapseSignal> {
     }
 
     /**
-     * EN: Lifecycle init: resolve the configured active agent, spawn it, attend
-     * to Awareness, and wire every Synapse signal type to its motor output.
-     * ZH: 生命周期初始化：解析配置的活跃 agent 并 spawn，接入 Awareness，
+     * EN: Lifecycle init: build the single Brain, attend to Awareness, and wire
+     * every Synapse signal type to its motor output.
+     * ZH: 生命周期初始化：构建单一的 Brain，接入 Awareness，
      * 并将每种 Synapse 信号类型接到对应的运动输出。
      */
     @Init()
     public async init() {
-        const active = this.config.agent;
-        this.active = active;
-        await this.spawnAgent(active);
+        this.brain = await this.spawnThought();
         this.awareness.attend(this);
         this.on(SynapseSignalType.Reply, (signal) => this.output(signal.data));
         this.on(SynapseSignalType.Event, (signal) => this.addressedWrite('data', signal.data));
@@ -117,48 +96,24 @@ export class Synapse extends FCortex<SynapseSignal> {
     }
 
     /**
-     * EN: Returns the cached agent for a profile, spawning and caching it on
-     * first use. Missing profiles throw with the configured names as detail.
-     * ZH: 返回某配置对应的已缓存 agent，首次使用时 spawn 并缓存。配置缺失时抛出
-     * 携带已配置名单的错误。
+     * EN: Spawns a fresh Brain for one parallel thought thread. The thread is
+     * not the foreground mind: it is an independent instance with its own
+     * private Memory and does not emit to the socket.
+     * ZH: 为一条并行思维线程 spawn 一个全新的 Brain。线程不是前台心智：它是
+     * 独立实例，拥有私有 Memory，不向 socket 广播。
      */
-    public async spawnAgent(name: string): Promise<Agent> {
-        const existing = this.agentPool[name];
-        if (existing) return existing;
-        const agentConfig = this.config.agents[name];
-        if (!agentConfig) {
-            throw Object.assign(Error('Default agent profile is missing'), {
-                detail: { active: name, configuredAgents: Object.keys(this.config.agents) },
-            });
-        }
-        agentConfig.model = agentConfig.model || this.config.model.model || this.config.model.default;
-        agentConfig.provider = agentConfig.provider || this.config.model.provider;
-        agentConfig.contextLength = agentConfig.contextLength || this.config.model.contextLength;
-        agentConfig.maxTokens = agentConfig.maxTokens || this.config.model.maxTokens;
-        const agent = await useContainer().getAsync(Agent, agentConfig, this);
-        this.agentPool[name] = agent;
-        return agent;
+    public async spawnThought(): Promise<Brain> {
+        return await useContainer().getAsync(Brain, this);
     }
 
     /**
-     * EN: Spawns a fresh worker agent for one coordination slice. The worker is
-     * not cached in the agent pool: it is an independent instance with its own
-     * private Memory and does not emit to the socket.
-     * ZH: 为一个协调切片 spawn 一个全新的 worker agent。worker 不缓存在 agent pool
-     * 中：它是独立实例，拥有私有 Memory，不向 socket 广播。
+     * EN: Reports whether a Turn has been preempted by an urgent stimulus.
+     * Neural atoms check this boundary through the synapse bus.
+     * ZH: 报告某个 Turn 是否已被紧急刺激抢占。神经原子通过 synapse 总线检查
+     * 这个边界。
      */
-    public async spawnWorker(name: string): Promise<Agent> {
-        const agentConfig = this.config.agents[name];
-        if (!agentConfig) {
-            throw Object.assign(Error('Worker agent profile is missing'), {
-                detail: { requested: name, configuredAgents: Object.keys(this.config.agents) },
-            });
-        }
-        agentConfig.model = agentConfig.model || this.config.model.model || this.config.model.default;
-        agentConfig.provider = agentConfig.provider || this.config.model.provider;
-        agentConfig.contextLength = agentConfig.contextLength || this.config.model.contextLength;
-        agentConfig.maxTokens = agentConfig.maxTokens || this.config.model.maxTokens;
-        return await useContainer().getAsync(Agent, agentConfig, this);
+    public preempted(turnId: string): boolean {
+        return this.awareness.preempted(turnId);
     }
 
     /**
@@ -193,7 +148,7 @@ export class Synapse extends FCortex<SynapseSignal> {
             relation: instruction.relation,
         });
         const controller = new AbortController();
-        const input: AgentInput = {
+        const input: BrainInput = {
             text: stimulus.text,
             speakerId: stimulus.speakerId,
             stimulusId: stimulus.id,
@@ -205,7 +160,7 @@ export class Synapse extends FCortex<SynapseSignal> {
         this.stimulusControllers.set(stimulus.id, { controller, speakerId: stimulus.speakerId });
         if (targetTurnId) this.turnControllers.set(targetTurnId, controller);
         try {
-            await this.agent.next(input);
+            await this.brain.next(input);
             const settledTurn = input.stimulusId ? this.context.turnForStimulus(input.stimulusId) : undefined;
             this.awareness.turnSettled(settledTurn?.id ?? input.targetTurnId ?? '');
         } catch (error) {
@@ -364,43 +319,46 @@ export class Synapse extends FCortex<SynapseSignal> {
     }
 
     /**
-     * EN: Cortex dispatch. The Turn intent needs multi-agent joint understanding.
-     * Slices run in parallel as unconscious processors (GWT): each gets its own
-     * abort handle chained to the turn signal, a failed slice is isolated with a
-     * reason instead of dragging the whole turn down, and only a total failure
-     * reaches the turn error boundary. Review and synthesis stay serial — the
-     * conscious stream — and everything settles into the one originating Turn.
-     * ZH: 皮层派发。Turn intent 判断需要多 agent 协同理解。切片作为无意识处理器
-     * 并行运行(GWT):每个切片持有级联到 turn 信号的独立中止句柄;失败的切片
-     * 带原因隔离记录而不是拖垮整轮,只有全部失败才进入 turn 错误边界。审核与
-     * 合成保持串行——即意识流——一切结算回发起它们的同一个 Turn。
+     * EN: Cortex dispatch. The Turn intent needs coordinated understanding.
+     * Slices run in parallel as unconscious processors of the single mind
+     * (GWT): each is a fresh Brain with its own private memory and its own
+     * abort handle chained to the turn signal; a failed slice is isolated with
+     * a reason instead of dragging the whole turn down, and only a total
+     * failure reaches the turn error boundary. Review and synthesis stay
+     * serial — the conscious stream — and everything settles into the one
+     * originating Turn.
+     * ZH: 皮层派发。Turn intent 判断需要协同理解。切片作为单一心智的无意识处理器
+     * 并行运行(GWT):每个切片是一个拥有私有记忆的全新 Brain，持有级联到 turn
+     * 信号的独立中止句柄;失败的切片带原因隔离记录而不是拖垮整轮,只有全部失败
+     * 才进入 turn 错误边界。审核与合成保持串行——即意识流——一切结算回发起它们的
+     * 同一个 Turn。
      */
     public async coordinate(chunk: string, turnId: string, abortSignal?: AbortSignal, streamId?: string): Promise<void> {
         const brief = this.context.brief(turnId);
         const plan = parse<CoordinatePlan>(await this.intelligence.completeText([
-            { role: AgentChatRole.System, content: this.planPrompt.section('plan') },
-            { role: AgentChatRole.User, content: `${JSON.stringify(brief)}\n<latest_user_message>${chunk}</latest_user_message>` },
+            { role: ChatRole.System, content: this.planPrompt.section('plan') },
+            { role: ChatRole.User, content: `${JSON.stringify(brief)}\n<latest_user_message>${chunk}</latest_user_message>` },
         ], abortSignal));
 
         abortSignal?.throwIfAborted();
         const slices = plan.slices.length === 0
-            ? [{ profile: this.active, persona: '', brief: this.context.brief(turnId).goal, slice: chunk }]
+            ? [{ brief: this.context.brief(turnId).goal, slice: chunk }]
             : plan.slices;
         const outcomes: CoordinateOutcome[] = await Promise.all(slices.map(async (slice): Promise<CoordinateOutcome> => {
             const controller = new AbortController();
             const chainAbort = () => controller.abort();
             abortSignal?.addEventListener('abort', chainAbort, { once: true });
             try {
-                const agent = await this.spawnWorker(slice.profile);
-                const outcome = await agent.understand(this.workerBrief(slice, turnId), controller.signal);
-                if (!outcome) throw Error(`Worker paused without an interaction boundary: ${slice.profile}`);
-                return { profile: slice.profile, persona: slice.persona, slice: slice.slice, brief: slice.brief, result: outcome.answer, evidence: outcome.evidence };
+                const worker = await this.spawnThought();
+                const outcome = await worker.understand(this.workerBrief(slice, turnId), controller.signal);
+                if (!outcome) throw Error(`Thought thread paused without an interaction boundary: ${slice.slice}`);
+                return { slice: slice.slice, brief: slice.brief, result: outcome.answer, evidence: outcome.evidence };
             } catch (error) {
                 // The main abort owns the turn: propagate instead of isolating.
                 if (abortSignal?.aborted) throw error;
                 const reason = error instanceof Error ? error.message : String(error);
-                this.log.warn('synapse.coordinate.slice_failed', { profile: slice.profile, reason });
-                return { profile: slice.profile, persona: slice.persona, slice: slice.slice, brief: slice.brief, result: '', evidence: [], failed: true, reason };
+                this.log.warn('synapse.coordinate.slice_failed', { slice: slice.slice, reason });
+                return { slice: slice.slice, brief: slice.brief, result: '', evidence: [], failed: true, reason };
             } finally {
                 abortSignal?.removeEventListener('abort', chainAbort);
             }
@@ -411,13 +369,13 @@ export class Synapse extends FCortex<SynapseSignal> {
             });
         }
 
-        const reviewer = await this.spawnWorker(plan.review.profile);
+        const reviewer = await this.spawnThought();
         const review = await reviewer.understand(this.reviewBrief(plan, outcomes, turnId), abortSignal);
-        if (!review) throw Error(`Reviewer paused without an interaction boundary: ${plan.review.profile}`);
+        if (!review) throw Error('Review pass paused without an interaction boundary');
 
         const answer = await this.intelligence.completeText([
-            { role: AgentChatRole.System, content: this.synthesisPrompt.section('synthesis') },
-            { role: AgentChatRole.User, content: JSON.stringify({ outcomes, review: { profile: plan.review.profile, persona: plan.review.persona, result: review.answer, evidence: review.evidence }, hint: plan.synthesisHint }) },
+            { role: ChatRole.System, content: this.synthesisPrompt.section('synthesis') },
+            { role: ChatRole.User, content: JSON.stringify({ outcomes, review: { result: review.answer, evidence: review.evidence }, hint: plan.synthesisHint }) },
         ], abortSignal);
 
         await this.context.settle(turnId, { assistant: answer, evidence: [...outcomes.flatMap((outcome) => outcome.evidence), ...review.evidence] }, abortSignal);
@@ -441,12 +399,11 @@ export class Synapse extends FCortex<SynapseSignal> {
         this.socket.write(turn.speakerId, { action, data });
     }
 
-    private workerBrief(slice: { profile: string; persona: string; brief: string; slice: string }, turnId: string): AgentBrief {
+    private workerBrief(slice: { brief: string; slice: string }, turnId: string): ContextBrief {
         const brief = this.context.brief(turnId);
         return {
             ...brief,
             goal: slice.brief,
-            persona: slice.persona,
             constraints: [...brief.constraints, slice.slice],
         };
     }
@@ -455,12 +412,11 @@ export class Synapse extends FCortex<SynapseSignal> {
         plan: CoordinatePlan,
         outcomes: CoordinateOutcome[],
         turnId: string,
-    ): AgentBrief {
+    ): ContextBrief {
         const brief = this.context.brief(turnId);
         return {
             ...brief,
             goal: JSON.stringify({ review: plan.review.brief, focus: plan.review.focus, intent: plan.intent, outcomes }),
-            persona: plan.review.persona,
         };
     }
 }

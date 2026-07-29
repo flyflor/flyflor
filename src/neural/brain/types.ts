@@ -2,7 +2,7 @@
  * EN: Chat roles Flyflor uses when talking to a provider.
  * ZH: Flyflor 与 provider 对话时使用的聊天角色。
  */
-export enum AgentChatRole {
+export enum ChatRole {
     /** EN: System instruction message. ZH: 系统指令消息。 */
     System = 'system',
     /** EN: User input message. ZH: 用户输入消息。 */
@@ -12,23 +12,23 @@ export enum AgentChatRole {
 }
 
 /**
- * EN: One pure short-term memory message for an agent.
- * ZH: 面向 agent 的一条纯短期记忆消息。
+ * EN: One pure short-term memory message for the mind.
+ * ZH: 面向心智的一条纯短期记忆消息。
  */
-export interface AgentMemory {
+export interface MemoryMessage {
     /** EN: Chat role of the message. ZH: 消息的聊天角色。 */
-    role: AgentChatRole.System | AgentChatRole.User | AgentChatRole.Assistant;
+    role: ChatRole.System | ChatRole.User | ChatRole.Assistant;
     /** EN: Text content of the message. ZH: 消息的文本内容。 */
     content: string;
 }
 
 /**
- * EN: One stimulus handed to an agent: what was said, who said it, and the
+ * EN: One stimulus handed to the brain: what was said, who said it, and the
  * stimulus it grew from. Session-less: identity is only the speaker id.
- * ZH: 交给 agent 的一条刺激:说了什么、谁说的、它源自哪条刺激。
+ * ZH: 交给大脑的一条刺激:说了什么、谁说的、它源自哪条刺激。
  * 无 session:身份只有 speaker id。
  */
-export interface AgentInput {
+export interface BrainInput {
     /** EN: Raw stimulus text. ZH: 原始刺激文本。 */
     text: string;
     /** EN: Identity of the speaker who produced the stimulus. ZH: 产生该刺激的说话者身份。 */

@@ -19,7 +19,7 @@ export enum SynapseSignalType {
     Pause = 'pause',
     /** EN: Paused Turn resumed by a speaker's answer. ZH: 暂停的 Turn 被说话人答复恢复。 */
     Resume = 'resume',
-    /** EN: Multi-agent coordination dispatch for one Turn. ZH: 针对一个 Turn 的多 agent 协同派发。 */
+    /** EN: Parallel thought coordination dispatch for one Turn. ZH: 针对一个 Turn 的并行思维协同派发。 */
     Coordinate = 'coordinate',
 }
 
@@ -29,7 +29,7 @@ export enum SynapseSignalType {
  * ZH: turn 思考期间随出站 Event 信号发出的活动事件类别:provider 步进与
  * 工具 action 边界。
  */
-export enum AgentEventType {
+export enum ActivityEventType {
     /** EN: One provider request step began. ZH: 一次 provider 请求步进开始。 */
     LlmRequest = 'llm_request',
     /** EN: One tool action started executing. ZH: 一个工具 action 开始执行。 */
@@ -42,11 +42,11 @@ export enum AgentEventType {
  * EN: One activity event payload carried by an Event signal.
  * ZH: Event 信号携带的一条活动事件载荷。
  */
-export interface AgentEvent {
+export interface ActivityEvent {
     /** EN: Turn that produced this event; resolves the speaker via Context. ZH: 产生本事件的 Turn；经 Context 解析说话人。 */
     turnId?: string;
     /** EN: Activity kind of this event. ZH: 本事件的活动类别。 */
-    type: AgentEventType;
+    type: ActivityEventType;
     /** EN: Short human-readable label of the event. ZH: 事件的短可读标签。 */
     chunk: string;
     /** EN: Optional structured payload attached to the event. ZH: 挂在事件上的可选结构化负载。 */
@@ -131,23 +131,19 @@ export type InteractionResponse =
 
 /**
  * EN: Outcome of one coordination slice. Slices run in parallel as
- * unconscious processors; a failed slice is isolated with `failed` and a
- * reason instead of dragging the whole turn down.
- * ZH: 一个协同切片的结果。切片作为无意识处理器并行运行;失败的切片用
- * `failed` 与原因隔离记录,而不是拖垮整个 turn。
+ * unconscious processors of the single mind; a failed slice is isolated with
+ * `failed` and a reason instead of dragging the whole turn down.
+ * ZH: 一个协同切片的结果。切片作为单一心智的无意识处理器并行运行;失败的
+ * 切片用 `failed` 与原因隔离记录,而不是拖垮整个 turn。
  */
 export interface CoordinateOutcome {
-    /** EN: Agent profile that worked this slice. ZH: 处理本切片的 agent 配置名。 */
-    profile: string;
-    /** EN: Temporary persona the worker adopted. ZH: worker 采用的临时人设。 */
-    persona: string;
-    /** EN: The user-message slice this worker covered. ZH: 本 worker 负责的用户消息切片。 */
+    /** EN: The user-message slice this thought thread covered. ZH: 本思维线程负责的用户消息切片。 */
     slice: string;
-    /** EN: Goal brief handed to the worker. ZH: 交给 worker 的目标简述。 */
+    /** EN: Goal brief handed to the thought thread. ZH: 交给思维线程的目标简述。 */
     brief: string;
-    /** EN: Worker result text; empty when the slice failed. ZH: worker 的结果文本;切片失败时为空。 */
+    /** EN: Thought-thread result text; empty when the slice failed. ZH: 思维线程的结果文本;切片失败时为空。 */
     result: string;
-    /** EN: Evidence lines collected by the worker. ZH: worker 收集的证据行。 */
+    /** EN: Evidence lines collected by the thought thread. ZH: 思维线程收集的证据行。 */
     evidence: string[];
     /** EN: Whether this slice failed and was isolated. ZH: 本切片是否失败并被隔离。 */
     failed?: boolean;
@@ -156,34 +152,26 @@ export interface CoordinateOutcome {
 }
 
 /**
- * EN: Plan produced by the cortex for multi-agent understanding.
- * ZH: 皮层为多 agent 理解生成的计划。
+ * EN: Plan produced by the cortex for parallel thought coordination.
+ * ZH: 皮层为并行思维协同生成的计划。
  */
 export interface CoordinatePlan {
     /** EN: Summarized intent of the Turn being coordinated. ZH: 被协同的 Turn 的意图摘要。 */
     intent: string;
     /** EN: Whether slices run in parallel or sequential order. ZH: 切片并行还是顺序执行。 */
     strategy: 'parallel' | 'sequential';
-    /** EN: Work slices dispatched to worker agents. ZH: 派发给 worker agent 的工作切片。 */
+    /** EN: Work slices dispatched to parallel thought threads. ZH: 派发给并行思维线程的工作切片。 */
     slices: Array<{
-        /** EN: Agent profile name the slice is dispatched to. ZH: 本切片派发到的 agent 配置名。 */
-        profile: string;
-        /** EN: Persona the worker adopts for this slice. ZH: worker 处理本切片时采用的人设。 */
-        persona: string;
-        /** EN: Goal brief handed to the worker. ZH: 交给 worker 的目标简述。 */
+        /** EN: Goal brief handed to the thought thread. ZH: 交给思维线程的目标简述。 */
         brief: string;
-        /** EN: The specific slice of the user message this worker covers. ZH: 本 worker 负责的用户消息切片。 */
+        /** EN: The specific slice of the user message this thought thread covers. ZH: 本思维线程负责的用户消息切片。 */
         slice: string;
     }>;
-    /** EN: Reviewer worker that audits all slice outcomes. ZH: 审核所有切片结果的 reviewer worker。 */
+    /** EN: Self-review pass that audits all slice outcomes. ZH: 审核所有切片结果的自我审核通道。 */
     review: {
-        /** EN: Agent profile name of the reviewer worker. ZH: reviewer worker 的 agent 配置名。 */
-        profile: string;
-        /** EN: Persona the reviewer adopts. ZH: reviewer 采用的人设。 */
-        persona: string;
-        /** EN: Goal brief handed to the reviewer. ZH: 交给 reviewer 的目标简述。 */
+        /** EN: Goal brief handed to the review pass. ZH: 交给审核通道的目标简述。 */
         brief: string;
-        /** EN: Review focus points the reviewer must check. ZH: reviewer 必须检查的关注点。 */
+        /** EN: Review focus points the review pass must check. ZH: 审核通道必须检查的关注点。 */
         focus: string;
     };
     /** EN: Hint guiding the final synthesis completion. ZH: 指导最终合成补全的提示。 */

@@ -31,7 +31,7 @@ flowchart TB
     Factory --> Container["Container<br/>constructs, injects, runs @Init"]
     Container --> AppModule["AppModule<br/>imports Synapse + PluginModule"]
 
-    AppModule --> Synapse["Synapse<br/>signal cortex + active agent pool"]
+    AppModule --> Synapse["Synapse<br/>signal cortex + single Brain"]
     AppModule --> PluginModule["PluginModule"]
     PluginModule --> Tools["ToolComponent<br/>ask, confirm, filesystem, shell, execute"]
 
@@ -41,11 +41,10 @@ flowchart TB
     Socket <--> Packet["IPCPacket<br/>8-byte length + JSON"]
     Socket <--> Client["web/client.ts<br/>browser bridge"]
 
-    Synapse --> Agent["Agent<br/>scoped Brain + Memory"]
-    Agent --> Brain["Brain<br/>turn orchestration"]
+    Synapse --> Brain["Brain<br/>single mind: turn orchestration"]
     Brain --> Context["Context<br/>four-slot semantic workspace"]
     Context --> MasterContext["MasterContext<br/>session-level situation model"]
-    Brain --> Memory["Memory<br/>private agent notes"]
+    Brain --> Memory["Memory<br/>private working-memory notes"]
     Brain --> Investigation["Investigation<br/>local action loop"]
     Brain --> Intelligence["Intelligence<br/>provider stream boundary"]
     Context --> Intelligence
@@ -77,7 +76,7 @@ Only the IOC container should construct application classes. Singleton classes a
 flowchart TD
     User["IPC packet<br/>action=user or answer"] --> Decode["FSocket -> IPCPacket.decode"]
     Decode --> Gate["Awareness.perceive() -> Scheduler<br/>round-robin fairness + same/new + urgent"]
-    Gate --> AgentNext["active Agent.next(input)"]
+    Gate --> AgentNext["Brain.next(input)"]
     AgentNext --> Ingest["Context.ingest() or revise()<br/>semantic Turn understanding"]
 
     Ingest --> Choice{"Turn intent"}
@@ -95,9 +94,9 @@ flowchart TD
     Pause -- no --> LlmTools
     FinalAnswer --> Settle2["Context.settle(evidence)"]
 
-    Choice -- coordinate --> Coordinate["Synapse.coordinate()<br/>LLM plan with temporary personas"]
-    Coordinate --> Workers["parallel silent worker understand() calls<br/>failed slices isolated"]
-    Workers --> Review["silent reviewer understand() call"]
+    Choice -- coordinate --> Coordinate["Synapse.coordinate()<br/>LLM plan of parallel thought slices"]
+    Coordinate --> Workers["parallel silent thought-thread understand() calls<br/>failed slices isolated"]
+    Workers --> Review["silent self-review understand() call"]
     Review --> Synthesis["synthesize outcomes + review"]
     Synthesis --> Settle4["Context.settle(evidence)"]
 ```
@@ -114,7 +113,7 @@ Every packet on the kernel socket is one 8-byte unsigned big-endian JSON body le
 +--------------------------+-------------------------------+
 ```
 
-Inbound packets with `action: "user"` or `action: "answer"` become agent input. Other inbound actions are dispatched to `Controller`; the current controller action is `cwd`, which updates `ConfigService.path.cwd`.
+Inbound packets with `action: "user"` or `action: "answer"` become brain input. Other inbound actions are dispatched to `Controller`; the current controller action is `cwd`, which updates `ConfigService.path.cwd`.
 
 Common outbound actions are `open`, `agent`, `interrupted`, `streamEnd`, `data`, `ask`, `confirm`, `pause`, `resume`, and `error`.
 
@@ -143,7 +142,7 @@ The current model-visible tools are loaded from `prompts/tools/config.jsonc` and
 
 ## Prompt Runtime
 
-`PromptService` loads either one markdown file or a prompt package directory with `config.jsonc`. Package configs define ordinary render sections, editable files, locked files, runtime-ignored files, and an optional XML document view. The active agent package loads only static `SOUL.md`/`EXTENSION.md`; runtime prompt writes and the legacy `soul` route are disabled.
+`PromptService` loads either one markdown file or a prompt package directory with `config.jsonc`. Package configs define ordinary render sections, editable files, locked files, runtime-ignored files, and an optional XML document view. The persona package loads only static `SOUL.md`/`EXTENSION.md`; runtime prompt writes and the legacy `soul` route are disabled.
 
 Canonical runtime prompt sources are English `.md` files. `.zh.cn.md` files are human mirrors and must not become runtime source-of-truth.
 
@@ -155,12 +154,13 @@ src/app.module.ts                      root @Module
 src/configuration.ts                   ConfigService and runtime config types
 src/core/                              decorators, IOC, base classes, prompt, logger, tool contracts
 src/neural/                            Synapse, Awareness, Scheduler, IPC socket, packet codec, controller
-src/agent/                             Agent, Brain, Context, MasterContext, Memory, Investigation, Intelligence
+src/neural/brain/                      Brain, Memory, Investigation, Intelligence
+src/neural/context/                    Context, MasterContext
 src/plugins/                           plugin boundary and local tools
 src/entities/                          entity/repository classes; MemoryRepo currently returns SQL statements
 web/                                   local browser-to-IPC bridge and test page
 prompts/                               prompt packages plus zh.cn mirrors
-.config/                              runtime config and active agent prompt package
+.config/                              runtime config and persona prompt package
 sql/                                   schema files
 pakcages/                              bundled sqlite-vec helper/native assets; not in the current agent turn path
 scripts/check.script.ts                repository mirror and prompt-term checks
@@ -168,7 +168,7 @@ scripts/check.script.ts                repository mirror and prompt-term checks
 
 ## Current Edges
 
-`MemoryRepo`, `sql/001-core-schema.sql`, and native vector assets remain placeholders for a future persistence boundary, but they are not connected to the current `Agent`, `Context`, or `Memory` path. The config file also declares skills and MCP shapes, but this codebase does not yet include a runtime MCP client or skill loader wired into the turn loop.
+`MemoryRepo`, `sql/001-core-schema.sql`, and native vector assets remain placeholders for a future persistence boundary, but they are not connected to the current `Brain`, `Context`, or `Memory` path. The config file also declares skills and MCP shapes, but this codebase does not yet include a runtime MCP client or skill loader wired into the turn loop.
 
 ## Session-less Organism Design
 
@@ -240,8 +240,9 @@ conscious.
 5. A same-speaker follow-up judged `same` calls `Context.revise()` and preserves
    the Turn id. A distinct stimulus is `new` and remains FIFO. Cross-speaker
    revision is rejected by deterministic code.
-6. External stimuli are serial. A single Turn may use temporary worker/reviewer
-   cognition, but that path does not create another external attention stream.
+6. External stimuli are serial. A single Turn may use parallel thought slices
+   and a self-review pass, but that path does not create another external
+   attention stream.
 7. Only an explicit boolean `urgent` verdict may pre-empt the foreground Turn.
    The runtime cancels its provider and cancellable tool work, compacts the Turn
    as suspended, sends `interrupted` followed by `streamEnd`, then releases the
@@ -270,9 +271,9 @@ conscious.
 | `Scheduler` | Own stimulus admission, cross-speaker round-robin fairness with per-speaker FIFO, LLM verdict consultation, and validated urgent pre-emption. |
 | `Context` | Own the four-slot semantic working set and Turn lifecycle, and consolidate settled Turns into the master context. |
 | `MasterContext` | Hold the bounded session-level situation model of consolidated turn outcomes; in-process only, never long-term memory. |
-| `Synapse` | Run one foreground stimulus, cancel it, address output to its speaker, and coordinate temporary workers. |
+| `Synapse` | Run one foreground stimulus, cancel it, address output to its speaker, and coordinate parallel thought threads. |
 | `Brain` | Ingest or revise a Turn and execute reply, research, or coordinate intent. |
-| `Memory` | Hold bounded per-agent scratch notes seeded from a brief; it is not a persistence layer. |
+| `Memory` | Hold bounded per-thread scratch notes seeded from a brief; it is not a persistence layer. |
 | `ToolComponent` | Execute local capabilities behind confirmation and cancellation boundaries. |
 
 The scheduler model may propose only `same|new`, `targetTurnId`, and a boolean

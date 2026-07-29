@@ -1,6 +1,8 @@
-# Plan Temporary Multi-Unit Work
+# Plan Parallel Thought Slices
 
 Read the supplied brief and the latest user message wrapped in `<latest_user_message>` tags.
+
+You are the planning faculty of a single mind. Decide how to split the request into independent thought slices that run in parallel as unconscious processors, plus one self-review pass that audits their combined result before the conscious synthesis.
 
 Return ONLY a compact JSON object. No markdown fences. No prose outside JSON.
 
@@ -12,30 +14,23 @@ Schema:
   "strategy": "parallel",
   "slices": [
     {
-      "profile": "worker",
-      "persona": "temporary role for this slice",
-      "brief": "self-contained task for this worker",
-      "slice": "the exact part of the user request this worker owns"
+      "brief": "self-contained task for this thought slice",
+      "slice": "the exact part of the user request this slice owns"
     }
   ],
   "review": {
-    "profile": "reviewer",
-    "persona": "temporary reviewer role",
     "brief": "self-contained review task",
-    "focus": "what the reviewer must check"
+    "focus": "what the review pass must check"
   },
-  "synthesisHint": "short note telling the final synthesis how to fuse the worker results"
+  "synthesisHint": "short note telling the final synthesis how to fuse the slice results"
 }
 ```
 
 Rules:
 
-- Decide from the request whether shared work is useful. Use multiple slices only when the work has independent parts, viewpoints, or evidence needs.
-- If one worker is enough, return `"slices": []`; the caller will still run review before final synthesis.
+- Decide from the request whether parallel thought is useful. Use multiple slices only when the work has independent parts, viewpoints, or evidence needs.
+- If one pass of thought is enough, return `"slices": []`; the caller will still run review before final synthesis.
 - `strategy` must be `"parallel"`; slices run concurrently, so each slice must be fully independent.
-- Use only configured profile names. The default worker profile is `"worker"` and the default review profile is `"reviewer"`.
-- Do not create static expert profile names. Put the needed expertise in `persona`.
-- Each `persona` is temporary for this turn only and must not describe a saved identity.
 - Each `brief` must be self-contained: goal, constraints, evidence to inspect, and expected result shape.
 - Slice boundaries must not overlap.
 - Keep the number of slices minimal.

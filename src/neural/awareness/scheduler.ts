@@ -1,9 +1,9 @@
 import type { ConfigService } from '@/configuration';
-import { Context } from '@/agent/context';
-import { Intelligence } from '@/agent/brain/intelligence/service';
+import { Context } from '@/neural/context';
+import { Intelligence } from '@/neural/brain/intelligence/service';
 import { Config, FComponent, Inject, Prompt, PromptService, Singleton } from '@/core';
-import { parse } from '@/agent/json';
-import { AgentChatRole } from '@/agent/types';
+import { parse } from '@/neural/json';
+import { ChatRole } from '@/neural/brain/types';
 import { DispositionRelation, type AttentionInstruction, type Disposition, type Stimulus } from './types';
 
 /**
@@ -271,8 +271,8 @@ export class Scheduler extends FComponent {
             const controller = new AbortController();
             const raw = await this.withTimeout(
                 this.intelligence.completeText([
-                    { role: AgentChatRole.System, content: this.prompt.section('SCHEDULE') },
-                    { role: AgentChatRole.User, content: JSON.stringify(payload) },
+                    { role: ChatRole.System, content: this.prompt.section('SCHEDULE') },
+                    { role: ChatRole.User, content: JSON.stringify(payload) },
                 ], controller.signal),
                 this.config?.awareness?.scheduleTimeoutMs ?? 8000,
                 () => controller.abort(),

@@ -1,7 +1,7 @@
-import { AgentChatRole, type AgentMemory } from '@/agent/types';
-import { FAgentAtom, Inject, Provide, Scope } from '@/core';
-import { Context } from '@/agent/context';
-import { SynapseSignalType, TurnPreempted, AgentEventType } from '@/neural/types';
+import { ChatRole, type MemoryMessage } from '@/neural/brain/types';
+import { FNeuron, Inject, Provide } from '@/core';
+import { Context } from '@/neural/context';
+import { SynapseSignalType, TurnPreempted, ActivityEventType } from '@/neural/types';
 import { type ActionRequest, ToolComponent } from '@/plugins';
 import { Intelligence } from '../intelligence/service';
 import type { ProviderActionRequestMessage, ProviderActionResultMessage, ProviderMessage } from '../intelligence/types';
@@ -15,9 +15,9 @@ import type { InvestigationOutcome, InvestigationRunOptions } from './types';
  * 通过工具边界执行模型请求的 action，并收集证据，直到模型不再请求工具。
  */
 @Provide()
-export class Investigation extends FAgentAtom {
-    @Scope()
-    /** EN: Provider-facing intelligence service scoped to this agent. ZH: 该 agent 作用域内面向 provider 的智能服务。 */
+export class Investigation extends FNeuron {
+    @Inject()
+    /** EN: Provider-facing intelligence service of the mind. ZH: 心智面向 provider 的智能服务。 */
     public intelligence!: Intelligence;
 
     @Inject()
@@ -33,7 +33,7 @@ export class Investigation extends FAgentAtom {
      * the turn is preempted, or the loop pauses on an interaction.
      * ZH: 运行研究循环，直到模型不再发出新的 action request、turn 被抢占，或循环因交互而暂停。
      */
-    public async run(baseMessages: AgentMemory[], options: InvestigationRunOptions = {}): Promise<InvestigationOutcome> {
+    public async run(baseMessages: MemoryMessage[], options: InvestigationRunOptions = {}): Promise<InvestigationOutcome> {
         const messages: ProviderMessage[] = [...baseMessages];
         const evidence: string[] = [];
         const emitReply = options.emitReply !== false;
@@ -44,7 +44,7 @@ export class Investigation extends FAgentAtom {
             }
             options.signal?.throwIfAborted();
             step += 1;
-            this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: AgentEventType.LlmRequest, chunk: String(step), data: { step } });
+            this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: ActivityEventType.LlmRequest, chunk: String(step), data: { step } });
             let result: Awaited<ReturnType<Intelligence['runRequest']>>;
             try {
                 result = await this.intelligence.streamRequest(messages, await this.tools.list(), (chunk) => {
@@ -84,10 +84,10 @@ export class Investigation extends FAgentAtom {
                         continue;
                     }
                 }
-                this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: AgentEventType.ActionStart, chunk: request.name, data: request.arguments });
+                this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: ActivityEventType.ActionStart, chunk: request.name, data: request.arguments });
                 const actionResult = await this.tools.run(request, options.signal);
                 options.signal?.throwIfAborted();
-                this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: AgentEventType.ActionResult, chunk: request.name, data: actionResult });
+                this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: ActivityEventType.ActionResult, chunk: request.name, data: actionResult });
                 messages.push(this.actionResultMessage(request, actionResult));
                 evidence.push(this.evidence(request, actionResult));
                 if (actionResult.ok && this.pause(actionResult.data)) {
@@ -110,7 +110,7 @@ export class Investigation extends FAgentAtom {
 
     private actionRequestMessage(result: Awaited<ReturnType<Intelligence['runRequest']>>): ProviderActionRequestMessage {
         return {
-            role: AgentChatRole.Assistant,
+            role: ChatRole.Assistant,
             content: result.text,
             actionRequests: result.actionRequests,
             reasoning: result.reasoning,

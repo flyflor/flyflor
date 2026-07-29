@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { describe, expect, test } from 'bun:test';
-import type { AgentBrief } from '@/agent/context';
-import { Context } from '@/agent/context';
+import type { ContextBrief } from '@/neural/context';
+import { Context } from '@/neural/context';
 import { Synapse } from './synapse';
 import { SynapseSignalType, type CoordinatePlan } from './types';
 import { DispositionRelation } from './awareness/types';
@@ -20,15 +20,15 @@ describe('SynapseSignalType', () => {
 });
 
 describe('Synapse coordinate', () => {
-    test('passes slice briefs and temporary personas to workers, then reviews before synthesis', async () => {
+    test('passes slice briefs to thought threads, then reviews before synthesis', async () => {
         const plan: CoordinatePlan = {
             intent: 'understand the cluster design',
             strategy: 'parallel',
             slices: [
-                { profile: 'worker', persona: 'intent analyst', brief: 'study intent', slice: 'intent' },
-                { profile: 'worker', persona: 'risk analyst', brief: 'study risk', slice: 'risk' },
+                { brief: 'study intent', slice: 'intent' },
+                { brief: 'study risk', slice: 'risk' },
             ],
-            review: { profile: 'reviewer', persona: 'strict reviewer', brief: 'review all worker results', focus: 'coverage and contradictions' },
+            review: { brief: 'review all slice results', focus: 'coverage and contradictions' },
             synthesisHint: 'merge and respect review',
         };
         const synapse = coordinateHarness(plan);
@@ -40,31 +40,29 @@ describe('Synapse coordinate', () => {
         await (synapse as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1');
 
         expect(synapse.workerBriefs.map((brief) => brief.goal)).toEqual(['study intent', 'study risk']);
-        expect(synapse.workerBriefs.map((brief) => brief.persona)).toEqual(['intent analyst', 'risk analyst']);
         expect(synapse.workerBriefs.map((brief) => brief.constraints.at(-1))).toEqual(['intent', 'risk']);
-        expect(synapse.seenReviewBrief?.persona).toBe('strict reviewer');
+        expect(JSON.parse(synapse.seenReviewBrief?.goal ?? '{}')).toMatchObject({ review: 'review all slice results', focus: 'coverage and contradictions' });
         const synthesis = JSON.parse(synapse.synthesisInput) as { outcomes: Array<{ result: string }>; review: { result: string } };
         expect(synthesis.outcomes.map((outcome) => outcome.result)).toEqual(['worker answer', 'worker answer']);
         expect(synthesis.review.result).toBe('review answer');
         expect(replies).toEqual([{ turnId: 'turn_1', chunk: 'final answer' }, { turnId: 'turn_1', chunk: null }]);
     });
 
-    test('uses the active profile when the plan has no slices and still runs review', async () => {
+    test('falls back to one slice from the turn goal when the plan has no slices and still runs review', async () => {
         const plan: CoordinatePlan = {
             intent: 'single path',
             strategy: 'parallel',
             slices: [],
-            review: { profile: 'reviewer', persona: 'single pass reviewer', brief: 'review active result', focus: 'answer quality' },
-            synthesisHint: 'summarize active result',
+            review: { brief: 'review single result', focus: 'answer quality' },
+            synthesisHint: 'summarize single result',
         };
         const synapse = coordinateHarness(plan);
 
         await (synapse as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1');
 
-        expect(synapse.activeNextCalls).toBe(0);
-        expect(synapse.activeUnderstandCalls).toBe(0);
         expect(synapse.workerBriefs).toHaveLength(1);
-        expect(synapse.seenReviewBrief?.persona).toBe('single pass reviewer');
+        expect(synapse.workerBriefs[0]?.goal).toBe('turn goal');
+        expect(synapse.seenReviewBrief).toBeDefined();
     });
 
     test('runs slices in parallel as unconscious processors', async () => {
@@ -72,21 +70,21 @@ describe('Synapse coordinate', () => {
             intent: 'two independent parts',
             strategy: 'parallel',
             slices: [
-                { profile: 'worker', persona: 'one', brief: 'study one', slice: 'one' },
-                { profile: 'worker', persona: 'two', brief: 'study two', slice: 'two' },
+                { brief: 'study one', slice: 'one' },
+                { brief: 'study two', slice: 'two' },
             ],
-            review: { profile: 'reviewer', persona: 'reviewer', brief: 'review', focus: 'coverage' },
+            review: { brief: 'review', focus: 'coverage' },
             synthesisHint: 'merge',
         };
         const synapse = coordinateHarness(plan);
         const started: string[] = [];
         const gates: Array<() => void> = [];
         let spawns = 0;
-        synapse.spawnWorker = async () => {
+        synapse.spawnThought = async () => {
             spawns += 1;
             const isReviewer = spawns > 2;
             return {
-                understand: async (brief: AgentBrief) => {
+                understand: async (brief: ContextBrief) => {
                     if (isReviewer) return { answer: 'review answer', steps: 1, completed: true, paused: false, evidence: [] };
                     started.push(brief.goal);
                     await new Promise<void>((resolve) => gates.push(resolve));
@@ -109,20 +107,21 @@ describe('Synapse coordinate', () => {
             intent: 'two parts, one doomed',
             strategy: 'parallel',
             slices: [
-                { profile: 'worker', persona: 'healthy', brief: 'study ok', slice: 'ok' },
-                { profile: 'worker', persona: 'doomed', brief: 'study fail', slice: 'fail' },
+                { brief: 'study ok', slice: 'ok' },
+                { brief: 'study fail', slice: 'fail' },
             ],
-            review: { profile: 'reviewer', persona: 'reviewer', brief: 'review', focus: 'coverage' },
+            review: { brief: 'review', focus: 'coverage' },
             synthesisHint: 'merge',
         };
         const synapse = coordinateHarness(plan);
-        synapse.spawnWorker = async (profile: string) => {
-            if (profile === 'reviewer') {
-                return { understand: async () => ({ answer: 'review answer', steps: 1, completed: true, paused: false, evidence: [] }) } as never;
-            }
+        let spawns = 0;
+        synapse.spawnThought = async () => {
+            spawns += 1;
+            const isReviewer = spawns > 2;
             return {
-                understand: async (brief: AgentBrief) => {
-                    if (brief.persona === 'doomed') throw Error('worker exploded');
+                understand: async (brief: ContextBrief) => {
+                    if (isReviewer) return { answer: 'review answer', steps: 1, completed: true, paused: false, evidence: [] };
+                    if (brief.goal === 'study fail') throw Error('worker exploded');
                     return { answer: 'worker answer', steps: 1, completed: true, paused: false, evidence: ['e'] };
                 },
             } as never;
@@ -145,14 +144,14 @@ describe('Synapse coordinate', () => {
             intent: 'all doomed',
             strategy: 'parallel',
             slices: [
-                { profile: 'worker', persona: 'one', brief: 'study one', slice: 'one' },
-                { profile: 'worker', persona: 'two', brief: 'study two', slice: 'two' },
+                { brief: 'study one', slice: 'one' },
+                { brief: 'study two', slice: 'two' },
             ],
-            review: { profile: 'reviewer', persona: 'reviewer', brief: 'review', focus: 'coverage' },
+            review: { brief: 'review', focus: 'coverage' },
             synthesisHint: 'merge',
         };
         const synapse = coordinateHarness(plan);
-        synapse.spawnWorker = async () => ({
+        synapse.spawnThought = async () => ({
             understand: async () => {
                 throw Error('boom');
             },
@@ -168,16 +167,16 @@ describe('Synapse coordinate', () => {
             intent: 'abort wins',
             strategy: 'parallel',
             slices: [
-                { profile: 'worker', persona: 'one', brief: 'study one', slice: 'one' },
-                { profile: 'worker', persona: 'two', brief: 'study two', slice: 'two' },
+                { brief: 'study one', slice: 'one' },
+                { brief: 'study two', slice: 'two' },
             ],
-            review: { profile: 'reviewer', persona: 'reviewer', brief: 'review', focus: 'coverage' },
+            review: { brief: 'review', focus: 'coverage' },
             synthesisHint: 'merge',
         };
         const synapse = coordinateHarness(plan);
         const controller = new AbortController();
-        synapse.spawnWorker = async () => ({
-            understand: async (_brief: AgentBrief, signal?: AbortSignal) => {
+        synapse.spawnThought = async () => ({
+            understand: async (_brief: ContextBrief, signal?: AbortSignal) => {
                 await new Promise<never>((_, reject) => {
                     signal?.addEventListener('abort', () => reject(Error('aborted')), { once: true });
                 });
@@ -197,13 +196,13 @@ describe('Synapse cancellation and speaker ownership', () => {
     test('aborts an ingest that has not created a Context turn when its speaker disconnects', async () => {
         let receivedSignal: AbortSignal | undefined;
         let release: (() => void) | undefined;
-        const agent = {
+        const brain = {
             next: async (input: unknown) => {
                 receivedSignal = (input as { signal?: AbortSignal }).signal;
                 await new Promise<void>((resolve) => { release = resolve; });
             },
         };
-        const synapse = setupSynapse(agent);
+        const synapse = setupSynapse(brain);
         const operation = synapse.attend({ id: 'stim_1', speakerId: 'conn_1', text: 'hello', ts: Date.now() }, {
             relation: DispositionRelation.New,
             urgent: false,
@@ -236,10 +235,9 @@ describe('Synapse cancellation and speaker ownership', () => {
     });
 });
 
-function setupSynapse(agent: { next(input: unknown): Promise<void> }) {
+function setupSynapse(brain: { next(input: unknown): Promise<void> }) {
     const synapse = new Synapse();
-    synapse.agentPool = { main: agent as never };
-    synapse.active = 'main';
+    synapse.brain = brain as never;
     synapse.context = new Context();
     synapse.awareness = {
         preempted: () => false,
@@ -251,24 +249,17 @@ function setupSynapse(agent: { next(input: unknown): Promise<void> }) {
 }
 
 function coordinateHarness(plan: CoordinatePlan): Synapse & {
-    workerBriefs: AgentBrief[];
-    seenReviewBrief?: AgentBrief;
+    workerBriefs: ContextBrief[];
+    seenReviewBrief?: ContextBrief;
     synthesisInput: string;
-    activeNextCalls: number;
-    activeUnderstandCalls: number;
 } {
     const synapse = new Synapse() as Synapse & {
-        workerBriefs: AgentBrief[];
-        seenReviewBrief?: AgentBrief;
+        workerBriefs: ContextBrief[];
+        seenReviewBrief?: ContextBrief;
         synthesisInput: string;
-        activeNextCalls: number;
-        activeUnderstandCalls: number;
     };
     synapse.workerBriefs = [];
     synapse.synthesisInput = '';
-    synapse.activeNextCalls = 0;
-    synapse.activeUnderstandCalls = 0;
-    synapse.active = 'flyflor';
     synapse.context = {
         brief: (turnId?: string) => ({
             turnId: turnId ?? 'turn_1',
@@ -295,23 +286,12 @@ function coordinateHarness(plan: CoordinatePlan): Synapse & {
             return 'final answer';
         },
     } as never;
-    synapse.agentPool = {
-        flyflor: {
-            next: async () => {
-                synapse.activeNextCalls += 1;
-            },
-            understand: async () => {
-                synapse.activeUnderstandCalls += 1;
-                return { answer: 'active answer', steps: 1, completed: true, paused: false, evidence: ['active evidence'] };
-            },
-        } as never,
-    };
     let spawned = 0;
-    synapse.spawnWorker = async () => {
+    synapse.spawnThought = async () => {
         spawned += 1;
         const index = spawned;
         return {
-            understand: async (brief: AgentBrief) => {
+            understand: async (brief: ContextBrief) => {
                 if (index > Math.max(plan.slices.length, 1)) {
                     synapse.seenReviewBrief = brief;
                     return { answer: 'review answer', steps: 1, completed: true, paused: false, evidence: ['review evidence'] };

@@ -1,4 +1,3 @@
-import type { FAgentProfileConfiguration } from '@/configuration';
 import type { ToolResult } from '@/core/tool';
 import { useLogger } from '../logger/service';
 import type { FLogger } from '../logger/types';
@@ -382,10 +381,10 @@ export abstract class FCortex<T extends CortexSignal = CortexSignal> extends FMo
 }
 
 /**
- * EN: Minimal synapse bus surface exposed to agent atoms.
- * ZH: 暴露给 agent 原子的最小 synapse 总线接口。
+ * EN: Minimal synapse bus surface exposed to neural atoms.
+ * ZH: 暴露给神经原子的最小 synapse 总线接口。
  */
-export interface FAgentSynapseBus {
+export interface FSynapseBus {
     /** EN: Emits one typed signal with its payload. ZH: 发出一个带载荷的具型信号。 */
     emit(type: string, data: unknown): unknown;
     /** EN: Optionally coordinates one signal for a turn, honoring abort and stream ids. ZH: 可选地为某个 turn 协调一个信号，遵循 abort 和 stream id。 */
@@ -397,35 +396,27 @@ export interface FAgentSynapseBus {
 }
 
 /**
- * EN: Base class for autonomous agents.
- * ZH: 自治 agent 的基类。
+ * EN: Base class for neural atoms bound to the synapse bus.
+ * ZH: 绑定到 synapse 总线的神经原子基类。
  *
- * EN: Parallel to `FService`: an agent is not a stateless service. It owns its own memory, scoped
- * cognition objects, and runtime subscriptions. The observable input surface is the canonical
- * interaction boundary for the active profile.
- * ZH: 与 `FService` 平行:agent 不是无状态服务。它拥有自己的记忆、作用域认知对象和运行时订阅。
- * observable 输入面是活动 profile 的标准交互边界。
+ * EN: A neural atom is not a stateless service. It owns its own memory, scoped
+ * cognition objects, and runtime subscriptions. The observable input surface is
+ * the canonical interaction boundary of the single mind.
+ * ZH: 神经原子不是无状态服务。它拥有自己的记忆、作用域认知对象和运行时订阅。
+ * observable 输入面是单一心智的标准交互边界。
  */
-export abstract class FAgentAtom<T = object | number | string | boolean | undefined, R = T> extends Observable<T, R> {
+export abstract class FNeuron<T = object | number | string | boolean | undefined, R = T> extends Observable<T, R> {
     /**
-     * EN: Binds the atom to one active agent profile and synapse bus.
-     * ZH: 把当前原子对象绑定到一个活动 agent 配置和 synapse 总线。
+     * EN: Binds the atom to the synapse bus.
+     * ZH: 把当前原子对象绑定到 synapse 总线。
      */
     constructor(
-        /** EN: Active agent profile this atom is bound to. ZH: 当前原子绑定的活动 agent 配置。 */
-        public agentConfig: FAgentProfileConfiguration,
         /** EN: Synapse bus used for signal emission and coordination. ZH: 用于信号发射和协调的 synapse 总线。 */
-        public synapse: FAgentSynapseBus,
+        public synapse: FSynapseBus,
     ) {
         super();
     }
 }
-
-/**
- * EN: Semantic alias for agent objects that expose the full observable contract.
- * ZH: 暴露完整 observable 契约的 agent 对象语义别名基类。
- */
-export abstract class FAgent<T, R = T> extends FAgentAtom<T, R> {}
 
 /**
  * EN: Section key type of the shared tool prompt package.

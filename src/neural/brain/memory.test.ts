@@ -1,20 +1,20 @@
 import { describe, expect, test } from 'bun:test';
 import { useContainer } from '@/core';
-import { AgentChatRole, Memory, type AgentMemory } from './memory';
-import { Context } from '@/agent/context';
+import { ChatRole, Memory, type MemoryMessage } from './memory';
+import { Context } from '@/neural/context';
 
 /**
  * EN: Memory is no longer a pure projection of Context.turns. It is a private
- * agent cache seeded by an explicit Context brief. The test verifies that
- * brief-derived notes (not the raw conversation) surface in the next model call
- * and that no tool replay buffers leak in.
+ * working-memory cache seeded by an explicit Context brief. The test verifies
+ * that brief-derived notes (not the raw conversation) surface in the next model
+ * call and that no tool replay buffers leak in.
  * ZH: Memory 不再是 Context.turns 的纯投影。它是由显式 Context 简报初始化的
- * agent 私有缓存。本测试验证简报衍生的笔记（而非原始对话）出现在下一次模型
+ * 私有工作记忆缓存。本测试验证简报衍生的笔记（而非原始对话）出现在下一次模型
  * 调用中，且没有工具回放缓冲区泄漏。
  */
 describe('Memory', () => {
     test('surfaces brief-derived notes without leaking tool or transcript buffers', async () => {
-        const memory = await useContainer().getAsync(Memory, { name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 });
+        const memory = await useContainer().getAsync(Memory);
         const context = new Context();
         context.prompt = { section: () => 'system placeholder' } as never;
         context.intelligence = {
@@ -33,16 +33,16 @@ describe('Memory', () => {
         const userMessage = '实现计划';
         const turn = await context.ingest({ text: userMessage, speakerId: 'test' });
 
-        // EN: Seed the agent's private memory cache from the Context brief.
-        // ZH: 用 Context 简报初始化 agent 的私有记忆缓存。
+        // EN: Seed the private working-memory cache from the Context brief.
+        // ZH: 用 Context 简报初始化私有工作记忆缓存。
         memory.ingestBrief(context.brief());
 
         const messages = memory.buildMessage();
         const system = messages[0]?.content ?? '';
         const user = messages[1]?.content ?? '';
-        const role: AgentMemory['role'] = AgentChatRole.User;
+        const role: MemoryMessage['role'] = ChatRole.User;
 
-        expect(role).toBe(AgentChatRole.User);
+        expect(role).toBe(ChatRole.User);
         expect(system).not.toContain('<agent_memory>');
         expect(turn.goal).toContain('synapse');
         expect(turn.intent).toBe('research');
@@ -57,22 +57,15 @@ describe('Memory', () => {
         expect(user).not.toContain('transcript');
     });
 
-    test('loads minimal worker persona package and keeps dynamic persona in brief notes', async () => {
-        const memory = await useContainer().getAsync(Memory, {
-            name: 'worker',
-            model: '',
-            provider: '',
-            contextLength: 0,
-            maxTokens: 0,
-            promptPackage: './prompts/agents',
-            promptSections: ['worker'],
-        });
+    test('renders persona sections and brief notes from the configured package', async () => {
+        const memory = await useContainer().getAsync(Memory);
+        memory.config = { persona: {} } as never;
+        memory.prompt = { render: () => 'system persona' } as never;
 
         memory.ingestBrief({
             turnId: 'turn_1',
             intent: 'research',
             goal: 'inspect one slice',
-            persona: 'temporary evidence specialist',
             constraints: [],
             refs: [],
             done: [],
@@ -82,14 +75,7 @@ describe('Memory', () => {
 
         const messages = memory.buildMessage();
 
-        expect(messages[0]?.content).toBe(`# Worker Base
-
-You are a temporary work unit.
-
-Use the persona and task brief supplied in short-term notes. Stay inside the assigned slice and return a compact, evidence-based result.
-
-Do not claim ownership of the whole user request. Do not save the temporary persona. Do not answer outside the assigned slice.`);
-        expect(messages[1]?.content).toBe(`-[brief] turn turn_1: intent=research, goal=inspect one slice, constraints=[]
--[brief] persona: temporary evidence specialist`);
+        expect(messages[0]?.content).toBe('system persona');
+        expect(messages[1]?.content).toBe(`-[brief] turn turn_1: intent=research, goal=inspect one slice, constraints=[]`);
     });
 });

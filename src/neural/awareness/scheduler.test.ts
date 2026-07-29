@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import { describe, expect, test } from 'bun:test';
 import type { ConfigService } from '@/configuration';
-import { Context } from '@/agent/context';
-import type { Intelligence } from '@/agent/brain/intelligence';
+import { Context } from '@/neural/context';
+import type { Intelligence } from '@/neural/brain/intelligence';
 import type { PromptService } from '@/core';
 import { Scheduler, type SchedulerHost } from './scheduler';
 import { DispositionRelation, type AttentionInstruction, type ScheduleVerdict, type Stimulus } from './types';

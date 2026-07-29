@@ -1,6 +1,6 @@
 import { FModelProtocolName } from '@/configuration';
 import type { ProtocolAdapter, ProtocolBuildContext, ProviderErrorShape, ProviderMessage } from '../types';
-import { AgentChatRole } from '@/agent/types';
+import { ChatRole } from '@/neural/brain/types';
 
 /**
  * EN: Protocol adapter for the Anthropic Messages SSE wire format.
@@ -54,7 +54,7 @@ function anthropicMessages(messages: ProviderMessage[]): { system: string[]; mes
     const conversation: Array<{ role: string; content: string }> = [];
     for (const message of messages) {
         if (message.role === 'action') continue;
-        if (message.role === AgentChatRole.System) {
+        if (message.role === ChatRole.System) {
             system.push(message.content);
             continue;
         }

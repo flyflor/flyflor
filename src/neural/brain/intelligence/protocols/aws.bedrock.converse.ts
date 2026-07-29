@@ -1,6 +1,6 @@
 import { FModelProtocolName } from '@/configuration';
 import type { ProtocolAdapter, ProtocolBuildContext, ProviderMessage } from '../types';
-import { AgentChatRole } from '@/agent/types';
+import { ChatRole } from '@/neural/brain/types';
 
 /**
  * EN: Protocol adapter for the AWS Bedrock Converse JSON-lines wire format.
@@ -43,12 +43,12 @@ function bedrockMessages(messages: ProviderMessage[]): {
     const conversation: Array<{ role: string; content: Array<{ text: string }> }> = [];
     for (const message of messages) {
         if (message.role === 'action') continue;
-        if (message.role === AgentChatRole.System) {
+        if (message.role === ChatRole.System) {
             system.push(message.content);
             continue;
         }
         conversation.push({
-            role: message.role === AgentChatRole.Assistant ? 'assistant' : 'user',
+            role: message.role === ChatRole.Assistant ? 'assistant' : 'user',
             content: [{ text: message.content }],
         });
     }

@@ -1,6 +1,6 @@
 import type { SocketPacket } from '@/neural/ipc';
 import type { ConfigService } from '@/configuration';
-import type { Context } from '@/agent/context';
+import type { Context } from '@/neural/context';
 import { Config, Inject, Singleton } from '@/core';
 import { FService } from '@/core/ioc';
 import type { Synapse } from '@/neural/synapse';

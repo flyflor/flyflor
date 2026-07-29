@@ -31,7 +31,7 @@ flowchart TB
     Factory --> Container["Container<br/>构造、注入、运行 @Init"]
     Container --> AppModule["AppModule<br/>imports Synapse + PluginModule"]
 
-    AppModule --> Synapse["Synapse<br/>信号皮层 + active agent pool"]
+    AppModule --> Synapse["Synapse<br/>信号皮层 + 单一 Brain"]
     AppModule --> PluginModule["PluginModule"]
     PluginModule --> Tools["ToolComponent<br/>ask, confirm, filesystem, shell, execute"]
 
@@ -41,11 +41,10 @@ flowchart TB
     Socket <--> Packet["IPCPacket<br/>8-byte length + JSON"]
     Socket <--> Client["web/client.ts<br/>browser bridge"]
 
-    Synapse --> Agent["Agent<br/>scoped Brain + Memory"]
-    Agent --> Brain["Brain<br/>turn orchestration"]
+    Synapse --> Brain["Brain<br/>单一心智：turn 编排"]
     Brain --> Context["Context<br/>四槽语义工作集"]
     Context --> MasterContext["MasterContext<br/>会话级情境模型"]
-    Brain --> Memory["Memory<br/>private agent notes"]
+    Brain --> Memory["Memory<br/>私有工作记忆笔记"]
     Brain --> Investigation["Investigation<br/>local action loop"]
     Brain --> Intelligence["Intelligence<br/>provider stream boundary"]
     Context --> Intelligence
@@ -77,7 +76,7 @@ flowchart LR
 flowchart TD
     User["IPC packet<br/>action=user 或 answer"] --> Decode["FSocket -> IPCPacket.decode"]
     Decode --> Gate["Awareness.perceive() -> Scheduler<br/>跨说话人轮转公平 + same/new + urgent"]
-    Gate --> AgentNext["active Agent.next(input)"]
+    Gate --> AgentNext["Brain.next(input)"]
     AgentNext --> Ingest["Context.ingest() 或 revise()<br/>语义 Turn 理解"]
 
     Ingest --> Choice{"Turn intent"}
@@ -95,14 +94,14 @@ flowchart TD
     Pause -- no --> LlmTools
     FinalAnswer --> Settle2["Context.settle(evidence)"]
 
-    Choice -- coordinate --> Coordinate["Synapse.coordinate()<br/>LLM 规划临时 persona"]
-    Coordinate --> Workers["并行静默 worker understand() 调用<br/>失败切片隔离"]
-    Workers --> Review["静默 reviewer understand() 调用"]
+    Choice -- coordinate --> Coordinate["Synapse.coordinate()<br/>LLM 规划并行思维切片"]
+    Coordinate --> Workers["并行静默思维线程 understand() 调用<br/>失败切片隔离"]
+    Workers --> Review["静默自我审核 understand() 调用"]
     Review --> Synthesis["综合 outcomes + review"]
     Synthesis --> Settle4["Context.settle(evidence)"]
 ```
 
-`Context` 是四槽语义工作集，不是 durable archive。容量不足时只淘汰 completed Turn，不使用墙上时间 TTL。已结算的 Turn 会固化(“升格”)进 `MasterContext`——进程内、有界的会话级情境模型——让理解与调度能看到四槽之外的前情,同时不构成长期记忆。`Memory` 是从 `Context.brief()` 初始化的有界 agent 私有笔记缓存；活跃运行时没有长期记忆写入路径。
+`Context` 是四槽语义工作集，不是 durable archive。容量不足时只淘汰 completed Turn，不使用墙上时间 TTL。已结算的 Turn 会固化(“升格”)进 `MasterContext`——进程内、有界的会话级情境模型——让理解与调度能看到四槽之外的前情,同时不构成长期记忆。`Memory` 是从 `Context.brief()` 初始化的有界私有工作记忆缓存；活跃运行时没有长期记忆写入路径。
 
 ## IPC 协议
 
@@ -114,7 +113,7 @@ kernel socket 上每个 packet 都是 8-byte unsigned big-endian JSON body lengt
 +--------------------------+-------------------------------+
 ```
 
-入站 `action: "user"` 或 `action: "answer"` 会变成 agent input。其他入站 action 会派发给 `Controller`；当前 controller action 是 `cwd`，用于更新 `ConfigService.path.cwd`。
+入站 `action: "user"` 或 `action: "answer"` 会变成 brain input。其他入站 action 会派发给 `Controller`；当前 controller action 是 `cwd`，用于更新 `ConfigService.path.cwd`。
 
 常见出站 action 是 `open`、`agent`、`interrupted`、`streamEnd`、`data`、`ask`、`confirm`、`pause`、`resume`、`error`。
 
@@ -143,7 +142,7 @@ kernel socket 上每个 packet 都是 8-byte unsigned big-endian JSON body lengt
 
 ## Prompt Runtime
 
-`PromptService` 可加载单个 markdown 文件，也可加载带 `config.jsonc` 的 prompt package 目录。package config 定义普通渲染 sections、editable files、locked files、runtime-ignored files，以及可选的 XML document view。活跃 agent package 只加载静态 `SOUL.md`/`EXTENSION.md`；运行时 prompt 写入和旧 `soul` route 已禁用。
+`PromptService` 可加载单个 markdown 文件，也可加载带 `config.jsonc` 的 prompt package 目录。package config 定义普通渲染 sections、editable files、locked files、runtime-ignored files，以及可选的 XML document view。persona package 只加载静态 `SOUL.md`/`EXTENSION.md`；运行时 prompt 写入和旧 `soul` route 已禁用。
 
 canonical runtime prompt source 是英文 `.md` 文件。`.zh.cn.md` 是 human mirror，不能成为运行时 source-of-truth。
 
@@ -155,12 +154,13 @@ src/app.module.ts                      root @Module
 src/configuration.ts                   ConfigService 和 runtime config types
 src/core/                              decorators、IOC、base classes、prompt、logger、tool contracts
 src/neural/                            Synapse、Awareness、Scheduler、IPC socket、packet codec、controller
-src/agent/                             Agent、Brain、Context、MasterContext、Memory、Investigation、Intelligence
+src/neural/brain/                      Brain、Memory、Investigation、Intelligence
+src/neural/context/                    Context、MasterContext
 src/plugins/                           plugin boundary 和 local tools
 src/entities/                          entity/repository classes；MemoryRepo 当前只返回 SQL statements
 web/                                   本地 browser-to-IPC bridge 和测试页
 prompts/                               prompt packages 和 zh.cn mirrors
-.config/                              runtime config 和 active agent prompt package
+.config/                              runtime config 和 persona prompt package
 sql/                                   schema files
 pakcages/                              bundled sqlite-vec helper/native assets；不在当前 agent turn path
 scripts/check.script.ts                仓库镜像和 prompt-term checks
@@ -168,7 +168,7 @@ scripts/check.script.ts                仓库镜像和 prompt-term checks
 
 ## 当前边界
 
-`MemoryRepo`、`sql/001-core-schema.sql` 和 native vector 资产保留为未来 persistence boundary 占位，但没有接入当前 `Agent`、`Context` 或 `Memory` 路径。config file 也声明了 skills 和 MCP shapes，但当前代码还没有把 runtime MCP client 或 skill loader 接进 turn loop。
+`MemoryRepo`、`sql/001-core-schema.sql` 和 native vector 资产保留为未来 persistence boundary 占位，但没有接入当前 `Brain`、`Context` 或 `Memory` 路径。config file 也声明了 skills 和 MCP shapes，但当前代码还没有把 runtime MCP client 或 skill loader 接进 turn loop。
 
 ## 无 session 生命体设计
 
@@ -226,7 +226,7 @@ scripts/check.script.ts                仓库镜像和 prompt-term checks
    槽都受保护，被判为 `new` 的刺激同样明确拒绝。两种情况都不会静默丢弃或无限保留。
 5. 同一说话人的追问若判定为 `same`，调用 `Context.revise()` 并保留 Turn id；独立刺激
    是 `new`，保持 FIFO。确定性代码拒绝跨说话人修订。
-6. 外部刺激串行执行。单个 Turn 可以调用临时 worker/reviewer cognition，但它不会形成
+6. 外部刺激串行执行。单个 Turn 可以使用并行思维切片与自我审核通道，但它不会形成
    第二条外部注意流。
 7. 只有明确的布尔 `urgent` 判决可以抢占前台 Turn。runtime 取消其 provider 与可取消
    工具工作，把 Turn 压缩为 suspended，依次发送 `interrupted`、`streamEnd`，再释放嘴。
@@ -250,9 +250,9 @@ scripts/check.script.ts                仓库镜像和 prompt-term checks
 | `Scheduler` | 持有刺激准入、跨说话人轮转公平(说话人内部 FIFO)、LLM 判决咨询与校验后的紧急抢占。 |
 | `Context` | 持有四槽语义工作集和 Turn 生命周期,并把已结算 Turn 固化升格进 master context。 |
 | `MasterContext` | 持有有界的会话级情境模型(固化 turn outcome);仅限进程内,绝不是长期记忆。 |
-| `Synapse` | 执行一个前台刺激、取消它、把输出寻址给所属说话人，并协调临时 worker。 |
+| `Synapse` | 执行一个前台刺激、取消它、把输出寻址给所属说话人，并协调并行思维线程。 |
 | `Brain` | 摄取或修订 Turn，执行 reply、research 或 coordinate 意图。 |
-| `Memory` | 保存由 brief 初始化的有界 agent 草稿；它不是持久化层。 |
+| `Memory` | 保存由 brief 初始化的有界私有笔记；它不是持久化层。 |
 | `ToolComponent` | 在确认与取消边界后执行本地能力。 |
 
 调度模型只能提出 `same|new`、`targetTurnId` 和布尔 `urgent`。身份、容量、有效抢占目标、

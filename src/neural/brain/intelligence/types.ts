@@ -1,4 +1,4 @@
-import { AgentChatRole, type AgentMemory } from '@/agent/types';
+import { ChatRole, type MemoryMessage } from '@/neural/brain/types';
 import { type FModelConfiguration, type FModelProtocolConfiguration, FModelProtocolName } from '@/configuration';
 import type { ActionRequest } from '@/plugins';
 
@@ -37,7 +37,7 @@ export interface IntelligenceToolDefinition {
  */
 export interface ProviderActionRequestMessage {
     /** EN: Fixed assistant role marker. ZH: 固定的 assistant 角色标记。 */
-    role: AgentChatRole.Assistant;
+    role: ChatRole.Assistant;
     /** EN: Visible text emitted alongside the action requests. ZH: 随 action request 一起产生的可见文本。 */
     content: string;
     /** EN: Actions the model asked the runtime to execute. ZH: 模型请求运行时执行的 action 列表。 */
@@ -67,7 +67,7 @@ export interface ProviderActionResultMessage {
  * EN: Union of all message shapes Flyflor sends to a provider.
  * ZH: Flyflor 发送给 provider 的全部消息形态联合。
  */
-export type ProviderMessage = AgentMemory | ProviderActionRequestMessage | ProviderActionResultMessage;
+export type ProviderMessage = MemoryMessage | ProviderActionRequestMessage | ProviderActionResultMessage;
 
 /**
  * EN: Reason a provider request ended.

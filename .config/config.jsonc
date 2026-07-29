@@ -254,41 +254,11 @@
     "sqlDir": "./sql",
     // 长期记忆和用户画像写入在当前研发阶段关闭。
     // 若迁移配置仍包含 memory block，ConfigService 会忽略它。
-    // 当前启用的 agent profile 名称。
-    // ConfigService 默认值为 main；需要切换多 agent profile 时取消注释。
-    // "agent": "main",
-    // Agent profile 列表。
-    // name: profile 名称。
-    // model: profile 使用的模型名。
-    // provider: profile 使用的 provider key。
-    // ConfigService 已有 main 占位默认值；需要多 agent 或覆盖模型时取消注释。
-    // "agents": {
-    //     "flyflor": {
-    //         "name": "flyflor",
-    //         "model": "deepseek-v4-flash",
-    //         "provider": "deepseek",
-    //     },
-    // },
-    "agents": {
-        "flyflor": {
-            "name": "flyflor",
-            "model": "deepseek-v4-flash",
-            "provider": "deepseek",
-        },
-        "worker": {
-            "name": "worker",
-            "model": "deepseek-v4-flash",
-            "provider": "deepseek",
-            "promptPackage": "./prompts/agents",
-            "promptSections": ["worker"],
-        },
-        "reviewer": {
-            "name": "reviewer",
-            "model": "deepseek-v4-flash",
-            "provider": "deepseek",
-            "promptPackage": "./prompts/agents",
-            "promptSections": ["reviewer"],
-        },
+    // 单一心智的人格提示词包配置。
+    // promptPackage: 人格 section（SOUL/AGENTS/EXTENSION/USER）所在目录。
+    // promptSections: 启用哪些 section；缺省为 ["SOUL", "EXTENSION"]。
+    "persona": {
+        "promptPackage": "./.config/persona",
     },
     // IPC socket 路径。
     // 默认值为 ./flyflor.sock；通常不需要配置。

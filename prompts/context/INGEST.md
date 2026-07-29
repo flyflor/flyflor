@@ -17,7 +17,7 @@ Rules:
 - Preserve the user's requested scope and explicit paths/commands in `refs`.
 - Use `reply` for a direct answer, `research` when files/tools/evidence are
   needed, and `coordinate` only when the request genuinely decomposes into
-  independent slices that benefit from a parallel multi-agent pass.
+  independent slices that benefit from a parallel coordinated-thought pass.
 - Do not return user text, assistant text, a transcript, tool messages, or a
   long-term memory instruction.
 - `done` and `open` are short task-state labels, not an archive.

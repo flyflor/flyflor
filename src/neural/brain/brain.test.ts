@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { AgentChatRole } from '@/agent/types';
+import { ChatRole } from '@/neural/brain/types';
 import { Brain } from './brain';
 import { SynapseSignalType, TurnPreempted } from '@/neural/types';
 
 describe('Brain', () => {
     test('awaits coordinate handling at the Synapse boundary', async () => {
         let coordinated = false;
-        const brain = new Brain({ name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 }, {
+        const brain = new Brain({
             emit: () => undefined,
             coordinate: async () => {
                 coordinated = true;
@@ -25,13 +25,13 @@ describe('Brain', () => {
     test('passes the latest user message into direct replies', async () => {
         const emitted: Array<{ type: SynapseSignalType; data: unknown }> = [];
         const seen: unknown[] = [];
-        const brain = new Brain({ name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 }, {
+        const brain = new Brain({
             emit: (type: string, data: unknown) => {
                 emitted.push({ type: type as SynapseSignalType, data });
                 return undefined;
             },
         });
-        brain.memory = { buildMessage: () => [{ role: AgentChatRole.System, content: 'system' }] } as never;
+        brain.memory = { buildMessage: () => [{ role: ChatRole.System, content: 'system' }] } as never;
         brain.intelligence = {
             stream: async (messages: unknown, onChunk: (chunk: string) => void) => {
                 seen.push(messages);
@@ -45,17 +45,17 @@ describe('Brain', () => {
             'turn_1',
         );
 
-        expect(seen[0]).toContainEqual({ role: AgentChatRole.User, content: '请只回复这五个字符：PONG1' });
+        expect(seen[0]).toContainEqual({ role: ChatRole.User, content: '请只回复这五个字符：PONG1' });
         expect(emitted).toContainEqual({ type: SynapseSignalType.Reply, data: { turnId: 'turn_1', chunk: 'PONG1' } });
         expect(emitted).toContainEqual({ type: SynapseSignalType.Reply, data: { turnId: 'turn_1', chunk: null } });
     });
 
     test('passes the latest user message into research turns', async () => {
         const seen: unknown[] = [];
-        const brain = new Brain({ name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 }, {
+        const brain = new Brain({
             emit: () => undefined,
         } as never);
-        brain.memory = { buildMessage: () => [{ role: AgentChatRole.System, content: 'system' }] } as never;
+        brain.memory = { buildMessage: () => [{ role: ChatRole.System, content: 'system' }] } as never;
         brain.investigation = {
             run: async (messages: unknown) => {
                 seen.push(messages);
@@ -69,17 +69,17 @@ describe('Brain', () => {
             'turn_1',
         );
 
-        expect(seen[0]).toContainEqual({ role: AgentChatRole.User, content: '请读取 package.json' });
+        expect(seen[0]).toContainEqual({ role: ChatRole.User, content: '请读取 package.json' });
     });
 
-    test('runs worker understanding silently from the assigned brief', async () => {
+    test('runs thought-thread understanding silently from the assigned brief', async () => {
         const seen: Array<{ messages: unknown; options: unknown }> = [];
-        const brain = new Brain({ name: 'worker', model: '', provider: '', contextLength: 0, maxTokens: 0 }, {
+        const brain = new Brain({
             emit: () => undefined,
         } as never);
         brain.memory = {
             ingestBrief: () => undefined,
-            buildMessage: () => [{ role: AgentChatRole.System, content: 'worker base' }, { role: AgentChatRole.User, content: 'study this slice' }],
+            buildMessage: () => [{ role: ChatRole.System, content: 'thread base' }, { role: ChatRole.User, content: 'study this slice' }],
         } as never;
         brain.investigation = {
             run: async (messages: unknown, options: unknown) => {
@@ -92,7 +92,6 @@ describe('Brain', () => {
             turnId: 'turn_1',
             intent: 'research',
             goal: 'study this slice',
-            persona: 'temporary specialist',
             constraints: [],
             refs: [],
             done: [],
@@ -100,7 +99,7 @@ describe('Brain', () => {
             workspace: [],
         });
 
-        expect(seen[0]?.messages).toContainEqual({ role: AgentChatRole.User, content: 'study this slice' });
+        expect(seen[0]?.messages).toContainEqual({ role: ChatRole.User, content: 'study this slice' });
         expect(seen[0]?.options).toEqual({ emitReply: false, cwd: undefined, signal: undefined });
     });
 
@@ -108,7 +107,7 @@ describe('Brain', () => {
         const emitted: Array<{ type: SynapseSignalType; data: unknown }> = [];
         let preempted = false;
         const controller = new AbortController();
-        const brain = new Brain({ name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 }, {
+        const brain = new Brain({
             emit: (type: string, data: unknown) => {
                 emitted.push({ type: type as SynapseSignalType, data });
                 return undefined;

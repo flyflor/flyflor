@@ -1,4 +1,4 @@
-import { AgentChatRole } from '@/agent/types';
+import { ChatRole } from '@/neural/brain/types';
 import type { ActionRequest } from '@/plugins';
 import type { IntelligenceEvent, ProtocolAdapter, ProtocolBuildContext, ProtocolStreamState, ProviderErrorShape, ProviderMessage, StreamingActionRequest } from '../types';
 import { FModelProtocolName } from '@/configuration';
@@ -166,16 +166,16 @@ function parseActionArguments(partialArgs: string): Record<string, unknown> {
  * EN: Projects provider-local messages to OpenAI chat messages.
  * ZH: 将 provider-local 消息投影为 OpenAI chat messages。
  *
- * EN: AgentMemory stays pure; action request/result
+ * EN: MemoryMessage stays pure; action request/result
  * replay exists only in the research call stack and is mapped back to OpenAI wire fields here.
- * ZH: `AgentMemory` 保持纯净；action request/result replay 只存在于 research 调用栈，并在这里映射回 OpenAI 线协议字段。
+ * ZH: `MemoryMessage` 保持纯净；action request/result replay 只存在于 research 调用栈，并在这里映射回 OpenAI 线协议字段。
  */
 function chatMessages(messages: ProviderMessage[]): Array<Record<string, unknown>> {
     return messages.map((message) => {
         if (message.role === 'action') {
             return { role: 'tool', tool_call_id: message.actionRequestId, content: message.content };
         }
-        if (message.role === AgentChatRole.Assistant && 'actionRequests' in message) {
+        if (message.role === ChatRole.Assistant && 'actionRequests' in message) {
             return {
                 role: 'assistant',
                 // DeepSeek rejects replayed assistant tool-call messages when `content` is null.
@@ -198,7 +198,7 @@ function chatMessages(messages: ProviderMessage[]): Array<Record<string, unknown
  * ZH: 消息列表是否已携带 action request/result 回放。
  */
 function hasActionHistory(messages: ProviderMessage[]): boolean {
-    return messages.some((message) => message.role === 'action' || (message.role === AgentChatRole.Assistant && 'actionRequests' in message));
+    return messages.some((message) => message.role === 'action' || (message.role === ChatRole.Assistant && 'actionRequests' in message));
 }
 
 /**

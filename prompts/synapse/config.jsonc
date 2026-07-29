@@ -4,7 +4,7 @@
     "version": 1,
     // EN: Human-readable description.
     // ZH: 面向人的描述。
-    "description": "Cortex coordination prompts for multi-agent understanding.",
+    "description": "Cortex coordination prompts for parallel thought understanding.",
     // EN: Files loaded into ordinary coordinator messages.
     // ZH: 加载进普通协调器消息的文件。
     "prompt": {
@@ -53,14 +53,14 @@
                     "tag": "document",
                     "file": "plan.md",
                     "role": "rules",
-                    "note": "how to plan multi-agent coordination"
+                    "note": "how to plan parallel thought coordination"
                 },
                 {
                     "key": "synthesis",
                     "tag": "document",
                     "file": "synthesis.md",
                     "role": "rules",
-                    "note": "how to synthesize worker understandings"
+                    "note": "how to synthesize parallel thought outcomes"
                 }
             ]
         }

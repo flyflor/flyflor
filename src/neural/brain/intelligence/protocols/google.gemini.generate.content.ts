@@ -1,6 +1,6 @@
 import { FModelProtocolName } from '@/configuration';
 import type { ProtocolAdapter, ProtocolBuildContext, ProviderMessage } from '../types';
-import { AgentChatRole } from '@/agent/types';
+import { ChatRole } from '@/neural/brain/types';
 
 /**
  * EN: Protocol adapter for the Google Gemini generateContent SSE wire format.
@@ -45,12 +45,12 @@ function geminiRequest(messages: ProviderMessage[]): {
     const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
     for (const message of messages) {
         if (message.role === 'action') continue;
-        if (message.role === AgentChatRole.System) {
+        if (message.role === ChatRole.System) {
             system.push(message.content);
             continue;
         }
         contents.push({
-            role: message.role === AgentChatRole.Assistant ? 'model' : 'user',
+            role: message.role === ChatRole.Assistant ? 'model' : 'user',
             parts: [{ text: message.content }],
         });
     }

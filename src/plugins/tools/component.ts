@@ -1,5 +1,5 @@
 import { FTool, FToolAtom, Inject, Singleton, type ToolError } from '@/core';
-import type { IntelligenceToolDefinition } from '@/agent/brain/intelligence/types';
+import type { IntelligenceToolDefinition } from '@/neural/brain/intelligence/types';
 import { Ask } from './ask';
 import { Execute } from './execute';
 import { Filesystem } from './filesystem';

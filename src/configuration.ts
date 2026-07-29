@@ -131,26 +131,18 @@ export interface FModelConfiguration {
 }
 
 /**
- * EN: One configured agent profile.
- * ZH: 单个已配置 agent profile。
+ * EN: Persona prompt-package configuration of the single mind.
+ * ZH: 单一心智的人格提示词包配置。
  *
- * EN: Profiles enable multi-agent setups by giving each agent its own model/provider and token budget.
- * ZH: profile 通过为每个 agent 提供自己的 model/provider 和 token budget 来支持多 agent 配置。
+ * EN: The persona selects which prompt package and sections shape the mind's
+ * identity; there is exactly one persona per life-form.
+ * ZH: persona 决定用哪个提示词包与哪些 section 塑造心智的身份；每个生命体
+ * 只有一个 persona。
  */
-export interface FAgentProfileConfiguration {
-    /** EN: Profile name. ZH: profile 名称。 */
-    name: string;
-    /** EN: Model used by this agent. ZH: 该 agent 使用的模型。 */
-    model: string;
-    /** EN: Provider used by this agent. ZH: 该 agent 使用的 provider。 */
-    provider: string;
-    /** EN: Context window size in tokens for this agent. ZH: 该 agent 的上下文窗口大小（token 数）。 */
-    contextLength: number;
-    /** EN: Maximum output tokens per response for this agent. ZH: 该 agent 单次响应的最大输出 token 数。 */
-    maxTokens: number;
-    /** EN: Prompt package directory used by this agent. ZH: 该 agent 使用的 prompt 包目录。 */
+export interface FPersonaConfiguration {
+    /** EN: Prompt package directory holding the persona sections. ZH: 存放人格 section 的提示词包目录。 */
     promptPackage?: string;
-    /** EN: Prompt sections enabled for this agent. ZH: 该 agent 启用的 prompt 段落。 */
+    /** EN: Prompt sections enabled for the persona. ZH: 人格启用的提示词段落。 */
     promptSections?: string[];
 }
 
@@ -158,19 +150,18 @@ export interface FAgentProfileConfiguration {
  * EN: Flyflor's single configuration object.
  * ZH: Flyflor 的单一配置对象。
  *
- * EN: It keeps the fields Flyflor currently needs: model/provider settings, agent profiles, skills,
- * MCP servers, and the public IPC socket path.
- * ZH: 它只保存 Flyflor 当前需要的字段：model/provider 设置、agent profiles、skills、MCP servers 和公开 IPC socket path。
+ * EN: It keeps the fields Flyflor currently needs: model/provider settings, the
+ * persona prompt package, skills, MCP servers, and the public IPC socket path.
+ * ZH: 它只保存 Flyflor 当前需要的字段：model/provider 设置、persona 提示词包、
+ * skills、MCP servers 和公开 IPC socket path。
  */
 export interface FConfiguration {
     /** EN: Model selection and endpoint configuration. ZH: 模型选择与端点配置。 */
     model: FModelConfiguration;
     /** EN: Provider registry keyed by provider name. ZH: 以 provider 名为键的 provider 注册表。 */
     providers: Record<string, FProviderConfiguration>;
-    /** EN: Name of the active agent profile. ZH: 当前启用的 agent profile 名称。 */
-    agent: string;
-    /** EN: Agent profile registry keyed by profile name. ZH: 以 profile 名为键的 agent profile 注册表。 */
-    agents: Record<string, FAgentProfileConfiguration>;
+    /** EN: Persona prompt-package configuration of the single mind. ZH: 单一心智的人格提示词包配置。 */
+    persona: FPersonaConfiguration;
     /** EN: Public IPC socket path. ZH: 公开 IPC socket 路径。 */
     socket: string;
     /** EN: Skill loading and discovery settings. ZH: skill 加载与发现配置。 */
@@ -276,10 +267,8 @@ export class ConfigService extends FService implements FConfiguration {
     public model: FModelConfiguration;
     /** EN: Provider registry keyed by provider name. ZH: 以 provider 名为键的 provider 注册表。 */
     public providers: Record<string, FProviderConfiguration>;
-    /** EN: Name of the active agent profile. ZH: 当前启用的 agent profile 名称。 */
-    public agent: string;
-    /** EN: Agent profile registry keyed by profile name. ZH: 以 profile 名为键的 agent profile 注册表。 */
-    public agents: Record<string, FAgentProfileConfiguration>;
+    /** EN: Persona prompt-package configuration of the single mind. ZH: 单一心智的人格提示词包配置。 */
+    public persona: FPersonaConfiguration;
     /** EN: Public IPC socket path for the current platform. ZH: 当前平台使用的公开 IPC socket 路径。 */
     public socket: string;
     /** EN: Skill loading and discovery settings. ZH: skill 加载与发现配置。 */
@@ -307,34 +296,7 @@ export class ConfigService extends FService implements FConfiguration {
             maxTokens: 8192,
         };
         this.providers = {};
-        this.agent = 'flyflor';
-        this.agents = {
-            flyflor: {
-                name: 'flyflor',
-                model: '',
-                provider: '',
-                contextLength: 0,
-                maxTokens: 0,
-            },
-            worker: {
-                name: 'worker',
-                model: '',
-                provider: '',
-                contextLength: 0,
-                maxTokens: 0,
-                promptPackage: './prompts/agents',
-                promptSections: ['worker'],
-            },
-            reviewer: {
-                name: 'reviewer',
-                model: '',
-                provider: '',
-                contextLength: 0,
-                maxTokens: 0,
-                promptPackage: './prompts/agents',
-                promptSections: ['reviewer'],
-            },
-        };
+        this.persona = { promptPackage: './prompts/agent' };
         if (process.platform !== 'win32') this.socket = './flyflor.sock';
         else this.socket = `\\\\.\\pipe\\flyflor.sock`;
         this.skills = {

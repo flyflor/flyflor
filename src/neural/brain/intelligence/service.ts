@@ -1,5 +1,5 @@
-import type { ConfigService, FAgentProfileConfiguration, FModelConfiguration } from '@/configuration';
-import { Config, FService, Init, Provide } from '@/core';
+import type { ConfigService, FModelConfiguration } from '@/configuration';
+import { Config, FService, Init, Singleton } from '@/core';
 import { createIntelligenceRequestStream } from './factory';
 import type { ActionRequest } from '@/plugins';
 import type { IntelligenceEvent, IntelligenceStopReason, IntelligenceToolDefinition, ProviderMessage } from './types';
@@ -25,43 +25,33 @@ export interface IntelligenceResult {
 }
 
 /**
- * EN: Intelligence is the provider-facing service of one agent profile. It owns
+ * EN: Intelligence is the provider-facing service of the single mind. It owns
  * model configuration resolution and turns provider event streams into the
  * structured results the brain consumes.
- * ZH: Intelligence 是单个 agent profile 面向 provider 的服务。它负责解析模型
+ * ZH: Intelligence 是单一心智面向 provider 的服务。它负责解析模型
  * 配置，并把 provider 事件流转换成 brain 消费的结构化结果。
  */
-@Provide()
+@Singleton()
 export class Intelligence extends FService {
     @Config()
     /** EN: Root configuration service. ZH: 根配置服务。 */
     public root!: ConfigService;
 
-    /** EN: Resolved model configuration for the active profile. ZH: 当前 profile 解析后的模型配置。 */
+    /** EN: Resolved model configuration for the mind. ZH: 心智解析后的模型配置。 */
     public config: FModelConfiguration;
 
-    constructor(private readonly profile: FAgentProfileConfiguration | undefined = undefined) {
+    constructor() {
         super();
         this.config = {} as FModelConfiguration;
     }
 
     /**
-     * EN: Resolves the effective model configuration by overlaying the profile onto the root model config.
-     * ZH: 通过把 profile 叠加到根模型配置之上，解析出实际生效的模型配置。
+     * EN: Resolves the effective model configuration from the root model config.
+     * ZH: 从根模型配置解析出实际生效的模型配置。
      */
     @Init()
     public initProfile(): void {
-        const profile = this.profile ?? { name: 'cortex', model: '', provider: '', contextLength: 0, maxTokens: 0 };
-        const config = this.root.model;
-        const provider = profile.provider || config.provider;
-        this.config = {
-            ...config,
-            model: profile.model || config.model || config.default,
-            provider,
-            contextLength: profile.contextLength || config.contextLength,
-            maxTokens: profile.maxTokens || config.maxTokens,
-            protocols: this.root.providers[provider]?.protocols ?? config.protocols,
-        };
+        this.config = this.root.model;
     }
 
     /**

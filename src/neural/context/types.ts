@@ -124,22 +124,20 @@ export interface MasterProjectionEntry {
 export type MasterProjection = MasterProjectionEntry[];
 
 /**
- * EN: A concise briefing of the current turn understanding handed to one agent.
- * This is not a conversation transcript; it is the organism's current grasp of
- * user intent, scoped for the receiving agent.
- * ZH: 交给某个 agent 的当前 turn 理解简报。它不是对话原文，而是生命体对接收
- * agent 范围的当前意图理解。
+ * EN: A concise briefing of the current turn understanding handed to one
+ * thought thread. This is not a conversation transcript; it is the organism's
+ * current grasp of user intent, scoped for the receiving thread.
+ * ZH: 交给某个思维线程的当前 turn 理解简报。它不是对话原文，而是生命体对接收
+ * 线程范围的当前意图理解。
  */
-export interface AgentBrief {
+export interface ContextBrief {
     /** EN: Identifier of the turn this brief scopes to, or `none`. ZH: 该简报所属的 turn 标识，或 `none`。 */
     turnId: string;
     /** EN: Classified intent of the current turn. ZH: 当前 turn 的分类意图。 */
     intent: Intent;
     /** EN: Goal of the current turn. ZH: 当前 turn 的目标。 */
     goal: string;
-    /** EN: Optional dynamic persona carried by the brief. ZH: 简报携带的可选动态人格。 */
-    persona?: string;
-    /** EN: Constraints the receiving agent must respect. ZH: 接收 agent 必须遵守的约束。 */
+    /** EN: Constraints the receiving thread must respect. ZH: 接收线程必须遵守的约束。 */
     constraints: string[];
     /** EN: Normalized references gathered by understanding. ZH: understanding 收集的规范化引用。 */
     refs: Reference[];
@@ -181,8 +179,8 @@ export interface TurnBrief {
 }
 
 /**
- * EN: One note inside an agent's private memory cache.
- * ZH: agent 私有记忆缓存中的一条笔记。
+ * EN: One note inside the mind's private memory cache.
+ * ZH: 心智私有记忆缓存中的一条笔记。
  */
 export interface MemoryNote {
     /** EN: Unique note identifier. ZH: 笔记的唯一标识。 */

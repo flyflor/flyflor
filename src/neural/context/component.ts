@@ -1,9 +1,9 @@
-import { AgentChatRole } from '@/agent/types';
+import { ChatRole } from '@/neural/brain/types';
 import { FComponent, Inject, Prompt, PromptService, Singleton } from '@/core';
-import { Intelligence } from '@/agent/brain/intelligence/service';
-import { parse } from '@/agent/json';
+import { Intelligence } from '@/neural/brain/intelligence/service';
+import { parse } from '@/neural/json';
 import { MasterContext } from './master';
-import type { AgentBrief, Ingest, MasterProjection, Pause, Settle, Summary, Turn, TurnBrief, TurnDraft } from './types';
+import type { ContextBrief, Ingest, MasterProjection, Pause, Settle, Summary, Turn, TurnBrief, TurnDraft } from './types';
 
 /**
  * EN: Context owns the life-form's bounded semantic working set.
@@ -111,7 +111,7 @@ export class Context extends FComponent {
      * projections from the bounded workspace, never the raw conversation.
      * ZH: 为一个 agent 生成范围简报。只包含有界工作集的语义 Turn 投影，不含原始对话。
      */
-    public brief(turnId?: string): AgentBrief {
+    public brief(turnId?: string): ContextBrief {
         const current = turnId === 'none' ? undefined : turnId ? this.turn(turnId) : this.foreground();
         if (!current) {
             return {
@@ -162,8 +162,8 @@ export class Context extends FComponent {
         const active = this.foreground();
         if (active) throw Error(`Another turn is already occupying the foreground: ${active.id}`);
         const raw = await this.intelligence.completeText([
-            { role: AgentChatRole.System, content: this.prompt.section('INGEST') },
-            { role: AgentChatRole.User, content: JSON.stringify({ latest: input.text, current: active ? this.briefTurn(active) : null, workspace: this.brief().workspace, master: this.masterProjection() }) },
+            { role: ChatRole.System, content: this.prompt.section('INGEST') },
+            { role: ChatRole.User, content: JSON.stringify({ latest: input.text, current: active ? this.briefTurn(active) : null, workspace: this.brief().workspace, master: this.masterProjection() }) },
         ], signal);
         signal?.throwIfAborted();
         const draft = this.draft(parse<unknown>(raw));
@@ -182,8 +182,8 @@ export class Context extends FComponent {
         if (active && active.id !== turnId) throw Error(`Another turn is already occupying the foreground: ${active.id}`);
         const expectedStatus = target.status;
         const raw = await this.intelligence.completeText([
-            { role: AgentChatRole.System, content: this.prompt.section('INGEST') },
-            { role: AgentChatRole.User, content: JSON.stringify({ latest: input.text, current: this.briefTurn(target), workspace: this.brief().workspace, master: this.masterProjection() }) },
+            { role: ChatRole.System, content: this.prompt.section('INGEST') },
+            { role: ChatRole.User, content: JSON.stringify({ latest: input.text, current: this.briefTurn(target), workspace: this.brief().workspace, master: this.masterProjection() }) },
         ], signal);
         signal?.throwIfAborted();
         const draft = this.draft(parse<unknown>(raw));
@@ -250,9 +250,9 @@ export class Context extends FComponent {
         const turn = this.turn(turnId);
         if (turn.status !== 'working') throw Error(`Turn is not working: ${turnId}`);
         const raw = await this.intelligence.completeText([
-            { role: AgentChatRole.System, content: this.prompt.section('SETTLE') },
+            { role: ChatRole.System, content: this.prompt.section('SETTLE') },
             {
-                role: AgentChatRole.User,
+                role: ChatRole.User,
                 content: JSON.stringify({ ...input, current: this.briefTurn(turn), workspace: this.brief().workspace, master: this.masterProjection() }),
             },
         ], signal);
@@ -278,9 +278,9 @@ export class Context extends FComponent {
         if (turn.status !== 'working') throw Error(`Turn is not working: ${turnId}`);
         if (signal?.aborted) return this.suspendWithSummary(turnId, turn, input);
         const messages = [
-            { role: AgentChatRole.System, content: this.prompt.section('SETTLE') },
+            { role: ChatRole.System, content: this.prompt.section('SETTLE') },
             {
-                role: AgentChatRole.User,
+                role: ChatRole.User,
                 content: JSON.stringify({ ...input, interrupted: true, current: this.briefTurn(turn), workspace: this.brief().workspace }),
             },
         ];

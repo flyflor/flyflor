@@ -7,7 +7,7 @@ This file contains only Flyflor-specific additions. If the project-local skill a
 ## Flyflor Code Rules
 
 1. Code is the source of truth. Documentation describes implemented behavior or clearly marks planned work.
-2. Runtime code is OOP-first. Business behavior belongs on classes extending the correct core base class: `FModule`, `FService`, `FComponent`, `FRepo`, `FGuard`, `FSandBox`, `FAgent`, or `FCortex`.
+2. Runtime code is OOP-first. Business behavior belongs on classes extending the correct core base class: `FModule`, `FService`, `FComponent`, `FRepo`, `FGuard`, `FSandBox`, `FNeuron`, or `FCortex`.
 3. Composition-style exported functions are allowed only at explicit boundaries: decorators, factories, bootstrap, scripts, protocol adapters, and low-level framework helpers.
 4. Method bodies have a 300-line soft limit and a 500-line hard limit. Do not extract helpers under 500 lines unless the extraction names a real object action, isolates a side effect, enables reuse, or reduces actual complexity.
 5. Directory names are semantic nouns. File names are local roles such as `index.ts`, `service.ts`, `types.ts`, `constants.ts`, `decorator.ts`, `factory.ts`, `container.ts`, `abstracts.ts`, `socket.ts`, `module.ts`, `entity.ts`, `repository.ts`, and `*.test.ts`.
