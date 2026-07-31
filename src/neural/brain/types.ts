@@ -35,7 +35,7 @@ export interface BrainInput {
     speakerId: string;
     /** EN: Identifier of the stimulus this input grew from. ZH: 该输入源自的刺激标识。 */
     stimulusId?: string;
-    /** EN: Attention relation selected by Awareness; absent means a new turn. ZH: Awareness 选出的注意力关系；缺省表示开启新回合。 */
+    /** EN: Attention relation selected by Thalamus; absent means a new turn. ZH: Thalamus 选出的注意力关系；缺省表示开启新回合。 */
     relation?: 'same' | 'new';
     /** EN: Turn to revise when the relation is `same`. ZH: 关系为 `same` 时要修订的 turn。 */
     targetTurnId?: string;

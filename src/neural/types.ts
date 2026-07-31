@@ -4,7 +4,7 @@ import type { CortexSignal } from '@/core';
  * EN: Discriminator for signals emitted through the neural bus.
  * ZH: 通过 neural bus 发出的信号的判别类型。
  */
-export enum SynapseSignalType {
+export enum NeuralSignalType {
     /** EN: Inbound stimulus entering the cortex. ZH: 进入皮层的入站刺激。 */
     Input = 'input',
     /** EN: One streamed reply chunk back to the speaker. ZH: 回给说话人的一个流式回复分片。 */
@@ -57,9 +57,9 @@ export interface ActivityEvent {
  * EN: Signal envelope emitted through the neural bus.
  * ZH: 通过 neural bus 发出的信号包裹。
  */
-export interface SynapseSignal extends CortexSignal {
+export interface NeuralSignal extends CortexSignal {
     /** EN: Discriminator identifying which signal this envelope carries. ZH: 标识本包裹携带哪种信号的判别字段。 */
-    type: SynapseSignalType;
+    type: NeuralSignalType;
 }
 
 /**

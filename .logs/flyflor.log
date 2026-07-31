@@ -610,3 +610,661 @@
   |   error: undefined,
   |   speakerId: 'conn_10'
   | }
+[WARN ]  2026-07-30T10:46:21.643Z  Synapse
+  | synapse.coordinate.slice_failed
+  | {
+  |   reason: 'worker exploded',
+  |   slice: 'fail'
+  | }
+[WARN ]  2026-07-30T10:46:21.645Z  Synapse
+  | synapse.coordinate.slice_failed
+  | {
+  |   reason: 'boom',
+  |   slice: 'one'
+  | }
+[WARN ]  2026-07-30T10:46:21.645Z  Synapse
+  | synapse.coordinate.slice_failed
+  | {
+  |   reason: 'boom',
+  |   slice: 'two'
+  | }
+[INFO ]  2026-07-30T10:46:21.656Z  Synapse
+  | input
+  | {
+  |   relation: 'new',
+  |   speakerId: 'conn_1',
+  |   stimulusId: 'stim_1',
+  |   textLength: 5
+  | }
+[WARN ]  2026-07-30T10:46:22.807Z  Scheduler
+  | scheduler.backpressure
+  | {
+  |   capacity: 1,
+  |   pending: 1,
+  |   speakerId: 'conn_2',
+  |   stimulusId: 'stim_2'
+  | }
+[WARN ]  2026-07-30T10:46:22.950Z  Scheduler
+  | scheduler.schedule.timeout
+  | {
+  |   name: 'Error'
+  | }
+[WARN ]  2026-07-30T10:46:23.036Z  Scheduler
+  | scheduler.workspace_backpressure
+  | {
+  |   speakerId: 'conn_5',
+  |   stimulusId: 'stim_1'
+  | }
+[WARN ]  2026-07-30T10:46:23.118Z  Scheduler
+  | scheduler.backpressure
+  | {
+  |   capacity: 1,
+  |   pending: 1,
+  |   speakerId: 'conn_3',
+  |   stimulusId: 'stim_3'
+  | }
+[WARN ]  2026-07-30T10:46:23.121Z  Scheduler
+  | scheduler.workspace_backpressure
+  | {
+  |   speakerId: 'conn_5',
+  |   stimulusId: 'stim_1'
+  | }
+[DEBUG]  2026-07-30T10:46:23.257Z  Controller
+  | cwd
+  | workspace
+[DEBUG]  2026-07-30T10:46:23.257Z  Controller
+  | cwd
+  | /tmp/absolute-root
+[WARN ]  2026-07-30T10:46:23.263Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'user',
+  |   name: 'Error',
+  |   speakerId: 'conn_5'
+  | }
+[WARN ]  2026-07-30T10:46:23.264Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'cwd',
+  |   name: 'Error',
+  |   speakerId: 'conn_6'
+  | }
+[INFO ]  2026-07-30T10:46:23.267Z  FSocket
+  | close
+  | {
+  |   error: undefined,
+  |   speakerId: 'conn_10'
+  | }
+[WARN ]  2026-07-31T03:20:21.051Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'worker exploded',
+  |   slice: 'fail'
+  | }
+[WARN ]  2026-07-31T03:20:21.052Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'boom',
+  |   slice: 'one'
+  | }
+[WARN ]  2026-07-31T03:20:21.052Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'boom',
+  |   slice: 'two'
+  | }
+[INFO ]  2026-07-31T03:20:21.065Z  Cortex
+  | input
+  | {
+  |   relation: 'new',
+  |   speakerId: 'conn_1',
+  |   stimulusId: 'stim_1',
+  |   textLength: 5
+  | }
+[WARN ]  2026-07-31T03:20:21.076Z  Scheduler
+  | scheduler.backpressure
+  | {
+  |   capacity: 1,
+  |   pending: 1,
+  |   speakerId: 'conn_2',
+  |   stimulusId: 'stim_2'
+  | }
+[WARN ]  2026-07-31T03:20:21.218Z  Scheduler
+  | scheduler.schedule.timeout
+  | {
+  |   name: 'Error'
+  | }
+[WARN ]  2026-07-31T03:20:21.304Z  Scheduler
+  | scheduler.workspace_backpressure
+  | {
+  |   speakerId: 'conn_5',
+  |   stimulusId: 'stim_1'
+  | }
+[WARN ]  2026-07-31T03:20:21.387Z  Scheduler
+  | scheduler.backpressure
+  | {
+  |   capacity: 1,
+  |   pending: 1,
+  |   speakerId: 'conn_3',
+  |   stimulusId: 'stim_3'
+  | }
+[WARN ]  2026-07-31T03:20:21.389Z  Scheduler
+  | scheduler.workspace_backpressure
+  | {
+  |   speakerId: 'conn_5',
+  |   stimulusId: 'stim_1'
+  | }
+[DEBUG]  2026-07-31T03:20:21.522Z  Controller
+  | cwd
+  | workspace
+[DEBUG]  2026-07-31T03:20:21.522Z  Controller
+  | cwd
+  | /tmp/absolute-root
+[WARN ]  2026-07-31T03:20:21.529Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'user',
+  |   name: 'Error',
+  |   speakerId: 'conn_5'
+  | }
+[WARN ]  2026-07-31T03:20:21.530Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'cwd',
+  |   name: 'Error',
+  |   speakerId: 'conn_6'
+  | }
+[INFO ]  2026-07-31T03:20:21.533Z  FSocket
+  | close
+  | {
+  |   error: undefined,
+  |   speakerId: 'conn_10'
+  | }
+[WARN ]  2026-07-31T03:23:18.741Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'worker exploded',
+  |   slice: 'fail'
+  | }
+[WARN ]  2026-07-31T03:23:18.741Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'boom',
+  |   slice: 'one'
+  | }
+[WARN ]  2026-07-31T03:23:18.741Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'boom',
+  |   slice: 'two'
+  | }
+[INFO ]  2026-07-31T03:23:18.753Z  Cortex
+  | input
+  | {
+  |   relation: 'new',
+  |   speakerId: 'conn_1',
+  |   stimulusId: 'stim_1',
+  |   textLength: 5
+  | }
+[WARN ]  2026-07-31T03:23:18.763Z  Scheduler
+  | scheduler.backpressure
+  | {
+  |   capacity: 1,
+  |   pending: 1,
+  |   speakerId: 'conn_2',
+  |   stimulusId: 'stim_2'
+  | }
+[WARN ]  2026-07-31T03:23:18.907Z  Scheduler
+  | scheduler.schedule.timeout
+  | {
+  |   name: 'Error'
+  | }
+[WARN ]  2026-07-31T03:23:18.993Z  Scheduler
+  | scheduler.workspace_backpressure
+  | {
+  |   speakerId: 'conn_5',
+  |   stimulusId: 'stim_1'
+  | }
+[WARN ]  2026-07-31T03:23:19.076Z  Scheduler
+  | scheduler.backpressure
+  | {
+  |   capacity: 1,
+  |   pending: 1,
+  |   speakerId: 'conn_3',
+  |   stimulusId: 'stim_3'
+  | }
+[WARN ]  2026-07-31T03:23:19.079Z  Scheduler
+  | scheduler.workspace_backpressure
+  | {
+  |   speakerId: 'conn_5',
+  |   stimulusId: 'stim_1'
+  | }
+[DEBUG]  2026-07-31T03:23:19.212Z  Controller
+  | cwd
+  | workspace
+[DEBUG]  2026-07-31T03:23:19.213Z  Controller
+  | cwd
+  | /tmp/absolute-root
+[WARN ]  2026-07-31T03:23:19.218Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'user',
+  |   name: 'Error',
+  |   speakerId: 'conn_5'
+  | }
+[WARN ]  2026-07-31T03:23:19.219Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'cwd',
+  |   name: 'Error',
+  |   speakerId: 'conn_6'
+  | }
+[INFO ]  2026-07-31T03:23:19.221Z  FSocket
+  | close
+  | {
+  |   error: undefined,
+  |   speakerId: 'conn_10'
+  | }
+[WARN ]  2026-07-31T08:11:07.421Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'worker exploded',
+  |   slice: 'fail'
+  | }
+[WARN ]  2026-07-31T08:11:07.422Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'boom',
+  |   slice: 'one'
+  | }
+[WARN ]  2026-07-31T08:11:07.422Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'boom',
+  |   slice: 'two'
+  | }
+[INFO ]  2026-07-31T08:11:07.435Z  Cortex
+  | input
+  | {
+  |   relation: 'new',
+  |   speakerId: 'conn_1',
+  |   stimulusId: 'stim_1',
+  |   textLength: 5
+  | }
+[WARN ]  2026-07-31T08:11:07.446Z  Scheduler
+  | scheduler.backpressure
+  | {
+  |   capacity: 1,
+  |   pending: 1,
+  |   speakerId: 'conn_2',
+  |   stimulusId: 'stim_2'
+  | }
+[WARN ]  2026-07-31T08:11:07.588Z  Scheduler
+  | scheduler.schedule.timeout
+  | {
+  |   name: 'Error'
+  | }
+[WARN ]  2026-07-31T08:11:07.670Z  Scheduler
+  | scheduler.workspace_backpressure
+  | {
+  |   speakerId: 'conn_5',
+  |   stimulusId: 'stim_1'
+  | }
+[WARN ]  2026-07-31T08:11:07.754Z  Scheduler
+  | scheduler.backpressure
+  | {
+  |   capacity: 1,
+  |   pending: 1,
+  |   speakerId: 'conn_3',
+  |   stimulusId: 'stim_3'
+  | }
+[WARN ]  2026-07-31T08:11:07.758Z  Scheduler
+  | scheduler.workspace_backpressure
+  | {
+  |   speakerId: 'conn_5',
+  |   stimulusId: 'stim_1'
+  | }
+[DEBUG]  2026-07-31T08:11:07.883Z  Controller
+  | cwd
+  | workspace
+[DEBUG]  2026-07-31T08:11:07.884Z  Controller
+  | cwd
+  | /tmp/absolute-root
+[WARN ]  2026-07-31T08:11:07.890Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'user',
+  |   name: 'Error',
+  |   speakerId: 'conn_5'
+  | }
+[WARN ]  2026-07-31T08:11:07.891Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'cwd',
+  |   name: 'Error',
+  |   speakerId: 'conn_6'
+  | }
+[INFO ]  2026-07-31T08:11:07.897Z  FSocket
+  | close
+  | {
+  |   error: undefined,
+  |   speakerId: 'conn_12'
+  | }
+[WARN ]  2026-07-31T08:11:41.600Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'user',
+  |   name: 'Error',
+  |   speakerId: 'conn_5'
+  | }
+[WARN ]  2026-07-31T08:11:41.601Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'cwd',
+  |   name: 'Error',
+  |   speakerId: 'conn_6'
+  | }
+[INFO ]  2026-07-31T08:11:41.606Z  FSocket
+  | close
+  | {
+  |   error: undefined,
+  |   speakerId: 'conn_12'
+  | }
+[WARN ]  2026-07-31T08:14:21.320Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'worker exploded',
+  |   slice: 'fail'
+  | }
+[WARN ]  2026-07-31T08:14:21.321Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'boom',
+  |   slice: 'one'
+  | }
+[WARN ]  2026-07-31T08:14:21.321Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'boom',
+  |   slice: 'two'
+  | }
+[INFO ]  2026-07-31T08:14:21.333Z  Cortex
+  | input
+  | {
+  |   relation: 'new',
+  |   speakerId: 'conn_1',
+  |   stimulusId: 'stim_1',
+  |   textLength: 5
+  | }
+[WARN ]  2026-07-31T08:14:21.344Z  Scheduler
+  | scheduler.backpressure
+  | {
+  |   capacity: 1,
+  |   pending: 1,
+  |   speakerId: 'conn_2',
+  |   stimulusId: 'stim_2'
+  | }
+[WARN ]  2026-07-31T08:14:21.489Z  Scheduler
+  | scheduler.schedule.timeout
+  | {
+  |   name: 'Error'
+  | }
+[WARN ]  2026-07-31T08:14:21.572Z  Scheduler
+  | scheduler.workspace_backpressure
+  | {
+  |   speakerId: 'conn_5',
+  |   stimulusId: 'stim_1'
+  | }
+[WARN ]  2026-07-31T08:14:21.655Z  Scheduler
+  | scheduler.backpressure
+  | {
+  |   capacity: 1,
+  |   pending: 1,
+  |   speakerId: 'conn_3',
+  |   stimulusId: 'stim_3'
+  | }
+[WARN ]  2026-07-31T08:14:21.658Z  Scheduler
+  | scheduler.workspace_backpressure
+  | {
+  |   speakerId: 'conn_5',
+  |   stimulusId: 'stim_1'
+  | }
+[DEBUG]  2026-07-31T08:14:21.786Z  Controller
+  | cwd
+  | workspace
+[DEBUG]  2026-07-31T08:14:21.787Z  Controller
+  | cwd
+  | /tmp/absolute-root
+[WARN ]  2026-07-31T08:14:21.793Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'user',
+  |   name: 'Error',
+  |   speakerId: 'conn_5'
+  | }
+[WARN ]  2026-07-31T08:14:21.793Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'cwd',
+  |   name: 'Error',
+  |   speakerId: 'conn_6'
+  | }
+[INFO ]  2026-07-31T08:14:21.799Z  FSocket
+  | close
+  | {
+  |   error: undefined,
+  |   speakerId: 'conn_12'
+  | }
+[WARN ]  2026-07-31T08:20:58.125Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'worker exploded',
+  |   slice: 'fail'
+  | }
+[WARN ]  2026-07-31T08:20:58.126Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'boom',
+  |   slice: 'one'
+  | }
+[WARN ]  2026-07-31T08:20:58.126Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'boom',
+  |   slice: 'two'
+  | }
+[INFO ]  2026-07-31T08:20:58.139Z  Cortex
+  | input
+  | {
+  |   relation: 'new',
+  |   speakerId: 'conn_1',
+  |   stimulusId: 'stim_1',
+  |   textLength: 5
+  | }
+[WARN ]  2026-07-31T08:20:58.149Z  Scheduler
+  | scheduler.backpressure
+  | {
+  |   capacity: 1,
+  |   pending: 1,
+  |   speakerId: 'conn_2',
+  |   stimulusId: 'stim_2'
+  | }
+[WARN ]  2026-07-31T08:20:58.294Z  Scheduler
+  | scheduler.schedule.timeout
+  | {
+  |   name: 'Error'
+  | }
+[WARN ]  2026-07-31T08:20:58.375Z  Scheduler
+  | scheduler.workspace_backpressure
+  | {
+  |   speakerId: 'conn_5',
+  |   stimulusId: 'stim_1'
+  | }
+[WARN ]  2026-07-31T08:20:58.452Z  Scheduler
+  | scheduler.backpressure
+  | {
+  |   capacity: 1,
+  |   pending: 1,
+  |   speakerId: 'conn_3',
+  |   stimulusId: 'stim_3'
+  | }
+[WARN ]  2026-07-31T08:20:58.454Z  Scheduler
+  | scheduler.workspace_backpressure
+  | {
+  |   speakerId: 'conn_5',
+  |   stimulusId: 'stim_1'
+  | }
+[DEBUG]  2026-07-31T08:20:58.578Z  Controller
+  | cwd
+  | workspace
+[DEBUG]  2026-07-31T08:20:58.578Z  Controller
+  | cwd
+  | /tmp/absolute-root
+[WARN ]  2026-07-31T08:20:58.584Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'user',
+  |   name: 'Error',
+  |   speakerId: 'conn_5'
+  | }
+[WARN ]  2026-07-31T08:20:58.584Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'cwd',
+  |   name: 'Error',
+  |   speakerId: 'conn_6'
+  | }
+[INFO ]  2026-07-31T08:20:58.591Z  FSocket
+  | close
+  | {
+  |   error: undefined,
+  |   speakerId: 'conn_12'
+  | }
+[WARN ]  2026-07-31T08:31:09.257Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'worker exploded',
+  |   slice: 'fail'
+  | }
+[WARN ]  2026-07-31T08:31:09.258Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'boom',
+  |   slice: 'one'
+  | }
+[WARN ]  2026-07-31T08:31:09.259Z  Cortex
+  | cortex.coordinate.slice_failed
+  | {
+  |   reason: 'boom',
+  |   slice: 'two'
+  | }
+[INFO ]  2026-07-31T08:31:09.271Z  Cortex
+  | input
+  | {
+  |   relation: 'new',
+  |   speakerId: 'conn_1',
+  |   stimulusId: 'stim_1',
+  |   textLength: 5
+  | }
+[WARN ]  2026-07-31T08:31:09.281Z  Scheduler
+  | scheduler.backpressure
+  | {
+  |   capacity: 1,
+  |   pending: 1,
+  |   speakerId: 'conn_2',
+  |   stimulusId: 'stim_2'
+  | }
+[WARN ]  2026-07-31T08:31:09.422Z  Scheduler
+  | scheduler.schedule.timeout
+  | {
+  |   name: 'Error'
+  | }
+[WARN ]  2026-07-31T08:31:09.508Z  Scheduler
+  | scheduler.workspace_backpressure
+  | {
+  |   speakerId: 'conn_5',
+  |   stimulusId: 'stim_1'
+  | }
+[WARN ]  2026-07-31T08:31:09.588Z  Scheduler
+  | scheduler.backpressure
+  | {
+  |   capacity: 1,
+  |   pending: 1,
+  |   speakerId: 'conn_3',
+  |   stimulusId: 'stim_3'
+  | }
+[WARN ]  2026-07-31T08:31:09.591Z  Scheduler
+  | scheduler.workspace_backpressure
+  | {
+  |   speakerId: 'conn_5',
+  |   stimulusId: 'stim_1'
+  | }
+[DEBUG]  2026-07-31T08:31:09.707Z  Controller
+  | cwd
+  | workspace
+[DEBUG]  2026-07-31T08:31:09.707Z  Controller
+  | cwd
+  | /tmp/absolute-root
+[WARN ]  2026-07-31T08:31:09.712Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'user',
+  |   name: 'Error',
+  |   speakerId: 'conn_5'
+  | }
+[WARN ]  2026-07-31T08:31:09.712Z  FSocket
+  | socket.packet.rejected
+  | {
+  |   action: 'cwd',
+  |   name: 'Error',
+  |   speakerId: 'conn_6'
+  | }
+[INFO ]  2026-07-31T08:31:09.718Z  FSocket
+  | close
+  | {
+  |   error: undefined,
+  |   speakerId: 'conn_12'
+  | }
+[INFO ]  2026-07-31T08:33:25.068Z  FSocket
+  | open
+  | {
+  |   speakerId: 'conn_1'
+  | }
+[INFO ]  2026-07-31T08:33:25.425Z  Cortex
+  | input
+  | {
+  |   relation: 'new',
+  |   speakerId: 'conn_1',
+  |   stimulusId: 'stim_1',
+  |   textLength: 32
+  | }
+[INFO ]  2026-07-31T08:33:30.580Z  FSocket
+  | close
+  | {
+  |   error: undefined,
+  |   speakerId: 'conn_1'
+  | }
+[INFO ]  2026-07-31T08:35:43.868Z  FSocket
+  | open
+  | {
+  |   speakerId: 'conn_2'
+  | }
+[INFO ]  2026-07-31T08:35:44.224Z  Cortex
+  | input
+  | {
+  |   relation: 'new',
+  |   speakerId: 'conn_2',
+  |   stimulusId: 'stim_2',
+  |   textLength: 32
+  | }
+[ERROR]  2026-07-31T08:35:45.921Z  Cortex
+  | cortex.input
+  | {
+  |   name: 'Error'
+  | }
+[INFO ]  2026-07-31T08:35:45.960Z  FSocket
+  | close
+  | {
+  |   error: undefined,
+  |   speakerId: 'conn_2'
+  | }

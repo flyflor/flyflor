@@ -13,6 +13,7 @@ const bannedPromptTerms = [
     /\bFlyflor\b/i,
     /\bCallosum\b/,
     /\bSynapse\b/,
+    /\bThalamus\b/,
     /\bCortex\b/,
     /\bIntelligence\b/,
     /\bFTool\b/,

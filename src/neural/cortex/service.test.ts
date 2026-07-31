@@ -2,24 +2,25 @@ import 'reflect-metadata';
 import { describe, expect, test } from 'bun:test';
 import type { WorkspaceBrief } from '@/neural/workspace';
 import { Workspace } from '@/neural/workspace';
-import { Synapse } from './synapse';
-import { SynapseSignalType, type CoordinatePlan } from './types';
-import { DispositionRelation } from './awareness/types';
+import { SituationModel } from '@/neural/situation';
+import { Cortex } from './service';
+import { NeuralSignalType, type CoordinatePlan } from '../types';
+import { DispositionRelation } from '../thalamus/types';
 
-describe('SynapseSignalType', () => {
+describe('NeuralSignalType', () => {
     test('exposes pause and resume as control signals', () => {
-        expect(String(SynapseSignalType.Pause)).toBe('pause');
-        expect(String(SynapseSignalType.Resume)).toBe('resume');
-        expect(String(SynapseSignalType.Ask)).toBe('ask');
-        expect(String(SynapseSignalType.Confirm)).toBe('confirm');
+        expect(String(NeuralSignalType.Pause)).toBe('pause');
+        expect(String(NeuralSignalType.Resume)).toBe('resume');
+        expect(String(NeuralSignalType.Ask)).toBe('ask');
+        expect(String(NeuralSignalType.Confirm)).toBe('confirm');
     });
 
     test('exposes coordinate for cortex dispatch', () => {
-        expect(String(SynapseSignalType.Coordinate)).toBe('coordinate');
+        expect(String(NeuralSignalType.Coordinate)).toBe('coordinate');
     });
 });
 
-describe('Synapse coordinate', () => {
+describe('Cortex coordinate', () => {
     test('passes slice briefs to thought threads, then reviews before synthesis', async () => {
         const plan: CoordinatePlan = {
             intent: 'understand the cluster design',
@@ -31,18 +32,18 @@ describe('Synapse coordinate', () => {
             review: { brief: 'review all slice results', focus: 'coverage and contradictions' },
             synthesisHint: 'merge and respect review',
         };
-        const synapse = coordinateHarness(plan);
+        const cortex = coordinateHarness(plan);
         const replies: unknown[] = [];
-        synapse.on(SynapseSignalType.Reply, (signal: { data: unknown }) => {
+        cortex.on(NeuralSignalType.Reply, (signal: { data: unknown }) => {
             replies.push(signal.data);
         });
 
-        await (synapse as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1');
+        await (cortex as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1');
 
-        expect(synapse.workerBriefs.map((brief) => brief.goal)).toEqual(['study intent', 'study risk']);
-        expect(synapse.workerBriefs.map((brief) => brief.constraints.at(-1))).toEqual(['intent', 'risk']);
-        expect(JSON.parse(synapse.seenReviewBrief?.goal ?? '{}')).toMatchObject({ review: 'review all slice results', focus: 'coverage and contradictions' });
-        const synthesis = JSON.parse(synapse.synthesisInput) as { outcomes: Array<{ result: string }>; review: { result: string } };
+        expect(cortex.workerBriefs.map((brief) => brief.goal)).toEqual(['study intent', 'study risk']);
+        expect(cortex.workerBriefs.map((brief) => brief.constraints.at(-1))).toEqual(['intent', 'risk']);
+        expect(JSON.parse(cortex.seenReviewBrief?.goal ?? '{}')).toMatchObject({ review: 'review all slice results', focus: 'coverage and contradictions' });
+        const synthesis = JSON.parse(cortex.synthesisInput) as { outcomes: Array<{ result: string }>; review: { result: string } };
         expect(synthesis.outcomes.map((outcome) => outcome.result)).toEqual(['worker answer', 'worker answer']);
         expect(synthesis.review.result).toBe('review answer');
         expect(replies).toEqual([{ turnId: 'turn_1', chunk: 'final answer' }, { turnId: 'turn_1', chunk: null }]);
@@ -56,13 +57,13 @@ describe('Synapse coordinate', () => {
             review: { brief: 'review single result', focus: 'answer quality' },
             synthesisHint: 'summarize single result',
         };
-        const synapse = coordinateHarness(plan);
+        const cortex = coordinateHarness(plan);
 
-        await (synapse as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1');
+        await (cortex as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1');
 
-        expect(synapse.workerBriefs).toHaveLength(1);
-        expect(synapse.workerBriefs[0]?.goal).toBe('turn goal');
-        expect(synapse.seenReviewBrief).toBeDefined();
+        expect(cortex.workerBriefs).toHaveLength(1);
+        expect(cortex.workerBriefs[0]?.goal).toBe('turn goal');
+        expect(cortex.seenReviewBrief).toBeDefined();
     });
 
     test('runs slices in parallel as unconscious processors', async () => {
@@ -76,11 +77,11 @@ describe('Synapse coordinate', () => {
             review: { brief: 'review', focus: 'coverage' },
             synthesisHint: 'merge',
         };
-        const synapse = coordinateHarness(plan);
+        const cortex = coordinateHarness(plan);
         const started: string[] = [];
         const gates: Array<() => void> = [];
         let spawns = 0;
-        synapse.spawnThought = async () => {
+        cortex.spawnThought = async () => {
             spawns += 1;
             const isReviewer = spawns > 2;
             return {
@@ -93,7 +94,7 @@ describe('Synapse coordinate', () => {
             } as never;
         };
 
-        const run = (synapse as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1');
+        const run = (cortex as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1');
         await new Promise((resolve) => setTimeout(resolve, 10));
 
         // Both slices started before either finished: true concurrency.
@@ -113,9 +114,9 @@ describe('Synapse coordinate', () => {
             review: { brief: 'review', focus: 'coverage' },
             synthesisHint: 'merge',
         };
-        const synapse = coordinateHarness(plan);
+        const cortex = coordinateHarness(plan);
         let spawns = 0;
-        synapse.spawnThought = async () => {
+        cortex.spawnThought = async () => {
             spawns += 1;
             const isReviewer = spawns > 2;
             return {
@@ -127,13 +128,13 @@ describe('Synapse coordinate', () => {
             } as never;
         };
         const replies: unknown[] = [];
-        synapse.on(SynapseSignalType.Reply, (signal: { data: unknown }) => {
+        cortex.on(NeuralSignalType.Reply, (signal: { data: unknown }) => {
             replies.push(signal.data);
         });
 
-        await (synapse as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1');
+        await (cortex as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1');
 
-        const synthesis = JSON.parse(synapse.synthesisInput) as { outcomes: Array<{ result: string; failed?: boolean; reason?: string }> };
+        const synthesis = JSON.parse(cortex.synthesisInput) as { outcomes: Array<{ result: string; failed?: boolean; reason?: string }> };
         expect(synthesis.outcomes).toHaveLength(2);
         expect(synthesis.outcomes.find((outcome) => outcome.failed)?.reason).toBe('worker exploded');
         expect(replies).toEqual([{ turnId: 'turn_1', chunk: 'final answer' }, { turnId: 'turn_1', chunk: null }]);
@@ -150,15 +151,15 @@ describe('Synapse coordinate', () => {
             review: { brief: 'review', focus: 'coverage' },
             synthesisHint: 'merge',
         };
-        const synapse = coordinateHarness(plan);
-        synapse.spawnThought = async () => ({
+        const cortex = coordinateHarness(plan);
+        cortex.spawnThought = async () => ({
             understand: async () => {
                 throw Error('boom');
             },
         } as never);
 
         await expect(
-            (synapse as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1'),
+            (cortex as unknown as { coordinate: (chunk: string, turnId: string) => Promise<void> }).coordinate('latest request', 'turn_1'),
         ).rejects.toThrow('Every coordinate slice failed');
     });
 
@@ -173,9 +174,9 @@ describe('Synapse coordinate', () => {
             review: { brief: 'review', focus: 'coverage' },
             synthesisHint: 'merge',
         };
-        const synapse = coordinateHarness(plan);
+        const cortex = coordinateHarness(plan);
         const controller = new AbortController();
-        synapse.spawnThought = async () => ({
+        cortex.spawnThought = async () => ({
             understand: async (_brief: WorkspaceBrief, signal?: AbortSignal) => {
                 await new Promise<never>((_, reject) => {
                     signal?.addEventListener('abort', () => reject(Error('aborted')), { once: true });
@@ -183,7 +184,7 @@ describe('Synapse coordinate', () => {
             },
         } as never);
 
-        const run = (synapse as unknown as { coordinate: (chunk: string, turnId: string, signal?: AbortSignal) => Promise<void> })
+        const run = (cortex as unknown as { coordinate: (chunk: string, turnId: string, signal?: AbortSignal) => Promise<void> })
             .coordinate('latest request', 'turn_1', controller.signal);
         await new Promise((resolve) => setTimeout(resolve, 10));
         controller.abort();
@@ -192,7 +193,7 @@ describe('Synapse coordinate', () => {
     });
 });
 
-describe('Synapse cancellation and speaker ownership', () => {
+describe('Cortex cancellation and speaker ownership', () => {
     test('aborts an ingest that has not created a Workspace turn when its speaker disconnects', async () => {
         let receivedSignal: AbortSignal | undefined;
         let release: (() => void) | undefined;
@@ -202,23 +203,23 @@ describe('Synapse cancellation and speaker ownership', () => {
                 await new Promise<void>((resolve) => { release = resolve; });
             },
         };
-        const synapse = setupSynapse(brain);
-        const operation = synapse.attend({ id: 'stim_1', speakerId: 'conn_1', text: 'hello', ts: Date.now() }, {
+        const cortex = setupCortex(brain);
+        const operation = cortex.attend({ id: 'stim_1', speakerId: 'conn_1', text: 'hello', ts: Date.now() }, {
             relation: DispositionRelation.New,
             urgent: false,
         });
 
         await new Promise((resolve) => setTimeout(resolve, 0));
         expect(receivedSignal?.aborted).toBe(false);
-        synapse.forgetSpeaker('conn_1');
+        cortex.forgetSpeaker('conn_1');
         expect(receivedSignal?.aborted).toBe(true);
         release?.();
         await operation;
     });
 
     test('keeps working turns while removing a disconnected speaker', () => {
-        const synapse = setupSynapse({ next: async () => undefined });
-        synapse.workspace.turns = [
+        const cortex = setupCortex({ next: async () => undefined });
+        cortex.workspace.turns = [
             {
                 id: 'turn_waiting', speakerId: 'conn_1', status: 'waiting', intent: 'reply', goal: 'wait',
                 constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
@@ -229,38 +230,29 @@ describe('Synapse cancellation and speaker ownership', () => {
             },
         ];
 
-        synapse.forgetSpeaker('conn_1');
+        cortex.forgetSpeaker('conn_1');
 
-        expect(synapse.workspace.turns.map((turn) => turn.id)).toEqual(['turn_waiting', 'turn_working']);
+        expect(cortex.workspace.turns.map((turn) => turn.id)).toEqual(['turn_waiting', 'turn_working']);
     });
 });
 
-function setupSynapse(brain: { next(input: unknown): Promise<void> }) {
-    const synapse = new Synapse();
-    synapse.brain = brain as never;
-    synapse.workspace = new Workspace();
-    synapse.awareness = {
+function setupCortex(brain: { next(input: unknown): Promise<void> }) {
+    const cortex = new Cortex(new Workspace(new SituationModel()), {
         preempted: () => false,
         turnSettled: () => undefined,
         turnInterrupted: () => undefined,
         say: () => undefined,
-    } as never;
-    return synapse;
+    } as never);
+    cortex.brain = brain as never;
+    return cortex;
 }
 
-function coordinateHarness(plan: CoordinatePlan): Synapse & {
+function coordinateHarness(plan: CoordinatePlan): Cortex & {
     workerBriefs: WorkspaceBrief[];
     seenReviewBrief?: WorkspaceBrief;
     synthesisInput: string;
 } {
-    const synapse = new Synapse() as Synapse & {
-        workerBriefs: WorkspaceBrief[];
-        seenReviewBrief?: WorkspaceBrief;
-        synthesisInput: string;
-    };
-    synapse.workerBriefs = [];
-    synapse.synthesisInput = '';
-    synapse.workspace = {
+    const workspace = {
         brief: (turnId?: string) => ({
             turnId: turnId ?? 'turn_1',
             intent: 'research',
@@ -274,32 +266,38 @@ function coordinateHarness(plan: CoordinatePlan): Synapse & {
         turn: () => ({ status: 'completed' }),
         settle: async () => undefined,
     } as never;
-    synapse.planPrompt = { section: () => 'plan prompt' } as never;
-    synapse.synthesisPrompt = { section: () => 'synthesis prompt' } as never;
-    synapse.awareness = { preempted: () => false } as never;
+    const cortex = new Cortex(workspace, { preempted: () => false } as never) as Cortex & {
+        workerBriefs: WorkspaceBrief[];
+        seenReviewBrief?: WorkspaceBrief;
+        synthesisInput: string;
+    };
+    cortex.workerBriefs = [];
+    cortex.synthesisInput = '';
+    cortex.planPrompt = { section: () => 'plan prompt' } as never;
+    cortex.synthesisPrompt = { section: () => 'synthesis prompt' } as never;
     let call = 0;
-    synapse.intelligence = {
+    cortex.intelligence = {
         completeText: async (messages: Array<{ content: string }>) => {
             call += 1;
             if (call === 1) return JSON.stringify(plan);
-            synapse.synthesisInput = messages.at(-1)?.content ?? '';
+            cortex.synthesisInput = messages.at(-1)?.content ?? '';
             return 'final answer';
         },
     } as never;
     let spawned = 0;
-    synapse.spawnThought = async () => {
+    cortex.spawnThought = async () => {
         spawned += 1;
         const index = spawned;
         return {
             understand: async (brief: WorkspaceBrief) => {
                 if (index > Math.max(plan.slices.length, 1)) {
-                    synapse.seenReviewBrief = brief;
+                    cortex.seenReviewBrief = brief;
                     return { answer: 'review answer', steps: 1, completed: true, paused: false, evidence: ['review evidence'] };
                 }
-                synapse.workerBriefs.push(brief);
+                cortex.workerBriefs.push(brief);
                 return { answer: 'worker answer', steps: 1, completed: true, paused: false, evidence: ['worker evidence'] };
             },
         } as never;
     };
-    return synapse;
+    return cortex;
 }

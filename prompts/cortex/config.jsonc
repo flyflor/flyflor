@@ -1,6 +1,6 @@
 {
-    // EN: Synapse coordination prompt package version.
-    // ZH: Synapse 协调提示词包版本。
+    // EN: cortex coordination prompt package version.
+    // ZH: cortex 协调提示词包版本。
     "version": 1,
     // EN: Human-readable description.
     // ZH: 面向人的描述。

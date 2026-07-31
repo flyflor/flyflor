@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { ConfigService } from '@/configuration';
 import { FToolAtom, useContainer } from '@/core';
+import { SituationModel } from '@/neural/situation';
 import { Workspace } from '@/neural/workspace';
 import { Ask, Execute, Filesystem, Shell, ToolComponent } from '@/plugins';
 
@@ -24,7 +25,7 @@ describe('ToolComponent', () => {
         other = mkdtempSync(join(tmpdir(), 'flyflor-tools-other-'));
         ConfigService.path = { ...ConfigService.path, cwd: root };
         process.chdir(other);
-        const workspace = new Workspace();
+        const workspace = new Workspace(new SituationModel());
         workspace.prompt = { section: () => 'system placeholder' } as never;
         workspace.intelligence = {
             completeText: async (messages: Array<{ role: string; content: string }>) => {

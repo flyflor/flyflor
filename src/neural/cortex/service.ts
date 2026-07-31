@@ -3,32 +3,33 @@ import { ChatRole } from '@/neural/brain/types';
 import type { BrainInput } from '@/neural/brain/types';
 import { Workspace, type WorkspaceBrief } from '@/neural/workspace';
 import type { ConfigService } from '@/configuration';
-import { Config, FCortex, Init, Inject, Module, Prompt, PromptService, useContainer } from '@/core';
+import { Config, FCortex, Init, Inject, Prompt, PromptService, Provide, useContainer } from '@/core';
 import { Intelligence } from '@/neural/brain/intelligence/service';
 import { parse } from '@/neural/json';
-import { Awareness } from '@/neural/awareness';
-import { DispositionRelation, type AttentionInstruction, type Stimulus } from '@/neural/awareness/types';
-import { FSocket } from './ipc';
+import { Thalamus } from '@/neural/thalamus';
+import { DispositionRelation, type AttentionInstruction, type Stimulus } from '@/neural/thalamus/types';
+import type { AgentProfile } from '@/population/types';
+import { FSocket } from '../sensorimotor';
 import {
-    SynapseSignalType,
+    NeuralSignalType,
     TurnPreempted,
     type CoordinateOutcome,
     type CoordinatePlan,
     type InteractionRequest,
     type InteractionResponse,
     type ReplyChunk,
-    type SynapseSignal,
-} from './types';
+    type NeuralSignal,
+} from '../types';
 
 /**
- * EN: Synapse is the neural cortex. It routes signals, owns the single Brain,
+ * EN: Cortex is the neural cortex. It routes signals, owns the single Brain,
  * and dispatches parallel thought threads when the semantic Turn intent
  * requires coordinated understanding.
- * ZH: Synapse 是神经皮层。它路由信号、持有单一的 Brain，并在语义 Turn intent
+ * ZH: Cortex 是神经皮层。它路由信号、持有单一的 Brain，并在语义 Turn intent
  * 需要协同理解时派发并行思维线程。
  */
-@Module()
-export class Synapse extends FCortex<SynapseSignal> {
+@Provide()
+export class Cortex extends FCortex<NeuralSignal> {
     /** EN: Runtime configuration injected from the IOC container. ZH: 由 IOC 容器注入的运行时配置。 */
     @Config()
     public readonly config!: ConfigService;
@@ -37,24 +38,16 @@ export class Synapse extends FCortex<SynapseSignal> {
     @Inject()
     public socket!: FSocket;
 
-    /** EN: Semantic workspace that owns Turn lifecycle. ZH: 持有 Turn 生命周期的语义工作区。 */
-    @Inject()
-    public workspace!: Workspace;
-
     /** EN: Intelligence provider used for plan and synthesis completions. ZH: 用于计划与合成补全的智能提供方。 */
     @Inject()
     public intelligence!: Intelligence;
 
-    /** EN: Attention gate that routes stimuli into this cortex. ZH: 将刺激路由进本皮层的注意门。 */
-    @Inject()
-    public awareness!: Awareness;
-
     /** EN: Prompt template for parallel thought coordination planning. ZH: 并行思维协同计划的提示词模板。 */
-    @Prompt('prompts/synapse')
+    @Prompt('prompts/cortex')
     public planPrompt!: PromptService;
 
     /** EN: Prompt template for synthesizing the final coordinated reply. ZH: 合成最终协同回复的提示词模板。 */
-    @Prompt('prompts/synapse')
+    @Prompt('prompts/cortex')
     public synthesisPrompt!: PromptService;
 
     /** EN: The single mind of the life-form, built during init. ZH: 生命体单一的心智，在 init 期间构建。 */
@@ -66,7 +59,14 @@ export class Synapse extends FCortex<SynapseSignal> {
     /** EN: Abort handles keyed by stimulus id, addressable before Workspace has created a Turn. ZH: 按刺激 id 索引的中止句柄，在 Workspace 创建 Turn 之前即可寻址。 */
     private stimulusControllers: Map<string, { controller: AbortController; speakerId: string }>;
 
-    constructor() {
+    constructor(
+        /** EN: Semantic workspace that owns Turn lifecycle. ZH: 持有 Turn 生命周期的语义工作区。 */
+        public workspace: Workspace,
+        /** EN: Attention gate that routes stimuli into this cortex. ZH: 将刺激路由进本皮层的注意门。 */
+        public thalamus: Thalamus,
+        /** EN: Population profile carried into spawned thought threads; absent in direct-construction tests. ZH: 传进被 spawn 思维线程的种群档案；测试中直接构造时缺省。 */
+        public profile?: AgentProfile,
+    ) {
         super();
         // EN: Pending ask/confirm waiters keyed by Turn id. ZH: 按 Turn id 索引的待答复 ask/confirm 等待者。
         this.interactions = new Map();
@@ -77,21 +77,21 @@ export class Synapse extends FCortex<SynapseSignal> {
     }
 
     /**
-     * EN: Lifecycle init: build the single Brain, attend to Awareness, and wire
-     * every Synapse signal type to its motor output.
-     * ZH: 生命周期初始化：构建单一的 Brain，接入 Awareness，
-     * 并将每种 Synapse 信号类型接到对应的运动输出。
+     * EN: Lifecycle init: build the single Brain, attend to Thalamus, and wire
+     * every Cortex signal type to its motor output.
+     * ZH: 生命周期初始化：构建单一的 Brain，接入 Thalamus，
+     * 并将每种 Cortex 信号类型接到对应的运动输出。
      */
     @Init()
     public async init() {
         this.brain = await this.spawnThought();
-        this.awareness.attend(this);
-        this.on(SynapseSignalType.Reply, (signal) => this.output(signal.data));
-        this.on(SynapseSignalType.Event, (signal) => this.addressedWrite('data', signal.data));
-        this.on(SynapseSignalType.Ask, (signal) => this.addressedWrite('ask', signal.data));
-        this.on(SynapseSignalType.Confirm, (signal) => this.addressedWrite('confirm', signal.data));
-        this.on(SynapseSignalType.Pause, (signal) => this.addressedWrite('pause', signal.data));
-        this.on(SynapseSignalType.Resume, (signal) => this.addressedWrite('resume', signal.data));
+        this.thalamus.attend(this);
+        this.on(NeuralSignalType.Reply, (signal) => this.output(signal.data));
+        this.on(NeuralSignalType.Event, (signal) => this.addressedWrite('data', signal.data));
+        this.on(NeuralSignalType.Ask, (signal) => this.addressedWrite('ask', signal.data));
+        this.on(NeuralSignalType.Confirm, (signal) => this.addressedWrite('confirm', signal.data));
+        this.on(NeuralSignalType.Pause, (signal) => this.addressedWrite('pause', signal.data));
+        this.on(NeuralSignalType.Resume, (signal) => this.addressedWrite('resume', signal.data));
         return true;
     }
 
@@ -103,24 +103,24 @@ export class Synapse extends FCortex<SynapseSignal> {
      * 独立实例，拥有私有 Scratchpad，不向 socket 广播。
      */
     public async spawnThought(): Promise<Brain> {
-        return await useContainer().getAsync(Brain, this);
+        return await useContainer().getAsync(Brain, this, this.workspace, this.profile);
     }
 
     /**
      * EN: Reports whether a Turn has been preempted by an urgent stimulus.
-     * Neural atoms check this boundary through the synapse bus.
-     * ZH: 报告某个 Turn 是否已被紧急刺激抢占。神经原子通过 synapse 总线检查
+     * Neural atoms check this boundary through the cortex bus.
+     * ZH: 报告某个 Turn 是否已被紧急刺激抢占。神经原子通过 cortex 总线检查
      * 这个边界。
      */
     public preempted(turnId: string): boolean {
-        return this.awareness.preempted(turnId);
+        return this.thalamus.preempted(turnId);
     }
 
     /**
-     * EN: Awareness asks the cortex to pay attention to one stimulus. This is the
+     * EN: Thalamus asks the cortex to pay attention to one stimulus. This is the
      * entry point for the active thought stream. The error boundary is the single
      * place where a failing main turn is reported to the speaker.
-     * ZH: Awareness 请求皮层注意一条刺激。这是主动意识流的入口。失败的主 turn 通过
+     * ZH: Thalamus 请求皮层注意一条刺激。这是主动意识流的入口。失败的主 turn 通过
      * 此处统一错误边界报告给说话人。
      */
     public async attend(stimulus: Stimulus, instruction: AttentionInstruction = stimulus.attention ?? { relation: DispositionRelation.New, urgent: false }): Promise<void> {
@@ -128,8 +128,8 @@ export class Synapse extends FCortex<SynapseSignal> {
     }
 
     /**
-     * EN: Awareness uses the same foreground boundary for a same-thread revision.
-     * ZH: Awareness 对同线程修订复用同一个前台边界。
+     * EN: Thalamus uses the same foreground boundary for a same-thread revision.
+     * ZH: Thalamus 对同线程修订复用同一个前台边界。
      */
     public async revise(stimulus: Stimulus, targetTurnId: string): Promise<void> {
         await this.runStimulus(stimulus, {
@@ -162,20 +162,20 @@ export class Synapse extends FCortex<SynapseSignal> {
         try {
             await this.brain.next(input);
             const settledTurn = input.stimulusId ? this.workspace.turnForStimulus(input.stimulusId) : undefined;
-            this.awareness.turnSettled(settledTurn?.id ?? input.targetTurnId ?? '');
+            this.thalamus.turnSettled(settledTurn?.id ?? input.targetTurnId ?? '');
         } catch (error) {
             if (error instanceof TurnPreempted) {
-                this.awareness.turnInterrupted(error.turnId);
+                this.thalamus.turnInterrupted(error.turnId);
                 return;
             }
             const active = this.workspace.working();
-            if (active && (this.awareness.preempted(active.id) || controller.signal.aborted)) {
+            if (active && (this.thalamus.preempted(active.id) || controller.signal.aborted)) {
                 try {
                     if (active.status === 'working') await this.workspace.interrupt(active.id, { assistant: '' });
                 } catch {
                     if (this.workspace.working()?.id === active.id) this.workspace.suspend(active.id);
                 }
-                this.awareness.turnInterrupted(active.id);
+                this.thalamus.turnInterrupted(active.id);
                 return;
             }
             // A disconnect can abort an ingest before Workspace has created a Turn.
@@ -187,11 +187,11 @@ export class Synapse extends FCortex<SynapseSignal> {
                 } catch {
                     if (this.workspace.working()?.id === active.id) this.workspace.suspend(active.id);
                 }
-                this.awareness.turnInterrupted(active.id);
+                this.thalamus.turnInterrupted(active.id);
             }
-            this.log.error('synapse.input', { name: error instanceof Error ? error.name : 'UnknownError' });
+            this.log.error('cortex.input', { name: error instanceof Error ? error.name : 'UnknownError' });
             const { speakerId } = input;
-            this.awareness.say(speakerId, '处理这条消息时出错，请重试。');
+            this.thalamus.say(speakerId, '处理这条消息时出错，请重试。');
         } finally {
             if (targetTurnId && this.turnControllers.get(targetTurnId) === controller) this.turnControllers.delete(targetTurnId);
             if (this.stimulusControllers.get(stimulus.id)?.controller === controller) this.stimulusControllers.delete(stimulus.id);
@@ -199,9 +199,9 @@ export class Synapse extends FCortex<SynapseSignal> {
     }
 
     /**
-     * EN: Cancels provider work for a Turn after Awareness has marked it urgent:
+     * EN: Cancels provider work for a Turn after Thalamus has marked it urgent:
      * rejects any pending interaction waiter and aborts the Turn's controller.
-     * ZH: 在 Awareness 标记紧急后取消 Turn 的提供方工作：拒绝所有待处理的
+     * ZH: 在 Thalamus 标记紧急后取消 Turn 的提供方工作：拒绝所有待处理的
      * 交互等待者并中止该 Turn 的控制器。
      */
     public cancel(turnId: string): void {
@@ -253,18 +253,18 @@ export class Synapse extends FCortex<SynapseSignal> {
 
     /**
      * EN: Motor output for one streamed reply chunk: resolves the speaker from
-     * the Turn in Workspace and hands the chunk to Awareness' one-mouth stream.
+     * the Turn in Workspace and hands the chunk to Thalamus' one-mouth stream.
      * ZH: 一个流式回复分片的运动输出：从 Workspace 的 Turn 解析说话人，并把分片交给
-     * Awareness 的单口流。
+     * Thalamus 的单口流。
      */
     public async output(data: unknown) {
         const { turnId, chunk, streamId } = data as ReplyChunk;
         const turn = this.workspace.turns.find((t) => t.id === turnId);
         if (!turn) {
-            this.log.warn('synapse.output.turn_not_found', { turnId });
+            this.log.warn('cortex.output.turn_not_found', { turnId });
             return;
         }
-        this.awareness.speak(turnId, turn.speakerId, chunk, streamId);
+        this.thalamus.speak(turnId, turn.speakerId, chunk, streamId);
     }
 
     /**
@@ -276,13 +276,13 @@ export class Synapse extends FCortex<SynapseSignal> {
     public async interact(request: InteractionRequest): Promise<InteractionResponse> {
         if (this.interactions.has(request.turnId)) throw Error('An interaction is already pending for this turn');
         this.workspace.pause(request.turnId, { id: request.id, kind: request.kind, prompt: JSON.stringify(request.data) });
-        this.emit(request.kind === 'ask' ? SynapseSignalType.Ask : SynapseSignalType.Confirm, {
+        this.emit(request.kind === 'ask' ? NeuralSignalType.Ask : NeuralSignalType.Confirm, {
             turnId: request.turnId,
             id: request.id,
             ...request.data as object,
         });
-        this.emit(SynapseSignalType.Pause, request);
-        this.awareness.turnPaused(request.turnId);
+        this.emit(NeuralSignalType.Pause, request);
+        this.thalamus.turnPaused(request.turnId);
         return await new Promise<InteractionResponse>((resolve, reject) => {
             this.interactions.set(request.turnId, { request, resolve, reject });
         });
@@ -307,7 +307,7 @@ export class Synapse extends FCortex<SynapseSignal> {
         this.workspace.resume(turnId, id);
         this.interactions.delete(turnId);
         interaction.resolve(response);
-        this.emit(SynapseSignalType.Resume, { turnId, id });
+        this.emit(NeuralSignalType.Resume, { turnId, id });
     }
 
     /**
@@ -357,7 +357,7 @@ export class Synapse extends FCortex<SynapseSignal> {
                 // The main abort owns the turn: propagate instead of isolating.
                 if (abortSignal?.aborted) throw error;
                 const reason = error instanceof Error ? error.message : String(error);
-                this.log.warn('synapse.coordinate.slice_failed', { slice: slice.slice, reason });
+                this.log.warn('cortex.coordinate.slice_failed', { slice: slice.slice, reason });
                 return { slice: slice.slice, brief: slice.brief, result: '', evidence: [], failed: true, reason };
             } finally {
                 abortSignal?.removeEventListener('abort', chainAbort);
@@ -380,20 +380,20 @@ export class Synapse extends FCortex<SynapseSignal> {
 
         await this.workspace.settle(turnId, { assistant: answer, evidence: [...outcomes.flatMap((outcome) => outcome.evidence), ...review.evidence] }, abortSignal);
         const settled = this.workspace.turn(turnId);
-        if (settled.status === 'working' && (abortSignal?.aborted || this.awareness.preempted?.(turnId))) throw new TurnPreempted(turnId);
-        this.emit(SynapseSignalType.Reply, { turnId, ...(streamId ? { streamId } : {}), chunk: answer });
-        this.emit(SynapseSignalType.Reply, { turnId, ...(streamId ? { streamId } : {}), chunk: null });
+        if (settled.status === 'working' && (abortSignal?.aborted || this.thalamus.preempted?.(turnId))) throw new TurnPreempted(turnId);
+        this.emit(NeuralSignalType.Reply, { turnId, ...(streamId ? { streamId } : {}), chunk: answer });
+        this.emit(NeuralSignalType.Reply, { turnId, ...(streamId ? { streamId } : {}), chunk: null });
     }
 
     private addressedWrite(action: string, data: unknown): void {
         if (typeof data !== 'object' || data === null || !('turnId' in data)) {
-            this.log.debug('synapse.addressed_write.no_turnId', { action });
+            this.log.debug('cortex.addressed_write.no_turnId', { action });
             return;
         }
         const { turnId } = data as { turnId: string };
         const turn = this.workspace.turns.find((t) => t.id === turnId);
         if (!turn) {
-            this.log.warn('synapse.addressed_write.turn_not_found', { action, turnId });
+            this.log.warn('cortex.addressed_write.turn_not_found', { action, turnId });
             return;
         }
         this.socket.write(turn.speakerId, { action, data });

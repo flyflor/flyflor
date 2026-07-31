@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { ChatRole, type MindMessage } from '@/neural/brain/types';
+import { SituationModel } from '@/neural/situation';
 import { Workspace } from '@/neural/workspace';
-import { SynapseSignalType } from '@/neural/types';
+import { NeuralSignalType } from '@/neural/types';
 import type { ActionRequest } from '@/plugins';
 import type { IntelligenceToolDefinition, ProviderMessage } from '../intelligence/types';
 import { Investigation } from './service';
@@ -15,24 +16,24 @@ import { Investigation } from './service';
  */
 
 function mockInvestigation(workspace: Workspace, responses: Array<{ text: string; actionRequests: ActionRequest[] }>) {
-    const events: Array<{ type: SynapseSignalType; data: unknown }> = [];
+    const events: Array<{ type: NeuralSignalType; data: unknown }> = [];
     const seenMessages: ProviderMessage[][] = [];
     const calls: ActionRequest[] = [];
     const instance = new Investigation(
         {
-            emit: (type: SynapseSignalType, data: unknown) => { events.push({ type, data }); },
+            emit: (type: NeuralSignalType, data: unknown) => { events.push({ type, data }); },
             interact: async (request: { turnId: string; id: string; kind: 'ask' | 'confirm'; data: unknown }) => {
                 workspace.pause(request.turnId, { id: request.id, kind: request.kind, prompt: JSON.stringify(request.data) });
-                events.push({ type: request.kind === 'ask' ? SynapseSignalType.Ask : SynapseSignalType.Confirm, data: request.data });
+                events.push({ type: request.kind === 'ask' ? NeuralSignalType.Ask : NeuralSignalType.Confirm, data: request.data });
                 workspace.resume(request.turnId, request.id);
                 return request.kind === 'ask'
                     ? { kind: 'ask', answers: [{ question: 'Pick?', answer: 'a' }] }
                     : { kind: 'confirm', approved: true };
             },
         } as never,
+        workspace,
     );
     let index = 0;
-    instance.workspace = workspace;
     instance.tools = {
         list: async () => [{ name: 'filesystem', description: 'filesystem', parameters: {} }, { name: 'ask', description: 'ask', parameters: {} }] as IntelligenceToolDefinition[],
         cwd: async (name: string) => name !== 'ask',
@@ -77,7 +78,7 @@ describe('Investigation', () => {
     let workspace: Workspace;
 
     beforeEach(async () => {
-        workspace = new Workspace();
+        workspace = new Workspace(new SituationModel());
         workspace.prompt = { section: () => 'system placeholder' } as never;
         workspace.intelligence = ingestMock() as never;
         await workspace.ingest({ text: '调查工具层 cwd=/tmp/semantic', speakerId: 'test' });
@@ -91,7 +92,7 @@ describe('Investigation', () => {
         );
 
         expect(outcome).toMatchObject({ answer: '直接答案', completed: true, paused: false, steps: 1, evidence: [] });
-        expect(events).toContainEqual({ type: SynapseSignalType.Reply, data: { turnId: undefined, chunk: '直接答案' } });
+        expect(events).toContainEqual({ type: NeuralSignalType.Reply, data: { turnId: undefined, chunk: '直接答案' } });
     });
 
     test('can finish silently for worker and reviewer runs', async () => {
@@ -103,7 +104,7 @@ describe('Investigation', () => {
         );
 
         expect(outcome.answer).toBe('静默答案');
-        expect(events.some((event) => event.type === SynapseSignalType.Reply)).toBe(false);
+        expect(events.some((event) => event.type === NeuralSignalType.Reply)).toBe(false);
     });
 
     test('streams text, replays the local action buffer into the next request, and emits one evidence line', async () => {
@@ -119,7 +120,7 @@ describe('Investigation', () => {
         expect(outcome).toMatchObject({ answer: '综合答案', completed: true, paused: false, steps: 2 });
         expect(outcome.evidence.join('\n')).toContain('filesystem');
         expect(outcome.evidence.join('\n')).toContain('/tmp/demo.ts');
-        expect(events.map((event) => event.type)).toContain(SynapseSignalType.Event);
+        expect(events.map((event) => event.type)).toContain(NeuralSignalType.Event);
         expect(JSON.stringify(workspace.turns)).not.toContain('tool_call_id');
         expect(JSON.stringify(workspace.turns)).not.toContain('"role":"tool"');
         expect(seenMessages).toHaveLength(2);
@@ -175,7 +176,7 @@ describe('Investigation', () => {
         );
         expect(outcome).toMatchObject({ answer: '继续完成', completed: true, paused: false, steps: 2 });
         expect(events).toContainEqual({
-            type: SynapseSignalType.Ask,
+            type: NeuralSignalType.Ask,
             data: { kind: 'ask', questions: [{ question: 'Pick?', options: [{ label: 'a' }] }] },
         });
         expect(JSON.stringify(seenMessages.at(-1))).toContain('\\"kind\\":\\"ask\\"');

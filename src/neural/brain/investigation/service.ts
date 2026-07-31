@@ -1,7 +1,7 @@
 import { ChatRole, type MindMessage } from '@/neural/brain/types';
-import { FNeuron, Inject, Provide } from '@/core';
+import { FNeuron, Inject, Provide, type FCortexBus } from '@/core';
 import { Workspace } from '@/neural/workspace';
-import { SynapseSignalType, TurnPreempted, ActivityEventType } from '@/neural/types';
+import { NeuralSignalType, TurnPreempted, ActivityEventType } from '@/neural/types';
 import { type ActionRequest, ToolComponent } from '@/plugins';
 import { Intelligence } from '../intelligence/service';
 import type { ProviderActionRequestMessage, ProviderActionResultMessage, ProviderMessage } from '../intelligence/types';
@@ -21,12 +21,16 @@ export class Investigation extends FNeuron {
     public intelligence!: Intelligence;
 
     @Inject()
-    /** EN: Shared bounded semantic working set. ZH: 共享的有界语义工作集。 */
-    public workspace!: Workspace;
-
-    @Inject()
     /** EN: Tool boundary used to list, confirm, and run actions. ZH: 用于列举、确认与执行 action 的工具边界。 */
     public tools!: ToolComponent;
+
+    constructor(
+        cortex: FCortexBus,
+        /** EN: Shared bounded semantic working set. ZH: 共享的有界语义工作集。 */
+        public workspace: Workspace,
+    ) {
+        super(cortex);
+    }
 
     /**
      * EN: Runs the research loop until the model answers without new action requests,
@@ -39,17 +43,17 @@ export class Investigation extends FNeuron {
         const emitReply = options.emitReply !== false;
         let step = 0;
         while (true) {
-            if (options.turnId && this.synapse.preempted?.(options.turnId)) {
+            if (options.turnId && this.cortex.preempted?.(options.turnId)) {
                 return { answer: '', steps: step, completed: false, paused: false, evidence, interrupted: true };
             }
             options.signal?.throwIfAborted();
             step += 1;
-            this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: ActivityEventType.LlmRequest, chunk: String(step), data: { step } });
+            this.cortex.emit(NeuralSignalType.Event, { turnId: options.turnId, type: ActivityEventType.LlmRequest, chunk: String(step), data: { step } });
             let result: Awaited<ReturnType<Intelligence['runRequest']>>;
             try {
                 result = await this.intelligence.streamRequest(messages, await this.tools.list(), (chunk) => {
-                    if (options.turnId && this.synapse.preempted?.(options.turnId)) throw new TurnPreempted(options.turnId);
-                    if (emitReply) this.synapse.emit(SynapseSignalType.Reply, {
+                    if (options.turnId && this.cortex.preempted?.(options.turnId)) throw new TurnPreempted(options.turnId);
+                    if (emitReply) this.cortex.emit(NeuralSignalType.Reply, {
                         turnId: options.turnId,
                         ...(options.streamId ? { streamId: options.streamId } : {}),
                         chunk,
@@ -70,8 +74,8 @@ export class Investigation extends FNeuron {
             for (const request of requests) {
                 options.signal?.throwIfAborted();
                 if (await this.tools.requiresConfirm(request)) {
-                    if (!options.turnId || !this.synapse.interact) throw Error('Confirm boundary is missing');
-                    const response = await this.synapse.interact({
+                    if (!options.turnId || !this.cortex.interact) throw Error('Confirm boundary is missing');
+                    const response = await this.cortex.interact({
                         turnId: options.turnId,
                         id: request.id,
                         kind: 'confirm',
@@ -84,17 +88,17 @@ export class Investigation extends FNeuron {
                         continue;
                     }
                 }
-                this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: ActivityEventType.ActionStart, chunk: request.name, data: request.arguments });
+                this.cortex.emit(NeuralSignalType.Event, { turnId: options.turnId, type: ActivityEventType.ActionStart, chunk: request.name, data: request.arguments });
                 const actionResult = await this.tools.run(request, options.signal);
                 options.signal?.throwIfAborted();
-                this.synapse.emit(SynapseSignalType.Event, { turnId: options.turnId, type: ActivityEventType.ActionResult, chunk: request.name, data: actionResult });
+                this.cortex.emit(NeuralSignalType.Event, { turnId: options.turnId, type: ActivityEventType.ActionResult, chunk: request.name, data: actionResult });
                 messages.push(this.actionResultMessage(request, actionResult));
                 evidence.push(this.evidence(request, actionResult));
                 if (actionResult.ok && this.pause(actionResult.data)) {
-                    if (!options.turnId || !this.synapse.interact) {
+                    if (!options.turnId || !this.cortex.interact) {
                         return { answer: '', steps: step, completed: false, paused: true, evidence };
                     }
-                    const response = await this.synapse.interact({
+                    const response = await this.cortex.interact({
                         turnId: options.turnId,
                         id: request.id,
                         kind: actionResult.data.kind,

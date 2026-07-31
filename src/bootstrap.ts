@@ -6,4 +6,4 @@ import { Factory } from '@/core';
 import { AppModule } from './app.module';
 
 const app = await Factory.create(AppModule);
-await app.synapse();
+await app.population();

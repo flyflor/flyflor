@@ -33,9 +33,9 @@
         "paths": {
             "@/*": ["./src/*"],
             "@plugins/*": ["./plugins/*"],
-            "@pakcages/*": ["./pakcages/*"]
+            "@packages/*": ["./packages/*"]
         },
     },
-    "include": ["pakcages/**/*.ts", "plugins/**/*.ts", "src/**/*.ts", "scripts/**/*.ts"],
+    "include": ["packages/**/*.ts", "plugins/**/*.ts", "src/**/*.ts", "scripts/**/*.ts"],
     "exclude": ["node_modules", "dist", "plugins", ".agents"],
 }

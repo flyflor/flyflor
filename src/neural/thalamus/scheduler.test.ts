@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { describe, expect, test } from 'bun:test';
 import type { ConfigService } from '@/configuration';
+import { SituationModel } from '@/neural/situation';
 import { Workspace } from '@/neural/workspace';
 import type { Intelligence } from '@/neural/brain/intelligence';
 import type { PromptService } from '@/core';
@@ -42,11 +43,10 @@ class MockHost implements SchedulerHost {
 }
 
 function mockScheduler(verdict: ScheduleVerdict = { dispositions: [] }): { scheduler: Scheduler; host: MockHost } {
-    const scheduler = new Scheduler();
+    const scheduler = new Scheduler(new Workspace(new SituationModel()));
     scheduler.config = {
-        awareness: { scheduleTimeoutMs: 50, batchWindowMs: 0 },
+        thalamus: { scheduleTimeoutMs: 50, batchWindowMs: 0 },
     } as ConfigService;
-    scheduler.workspace = new Workspace();
     scheduler.prompt = { section: () => 'schedule prompt' } as unknown as PromptService;
     scheduler.intelligence = {
         completeText: async () => JSON.stringify(verdict),
@@ -62,7 +62,7 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
 describe('Scheduler', () => {
     test('applies backpressure at the configured pending capacity', () => {
         const { scheduler } = mockScheduler();
-        scheduler.config = { awareness: { scheduleTimeoutMs: 50, batchWindowMs: 0, pendingCapacity: 1 } } as ConfigService;
+        scheduler.config = { thalamus: { scheduleTimeoutMs: 50, batchWindowMs: 0, pendingCapacity: 1 } } as ConfigService;
 
         expect(scheduler.enqueue(stimulus('stim_1', 'conn_1', 'a'))).toBe(true);
         expect(scheduler.enqueue(stimulus('stim_2', 'conn_2', 'b'))).toBe(false);

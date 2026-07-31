@@ -46,11 +46,11 @@ export class Factory {
     }
 
     /**
-     * EN: Returns the initialized global `Synapse`.
-     * ZH: 返回已初始化的全局 `Synapse`。
+     * EN: Returns the initialized global `AgentManager` population root.
+     * ZH: 返回已初始化的全局 `AgentManager` 种群根。
      */
-    public async synapse() {
-        const { Synapse } = await import('@/neural/synapse');
-        return await this.container.getAsync(Synapse);
+    public async population() {
+        const { AgentManager } = await import('@/population/manager');
+        return await this.container.getAsync(AgentManager);
     }
 }

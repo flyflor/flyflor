@@ -93,8 +93,7 @@ describe('SituationModel', () => {
 
 describe('Workspace consolidation', () => {
     test('settle promotes the outcome into the situation model', async () => {
-        const workspace = new Workspace();
-        workspace.situation = new SituationModel();
+        const workspace = new Workspace(new SituationModel());
         workspace.prompt = { section: () => 'prompt' } as never;
         workspace.intelligence = {
             completeText: async () => JSON.stringify({
@@ -110,8 +109,7 @@ describe('Workspace consolidation', () => {
     });
 
     test('eviction consolidates a completed turn instead of dropping it silently', () => {
-        const workspace = new Workspace();
-        workspace.situation = new SituationModel();
+        const workspace = new Workspace(new SituationModel());
         const evicted: string[] = [];
         for (let index = 0; index < Workspace.Capacity; index += 1) {
             const item = workspace.load(draft(`goal-${index}`), { speakerId: `speaker-${index}` });
@@ -128,8 +126,7 @@ describe('Workspace consolidation', () => {
     });
 
     test('forgetSpeaker drops both working-set turns and situation records', () => {
-        const workspace = new Workspace();
-        workspace.situation = new SituationModel();
+        const workspace = new Workspace(new SituationModel());
         const item = workspace.load(draft('goal'), { speakerId: 'conn_1' });
         item.status = 'completed';
         item.outcome = outcome('result');
@@ -142,8 +139,7 @@ describe('Workspace consolidation', () => {
     });
 
     test('suspended turns are not promoted by interruption', async () => {
-        const workspace = new Workspace();
-        workspace.situation = new SituationModel();
+        const workspace = new Workspace(new SituationModel());
         const active = workspace.load(draft('goal'), { speakerId: 'conn_1' });
         const controller = new AbortController();
         controller.abort();

@@ -381,10 +381,10 @@ export abstract class FCortex<T extends CortexSignal = CortexSignal> extends FMo
 }
 
 /**
- * EN: Minimal synapse bus surface exposed to neural atoms.
- * ZH: 暴露给神经原子的最小 synapse 总线接口。
+ * EN: Minimal cortex bus surface exposed to neural atoms.
+ * ZH: 暴露给神经原子的最小 cortex 总线接口。
  */
-export interface FSynapseBus {
+export interface FCortexBus {
     /** EN: Emits one typed signal with its payload. ZH: 发出一个带载荷的具型信号。 */
     emit(type: string, data: unknown): unknown;
     /** EN: Optionally coordinates one signal for a turn, honoring abort and stream ids. ZH: 可选地为某个 turn 协调一个信号，遵循 abort 和 stream id。 */
@@ -396,23 +396,23 @@ export interface FSynapseBus {
 }
 
 /**
- * EN: Base class for neural atoms bound to the synapse bus.
- * ZH: 绑定到 synapse 总线的神经原子基类。
+ * EN: Base class for neural atoms bound to the cortex bus.
+ * ZH: 绑定到 cortex 总线的神经原子基类。
  *
- * EN: A neural atom is not a stateless service. It owns its own memory, scoped
- * cognition objects, and runtime subscriptions. The observable input surface is
- * the canonical interaction boundary of the single mind.
- * ZH: 神经原子不是无状态服务。它拥有自己的记忆、作用域认知对象和运行时订阅。
- * observable 输入面是单一心智的标准交互边界。
+ * EN: A neural atom is not a stateless service. It owns local scoped state,
+ * scoped cognition objects, and runtime subscriptions. The observable input
+ * surface is the canonical interaction boundary of the single mind.
+ * ZH: 神经原子不是无状态服务。它拥有本地作用域状态、作用域认知对象和运行时
+ * 订阅。observable 输入面是单一心智的标准交互边界。
  */
 export abstract class FNeuron<T = object | number | string | boolean | undefined, R = T> extends Observable<T, R> {
     /**
-     * EN: Binds the atom to the synapse bus.
-     * ZH: 把当前原子对象绑定到 synapse 总线。
+     * EN: Binds the atom to the cortex bus.
+     * ZH: 把当前原子对象绑定到 cortex 总线。
      */
     constructor(
-        /** EN: Synapse bus used for signal emission and coordination. ZH: 用于信号发射和协调的 synapse 总线。 */
-        public synapse: FSynapseBus,
+        /** EN: Cortex bus used for signal emission and coordination. ZH: 用于信号发射和协调的 cortex 总线。 */
+        public cortex: FCortexBus,
     ) {
         super();
     }

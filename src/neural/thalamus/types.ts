@@ -6,7 +6,7 @@
  * 谁在说、说了什么、什么时候到达。
  */
 export interface Stimulus {
-    /** EN: Monotonic id assigned by Awareness at perception time. ZH: Awareness 在感知时分配的单调 id。 */
+    /** EN: Monotonic id assigned by Thalamus at perception time. ZH: Thalamus 在感知时分配的单调 id。 */
     id: string;
     /** EN: Connection-level speaker who produced this stimulus. ZH: 产生本刺激的连接级说话人。 */
     speakerId: string;
@@ -35,9 +35,9 @@ export enum DispositionRelation {
 }
 
 /**
- * EN: Routing metadata attached by Awareness when a stimulus enters the
+ * EN: Routing metadata attached by Thalamus when a stimulus enters the
  * cortex. It is not user input and is never persisted as memory.
- * ZH: 刺激进入皮层时由 Awareness 附加的路由元数据。它不是用户输入，也不会被
+ * ZH: 刺激进入皮层时由 Thalamus 附加的路由元数据。它不是用户输入，也不会被
  * 持久化为记忆。
  */
 export interface AttentionInstruction {

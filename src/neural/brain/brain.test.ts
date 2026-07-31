@@ -1,17 +1,17 @@
 import { describe, expect, test } from 'bun:test';
 import { ChatRole } from '@/neural/brain/types';
 import { Brain } from './brain';
-import { SynapseSignalType, TurnPreempted } from '@/neural/types';
+import { NeuralSignalType, TurnPreempted } from '@/neural/types';
 
 describe('Brain', () => {
-    test('awaits coordinate handling at the Synapse boundary', async () => {
+    test('awaits coordinate handling at the Cortex boundary', async () => {
         let coordinated = false;
         const brain = new Brain({
             emit: () => undefined,
             coordinate: async () => {
                 coordinated = true;
             },
-        });
+        }, {} as never);
 
         await (brain as unknown as { handle: (intent: string, chunk: string, turnId: string) => Promise<void> }).handle(
             'coordinate',
@@ -23,14 +23,14 @@ describe('Brain', () => {
     });
 
     test('passes the latest user message into direct replies', async () => {
-        const emitted: Array<{ type: SynapseSignalType; data: unknown }> = [];
+        const emitted: Array<{ type: NeuralSignalType; data: unknown }> = [];
         const seen: unknown[] = [];
         const brain = new Brain({
             emit: (type: string, data: unknown) => {
-                emitted.push({ type: type as SynapseSignalType, data });
+                emitted.push({ type: type as NeuralSignalType, data });
                 return undefined;
             },
-        });
+        }, {} as never);
         brain.scratchpad = { buildMessages: () => [{ role: ChatRole.System, content: 'system' }] } as never;
         brain.intelligence = {
             stream: async (messages: unknown, onChunk: (chunk: string) => void) => {
@@ -46,15 +46,15 @@ describe('Brain', () => {
         );
 
         expect(seen[0]).toContainEqual({ role: ChatRole.User, content: '请只回复这五个字符：PONG1' });
-        expect(emitted).toContainEqual({ type: SynapseSignalType.Reply, data: { turnId: 'turn_1', chunk: 'PONG1' } });
-        expect(emitted).toContainEqual({ type: SynapseSignalType.Reply, data: { turnId: 'turn_1', chunk: null } });
+        expect(emitted).toContainEqual({ type: NeuralSignalType.Reply, data: { turnId: 'turn_1', chunk: 'PONG1' } });
+        expect(emitted).toContainEqual({ type: NeuralSignalType.Reply, data: { turnId: 'turn_1', chunk: null } });
     });
 
     test('passes the latest user message into research turns', async () => {
         const seen: unknown[] = [];
         const brain = new Brain({
             emit: () => undefined,
-        } as never);
+        } as never, {} as never);
         brain.scratchpad = { buildMessages: () => [{ role: ChatRole.System, content: 'system' }] } as never;
         brain.investigation = {
             run: async (messages: unknown) => {
@@ -76,7 +76,7 @@ describe('Brain', () => {
         const seen: Array<{ messages: unknown; options: unknown }> = [];
         const brain = new Brain({
             emit: () => undefined,
-        } as never);
+        } as never, {} as never);
         brain.scratchpad = {
             ingestBrief: () => undefined,
             buildMessages: () => [{ role: ChatRole.System, content: 'thread base' }, { role: ChatRole.User, content: 'study this slice' }],
@@ -104,16 +104,16 @@ describe('Brain', () => {
     });
 
     test('passes the abort signal into settle and suppresses stale terminal output', async () => {
-        const emitted: Array<{ type: SynapseSignalType; data: unknown }> = [];
+        const emitted: Array<{ type: NeuralSignalType; data: unknown }> = [];
         let preempted = false;
         const controller = new AbortController();
         const brain = new Brain({
             emit: (type: string, data: unknown) => {
-                emitted.push({ type: type as SynapseSignalType, data });
+                emitted.push({ type: type as NeuralSignalType, data });
                 return undefined;
             },
             preempted: () => preempted,
-        });
+        }, {} as never);
         brain.scratchpad = { buildMessages: () => [] } as never;
         brain.intelligence = {
             stream: async (_messages: unknown, onChunk: (chunk: string) => void) => onChunk('answer'),
@@ -135,6 +135,6 @@ describe('Brain', () => {
             controller.signal,
         )).rejects.toBeInstanceOf(TurnPreempted);
 
-        expect(emitted).not.toContainEqual({ type: SynapseSignalType.Reply, data: { turnId: 'turn_1', chunk: null } });
+        expect(emitted).not.toContainEqual({ type: NeuralSignalType.Reply, data: { turnId: 'turn_1', chunk: null } });
     });
 });

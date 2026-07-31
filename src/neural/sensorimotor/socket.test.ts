@@ -6,7 +6,7 @@ import { IPCPacket } from './packet';
 import { FSocket, SocketEvent } from './socket';
 import { Connection, type ConnectionData } from './connection';
 import type { Controller } from './controller';
-import type { Awareness } from '@/neural/awareness';
+import type { PopulationRouter } from '@/population/types';
 
 /**
  * EN: Mock socket that records backpressure and partial writes.
@@ -31,10 +31,12 @@ interface CapturedStimulus {
     text: string;
 }
 
-class RecordingAwareness {
+class RecordingRouter implements PopulationRouter {
     public stimuli: CapturedStimulus[] = [];
     public forgotten: string[] = [];
     public answers: unknown[] = [];
+    public routes: Array<{ speakerId: string; agentId: string }> = [];
+    public knownAgents = new Set<string>();
 
     public perceive(input: { speakerId: string; text: string }): void {
         this.stimuli.push(input);
@@ -46,6 +48,11 @@ class RecordingAwareness {
 
     public answer(turnId: string, id: string, response: unknown): void {
         this.answers.push({ turnId, id, response });
+    }
+
+    public route(speakerId: string, agentId: string): boolean {
+        this.routes.push({ speakerId, agentId });
+        return this.knownAgents.has(agentId);
     }
 }
 
@@ -67,16 +74,16 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 describe('FSocket', () => {
     let socket: FSocket;
     let packet: IPCPacket;
-    let awareness: RecordingAwareness;
+    let router: RecordingRouter;
     let controller: RecordingController;
 
     beforeEach(async () => {
         socket = new FSocket();
         packet = new IPCPacket();
-        awareness = new RecordingAwareness();
+        router = new RecordingRouter();
         controller = new RecordingController();
         socket.packet = packet;
-        socket.awareness = awareness as unknown as Awareness;
+        socket.attachRouter(router);
         socket.controller = controller as unknown as Controller;
         socket.path = '/tmp/flyflor.test.sock';
     });
@@ -123,23 +130,23 @@ describe('FSocket', () => {
         expect(decoded).toEqual(message);
     });
 
-    test('hands user packets to Awareness as stimuli', async () => {
+    test('hands user packets to the population router as stimuli', async () => {
         const { connection } = openConnection();
 
         await socket.data(connection.socket, packet.encode({ action: SocketEvent.User, data: { text: 'hello' } }));
         await tick();
 
-        expect(awareness.stimuli).toEqual([{ speakerId: connection.speakerId, text: 'hello' }]);
+        expect(router.stimuli).toEqual([{ speakerId: connection.speakerId, text: 'hello' }]);
     });
 
-    test('hands answer packets to Awareness', async () => {
+    test('hands answer packets to the population router', async () => {
         const { connection } = openConnection();
         const answer = { turnId: 'turn_1', id: 'ask_1', response: { kind: 'ask', answers: [{ question: 'Pick?', answer: 'a' }] } };
 
         await socket.data(connection.socket, packet.encode({ action: SocketEvent.Answer, data: answer }));
         await tick();
 
-        expect(awareness.answers).toEqual([answer]);
+        expect(router.answers).toEqual([answer]);
     });
 
     test('continues after malformed coalesced packets', async () => {
@@ -149,7 +156,7 @@ describe('FSocket', () => {
 
         await expect(socket.data(connection.socket, Buffer.concat([malformed, valid]))).resolves.toBeUndefined();
 
-        expect(awareness.stimuli).toEqual([{ speakerId: connection.speakerId, text: 'after malformed' }]);
+        expect(router.stimuli).toEqual([{ speakerId: connection.speakerId, text: 'after malformed' }]);
     });
 
     test('contains async controller rejection from malformed packets', async () => {
@@ -183,17 +190,41 @@ describe('FSocket', () => {
         await socket.data(a.socket, rest);
         await tick();
 
-        expect(awareness.stimuli).toEqual([
+        expect(router.stimuli).toEqual([
             { speakerId: b.speakerId, text: 'b first' },
             { speakerId: a.speakerId, text: 'a first' },
         ]);
+    });
+
+    test('acknowledges a route rebind for a known agent', async () => {
+        const { mock, connection } = openConnection();
+        mock.limit = 1024;
+        router.knownAgents.add('planner');
+
+        await socket.data(connection.socket, packet.encode({ action: SocketEvent.Route, data: { agent: 'planner' } }));
+        await tick();
+
+        expect(router.routes).toEqual([{ speakerId: connection.speakerId, agentId: 'planner' }]);
+        const written = packet.decode(Buffer.concat(mock.chunks));
+        expect(written).toEqual({ action: SocketEvent.Route, data: { agent: 'planner', ok: true } });
+    });
+
+    test('rejects a route rebind for an unknown agent', async () => {
+        const { mock, connection } = openConnection();
+        mock.limit = 1024;
+
+        await socket.data(connection.socket, packet.encode({ action: SocketEvent.Route, data: { agent: 'ghost' } }));
+        await tick();
+
+        const written = packet.decode(Buffer.concat(mock.chunks));
+        expect(written).toEqual({ action: SocketEvent.Route, data: { agent: 'ghost', ok: false } });
     });
 
     test('forgets a speaker and drops its connection on close', async () => {
         const { connection } = openConnection();
         await socket.close(connection.socket);
 
-        expect(awareness.forgotten).toEqual([connection.speakerId]);
+        expect(router.forgotten).toEqual([connection.speakerId]);
         const access = socket as unknown as { connections: Map<Socket<ConnectionData>, Connection>; bySpeaker: Map<string, Connection> };
         expect(access.connections.has(connection.socket as never)).toBe(false);
         expect(access.bySpeaker.has(connection.speakerId)).toBe(false);

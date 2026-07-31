@@ -168,13 +168,15 @@ export interface FConfiguration {
     skills: SkillsConfig;
     /** EN: MCP server registry configuration. ZH: MCP server 注册配置。 */
     mcp: MCPServerConfig;
-    /** EN: Awareness attention-gate tuning parameters. ZH: Awareness 注意门控调节参数。 */
-    awareness: FAwarenessConfiguration;
+    /** EN: Thalamus attention-gate tuning parameters. ZH: Thalamus 注意门控调节参数。 */
+    thalamus: FThalamusConfiguration;
+    /** EN: Agent population configuration. ZH: agent 种群配置。 */
+    population: FPopulationConfiguration;
 }
 
 /**
- * EN: Attention-gate tuning for the life-form's Awareness layer.
- * ZH: 生命体 Awareness 注意门控的调节参数。
+ * EN: Attention-gate tuning for the life-form's Thalamus layer.
+ * ZH: 生命体 Thalamus 注意门控的调节参数。
  *
  * EN: `scheduleTimeoutMs` bounds one scheduler LLM call before FIFO fallback;
  * `batchWindowMs` coalesces bursts of stimuli into one scheduling pass;
@@ -184,13 +186,34 @@ export interface FConfiguration {
  * `batchWindowMs` 把突发刺激合并进同一次调度；`pendingCapacity` 在感觉队列
  * 无界增长前施加明确背压。
  */
-export interface FAwarenessConfiguration {
+export interface FThalamusConfiguration {
     /** EN: Bound on one scheduler LLM call before FIFO fallback, in milliseconds. ZH: 单次调度 LLM 调用的时长上限（毫秒），超时降级为 FIFO。 */
     scheduleTimeoutMs: number;
     /** EN: Window that coalesces bursts of stimuli into one scheduling pass, in milliseconds. ZH: 将突发刺激合并进同一次调度的时间窗口（毫秒）。 */
     batchWindowMs: number;
     /** EN: Backpressure capacity applied to the pending sensory queue. ZH: 作用于待处理感觉队列的背压容量。 */
     pendingCapacity: number;
+}
+
+/**
+ * EN: Agent population configuration.
+ * ZH: agent 种群配置。
+ *
+ * EN: `main` names the agent that receives unbound speakers; `capacity` bounds
+ * how many configured agents are built; `agents` lists the agent
+ * specifications built at bootstrap. The default single `main` agent
+ * reproduces single-agent behavior.
+ * ZH: `main` 指定接收未绑定说话人的 agent;`capacity` 限制配置构建的 agent
+ * 数量;`agents` 列出启动时构建的 agent 规格。默认单个 `main` agent,行为与
+ * 单 agent 一致。
+ */
+export interface FPopulationConfiguration {
+    /** EN: Agent id that receives unbound speakers. ZH: 接收未绑定说话人的 agent id。 */
+    main: string;
+    /** EN: Maximum number of configured agents built at bootstrap. ZH: 启动时最多构建的配置 agent 数。 */
+    capacity: number;
+    /** EN: Agent specifications built at bootstrap. ZH: 启动时构建的 agent 规格列表。 */
+    agents: Array<{ id: string; personaPackage?: string }>;
 }
 
 /**
@@ -275,8 +298,10 @@ export class ConfigService extends FService implements FConfiguration {
     public skills: SkillsConfig;
     /** EN: MCP server registry configuration. ZH: MCP server 注册配置。 */
     public mcp: MCPServerConfig;
-    /** EN: Awareness attention-gate tuning parameters. ZH: Awareness 注意门控调节参数。 */
-    public awareness: FAwarenessConfiguration;
+    /** EN: Thalamus attention-gate tuning parameters. ZH: Thalamus 注意门控调节参数。 */
+    public thalamus: FThalamusConfiguration;
+    /** EN: Agent population configuration. ZH: agent 种群配置。 */
+    public population: FPopulationConfiguration;
 
     /**
      * EN: Loads config defaults, merges `.config/config.jsonc`, and resolves active model protocols.
@@ -305,11 +330,12 @@ export class ConfigService extends FService implements FConfiguration {
             externalDirs: [],
         };
         this.mcp = {};
-        this.awareness = {
+        this.thalamus = {
             scheduleTimeoutMs: 8000,
             batchWindowMs: 200,
             pendingCapacity: 32,
         };
+        this.population = { main: 'main', capacity: 8, agents: [{ id: 'main' }] };
         Object.assign(this, JSON5.parse(readFileSync(join(this.path.config, 'config.jsonc'), 'utf-8')));
         // Legacy memory blocks may remain in config files as migration placeholders,
         // but they are deliberately not part of the active runtime configuration.

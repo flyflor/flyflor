@@ -1,9 +1,9 @@
-import type { SocketPacket } from '@/neural/ipc';
+import type { SocketPacket } from '@/neural/sensorimotor';
 import type { ConfigService } from '@/configuration';
-import type { Workspace } from '@/neural/workspace';
-import { Config, Inject, Singleton } from '@/core';
+import { Workspace } from '@/neural/workspace';
+import { Config, Provide } from '@/core';
 import { FService } from '@/core/ioc';
-import type { Synapse } from '@/neural/synapse';
+import type { Cortex } from '@/neural/cortex';
 import type { InteractionResponse } from '@/neural/types';
 import { Scheduler } from './scheduler';
 import { DispositionRelation, type AttentionInstruction, type Stimulus } from './types';
@@ -21,15 +21,15 @@ interface Mouthful {
 }
 
 /**
- * EN: The small protocol Awareness needs from the cortex.  `revise` and `cancel`
- * are optional while Synapse is being migrated; the attention instruction is
+ * EN: The small protocol Thalamus needs from the cortex.  `revise` and `cancel`
+ * are optional while Cortex is being migrated; the attention instruction is
  * also attached to the routed stimulus so an older cortex can safely ignore
  * the extra argument and a newer one can route it to Workspace.revise().
- * ZH: Awareness 需要皮层提供的最小协议。在 Synapse 迁移期间 `revise` 与 `cancel`
+ * ZH: Thalamus 需要皮层提供的最小协议。在 Cortex 迁移期间 `revise` 与 `cancel`
  * 为可选；注意指令也会附加在路由出去的刺激上，旧皮层可以安全忽略这个额外参数，
  * 新皮层则可以将其路由到 Workspace.revise()。
  */
-interface AwarenessCortex {
+interface ThalamusCortex {
     /** EN: Routes one attended stimulus into the cortex's foreground stream. ZH: 把一条已注意的刺激路由进皮层的前台流。 */
     attend(stimulus: Stimulus, instruction?: AttentionInstruction): Promise<void> | void;
     /** EN: Routes a same-thread revision to an existing Turn. ZH: 把同线程修订路由到已有 Turn。 */
@@ -45,17 +45,17 @@ interface AwarenessCortex {
 }
 
 /**
- * EN: Awareness is the life-form's attention gate — the thalamic surface. It
+ * EN: Thalamus is the life-form's attention gate — the thalamic surface. It
  * perceives stimuli, arbitrates the single mouth, and owns speaker
  * tombstones. Queue mechanics, ordering, fairness, and pre-emption policy
- * belong to the injected `Scheduler` (the central executive); Awareness never
+ * belong to the injected `Scheduler` (the central executive); Thalamus never
  * re-implements them. There are no cross-stimulus background workers.
- * ZH: Awareness 是生命体的注意门——丘脑表面。它感知刺激、仲裁唯一的嘴巴、
+ * ZH: Thalamus 是生命体的注意门——丘脑表面。它感知刺激、仲裁唯一的嘴巴、
  * 持有说话人墓碑。队列机制、排序、公平性与抢占策略归属注入的 `Scheduler`
- * (中央执行器);Awareness 绝不重复实现它们。不存在跨刺激的后台 worker。
+ * (中央执行器);Thalamus 绝不重复实现它们。不存在跨刺激的后台 worker。
  */
-@Singleton()
-export class Awareness extends FService {
+@Provide()
+export class Thalamus extends FService {
     /** EN: Backpressure notice sent when the attention queue is full. ZH: 注意队列满时发送的背压提示。 */
     public static readonly QueueBackpressureMessage = Scheduler.QueueBackpressureMessage;
     /** EN: Backpressure notice sent when the semantic workspace is full. ZH: 语义工作区满时发送的背压提示。 */
@@ -65,15 +65,7 @@ export class Awareness extends FService {
     @Config()
     public config!: ConfigService;
 
-    /** EN: Semantic workspace consulted for Turn state and capacity. ZH: 用于查询 Turn 状态与容量的语义工作区。 */
-    @Inject()
-    public workspace!: Workspace;
-
-    /** EN: Central executive that owns stimulus queueing, ordering, and pre-emption policy. ZH: 持有刺激队列、排序与抢占策略的中央执行器。 */
-    @Inject()
-    public scheduler!: Scheduler;
-
-    private cortex?: AwarenessCortex;
+    private cortex?: ThalamusCortex;
     private sequence: number;
     private mouthOwner?: string;
     private mouthQueue: Mouthful[];
@@ -81,7 +73,12 @@ export class Awareness extends FService {
     private streamState: Map<string, { speakerId: string; streamId?: string; ended: boolean }>;
     private forgottenSpeakers: Set<string>;
 
-    constructor() {
+    constructor(
+        /** EN: Semantic workspace consulted for Turn state and capacity. ZH: 用于查询 Turn 状态与容量的语义工作区。 */
+        public workspace: Workspace,
+        /** EN: Central executive that owns stimulus queueing, ordering, and pre-emption policy. ZH: 持有刺激队列、排序与抢占策略的中央执行器。 */
+        public scheduler: Scheduler,
+    ) {
         super();
         // EN: Monotonic id source for perceived stimuli. ZH: 感知刺激的单调 id 来源。
         this.sequence = 0;
@@ -96,14 +93,14 @@ export class Awareness extends FService {
     }
 
     /**
-     * EN: Attaches the cortex so Awareness can route attended stimuli, cancels,
+     * EN: Attaches the cortex so Thalamus can route attended stimuli, cancels,
      * answers, and motor output through it; also wires the scheduler's host
      * boundary onto the same cortex.
-     * ZH: 挂载皮层，使 Awareness 经它路由已注意的刺激、取消、答复和运动输出；
+     * ZH: 挂载皮层，使 Thalamus 经它路由已注意的刺激、取消、答复和运动输出；
      * 同时把调度器的宿主边界接到同一个皮层上。
      */
-    public attend(cortex: Synapse): void {
-        this.cortex = cortex as unknown as AwarenessCortex;
+    public attend(cortex: Cortex): void {
+        this.cortex = cortex as unknown as ThalamusCortex;
         const bound = this.cortex;
         this.scheduler.attach({
             route: (stimulus, instruction) => {
@@ -277,12 +274,12 @@ export class Awareness extends FService {
         if (this.forgottenSpeakers.has(speakerId)) return;
         const owner = this.workspace?.turns.find((turn) => turn.id === turnId);
         if (owner && owner.speakerId !== speakerId) {
-            this.log.warn('awareness.speaker_mismatch', { turnId, speakerId });
+            this.log.warn('thalamus.speaker_mismatch', { turnId, speakerId });
             return;
         }
         const previous = this.streamState.get(turnId);
         if (previous?.speakerId !== undefined && previous.speakerId !== speakerId) {
-            this.log.warn('awareness.stream_speaker_mismatch', { turnId, speakerId });
+            this.log.warn('thalamus.stream_speaker_mismatch', { turnId, speakerId });
             return;
         }
         if (previous?.ended) {

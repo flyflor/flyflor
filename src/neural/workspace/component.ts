@@ -1,5 +1,5 @@
 import { ChatRole } from '@/neural/brain/types';
-import { FComponent, Inject, Prompt, PromptService, Singleton } from '@/core';
+import { FComponent, Inject, Prompt, PromptService, Provide } from '@/core';
 import { Intelligence } from '@/neural/brain/intelligence/service';
 import { parse } from '@/neural/json';
 import { SituationModel, type SituationProjection } from '@/neural/situation';
@@ -12,7 +12,7 @@ import type { WorkspaceBrief, Ingest, Pause, Settle, TurnOutcome, Turn, TurnBrie
  * EN: A Turn is understood content, not a transcript or an archive.
  * ZH: Turn 是理解后的内容，不是 transcript，也不是历史账本。
  */
-@Singleton()
+@Provide()
 export class Workspace extends FComponent {
     /** EN: Upper bound of the bounded working set. ZH: 有界工作集的容量上限。 */
     public static readonly Capacity = 4;
@@ -25,10 +25,6 @@ export class Workspace extends FComponent {
     /** EN: Intelligence service used for understanding and settlement calls. ZH: 用于理解与结算调用的智能服务。 */
     public intelligence!: Intelligence;
 
-    @Inject()
-    /** EN: In-process situation model that settled turns consolidate into. ZH: 已结算 turn 固化升格进入的进程内情境模型。 */
-    public situation!: SituationModel;
-
     /** EN: Tracked semantic turns held inside the bounded workspace. ZH: 有界工作空间内被跟踪的语义 turn 列表。 */
     public turns: Turn[];
 
@@ -36,7 +32,10 @@ export class Workspace extends FComponent {
     /** EN: Prompt package backing the INGEST and SETTLE sections. ZH: 提供 INGEST 与 SETTLE section 的提示词包。 */
     public prompt!: PromptService;
 
-    constructor() {
+    constructor(
+        /** EN: In-process situation model that settled turns consolidate into. ZH: 已结算 turn 固化升格进入的进程内情境模型。 */
+        public situation: SituationModel,
+    ) {
         super();
         this.sequence = 0;
         this.turns = [];
@@ -143,6 +142,7 @@ export class Workspace extends FComponent {
     private briefTurn(turn: Turn): TurnBrief {
         return {
             turnId: turn.id,
+            status: turn.status,
             intent: turn.intent,
             goal: turn.goal,
             constraints: [...turn.constraints],
@@ -379,8 +379,8 @@ export class Workspace extends FComponent {
             const index = this.turns.findIndex((turn) => turn.status === 'completed');
             if (index < 0) throw Error('Workspace working set is full');
             const [evicted] = this.turns.splice(index, 1);
-            // Consolidation before eviction: a completed turn graduates into
-            // the in-process situation model instead of vanishing silently.
+            // Graduate into SituationModel before eviction (in-process only).
+            // This is not long-term memory consolidation or cross-process recall.
             if (evicted?.outcome) this.situation?.promote(evicted, evicted.outcome);
         }
     }

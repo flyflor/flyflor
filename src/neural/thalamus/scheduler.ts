@@ -1,16 +1,16 @@
 import type { ConfigService } from '@/configuration';
 import { Workspace } from '@/neural/workspace';
 import { Intelligence } from '@/neural/brain/intelligence/service';
-import { Config, FComponent, Inject, Prompt, PromptService, Singleton } from '@/core';
+import { Config, FComponent, Inject, Prompt, PromptService, Provide } from '@/core';
 import { parse } from '@/neural/json';
 import { ChatRole } from '@/neural/brain/types';
 import { DispositionRelation, type AttentionInstruction, type Disposition, type Stimulus } from './types';
 
 /**
- * EN: The boundary services a Scheduler needs from its host (Awareness).
+ * EN: The boundary services a Scheduler needs from its host (Thalamus).
  * The scheduler owns queue mechanics; the host owns the cortex boundary,
  * the mouth, and speaker tombstones.
- * ZH: Scheduler 需要宿主(Awareness)提供的边界服务。调度器持有队列机制;
+ * ZH: Scheduler 需要宿主(Thalamus)提供的边界服务。调度器持有队列机制;
  * 宿主持有皮层边界、嘴巴与说话人墓碑。
  */
 export interface SchedulerHost {
@@ -41,7 +41,7 @@ export interface SchedulerHost {
  * ZH: 排序策略:校验通过的紧急刺激可以抢占前台;其余按跨说话人轮转派发,
  * 说话人内部保持 FIFO,健谈的说话人不会让其他人饥饿。
  */
-@Singleton()
+@Provide()
 export class Scheduler extends FComponent {
     /** EN: Fallback pending-stimulus capacity when config omits it. ZH: 配置缺省时的待处理刺激容量兜底值。 */
     public static readonly DefaultPendingCapacity = 32;
@@ -54,16 +54,12 @@ export class Scheduler extends FComponent {
     @Config()
     public config!: ConfigService;
 
-    /** EN: Semantic workspace consulted for Turn state and capacity. ZH: 用于查询 Turn 状态与容量的语义工作区。 */
-    @Inject()
-    public workspace!: Workspace;
-
     /** EN: Intelligence provider used for scheduling verdicts. ZH: 用于生成调度判决的智能提供方。 */
     @Inject()
     public intelligence!: Intelligence;
 
     /** EN: Prompt template for the scheduling-advisor LLM. ZH: 调度顾问 LLM 的提示词模板。 */
-    @Prompt('prompts/awareness')
+    @Prompt('prompts/thalamus')
     public prompt!: PromptService;
 
     /** EN: The stimulus whose dispatch is currently in flight. ZH: 当前正在派发途中的刺激。 */
@@ -84,9 +80,12 @@ export class Scheduler extends FComponent {
     /** EN: Requests one more scheduling pass after the current run. ZH: 请求本轮调度结束后再跑一轮。 */
     private scheduleAgain: boolean;
 
-    constructor() {
+    constructor(
+        /** EN: Semantic workspace consulted for Turn state and capacity. ZH: 用于查询 Turn 状态与容量的语义工作区。 */
+        public workspace: Workspace,
+    ) {
         super();
-        // EN: No host until Awareness attaches its boundary services. ZH: Awareness 接线边界服务前没有宿主。
+        // EN: No host until Thalamus attaches its boundary services. ZH: Thalamus 接线边界服务前没有宿主。
         this.host = undefined;
         // EN: FIFO queue of stimuli awaiting a verdict. ZH: 等待判决的刺激 FIFO 队列。
         this.stimuli = [];
@@ -148,7 +147,7 @@ export class Scheduler extends FComponent {
      */
     public kick(): void {
         if (this.batchTimer !== undefined) return;
-        const delay = this.config?.awareness?.batchWindowMs ?? 0;
+        const delay = this.config?.thalamus?.batchWindowMs ?? 0;
         this.batchTimer = setTimeout(() => {
             this.batchTimer = undefined;
             void this.schedule();
@@ -274,7 +273,7 @@ export class Scheduler extends FComponent {
                     { role: ChatRole.System, content: this.prompt.section('SCHEDULE') },
                     { role: ChatRole.User, content: JSON.stringify(payload) },
                 ], controller.signal),
-                this.config?.awareness?.scheduleTimeoutMs ?? 8000,
+                this.config?.thalamus?.scheduleTimeoutMs ?? 8000,
                 () => controller.abort(),
             );
             const parsed = parse<unknown>(raw);
@@ -421,7 +420,7 @@ export class Scheduler extends FComponent {
     }
 
     private pendingCapacity(): number {
-        const configured = this.config?.awareness?.pendingCapacity;
+        const configured = this.config?.thalamus?.pendingCapacity;
         return typeof configured === 'number' && Number.isFinite(configured)
             ? Math.max(1, Math.floor(configured))
             : Scheduler.DefaultPendingCapacity;

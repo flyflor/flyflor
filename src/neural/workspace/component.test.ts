@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { SituationModel } from '@/neural/situation';
 import { Workspace } from './component';
 import type { TurnDraft } from './types';
 
@@ -21,7 +22,7 @@ const draftJson = (goal: string): string => JSON.stringify({ ...draft(goal), inv
  */
 describe('Workspace', () => {
     test('lands one user message, lets the LLM settle an outcome in its own words, and marks the turn complete', async () => {
-        const workspace = new Workspace();
+        const workspace = new Workspace(new SituationModel());
         workspace.prompt = { section: () => 'settle prompt' } as never;
         let request = 0;
         workspace.intelligence = {
@@ -63,7 +64,7 @@ describe('Workspace', () => {
     });
 
     test('briefs an agent with the current turn understanding, not the raw conversation', async () => {
-        const workspace = new Workspace();
+        const workspace = new Workspace(new SituationModel());
         workspace.prompt = { section: () => 'ingest prompt' } as never;
         workspace.intelligence = {
             completeText: async () => JSON.stringify({
@@ -87,12 +88,13 @@ describe('Workspace', () => {
         expect(brief.refs[0]?.value).toBe('src/neural/workspace/component.ts');
         expect(brief.done).toEqual([]);
         expect(brief.workspace).toHaveLength(1);
+        expect(brief.workspace[0]?.status).toBe('working');
         expect(brief.situation).toEqual([]);
         expect('master' in brief).toBe(false);
     });
 
     test('keeps four semantic slots and evicts the oldest completed slot first', () => {
-        const workspace = new Workspace();
+        const workspace = new Workspace(new SituationModel());
         const turns = Array.from({ length: Workspace.Capacity }, (_, index) => {
             const turn = workspace.load(draft(`goal-${index}`), { speakerId: `speaker-${index}` });
             turn.status = 'completed';
@@ -112,7 +114,7 @@ describe('Workspace', () => {
     });
 
     test('protects suspended slots when a completed slot is available for eviction', () => {
-        const workspace = new Workspace();
+        const workspace = new Workspace(new SituationModel());
         const protectedTurns = Array.from({ length: Workspace.Capacity - 1 }, (_, index) => {
             const turn = workspace.load(draft(`suspended-${index}`), { speakerId: `speaker-${index}` });
             turn.status = 'suspended';
@@ -132,7 +134,7 @@ describe('Workspace', () => {
 
     test('does not admit a new turn while working or waiting occupies the foreground', () => {
         for (const status of ['working', 'waiting'] as const) {
-            const workspace = new Workspace();
+            const workspace = new Workspace(new SituationModel());
             const active = workspace.load(draft(status), { speakerId: 'speaker' });
             active.status = status;
 
@@ -142,7 +144,7 @@ describe('Workspace', () => {
     });
 
     test('does not expire a turn because its timestamps are old', () => {
-        const workspace = new Workspace();
+        const workspace = new Workspace(new SituationModel());
         const turn = workspace.load(draft('old but relevant'), { speakerId: 'speaker' });
         turn.status = 'completed';
         turn.ts = 1;
@@ -154,7 +156,7 @@ describe('Workspace', () => {
     });
 
     test('revises a turn in place while preserving its id and speaker', async () => {
-        const workspace = new Workspace();
+        const workspace = new Workspace(new SituationModel());
         workspace.prompt = { section: () => 'ingest prompt' } as never;
         workspace.intelligence = {
             completeText: async () => draftJson('revised goal'),
@@ -180,7 +182,7 @@ describe('Workspace', () => {
     });
 
     test('does not revive a turn after another foreground turn starts during revision', async () => {
-        const workspace = new Workspace();
+        const workspace = new Workspace(new SituationModel());
         workspace.prompt = { section: () => 'ingest prompt' } as never;
         const resolvers: Array<(value: string) => void> = [];
         workspace.intelligence = {
@@ -209,7 +211,7 @@ describe('Workspace', () => {
     });
 
     test('falls back to a bounded suspended outcome when interruption is already aborted', async () => {
-        const workspace = new Workspace();
+        const workspace = new Workspace(new SituationModel());
         const turn = workspace.load(draft('interrupt safely'), { speakerId: 'speaker' });
         const controller = new AbortController();
         controller.abort();

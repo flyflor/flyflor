@@ -117,6 +117,8 @@ export interface WorkspaceBrief {
 export interface TurnBrief {
     /** EN: Identifier of the projected turn. ZH: 被投影 turn 的标识。 */
     turnId: string;
+    /** EN: Lifecycle state of the projected turn. ZH: 被投影 turn 的生命周期状态。 */
+    status: TurnStatus;
     /** EN: Classified intent of the turn. ZH: 该 turn 的分类意图。 */
     intent: Intent;
     /** EN: Goal of the turn. ZH: 该 turn 的目标。 */

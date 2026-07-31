@@ -1,17 +1,20 @@
-import { FComponent, Singleton } from '@/core';
+import { FComponent, Provide } from '@/core';
 import type { Turn, TurnOutcome } from '@/neural/workspace/types';
 import type { SituationProjection, SituationRecord } from './types';
 
 /**
- * EN: SituationModel is the bounded in-process situation model. Settled turns
- * are consolidated ("promoted")
- * into this bounded store so understanding and scheduling can see beyond the
- * four-slot working set. It has no recall ranking, vector retrieval, or persistence.
- * ZH: SituationModel 是有界的进程内情境模型。已结算的
- * turn 被固化(“升格”)进这个有界存储,让理解与调度能看到四槽工作集之外的
- * 前情。它不做召回排序、向量检索，也不落盘。
+ * EN: SituationModel is a bounded in-process situation buffer, not long-term
+ * memory. Settled turns graduate ("promote") into this store so understanding
+ * and scheduling can see beyond the four-slot working set within one process
+ * lifetime. It has no recall ranking API, vector retrieval, durable archive,
+ * or cross-process persistence — and must not grow those without an explicit
+ * long-term memory design phase.
+ * ZH: SituationModel 是有界的进程内情境缓冲，不是长期记忆。已结算的 turn 升格
+ * ("promote") 进此存储，让理解与调度在同一进程寿命内看到四槽工作集之外的前
+ * 情。它没有召回排序 API、向量检索、持久档案或跨进程落盘——在未单独立项长期
+ * 记忆设计前，不得扩展成上述能力。
  */
-@Singleton()
+@Provide()
 export class SituationModel extends FComponent {
     /** EN: Upper bound of consolidated records. ZH: 固化记录的容量上限。 */
     public static readonly Capacity = 16;

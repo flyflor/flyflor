@@ -14,4 +14,4 @@ what was achieved and what remains without seeing the conversation. Never
 include raw tool payloads, provider roles, action ids, connection/session
 data, or a verbatim conversation. If the Turn was interrupted, describe only
 salvageable progress and unfinished work; the wire stream is terminated
-separately by Awareness.
+separately by the attention gate.

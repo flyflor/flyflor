@@ -1,14 +1,15 @@
 import 'reflect-metadata';
 import { describe, expect, test } from 'bun:test';
 import type { ConfigService } from '@/configuration';
+import { SituationModel } from '@/neural/situation';
 import { Workspace } from '@/neural/workspace';
 import type { Intelligence } from '@/neural/brain/intelligence';
 import type { PromptService } from '@/core';
-import { Awareness } from './service';
+import { Thalamus } from './service';
 import { Scheduler } from './scheduler';
 import { DispositionRelation, type ScheduleVerdict, type Stimulus } from './types';
-import type { Synapse } from '@/neural/synapse';
-import type { SocketPacket } from '@/neural/ipc';
+import type { Cortex } from '@/neural/cortex';
+import type { SocketPacket } from '@/neural/sensorimotor';
 
 class MockCortex {
     public attended: Stimulus[] = [];
@@ -44,33 +45,30 @@ class MockCortex {
     }
 }
 
-function mockAwareness(verdict: ScheduleVerdict = { dispositions: [] }): { awareness: Awareness; scheduler: Scheduler; cortex: MockCortex } {
-    const awareness = new Awareness();
-    const scheduler = new Scheduler();
-    const workspace = new Workspace();
-    awareness.config = {
-        awareness: { scheduleTimeoutMs: 5000, batchWindowMs: 0 },
+function mockThalamus(verdict: ScheduleVerdict = { dispositions: [] }): { thalamus: Thalamus; scheduler: Scheduler; cortex: MockCortex } {
+    const workspace = new Workspace(new SituationModel());
+    const scheduler = new Scheduler(workspace);
+    const thalamus = new Thalamus(workspace, scheduler);
+    thalamus.config = {
+        thalamus: { scheduleTimeoutMs: 5000, batchWindowMs: 0 },
     } as ConfigService;
-    awareness.workspace = workspace;
-    awareness.scheduler = scheduler;
-    scheduler.config = awareness.config;
-    scheduler.workspace = workspace;
+    scheduler.config = thalamus.config;
     scheduler.prompt = { section: () => 'schedule prompt' } as unknown as PromptService;
     scheduler.intelligence = {
         completeText: async () => JSON.stringify(verdict),
     } as unknown as Intelligence;
     const cortex = new MockCortex();
-    awareness.attend(cortex as unknown as Synapse);
-    return { awareness, scheduler, cortex };
+    thalamus.attend(cortex as unknown as Cortex);
+    return { thalamus, scheduler, cortex };
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
 
-describe('Awareness', () => {
+describe('Thalamus', () => {
     test('dispatches the first stimulus as a new foreground turn', async () => {
-        const { awareness, cortex } = mockAwareness();
+        const { thalamus, cortex } = mockThalamus();
 
-        awareness.perceive({ speakerId: 'conn_1', text: 'hello' });
+        thalamus.perceive({ speakerId: 'conn_1', text: 'hello' });
         await tick();
 
         expect(cortex.attended).toHaveLength(1);
@@ -79,9 +77,9 @@ describe('Awareness', () => {
     });
 
     test('keeps the original batch deadline when more stimuli arrive', () => {
-        const { scheduler } = mockAwareness();
+        const { scheduler } = mockThalamus();
         scheduler.config = {
-            awareness: { scheduleTimeoutMs: 5000, batchWindowMs: 1000 },
+            thalamus: { scheduleTimeoutMs: 5000, batchWindowMs: 1000 },
         } as ConfigService;
 
         scheduler.enqueue({ id: 'stim_1', speakerId: 'conn_1', text: 'a', ts: Date.now() });
@@ -93,10 +91,10 @@ describe('Awareness', () => {
     });
 
     test('keeps external stimuli serial and FIFO', async () => {
-        const { awareness, cortex } = mockAwareness();
-        awareness.perceive({ speakerId: 'conn_1', text: 'a' });
+        const { thalamus, cortex } = mockThalamus();
+        thalamus.perceive({ speakerId: 'conn_1', text: 'a' });
         await tick();
-        awareness.perceive({ speakerId: 'conn_2', text: 'b' });
+        thalamus.perceive({ speakerId: 'conn_2', text: 'b' });
         await tick();
 
         expect(cortex.attended.map((stimulus) => stimulus.text)).toEqual(['a']);
@@ -106,15 +104,15 @@ describe('Awareness', () => {
     });
 
     test('applies explicit backpressure when the transient queue is full', async () => {
-        const { awareness, scheduler, cortex } = mockAwareness();
+        const { thalamus, scheduler, cortex } = mockThalamus();
         scheduler.config = {
-            awareness: { scheduleTimeoutMs: 5000, batchWindowMs: 0, pendingCapacity: 1 },
+            thalamus: { scheduleTimeoutMs: 5000, batchWindowMs: 0, pendingCapacity: 1 },
         } as ConfigService;
 
-        awareness.perceive({ speakerId: 'conn_1', text: 'active' });
+        thalamus.perceive({ speakerId: 'conn_1', text: 'active' });
         await tick();
-        const queued = awareness.perceive({ speakerId: 'conn_2', text: 'queued' });
-        const rejected = awareness.perceive({ speakerId: 'conn_3', text: 'overflow' });
+        const queued = thalamus.perceive({ speakerId: 'conn_2', text: 'queued' });
+        const rejected = thalamus.perceive({ speakerId: 'conn_3', text: 'overflow' });
 
         expect(queued?.text).toBe('queued');
         expect(rejected).toBeUndefined();
@@ -126,8 +124,8 @@ describe('Awareness', () => {
     });
 
     test('rejects a new stimulus when all four semantic slots are protected', async () => {
-        const { awareness, scheduler, cortex } = mockAwareness();
-        awareness.workspace.turns = Array.from({ length: 4 }, (_, index) => ({
+        const { thalamus, scheduler, cortex } = mockThalamus();
+        thalamus.workspace.turns = Array.from({ length: 4 }, (_, index) => ({
             id: `turn_${index + 1}`,
             speakerId: `conn_${index + 1}`,
             status: 'suspended' as const,
@@ -136,7 +134,7 @@ describe('Awareness', () => {
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: index + 1,
         }));
 
-        awareness.perceive({ speakerId: 'conn_5', text: 'new work' });
+        thalamus.perceive({ speakerId: 'conn_5', text: 'new work' });
         await tick();
 
         expect(cortex.attended).toHaveLength(0);
@@ -152,12 +150,12 @@ describe('Awareness', () => {
             id: 'turn_1', speakerId: 'conn_1', status: 'completed', intent: 'reply', goal: 'g',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         } as any;
-        const { awareness, cortex } = mockAwareness({
+        const { thalamus, cortex } = mockThalamus({
             dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.Same, targetTurnId: turn.id }],
         });
-        awareness.workspace.turns = [turn];
+        thalamus.workspace.turns = [turn];
 
-        awareness.perceive({ speakerId: 'conn_1', text: 'follow up' });
+        thalamus.perceive({ speakerId: 'conn_1', text: 'follow up' });
         await tick();
 
         expect(cortex.revised).toHaveLength(1);
@@ -165,13 +163,13 @@ describe('Awareness', () => {
     });
 
     test('falls back to a new Turn when semantic scheduling has no valid verdict', async () => {
-        const { awareness, cortex } = mockAwareness();
-        awareness.workspace.turns = [{
+        const { thalamus, cortex } = mockThalamus();
+        thalamus.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'completed', intent: 'reply', goal: 'old goal',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
 
-        awareness.perceive({ speakerId: 'conn_1', text: 'unclassified request' });
+        thalamus.perceive({ speakerId: 'conn_1', text: 'unclassified request' });
         await tick();
 
         expect(cortex.revised).toHaveLength(0);
@@ -179,87 +177,87 @@ describe('Awareness', () => {
     });
 
     test('marks only an explicit urgent verdict for pre-emption', async () => {
-        const { awareness, cortex } = mockAwareness({
+        const { thalamus, cortex } = mockThalamus({
             dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.New, urgent: true, targetTurnId: 'turn_1' }],
         });
-        awareness.workspace.turns = [{
+        thalamus.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'working', intent: 'reply', goal: 'g',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
 
-        awareness.perceive({ speakerId: 'conn_2', text: 'stop' });
+        thalamus.perceive({ speakerId: 'conn_2', text: 'stop' });
         await tick();
-        expect(awareness.preempted('turn_1')).toBe(true);
+        expect(thalamus.preempted('turn_1')).toBe(true);
 
-        awareness.speak('turn_1', 'conn_1', 'partial');
-        awareness.turnInterrupted('turn_1');
-        expect(awareness.preempted('turn_1')).toBe(false);
+        thalamus.speak('turn_1', 'conn_1', 'partial');
+        thalamus.turnInterrupted('turn_1');
+        expect(thalamus.preempted('turn_1')).toBe(false);
         expect(cortex.delivered.slice(-2).map(({ packet }) => packet.action)).toEqual(['interrupted', 'streamEnd']);
     });
 
     test('does not let a cross-speaker same-Turn verdict pre-empt its owner', async () => {
-        const { awareness, cortex } = mockAwareness({
+        const { thalamus, cortex } = mockThalamus({
             dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.Same, targetTurnId: 'turn_1', urgent: true }],
         });
-        awareness.workspace.turns = [{
+        thalamus.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'working', intent: 'reply', goal: 'g',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
 
-        awareness.perceive({ speakerId: 'conn_2', text: 'unrelated correction' });
+        thalamus.perceive({ speakerId: 'conn_2', text: 'unrelated correction' });
         await tick();
 
         expect(cortex.cancelled).toEqual([]);
-        expect(awareness.preempted('turn_1')).toBe(false);
+        expect(thalamus.preempted('turn_1')).toBe(false);
     });
 
     test('clears a pre-emption flag when settlement is reported by stimulus id', () => {
-        const { awareness, scheduler } = mockAwareness();
-        awareness.workspace.turns = [{
+        const { thalamus, scheduler } = mockThalamus();
+        thalamus.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', stimulusId: 'stim_1', status: 'completed', intent: 'reply', goal: 'g',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
         (scheduler as unknown as { preemptFlags: Set<string> }).preemptFlags.add('turn_1');
 
-        awareness.turnSettled('stim_1');
+        thalamus.turnSettled('stim_1');
 
-        expect(awareness.preempted('turn_1')).toBe(false);
+        expect(thalamus.preempted('turn_1')).toBe(false);
     });
 
     test('allows an explicit urgent stimulus to interrupt a waiting foreground turn', async () => {
-        const { awareness, cortex } = mockAwareness({
+        const { thalamus, cortex } = mockThalamus({
             dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.New, urgent: true }],
         });
-        awareness.workspace.turns = [{
+        thalamus.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'waiting', intent: 'reply', goal: 'waiting',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
 
-        awareness.perceive({ speakerId: 'conn_2', text: 'stop waiting' });
+        thalamus.perceive({ speakerId: 'conn_2', text: 'stop waiting' });
         await tick();
 
         expect(cortex.cancelled).toEqual(['turn_1']);
-        expect(awareness.preempted('turn_1')).toBe(true);
+        expect(thalamus.preempted('turn_1')).toBe(true);
     });
 
     test('answers are forwarded only for the owning speaker when supplied', () => {
-        const { awareness, cortex } = mockAwareness();
-        awareness.workspace.turns = [{
+        const { thalamus, cortex } = mockThalamus();
+        thalamus.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'waiting', intent: 'reply', goal: 'g',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
 
-        expect(() => awareness.answer('turn_1', 'ask_1', { kind: 'ask' }, 'conn_2')).toThrow();
-        awareness.answer('turn_1', 'ask_1', { kind: 'ask' }, 'conn_1');
+        expect(() => thalamus.answer('turn_1', 'ask_1', { kind: 'ask' }, 'conn_2')).toThrow();
+        thalamus.answer('turn_1', 'ask_1', { kind: 'ask' }, 'conn_1');
         expect(cortex.answers).toHaveLength(1);
     });
 
     test('forgets a speaker pending in the FIFO queue', async () => {
-        const { awareness, cortex } = mockAwareness();
-        awareness.perceive({ speakerId: 'conn_1', text: 'a' });
+        const { thalamus, cortex } = mockThalamus();
+        thalamus.perceive({ speakerId: 'conn_1', text: 'a' });
         await tick();
-        awareness.perceive({ speakerId: 'conn_2', text: 'b' });
-        awareness.forget('conn_2');
+        thalamus.perceive({ speakerId: 'conn_2', text: 'b' });
+        thalamus.forget('conn_2');
         cortex.release();
         await tick();
 
@@ -267,29 +265,29 @@ describe('Awareness', () => {
     });
 
     test('defers active-turn cleanup until interruption settles', () => {
-        const { awareness } = mockAwareness();
-        awareness.workspace.turns = [{
+        const { thalamus } = mockThalamus();
+        thalamus.workspace.turns = [{
             id: 'turn_1', speakerId: 'conn_1', status: 'working', intent: 'reply', goal: 'g',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
 
-        awareness.forget('conn_1');
-        expect(awareness.workspace.turns).toHaveLength(1);
-        awareness.turnInterrupted('turn_1');
-        expect(awareness.workspace.turns).toHaveLength(0);
+        thalamus.forget('conn_1');
+        expect(thalamus.workspace.turns).toHaveLength(1);
+        thalamus.turnInterrupted('turn_1');
+        expect(thalamus.workspace.turns).toHaveLength(0);
     });
 
     test('drops late chunks from a disconnected active speaker before they seize the mouth', () => {
-        const { awareness, cortex } = mockAwareness();
-        awareness.workspace.turns = [{
+        const { thalamus, cortex } = mockThalamus();
+        thalamus.workspace.turns = [{
             id: 'turn_a', speakerId: 'conn_a', status: 'working', intent: 'reply', goal: 'work',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
 
-        awareness.forget('conn_a');
-        awareness.speak('turn_a', 'conn_a', 'late', 'stim_a');
-        awareness.speak('turn_b', 'conn_b', 'next', 'stim_b');
-        awareness.speak('turn_b', 'conn_b', null, 'stim_b');
+        thalamus.forget('conn_a');
+        thalamus.speak('turn_a', 'conn_a', 'late', 'stim_a');
+        thalamus.speak('turn_b', 'conn_b', 'next', 'stim_b');
+        thalamus.speak('turn_b', 'conn_b', null, 'stim_b');
 
         expect(cortex.delivered.map(({ packet }) => packet)).toEqual([
             { action: 'agent', data: 'next' },
@@ -298,11 +296,11 @@ describe('Awareness', () => {
     });
 
     test('serializes mouth chunks and full answers', () => {
-        const { awareness, cortex } = mockAwareness();
-        awareness.speak('turn_1', 'conn_1', 'one');
-        awareness.speak('turn_2', 'conn_2', 'two');
-        awareness.speak('turn_1', 'conn_1', null);
-        awareness.speak('turn_2', 'conn_2', null);
+        const { thalamus, cortex } = mockThalamus();
+        thalamus.speak('turn_1', 'conn_1', 'one');
+        thalamus.speak('turn_2', 'conn_2', 'two');
+        thalamus.speak('turn_1', 'conn_1', null);
+        thalamus.speak('turn_2', 'conn_2', null);
 
         expect(cortex.delivered.map(({ packet }) => packet)).toEqual([
             { action: 'agent', data: 'one' },
@@ -313,13 +311,13 @@ describe('Awareness', () => {
     });
 
     test('reopens a same-Turn mouth for a new stream generation and ignores late old chunks', () => {
-        const { awareness, cortex } = mockAwareness();
+        const { thalamus, cortex } = mockThalamus();
 
-        awareness.speak('turn_1', 'conn_1', 'old', 'stim_1');
-        awareness.speak('turn_1', 'conn_1', null, 'stim_1');
-        awareness.speak('turn_1', 'conn_1', 'late old', 'stim_1');
-        awareness.speak('turn_1', 'conn_1', 'new', 'stim_2');
-        awareness.speak('turn_1', 'conn_1', null, 'stim_2');
+        thalamus.speak('turn_1', 'conn_1', 'old', 'stim_1');
+        thalamus.speak('turn_1', 'conn_1', null, 'stim_1');
+        thalamus.speak('turn_1', 'conn_1', 'late old', 'stim_1');
+        thalamus.speak('turn_1', 'conn_1', 'new', 'stim_2');
+        thalamus.speak('turn_1', 'conn_1', null, 'stim_2');
 
         expect(cortex.delivered.map(({ packet }) => packet)).toEqual([
             { action: 'agent', data: 'old' },
@@ -330,16 +328,16 @@ describe('Awareness', () => {
     });
 
     test('releases a waiting speaker mouth when the connection closes', () => {
-        const { awareness, cortex } = mockAwareness();
-        awareness.workspace.turns = [{
+        const { thalamus, cortex } = mockThalamus();
+        thalamus.workspace.turns = [{
             id: 'turn_a', speakerId: 'conn_a', status: 'waiting', intent: 'reply', goal: 'wait',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
 
-        awareness.speak('turn_a', 'conn_a', 'partial', 'stim_a');
-        awareness.forget('conn_a');
-        awareness.speak('turn_b', 'conn_b', 'next', 'stim_b');
-        awareness.speak('turn_b', 'conn_b', null, 'stim_b');
+        thalamus.speak('turn_a', 'conn_a', 'partial', 'stim_a');
+        thalamus.forget('conn_a');
+        thalamus.speak('turn_b', 'conn_b', 'next', 'stim_b');
+        thalamus.speak('turn_b', 'conn_b', null, 'stim_b');
 
         expect(cortex.delivered.map(({ packet }) => packet)).toEqual([
             { action: 'agent', data: 'partial' },
@@ -349,9 +347,9 @@ describe('Awareness', () => {
     });
 
     test('does not dispatch a stimulus removed while the scheduler is awaiting', async () => {
-        const { awareness, scheduler, cortex } = mockAwareness();
+        const { thalamus, scheduler, cortex } = mockThalamus();
         let resolveSchedule!: (value: string) => void;
-        awareness.workspace.turns = [{
+        thalamus.workspace.turns = [{
             id: 'turn_done', speakerId: 'old', status: 'completed', intent: 'reply', goal: 'done',
             constraints: [], refs: [], done: [], open: [], investigate: false, ts: 1,
         }];
@@ -359,10 +357,10 @@ describe('Awareness', () => {
             completeText: () => new Promise<string>((resolve) => { resolveSchedule = resolve; }),
         } as unknown as Intelligence;
 
-        awareness.perceive({ speakerId: 'conn_a', text: 'a' });
-        awareness.perceive({ speakerId: 'conn_b', text: 'b' });
+        thalamus.perceive({ speakerId: 'conn_a', text: 'a' });
+        thalamus.perceive({ speakerId: 'conn_b', text: 'b' });
         await tick();
-        awareness.forget('conn_a');
+        thalamus.forget('conn_a');
         resolveSchedule(JSON.stringify({ dispositions: [{ stimulusId: 'stim_1', relation: DispositionRelation.New }] }));
         await tick();
 
