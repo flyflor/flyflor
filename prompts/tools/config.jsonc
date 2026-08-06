@@ -53,7 +53,7 @@
           "path": { "type": "string" },
           "offsetLines": { "type": "number" },
           "limitLines": { "type": "number" },
-          "limitBytes": { "type": "number" },
+          "limitBytes": { "type": "number", "minimum": 0, "maximum": 20000 },
           "content": { "type": "string" },
           "oldText": { "type": "string" },
           "newText": { "type": "string" }
@@ -93,9 +93,10 @@
         "properties": {
           "cwd": { "type": "string" },
           "mode": { "type": "string", "enum": ["serial", "parallel"] },
-          "maxConcurrency": { "type": "number" },
+          "maxConcurrency": { "type": "number", "minimum": 1, "maximum": 8 },
           "tasks": {
             "type": "array",
+            "maxItems": 64,
             "items": {
               "type": "object",
               "properties": {

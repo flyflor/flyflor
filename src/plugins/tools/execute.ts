@@ -4,6 +4,11 @@ import { spawn } from 'node:child_process';
 import { isAbsolute, resolve } from 'node:path';
 import type { ExecuteInput, ExecuteMode, ExecuteOutput, ExecuteTaskInput, ExecuteTaskResult } from './types';
 
+const OUTPUT_CHAR_LIMIT = 20000;
+const OUTPUT_EDGE_CHAR_LIMIT = OUTPUT_CHAR_LIMIT / 2;
+const MAX_EXECUTE_TASKS = 64;
+const MAX_EXECUTE_CONCURRENCY = 8;
+
 interface ExecuteTask {
     id?: string;
     runtime: 'python' | 'sh';
@@ -12,6 +17,12 @@ interface ExecuteTask {
     cwd?: string;
     env?: Record<string, string>;
     timeoutMs: number;
+}
+
+interface CapturedOutput {
+    head: string;
+    tail: string;
+    truncated: boolean;
 }
 
 @Tool()
@@ -38,6 +49,7 @@ export class Execute extends FToolAtom<ExecuteInput, ExecuteOutput> {
             data: {
                 action: 'execute',
                 mode,
+                maxConcurrency,
                 cwd,
                 total: results.length,
                 success: results.filter((item) => item.ok).length,
@@ -68,7 +80,7 @@ export class Execute extends FToolAtom<ExecuteInput, ExecuteOutput> {
         const command = task.runtime === 'python' ? 'python' : 'sh';
         const startedAt = Date.now();
         try {
-            const { stdout, stderr, exitCode, timedOut } = await this.spawn(command, [path, ...task.args], cwd, task.timeoutMs, task.env);
+            const { stdout, stderr, stdoutTruncated, stderrTruncated, exitCode, timedOut } = await this.spawn(command, [path, ...task.args], cwd, task.timeoutMs, task.env);
             return {
                 id: task.id,
                 runtime: task.runtime,
@@ -78,6 +90,8 @@ export class Execute extends FToolAtom<ExecuteInput, ExecuteOutput> {
                 exitCode,
                 stdout,
                 stderr,
+                stdoutTruncated,
+                stderrTruncated,
                 timedOut,
                 ok: exitCode === 0 && !timedOut,
                 durationMs: Date.now() - startedAt,
@@ -92,6 +106,8 @@ export class Execute extends FToolAtom<ExecuteInput, ExecuteOutput> {
                 exitCode: null,
                 stdout: '',
                 stderr: error instanceof Error ? error.message : String(error),
+                stdoutTruncated: false,
+                stderrTruncated: false,
                 timedOut: false,
                 ok: false,
                 durationMs: Date.now() - startedAt,
@@ -105,23 +121,31 @@ export class Execute extends FToolAtom<ExecuteInput, ExecuteOutput> {
             env: { ...process.env, ...(env ?? {}) },
             stdio: ['ignore', 'pipe', 'pipe'],
         });
-        let stdout = '';
-        let stderr = '';
+        const stdout = this.capture();
+        const stderr = this.capture();
         let timedOut = false;
-        proc.stdout.on('data', (chunk) => { stdout += String(chunk); });
-        proc.stderr.on('data', (chunk) => { stderr += String(chunk); });
+        proc.stdout.on('data', (chunk) => { this.append(stdout, String(chunk)); });
+        proc.stderr.on('data', (chunk) => { this.append(stderr, String(chunk)); });
         const timer = setTimeout(() => {
             timedOut = true;
             proc.kill();
         }, timeoutMs);
-        return new Promise<{ stdout: string; stderr: string; exitCode: number | null; timedOut: boolean }>((resolvePromise, reject) => {
+        return new Promise<{ stdout: string; stderr: string; stdoutTruncated: boolean; stderrTruncated: boolean; exitCode: number | null; timedOut: boolean }>((resolvePromise, reject) => {
             proc.on('error', reject);
-            proc.on('close', (exitCode) => resolvePromise({ stdout, stderr, exitCode, timedOut }));
+            proc.on('close', (exitCode) => resolvePromise({
+                stdout: this.output(stdout),
+                stderr: this.output(stderr),
+                stdoutTruncated: stdout.truncated,
+                stderrTruncated: stderr.truncated,
+                exitCode,
+                timedOut,
+            }));
         }).finally(() => clearTimeout(timer));
     }
 
     private tasks(value: unknown): ExecuteTask[] {
         if (!Array.isArray(value) || value.length === 0) throw Error('tasks is required');
+        if (value.length > MAX_EXECUTE_TASKS) throw Error(`tasks exceeds ${MAX_EXECUTE_TASKS} items`);
         return value.map((item, index) => this.task(item, index));
     }
 
@@ -163,9 +187,9 @@ export class Execute extends FToolAtom<ExecuteInput, ExecuteOutput> {
 
     private maxConcurrency(value: unknown, mode: ExecuteMode, total: number): number {
         if (mode === 'serial') return 1;
-        if (value === undefined) return Math.max(1, total);
+        if (value === undefined) return Math.min(MAX_EXECUTE_CONCURRENCY, Math.max(1, total));
         if (typeof value !== 'number' || !Number.isFinite(value) || value < 1) throw Error('maxConcurrency must be a positive number');
-        return Math.floor(value);
+        return Math.min(MAX_EXECUTE_CONCURRENCY, Math.floor(value));
     }
 
     private text(value: unknown, name: string): string {
@@ -196,5 +220,28 @@ export class Execute extends FToolAtom<ExecuteInput, ExecuteOutput> {
         if (value === undefined) return 30000;
         if (typeof value !== 'number' || !Number.isFinite(value)) throw Error('timeoutMs must be a number');
         return Math.min(120000, Math.max(1000, Math.floor(value)));
+    }
+
+    private capture(): CapturedOutput {
+        return { head: '', tail: '', truncated: false };
+    }
+
+    private append(output: CapturedOutput, chunk: string): void {
+        if (output.truncated) {
+            output.tail = `${output.tail}${chunk}`.slice(-OUTPUT_EDGE_CHAR_LIMIT);
+            return;
+        }
+        const combined = `${output.head}${chunk}`;
+        if (combined.length <= OUTPUT_CHAR_LIMIT) {
+            output.head = combined;
+            return;
+        }
+        output.head = combined.slice(0, OUTPUT_EDGE_CHAR_LIMIT);
+        output.tail = combined.slice(-OUTPUT_EDGE_CHAR_LIMIT);
+        output.truncated = true;
+    }
+
+    private output(output: CapturedOutput): string {
+        return output.truncated ? `${output.head}${output.tail}` : output.head;
     }
 }

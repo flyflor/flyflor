@@ -1,8 +1,8 @@
 # Flyflor
 
-Flyflor is a Bun + TypeScript agent kernel. The current codebase is built around decorated classes, a reflect-metadata IOC container, a local length-prefixed IPC socket, prompt packages, provider protocol adapters, and a small local tool surface.
+Flyflor is a Bun + TypeScript kernel for one process-wide, sessionless intelligent collective. It has one consciousness stream and one global working Context. Multiple external speakers are identified by stable `speakerId` values; they do not create isolated conversations.
 
-## Quick Start
+## Quick start
 
 ```bash
 bun install
@@ -11,9 +11,9 @@ bun run dev
 bun run client
 ```
 
-`bun run dev` starts `src/bootstrap.ts` and opens the configured IPC socket. `bun run client` serves the local browser bridge at `http://127.0.0.1:17878` and forwards browser JSON messages to that socket.
+The kernel opens the Unix socket configured in `.config/config.jsonc`. The browser bridge is served at `http://127.0.0.1:17878` and forwards strict Flyflor IPC packets.
 
-Use these checks before calling a change healthy:
+Before handing off a change, run:
 
 ```bash
 bun run check
@@ -21,95 +21,46 @@ bun test
 bun run build:binary
 ```
 
-`bun run check` runs TypeScript and the repository red-line scanner. The default model/provider lives in `.config/config.jsonc`; secrets stay in environment variables.
+Secrets remain environment variables. Restarting the process intentionally clears Context and all volatile agent notes. Reconnecting a socket does not clear them.
 
-## Runtime Map
-
-```mermaid
-flowchart TB
-    Bootstrap["src/bootstrap.ts<br/>loads reflect-metadata first"] --> Factory["Factory.create(AppModule)"]
-    Factory --> Container["Container<br/>constructs, injects, runs @Init"]
-    Container --> AppModule["AppModule<br/>imports Synapse + PluginModule"]
-
-    AppModule --> Synapse["Synapse<br/>signal cortex + active agent pool"]
-    AppModule --> PluginModule["PluginModule"]
-    PluginModule --> Tools["ToolComponent<br/>ask, confirm, filesystem, shell, execute"]
-
-    Synapse --> Socket["FSocket<br/>Bun IPC listener"]
-    Socket <--> Packet["IPCPacket<br/>8-byte length + JSON"]
-    Socket <--> Client["web/client.ts<br/>browser bridge"]
-
-    Synapse --> Agent["Agent<br/>scoped Brain + Memory"]
-    Agent --> Brain["Brain<br/>turn orchestration"]
-    Brain --> Callosum["Callosum<br/>route classifier"]
-    Brain --> Context["Context<br/>turns + summaries"]
-    Brain --> Memory["Memory<br/>private agent notes"]
-    Brain --> Investigation["Investigation<br/>local action loop"]
-    Brain --> Intelligence["Intelligence<br/>provider stream boundary"]
-    Context --> Intelligence
-    Investigation --> Tools
-    Investigation --> Intelligence
-    Intelligence --> Protocols["Protocol adapters<br/>OpenAI, Anthropic, Gemini, Bedrock,<br/>Cohere, HuggingFace, Ollama, vLLM, LM Studio"]
-```
-
-## Boot Lifecycle
+## Runtime chain
 
 ```mermaid
 flowchart LR
-    A["bootstrap.ts"] --> B["import reflect-metadata"]
-    B --> C["Factory.create(AppModule)"]
-    C --> D["Container.getAsync(AppModule)"]
-    D --> E["build module imports"]
-    E --> F["construct class"]
-    F --> G["@Config / @Prompt early injections"]
-    G --> H["@Inject / @Scope dependency injections"]
-    H --> I["@Init lifecycle method"]
-    I --> J["Factory.synapse()"]
+    IPC["IPCModule"] --> Socket["Socket\nper-connection decoder + write queue"]
+    Socket --> Manager["AgentManager\nfixed roster + scheduling"]
+    Manager --> Attention["Attention\nfocus, merge, queue, fairness"]
+    Attention --> Context["Context\none global workspace"]
+    Context --> Agents["Fixed Agents\nleader + specialists"]
+    Agents --> Brain["Brain"]
+    Brain --> Thought["Thought"]
+    Thought --> Action["Action"]
+    Action --> Thought
+    Action --> Tools["Plugin tools"]
+    Thought --> Inference["Inference + protocol adapters"]
 ```
 
-Only the IOC container should construct application classes. Singleton classes are cached by decorator metadata; ordinary providers are created fresh when resolved.
+The boundaries are deliberately object-led:
 
-## One User Turn
+- `IPC → Socket` owns framing, validation, connection identity, and backpressure.
+- `AgentManager` owns fixed member construction, one active focus, cancellation, revision checks, and output routing. It does not generate answers.
+- `Attention` acts as the salience gate. Related stimuli merge into the active focus; unrelated stimuli enter a bounded fair queue.
+- `Context` is the only owner of dialogue facts. It stores the current focus, constraints, decisions, evidence, unresolved items, and sourced summaries.
+- Each fixed `Agent` owns a volatile local `Memory` for observations and reflections. It never owns an independent dialogue transcript.
+- `Brain` runs the same loop for every member: `Thought → Action/Observation → Thought` until a report is ready. Hidden provider reasoning and replay buffers stay inside the current inference call.
+- Only the configured leader may use side-effecting tools. Specialists are forced to read-only scope and run in parallel before the leader synthesizes the answer.
 
-```mermaid
-flowchart TD
-    User["IPC packet<br/>action=user or answer"] --> Decode["FSocket -> IPCPacket.decode"]
-    Decode --> Input["Synapse.emit(input, text)"]
-    Input --> AgentNext["active Agent.next(text)"]
-    AgentNext --> Ingest["Context.ingest()<br/>LLM extracts intent, goal, cwd, refs"]
-    Ingest --> Route["Callosum.route(text)"]
+## Focus and continuity
 
-    Route --> Choice{"route type"}
-    Choice -- reply --> Reply["Brain.reply()<br/>stream Memory messages through Intelligence"]
-    Reply --> ReplyOut["Synapse reply chunks<br/>then streamEnd"]
-    ReplyOut --> Settle1["Context.settle()"]
+There is at most one external focus at a time. When the process is idle, the first stimulus opens it. While it is working, a message with an explicit `replyTo` is merged first; otherwise Attention evaluates semantic relation. A merge increments `revision`, emits `responseReset`, aborts cancellable model work, and causes the leader to rethink from the new Context. An action becomes started only after its tool atom has resolved and the current revision has been checked immediately before execution. A side effect that has actually started is allowed to finish and is recorded as compact evidence.
 
-    Choice -- research or task --> Research["Investigation.run()"]
-    Research --> LlmTools["Intelligence.streamRequest()<br/>with tool definitions"]
-    LlmTools --> HasAction{"tool calls?"}
-    HasAction -- no --> FinalAnswer["final answer"]
-    HasAction -- yes --> RunTool["ToolComponent.run()"]
-    RunTool --> Pause{"ask / confirm?"}
-    Pause -- yes --> UserPause["emit ask or confirm<br/>mark active turn paused"]
-    Pause -- no --> LlmTools
-    FinalAnswer --> Settle2["Context.settle(evidence)"]
+While an `ask` or `confirm` interaction is pending, ordinary user input is queued. Only an answer matching `focusId` + `requestId` from the focus owner, or an owner `cancel`, releases the hard gate. Ask answers must also match the pending question count, order, and text. A reconnected owner connection is attached when it answers or cancels. Ask answers become sourced constraints in Context, and confirmations become sourced decisions. A merged focus sends its final stream to every participating connection, while confirmation authority remains with the owner who opened the focus. Cancellation is reported immediately, but an already-started side effect is allowed to finish and record a compact observation before the focus is released.
 
-    Choice -- soul --> Soul["render prompt package XML<br/>LLM plans writes"]
-    Soul --> Apply["PromptService.applyWrites()"]
-    Apply --> Settle3["Context.settle()"]
+The queue is bounded by `collective.queueLimit`. It scores salience, wait age, and speaker fairness; when full it rejects the newest message explicitly. When a queued root becomes active, its explicit `replyTo` chain is absorbed before inference starts, so related queued speakers receive one focus and one final revision. Every inbound action reserves its `messageId` process-wide. An exact `user`, `answer`, or `cancel` retry is idempotent and returns the stable receipt for that command. Reusing an ID for another action or payload is rejected. Idempotency records retain SHA-256 payload fingerprints rather than raw dialogue or interaction answers.
 
-    Choice -- coordinate --> Coordinate["Synapse.coordinate()<br/>LLM plan with temporary personas"]
-    Coordinate --> Workers["silent worker understand() calls"]
-    Workers --> Review["silent reviewer understand() call"]
-    Review --> Synthesis["synthesize outcomes + review"]
-    Synthesis --> Settle4["Context.settle(evidence)"]
-```
+## IPC
 
-`Context` is the durable turn owner. `Memory` is not a transcript; it is a bounded private note cache seeded from a `Context.brief()`.
-
-## IPC Contract
-
-Every packet on the kernel socket is one 8-byte unsigned big-endian JSON body length followed by a UTF-8 JSON body:
+Every socket packet is an 8-byte unsigned big-endian body length followed by UTF-8 JSON:
 
 ```txt
 +--------------------------+-------------------------------+
@@ -117,60 +68,45 @@ Every packet on the kernel socket is one 8-byte unsigned big-endian JSON body le
 +--------------------------+-------------------------------+
 ```
 
-Inbound packets with `action: "user"` or `action: "answer"` become agent input. Other inbound actions are dispatched to `Controller`; the current controller action is `cwd`, which updates `ConfigService.path.cwd`.
+The envelope is strict; legacy packets are rejected:
 
-Common outbound actions are `open`, `agent`, `streamEnd`, `data`, `ask`, `confirm`, `pause`, `resume`, and `error`.
+```ts
+interface IpcEnvelope<A extends string, D> {
+    protocol: 'flyflor.ipc';
+    messageId: string;
+    action: A;
+    data: D;
+}
 
-## Model Boundary
-
-`Intelligence` exposes one normalized stream contract:
-
-- `text_delta` for visible output.
-- `reasoning_delta` for provider reasoning that must be replayed when the provider expects it.
-- `action_start`, `action_delta`, and `action_end` for streamed tool calls.
-- `done` with `stop`, `length`, or `toolUse`.
-
-Protocol selection comes from the active provider in `.config/config.jsonc`. Provider-level `protocols` override `model.protocols`; each protocol adapter owns only its wire body and stream parser.
-
-## Tool Surface
-
-The current model-visible tools are loaded from `prompts/tools/config.jsonc` and implemented under `src/plugins/tools`:
-
-- `ask`: asks the user to choose from options; the tool adds an `other` option.
-- `confirm`: asks for a yes/no-style confirmation with a recommended boolean.
-- `filesystem`: `read`, `write`, `edit`, or file-only `delete`, resolved from explicit `cwd` or `ConfigService.path.cwd`.
-- `shell`: runs one command with args and a bounded timeout.
-- `execute`: runs serial or parallel `python` / `sh` script tasks with optional per-task cwd, env, and timeout.
-
-`Investigation` owns the tool loop. Tool request/result replay stays inside provider messages and is not written into `Context.turns`.
-
-## Prompt Runtime
-
-`PromptService` loads either one markdown file or a prompt package directory with `config.jsonc`. Package configs define ordinary render sections, editable files, locked files, runtime-ignored files, and an XML document view used by the `soul` route.
-
-Canonical runtime prompt sources are English `.md` files. `.zh.cn.md` files are human mirrors and must not become runtime source-of-truth.
-
-## Source Layout
-
-```txt
-src/bootstrap.ts                       process entrypoint
-src/app.module.ts                      root @Module
-src/configuration.ts                   ConfigService and runtime config types
-src/core/                              decorators, IOC, base classes, prompt, logger, tool contracts
-src/neural/                            Synapse, IPC socket, packet codec, controller
-src/agent/                             Agent, Brain, Callosum, Context, Memory, Investigation, Intelligence
-src/plugins/                           plugin boundary and local tools
-src/entities/                          entity/repository classes; MemoryRepo currently returns SQL statements
-web/                                   local browser-to-IPC bridge and test page
-prompts/                               prompt packages plus zh.cn mirrors
-.config/                              runtime config and active agent prompt package
-sql/                                   schema files
-pakcages/                              bundled sqlite-vec helper/native assets; not in the current agent turn path
-scripts/check.script.ts                docs mirror and prompt-term checks
+interface UserInput {
+    speakerId: string;
+    text: string;
+    replyTo?: string;
+}
 ```
 
-## Current Edges
+Inbound actions are `user`, `answer`, and `cancel`. `open` returns `connectionId` and the protocol. Every accepted inbound command returns an `event` receipt. Public `attention` packets contain only state and queue depth. Chunks use `{ focusId, revision, chunk }`; a revision merge emits `responseReset`. Answers, confirmations, tool events, errors, and final streams are targeted to the relevant focus participants.
 
-`MemoryRepo` and `sql/001-core-schema.sql` prepare a future persistence boundary, but the current `Agent`, `Context`, and `Memory` path is in memory. The config file also declares skills and MCP shapes, but this codebase does not yet include a runtime MCP client or skill loader wired into the turn loop.
+Each socket has an independent decoder, ordered intake, and backpressure output queue. Split UTF-8 bytes, coalesced packets, malformed frames, overlapping data callbacks, and one client disconnect cannot reset or reorder another connection. Per-connection pending input and output are each capped at two maximum-size IPC packets; a slow or flooding client is disconnected without disturbing healthy clients. A malformed complete frame emits an error without dropping valid frames that follow it in the same chunk. Disconnecting removes that connection's active routing entry without deleting its speaker identity; reconnecting can attach a new route, but missed output is not replayed. An oversized outbound packet is isolated as an error on its target connection instead of interrupting Agent execution.
 
-Project rules live in `AGENTS.md`; this README is only the implementation overview.
+Attention projects active stimuli into `collective.contextCharLimit` before classification. Context applies the same budget independently for each Agent, preserving full process-local truth while keeping the first and latest messages and constraints in bounded model input. `collective.contextItemLimit` is a hard store limit: ordinary items are evicted first, then the oldest non-pinned protected item only when every slot is protected; current focus constraints remain on the Focus itself.
+
+Inference propagates external abort reasons, enforces provider/model total-request and stale-stream timeouts, and cancels the active byte reader on failure or consumer cancellation. Missing or duplicate provider tool-call IDs are normalized into unique request IDs before interaction or replay. Inside Brain, the retention budget for old provider-only tool replay uses `collective.contextCharLimit`; eviction removes only whole old Thought/Action cycles and always retains the newest complete cycle. A single replayed tool result is capped at 12,000 characters. Filesystem reads return at most 20,000 valid UTF-8 bytes. Shell and execute each retain at most 20,000 characters per stdout/stderr stream; truncated streams preserve both edges and set explicit flags. Execute accepts at most 64 tasks with effective concurrency capped at 8.
+
+## Source layout
+
+```txt
+src/ipc/                          framing and multi-connection socket boundary
+src/collective/                   AgentManager, Attention, and the global Context
+src/agent/                        fixed Agent, volatile Memory, Brain, Thought, Action
+src/inference/                    model/provider infrastructure and adapters
+src/plugins/tools/                ask, filesystem, shell, and execute atoms
+prompts/agents/                   read-only fixed identity packages
+prompts/attention/                salience/focus prompt package
+web/                              browser bridge and local IPC console
+.config/config.jsonc              model, collective, roster, and socket configuration
+```
+
+Runtime prompt sources are canonical English `.md` files. Every documentation and prompt source has a human `.zh.cn.md` mirror; mirrors are never loaded by runtime code.
+
+The IOC container is the only constructor for application classes. Decorators (`@Module`, `@Singleton`, `@Provide`, `@Inject`, `@Scope`, `@Init`) make lifecycle and ownership explicit.

@@ -42,12 +42,4 @@ export class Factory {
         return factory;
     }
 
-    /**
-     * EN: Returns the initialized global `Synapse`.
-     * ZH: 返回已初始化的全局 `Synapse`。
-     */
-    public async synapse() {
-        const { Synapse } = await import('@/neural/synapse');
-        return await this.container.getAsync(Synapse);
-    }
 }

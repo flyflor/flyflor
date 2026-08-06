@@ -360,10 +360,9 @@ export abstract class FCortex<T extends CortexSignal = CortexSignal> extends FMo
     }
 }
 
-export interface FAgentSynapseBus {
+export interface FAgentHost {
     emit(type: string, data: unknown): unknown;
-    coordinate?(signal: unknown, turnId: string): Promise<void>;
-    interact?(request: { turnId: string; id: string; kind: 'ask' | 'confirm'; data: unknown }): Promise<unknown>;
+    interact?(request: unknown): Promise<unknown>;
 }
 
 /**
@@ -375,10 +374,10 @@ export interface FAgentSynapseBus {
  */
 export abstract class FAgentAtom<T = object | number | string | boolean | undefined, R = T> extends Observable<T, R> {
     /**
-     * EN: Binds the atom to one active agent profile and synapse bus.
-     * ZH: 把当前原子对象绑定到一个活动 agent 配置和 synapse 总线。
+     * EN: Binds the atom to one fixed agent profile and its collective host.
+     * ZH: 把当前原子对象绑定到一个固定 agent 配置和群体宿主。
      */
-    constructor(public agentConfig: FAgentProfileConfiguration, public synapse: FAgentSynapseBus) {
+    constructor(public agentConfig: FAgentProfileConfiguration, public host: FAgentHost) {
         super();
     }
 }
@@ -425,7 +424,8 @@ export abstract class FToolAtom<TInput = unknown, TOutput = unknown> extends Obs
     public async prompt(): Promise<PromptService<ToolPromptSection> & PromptPackageData<ToolPromptSection>> {
         if (this.promptService === undefined) {
             const { PromptService } = await import('../prompt/service');
-            this.promptService = await useContainer().getAsync(PromptService, join(import.meta.dir, '../../..', 'prompts/tools')) as PromptService<ToolPromptSection>;
+            const { useRootPath } = await import('@/configuration');
+            this.promptService = await useContainer().getAsync(PromptService, join(useRootPath(), 'prompts/tools')) as PromptService<ToolPromptSection>;
         }
         return this.promptService as PromptService<ToolPromptSection> & PromptPackageData<ToolPromptSection>;
     }

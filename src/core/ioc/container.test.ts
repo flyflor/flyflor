@@ -32,10 +32,10 @@ interface ScopedConfig {
 }
 
 /**
- * EN: ScopedSynapse class declaration.
- * ZH: ScopedSynapse class 声明。
+ * EN: ScopedRuntime class declaration.
+ * ZH: ScopedRuntime class 声明。
  */
-class ScopedSynapse {}
+class ScopedRuntime {}
 
 /**
  * EN: ScopedAtom class declaration.
@@ -44,7 +44,7 @@ class ScopedSynapse {}
 class ScopedAtom {
     constructor(
         public config: ScopedConfig,
-        public synapse: ScopedSynapse,
+        public runtime: ScopedRuntime,
     ) {}
 }
 
@@ -63,10 +63,10 @@ class ScopedMemory extends ScopedAtom {}
 class ScopedBrain extends ScopedAtom {
     constructor(
         public override config: ScopedConfig,
-        public override synapse: ScopedSynapse,
+        public override runtime: ScopedRuntime,
         public memory: ScopedMemory,
     ) {
-        super(config, synapse);
+        super(config, runtime);
     }
 }
 
@@ -78,7 +78,7 @@ class ScopedBrain extends ScopedAtom {
 class ObjectMetadataBrain {
     constructor(
         public config: object,
-        public synapse: object,
+        public runtime: object,
         public memory: object,
     ) {}
 }
@@ -135,23 +135,23 @@ class ScopedHostWithChild {
 describe('@Scope', () => {
     test('resolves constructor args from the host scope', async () => {
         const config = { name: 'flyflor' };
-        const synapse = new ScopedSynapse();
-        const host = await useContainer().getAsync(ScopedHost, config, synapse);
+        const runtime = useContainer().create(ScopedRuntime);
+        const host = await useContainer().getAsync(ScopedHost, config, runtime);
 
         expect(host.memory.config).toBe(config);
-        expect(host.memory.synapse).toBe(synapse);
+        expect(host.memory.runtime).toBe(runtime);
         expect(host.brain.config).toBe(config);
-        expect(host.brain.synapse).toBe(synapse);
+        expect(host.brain.runtime).toBe(runtime);
         expect(host.brain.memory).toBe(host.memory);
     });
 
     test('passes host values when constructor metadata is erased to Object', async () => {
         const config = { name: 'flyflor' };
-        const synapse = new ScopedSynapse();
-        const host = await useContainer().getAsync(ObjectMetadataHost, config, synapse);
+        const runtime = useContainer().create(ScopedRuntime);
+        const host = await useContainer().getAsync(ObjectMetadataHost, config, runtime);
 
         expect(host.brain.config).toBe(config);
-        expect(host.brain.synapse).toBe(synapse);
+        expect(host.brain.runtime).toBe(runtime);
         expect(host.brain.memory).toBe(host.memory);
     });
 

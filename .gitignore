@@ -40,3 +40,6 @@ flyflor.sock
 skills-lock.json
 !TODO.md
 !plugins
+
+# life ledger data
+/.ledger/

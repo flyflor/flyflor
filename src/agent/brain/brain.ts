@@ -1,122 +1,128 @@
+import { type FAgentActionScope, ConfigService } from '@/configuration';
+import type { AgentContext } from '@/collective/context';
+import type { AgentReport, AgentRunControl } from '@/agent/types';
+import { Memory } from '@/agent/memory';
+import { Config, FAgentAtom, Scope, Provide } from '@/core';
 import { AgentChatRole } from '@/agent/types';
-import { Context } from '@/agent/context';
-import { SynapseSignalType } from '@/neural/types';
-import { FAgentAtom, Inject, Prompt, PromptService, Provide, Scope, type IObservable } from '@/core';
-import { parse } from '@/agent/json';
-import { Memory } from '../memory';
-import { Callosum } from './callosum';
-import { CallosumSignalType, type CallosumSignal } from './callosum';
-import { Intelligence } from './intelligence/service';
-import { Investigation } from './investigation';
-import type { InvestigationOutcome } from './investigation/types';
-import type { AgentBrief } from '@/agent/context/types';
+import type { ProviderActionRequestMessage, ProviderActionResultMessage, ProviderMessage } from '@/inference';
+import { Action } from './action';
+import { Thought } from './thought';
 
-export enum BrainPrompt {
-    Soul = 'SOUL',
-}
+const MAX_THOUGHT_STEPS = 16;
+const MAX_PROVIDER_ACTION_RESULT_CHARS = 12000;
 
 /**
- * EN: Brain receives the routed intent from Callosum.
- * ZH: Brain 接收 Callosum 路由后的意图。
- *
- * EN: `reply`, `research`, `soul` are handled locally; `coordinate` is forwarded
- * to Synapse so the cortex can dispatch the agent pool.
- * ZH: `reply`、`research`、`soul` 在本地处理；`coordinate` 转发给 Synapse，由皮层派发 agent pool。
+ * EN: One fixed person's cognitive loop: Thought proposes, Action observes, Thought continues.
+ * ZH: 一个固定成员的认知闭环：Thought 提议，Action 观察，Thought 继续。
  */
 @Provide()
-export class Brain extends FAgentAtom<string, CallosumSignal> implements IObservable<string, CallosumSignal> {
-    @Scope()
-    public callosum!: Callosum;
-
-    @Prompt('prompts/callosum')
-    public prompt!: PromptService<BrainPrompt>;
+export class Brain extends FAgentAtom {
+    @Config()
+    public config!: ConfigService;
 
     @Scope()
-    public intelligence!: Intelligence;
+    public thought!: Thought;
 
-    @Inject()
-    public context!: Context;
+    @Scope()
+    public action!: Action;
 
     @Scope()
     public memory!: Memory;
 
-    @Scope()
-    public investigation!: Investigation;
+    public async run(context: AgentContext, control: AgentRunControl): Promise<AgentReport> {
+        const baseMessages = this.memoryMessages(context);
+        const replayCycles: ProviderMessage[][] = [];
+        const evidence: string[] = [];
+        let answer = '';
+        let steps = 0;
+        while (steps < MAX_THOUGHT_STEPS) {
+            steps += 1;
+            const visible = (chunk: string) => {
+                answer += chunk;
+                if (control.stream) control.onChunk(chunk);
+            };
+            const result = await this.thought.think(
+                [...baseMessages, ...this.replay(replayCycles)],
+                await this.action.tools.list(this.agentConfig.actionScope),
+                visible,
+                control.signal,
+            );
+            if (result.actionRequests.length === 0) {
+                return {
+                    agentId: this.agentConfig.name,
+                    answer: answer || result.text,
+                    evidence,
+                    decisions: [],
+                    remaining: [],
+                    steps,
+                };
+            }
 
-    /**
-     * EN: Runs one whole user turn behind a single error boundary.
-     * ZH: 在单一错误边界内运行一整个用户回合。
-     *
-     * EN: ingest, route, and the chosen handler all throw freely; the single error boundary in
-     * `Synapse.input` (the call site of `agent.next`) receives the rejection and decides what the
-     * user sees. `Brain` does not catch.
-     * ZH: ingest、route 和选中的 handler 都可自由抛出;唯一错误边界在 `Synapse.input`
-     * (调 `agent.next` 的地方),由它接住拒绝并决定给用户看什么。`Brain` 不做 catch。
-     */
-    public override async onPipe(data: string) {
-        const turn = await this.context.ingest({ text: data });
-        await this.handle(await this.callosum.route(data), turn.id);
-    }
-
-    private handle(signal: CallosumSignal, turnId: string): Promise<void> {
-        if (signal.type === CallosumSignalType.Reply) return this.reply(signal, turnId);
-        if (signal.type === CallosumSignalType.Soul) return this.soul(signal, turnId);
-        if (signal.type === CallosumSignalType.Coordinate) {
-            if (!this.synapse.coordinate) throw Error('Coordinate boundary is missing');
-            return this.synapse.coordinate(signal, turnId);
+            const replayCycle: ProviderMessage[] = [{
+                role: AgentChatRole.Assistant,
+                content: result.text,
+                actionRequests: result.actionRequests,
+                reasoning: result.reasoning,
+            } satisfies ProviderActionRequestMessage];
+            for (const request of result.actionRequests) {
+                const observation = await this.action.run(request, this.scope(), {
+                    focusId: control.focusId,
+                    revision: control.revision,
+                    agentId: this.agentConfig.name,
+                    cwd: control.cwd,
+                    signal: control.signal,
+                });
+                evidence.push(observation.evidence);
+                this.memoryRemember(observation.evidence, observation.result.ok ? 0.75 : 0.9);
+                replayCycle.push({
+                    role: 'action',
+                    content: this.providerResult(observation.result),
+                    actionRequestId: request.id,
+                    actionName: request.name,
+                    isError: !observation.result.ok,
+                } satisfies ProviderActionResultMessage);
+            }
+            replayCycles.push(replayCycle);
         }
-        return this.research(signal, turnId);
+        throw Error(`Thought step limit exceeded: ${this.agentConfig.name}`);
     }
 
-    private async reply(signal: CallosumSignal, turnId: string): Promise<void> {
-        let assistant = '';
-        const messages = [...this.memory.buildMessage(), { role: AgentChatRole.User, content: String(signal.chunk) }];
-        await this.intelligence.stream(messages, (chunk) => {
-            assistant += chunk;
-            this.synapse.emit(SynapseSignalType.Reply, chunk);
-        });
-        await this.context.settle(turnId, { assistant });
-        this.synapse.emit(SynapseSignalType.Reply, null);
+    public memorySnapshot() {
+        return this.memory.snapshot();
     }
 
-    private async research(signal: CallosumSignal, turnId: string): Promise<void> {
-        const messages = [...this.memory.buildMessage(), { role: AgentChatRole.User, content: String(signal.chunk) }];
-        const turn = this.context.turn(turnId);
-        const outcome = await this.investigation.run(signal, messages, { turnId, cwd: turn.cwd });
-        if (outcome.paused) return;
-        await this.context.settle(turnId, { assistant: outcome.answer, evidence: outcome.evidence });
-        this.synapse.emit(SynapseSignalType.Reply, null);
+    private scope(): FAgentActionScope {
+        return this.agentConfig.actionScope;
     }
 
-    private async soul(signal: CallosumSignal, turnId: string): Promise<void> {
-        const pkg = this.memory.prompt;
-        const raw = await this.intelligence.completeText([
-            { role: AgentChatRole.System, content: this.prompt.section(BrainPrompt.Soul) },
-            { role: AgentChatRole.User, content: `${pkg.render({ kind: 'document' })}\n<latest_user_message>${signal.chunk}</latest_user_message>` },
-        ]);
-        const plan = parse<{ writes?: Array<{ file?: string; content?: string }> }>(raw);
-        const { written, rejected } = pkg.applyWrites(plan.writes ?? []);
-        const assistant = `协议包已更新: ${written.join(', ') || '无'}${rejected.length ? `；已拒绝: ${rejected.join(', ')}` : ''}`;
-        this.synapse.emit(SynapseSignalType.Reply, assistant);
-        await this.context.settle(turnId, { assistant });
-        this.synapse.emit(SynapseSignalType.Reply, null);
+    private memoryMessages(context: AgentContext): ProviderMessage[] {
+        return this.memory.messages(context);
     }
 
-    /**
-     * EN: Worker understanding entry. Ingests the Context brief into this agent's
-     * private memory, then runs one investigation loop without touching Context.turns.
-     * ZH: worker 理解入口。把 Context 简报写入该 agent 的私有记忆，然后跑一轮
-     * investigation，不修改 Context.turns。
-     */
-    public async understand(brief: AgentBrief): Promise<InvestigationOutcome | undefined> {
-        this.memory.ingestBrief(brief);
-        const messages = this.memory.buildMessage();
-        const outcome = await this.investigation.run(
-            { type: CallosumSignalType.Research, chunk: brief.goal },
-            messages,
-            { emitReply: false, cwd: brief.cwd },
-        );
-        if (outcome.paused) return undefined;
-        return outcome;
+    private memoryRemember(content: string, salience: number): void {
+        this.memory.remember(content, 'observation', salience);
     }
+
+    private replay(cycles: ProviderMessage[][]): ProviderMessage[] {
+        const selected: ProviderMessage[][] = [];
+        const limit = Math.max(0, this.config.collective.contextCharLimit);
+        let chars = 0;
+        for (let index = cycles.length - 1; index >= 0; index -= 1) {
+            const cycle = cycles[index]!;
+            const size = JSON.stringify(cycle).length;
+            if (selected.length > 0 && chars + size > limit) break;
+            selected.unshift(cycle);
+            chars += size;
+        }
+        return selected.flat();
+    }
+
+    private providerResult(result: unknown): string {
+        const encoded = JSON.stringify(result);
+        if (encoded.length <= MAX_PROVIDER_ACTION_RESULT_CHARS) return encoded;
+        const marker = '\n...[tool result truncated for provider replay]...\n';
+        const edge = Math.floor((MAX_PROVIDER_ACTION_RESULT_CHARS - marker.length) / 2);
+        return `${encoded.slice(0, edge)}${marker}${encoded.slice(-edge)}`;
+    }
+
 }

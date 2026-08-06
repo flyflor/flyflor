@@ -1,103 +1,112 @@
 import { describe, expect, test } from 'bun:test';
+import { ConfigService, type FAgentProfileConfiguration, type FAgentActionScope } from '@/configuration';
+import type { FAgentHost } from '@/core';
+import { useContainer } from '@/core';
+import type { AgentContext, AgentFocus } from '@/collective/context';
 import { AgentChatRole } from '@/agent/types';
+import type { ProviderMessage } from '@/inference';
+import type { ActionObservation } from './action';
+import type { ThoughtOutcome } from './thought';
 import { Brain } from './brain';
-import { CallosumSignalType } from './callosum';
-import { SynapseSignalType } from '@/neural/types';
+
+const profile: FAgentProfileConfiguration = {
+    name: 'flyflor', role: 'leader', description: 'leader', capabilities: [], actionScope: 'full',
+    model: 'model', provider: 'provider', contextLength: 1, maxTokens: 1,
+};
+
+const focus: AgentFocus = {
+    id: 'focus_1', revision: 1, ownerSpeakerId: 'speaker', messages: [], goal: 'goal', constraints: [], references: [],
+};
 
 describe('Brain', () => {
-    test('awaits coordinate handling at the Synapse boundary', async () => {
-        let coordinated = false;
-        const brain = new Brain({ name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 }, {
-            emit: () => undefined,
-            coordinate: async () => {
-                coordinated = true;
-            },
-        });
-
-        await (brain as unknown as { handle: (signal: { type: CallosumSignalType; chunk: string }, turnId: string) => Promise<void> }).handle({
-            type: CallosumSignalType.Coordinate,
-            chunk: 'compare src/agent and src/neural',
-        }, 'turn_1');
-
-        expect(coordinated).toBe(true);
-    });
-
-    test('passes the latest user message into direct replies', async () => {
-        const emitted: Array<{ type: SynapseSignalType; data: unknown }> = [];
-        const seen: unknown[] = [];
-        const brain = new Brain({ name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 }, {
-            emit: (type: string, data: unknown) => {
-                emitted.push({ type: type as SynapseSignalType, data });
-                return undefined;
-            },
-        });
-        brain.memory = { buildMessage: () => [{ role: AgentChatRole.System, content: 'system' }] } as never;
-        brain.intelligence = {
-            stream: async (messages: unknown, onChunk: (chunk: string) => void) => {
-                seen.push(messages);
-                onChunk('PONG1');
+    test('runs Thought to Action to Observation to Thought without exposing reasoning', async () => {
+        const brain = useContainer().create(Brain, profile, { emit: () => undefined } satisfies FAgentHost);
+        brain.config = { collective: { contextCharLimit: 32000 } } as ConfigService;
+        const thoughts: ThoughtOutcome[] = [
+            { text: 'checking', reasoning: 'hidden chain', actionRequests: [{ id: 'read', name: 'filesystem', arguments: { action: 'read' } }], stopReason: 'toolUse' },
+            { text: 'final answer', reasoning: 'more hidden chain', actionRequests: [], stopReason: 'stop' },
+        ];
+        const messagesSeen: unknown[] = [];
+        brain.thought = {
+            think: async (messages: unknown[], _tools: unknown[], onText: (chunk: string) => void) => {
+                messagesSeen.push(structuredClone(messages));
+                const result = thoughts.shift()!;
+                onText(result.text);
+                return result;
             },
         } as never;
-        brain.context = { settle: async () => undefined, turn: () => ({ cwd: undefined }) } as never;
-
-        await (brain as unknown as { reply: (signal: { type: CallosumSignalType; chunk: string }, turnId: string) => Promise<void> }).reply({
-            type: CallosumSignalType.Reply,
-            chunk: '请只回复这五个字符：PONG1',
-        }, 'turn_1');
-
-        expect(seen[0]).toContainEqual({ role: AgentChatRole.User, content: '请只回复这五个字符：PONG1' });
-        expect(emitted).toContainEqual({ type: SynapseSignalType.Reply, data: 'PONG1' });
-    });
-
-    test('passes the latest user message into research turns', async () => {
-        const seen: unknown[] = [];
-        const brain = new Brain({ name: 'flyflor', model: '', provider: '', contextLength: 0, maxTokens: 0 }, {
-            emit: () => undefined,
-        } as never);
-        brain.memory = { buildMessage: () => [{ role: AgentChatRole.System, content: 'system' }] } as never;
-        brain.investigation = {
-            run: async (_signal: unknown, messages: unknown) => {
-                seen.push(messages);
-                return { answer: 'done', steps: 1, completed: true, paused: false, evidence: [] };
-            },
+        brain.action = {
+            tools: { list: async (_scope: FAgentActionScope) => [] },
+            run: async (): Promise<ActionObservation> => ({
+                request: { id: 'read', name: 'filesystem', arguments: { action: 'read' } },
+                result: { ok: true, name: 'filesystem', data: { content: 'provider-local raw result' } },
+                evidence: 'filesystem ok: path=/tmp/a',
+            }),
         } as never;
-        brain.context = { settle: async () => undefined, turn: () => ({ cwd: undefined }) } as never;
-
-        await (brain as unknown as { research: (signal: { type: CallosumSignalType; chunk: string }, turnId: string) => Promise<void> }).research({
-            type: CallosumSignalType.Research,
-            chunk: '请读取 package.json',
-        }, 'turn_1');
-
-        expect(seen[0]).toContainEqual({ role: AgentChatRole.User, content: '请读取 package.json' });
-    });
-
-    test('runs worker understanding silently from the assigned brief', async () => {
-        const seen: Array<{ signal: unknown; options: unknown }> = [];
-        const brain = new Brain({ name: 'worker', model: '', provider: '', contextLength: 0, maxTokens: 0 }, {
-            emit: () => undefined,
-        } as never);
+        const remembered: string[] = [];
         brain.memory = {
-            ingestBrief: () => undefined,
-            buildMessage: () => [{ role: AgentChatRole.System, content: 'worker base' }],
+            messages: (_context: AgentContext) => [{ role: 'user', content: 'goal' }],
+            remember: (content: string) => remembered.push(content),
+            snapshot: () => [],
         } as never;
-        brain.investigation = {
-            run: async (signal: unknown, _messages: unknown, options: unknown) => {
-                seen.push({ signal, options });
-                return { answer: 'done', steps: 1, completed: true, paused: false, evidence: [] };
-            },
-        } as never;
+        const chunks: string[] = [];
 
-        await brain.understand({
-            turnId: 'turn_1',
-            intent: 'research',
-            goal: 'study this slice',
-            persona: 'temporary specialist',
-            constraints: [],
-            refs: [],
-            recentSummaries: [],
+        const report = await brain.run({ agentId: 'flyflor', focus, history: [], items: [], localMemory: [] }, {
+            focusId: focus.id, revision: 1, signal: new AbortController().signal, stream: true, onChunk: (chunk) => chunks.push(chunk),
         });
 
-        expect(seen[0]?.signal).toEqual({ type: CallosumSignalType.Research, chunk: 'study this slice' });
-        expect(seen[0]?.options).toEqual({ emitReply: false, cwd: undefined });
+        expect(messagesSeen).toHaveLength(2);
+        expect(JSON.stringify(messagesSeen[1])).toContain('hidden chain');
+        expect(JSON.stringify(messagesSeen[1])).toContain('provider-local raw result');
+        expect(report.answer).toBe('checkingfinal answer');
+        expect(report.evidence).toEqual(['filesystem ok: path=/tmp/a']);
+        expect(JSON.stringify(report)).not.toContain('hidden chain');
+        expect(remembered).toEqual(['filesystem ok: path=/tmp/a']);
+        expect(chunks).toEqual(['checking', 'final answer']);
+    });
+
+    test('evicts old provider replay only as whole Thought/Action cycles', async () => {
+        const brain = useContainer().create(Brain, profile, { emit: () => undefined } satisfies FAgentHost);
+        brain.config = { collective: { contextCharLimit: 500 } } as ConfigService;
+        const messagesSeen: ProviderMessage[][] = [];
+        let thought = 0;
+        brain.thought = {
+            think: async (messages: ProviderMessage[]) => {
+                messagesSeen.push(structuredClone(messages));
+                thought += 1;
+                if (thought === 3) return { text: 'done', reasoning: '', actionRequests: [], stopReason: 'stop' };
+                return {
+                    text: `cycle-${thought}`,
+                    reasoning: `reasoning-${thought}`,
+                    actionRequests: [{ id: `call-${thought}`, name: 'filesystem', arguments: { action: 'read' } }],
+                    stopReason: 'toolUse',
+                };
+            },
+        } as never;
+        brain.action = {
+            tools: { list: async () => [] },
+            run: async (request: { id: string }): Promise<ActionObservation> => ({
+                request: { id: request.id, name: 'filesystem', arguments: { action: 'read' } },
+                result: { ok: true, name: 'filesystem', data: { content: request.id.repeat(3000) } },
+                evidence: `evidence-${request.id}`,
+            }),
+        } as never;
+        brain.memory = {
+            messages: () => [{ role: AgentChatRole.User, content: 'goal' }],
+            remember: () => undefined,
+            snapshot: () => [],
+        } as never;
+
+        await brain.run({ agentId: 'flyflor', focus, history: [], items: [], localMemory: [] }, {
+            focusId: focus.id, revision: 1, signal: new AbortController().signal, stream: false, onChunk: () => undefined,
+        });
+
+        const second = JSON.stringify(messagesSeen[1]);
+        const third = JSON.stringify(messagesSeen[2]);
+        expect(second).toContain('call-1');
+        expect(second).toContain('tool result truncated for provider replay');
+        expect(third).not.toContain('call-1');
+        expect(third).toContain('call-2');
+        expect(messagesSeen[2]?.filter((message) => message.role === 'action')).toHaveLength(1);
     });
 });

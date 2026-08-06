@@ -1,6 +1,6 @@
 # Flyflor
 
-Flyflor 是一个 Bun + TypeScript agent kernel。当前代码围绕 decorated classes、reflect-metadata IOC container、本地 length-prefixed IPC socket、prompt package、provider protocol adapter 和一组本地工具面运行。
+Flyflor 是一个 Bun + TypeScript 内核，用于承载单进程、无 session 的多人智能生命体。进程只有一条意识流和一个全局工作 Context。多个外部说话者通过稳定的 `speakerId` 区分，不会产生彼此隔离的对话。
 
 ## 快速开始
 
@@ -11,9 +11,9 @@ bun run dev
 bun run client
 ```
 
-`bun run dev` 启动 `src/bootstrap.ts` 并打开配置中的 IPC socket。`bun run client` 在 `http://127.0.0.1:17878` 启动本地浏览器桥，把浏览器 JSON 消息转发到这个 socket。
+内核会监听 `.config/config.jsonc` 中配置的 Unix socket；浏览器 bridge 在 `http://127.0.0.1:17878` 提供页面，并转发严格的 Flyflor IPC 数据包。
 
-改动健康门槛：
+提交改动前运行：
 
 ```bash
 bun run check
@@ -21,95 +21,46 @@ bun test
 bun run build:binary
 ```
 
-`bun run check` 会跑 TypeScript 和仓库红线扫描。默认 model/provider 在 `.config/config.jsonc`；secret 只放环境变量。
+密钥只放在环境变量中。进程重启会按设计清空 Context 和所有易失 Agent 笔记；socket 重连不会清空它们。
 
-## 运行时地图
-
-```mermaid
-flowchart TB
-    Bootstrap["src/bootstrap.ts<br/>先加载 reflect-metadata"] --> Factory["Factory.create(AppModule)"]
-    Factory --> Container["Container<br/>构造、注入、运行 @Init"]
-    Container --> AppModule["AppModule<br/>imports Synapse + PluginModule"]
-
-    AppModule --> Synapse["Synapse<br/>信号皮层 + active agent pool"]
-    AppModule --> PluginModule["PluginModule"]
-    PluginModule --> Tools["ToolComponent<br/>ask, confirm, filesystem, shell, execute"]
-
-    Synapse --> Socket["FSocket<br/>Bun IPC listener"]
-    Socket <--> Packet["IPCPacket<br/>8-byte length + JSON"]
-    Socket <--> Client["web/client.ts<br/>browser bridge"]
-
-    Synapse --> Agent["Agent<br/>scoped Brain + Memory"]
-    Agent --> Brain["Brain<br/>turn orchestration"]
-    Brain --> Callosum["Callosum<br/>route classifier"]
-    Brain --> Context["Context<br/>turns + summaries"]
-    Brain --> Memory["Memory<br/>private agent notes"]
-    Brain --> Investigation["Investigation<br/>local action loop"]
-    Brain --> Intelligence["Intelligence<br/>provider stream boundary"]
-    Context --> Intelligence
-    Investigation --> Tools
-    Investigation --> Intelligence
-    Intelligence --> Protocols["Protocol adapters<br/>OpenAI, Anthropic, Gemini, Bedrock,<br/>Cohere, HuggingFace, Ollama, vLLM, LM Studio"]
-```
-
-## 启动生命周期
+## 运行链路
 
 ```mermaid
 flowchart LR
-    A["bootstrap.ts"] --> B["import reflect-metadata"]
-    B --> C["Factory.create(AppModule)"]
-    C --> D["Container.getAsync(AppModule)"]
-    D --> E["构建 module imports"]
-    E --> F["构造 class"]
-    F --> G["@Config / @Prompt 早期注入"]
-    G --> H["@Inject / @Scope 依赖注入"]
-    H --> I["@Init lifecycle method"]
-    I --> J["Factory.synapse()"]
+    IPC["IPCModule"] --> Socket["Socket\n每连接 decoder + 写队列"]
+    Socket --> Manager["AgentManager\n固定成员 + 调度"]
+    Manager --> Attention["Attention\n聚焦、合并、排队、公平"]
+    Attention --> Context["Context\n唯一全局工作空间"]
+    Context --> Agents["固定 Agents\n主 Agent + 专家"]
+    Agents --> Brain["Brain"]
+    Brain --> Thought["Thought"]
+    Thought --> Action["Action"]
+    Action --> Thought
+    Action --> Tools["插件工具"]
+    Thought --> Inference["Inference + 协议适配器"]
 ```
 
-应用类只应由 IOC container 构造。带 singleton metadata 的 class 会缓存；普通 provider 每次解析时 fresh 创建。
+对象边界如下：
 
-## 一次用户回合
+- `IPC → Socket` 负责 framing、校验、连接身份和 backpressure。
+- `AgentManager` 负责固定成员构建、单焦点、取消、revision 校验和输出路由，不直接生成答案。
+- `Attention` 是显著性门控。相关刺激合并到当前焦点，无关刺激进入有界且公平的队列。
+- `Context` 是对话事实唯一所有者，保存当前焦点、约束、决定、证据、未决事项和带来源摘要。
+- 每个固定 `Agent` 只有保存观察与反思的易失局部 `Memory`，不拥有独立对话 transcript。
+- 每个成员的 `Brain` 都运行 `Thought → Action/Observation → Thought` 闭环。隐藏 provider 推理和 replay 缓冲只留在当前推理调用内部。
+- 只有配置的主 Agent 能使用副作用工具；专家强制只读，并在主 Agent 综合前并行工作。
 
-```mermaid
-flowchart TD
-    User["IPC packet<br/>action=user 或 answer"] --> Decode["FSocket -> IPCPacket.decode"]
-    Decode --> Input["Synapse.emit(input, text)"]
-    Input --> AgentNext["active Agent.next(text)"]
-    AgentNext --> Ingest["Context.ingest()<br/>LLM 提取 intent, goal, cwd, refs"]
-    Ingest --> Route["Callosum.route(text)"]
+## 焦点与连续性
 
-    Route --> Choice{"route type"}
-    Choice -- reply --> Reply["Brain.reply()<br/>Memory messages 经过 Intelligence stream"]
-    Reply --> ReplyOut["Synapse reply chunks<br/>然后 streamEnd"]
-    ReplyOut --> Settle1["Context.settle()"]
+全局同时最多一个外部焦点。空闲时第一条刺激创建焦点；工作中优先检查显式 `replyTo`，否则由 Attention 判断语义关联。合并会增加 `revision`、发送 `responseReset`、取消可取消的模型工作，并让主 Agent 基于新 Context 重思考。只有解析出工具 atom，并在执行前一刻再次校验当前 revision 后，action 才算真正开始；实际已经开始的副作用会完成，并以精简证据记录。
 
-    Choice -- research 或 task --> Research["Investigation.run()"]
-    Research --> LlmTools["Intelligence.streamRequest()<br/>with tool definitions"]
-    LlmTools --> HasAction{"tool calls?"}
-    HasAction -- no --> FinalAnswer["final answer"]
-    HasAction -- yes --> RunTool["ToolComponent.run()"]
-    RunTool --> Pause{"ask / confirm?"}
-    Pause -- yes --> UserPause["emit ask 或 confirm<br/>标记 active turn paused"]
-    Pause -- no --> LlmTools
-    FinalAnswer --> Settle2["Context.settle(evidence)"]
+等待 `ask` 或 `confirm` 时是硬闸门，普通消息排队。只有携带匹配 `focusId` + `requestId` 且由焦点拥有者发出的 answer，或拥有者发出的 cancel，才能解除等待；ask 回答还必须与 pending questions 的数量、顺序和文本完全一致。拥有者重连后通过新连接回答或取消时，该连接会自动附着到焦点。ask 回答会作为带来源约束写入 Context，confirm 结果会作为带来源决定写入 Context。跨 speaker 合并后，最终流定向发送给所有参与连接，但确认权仍属于创建焦点的拥有者。取消结果会立即发送，但已经开始的副作用会完成并记录精简观察，之后才释放焦点。
 
-    Choice -- soul --> Soul["render prompt package XML<br/>LLM 规划写入"]
-    Soul --> Apply["PromptService.applyWrites()"]
-    Apply --> Settle3["Context.settle()"]
+队列上限由 `collective.queueLimit` 控制，按显著性、等待时间和说话者公平性选取；队列满时明确拒绝最新消息。排队根消息激活时，会在推理开始前吸收它的显式 `replyTo` 链，因此相关排队说话者共享一个焦点和一个最终 revision。每个入站 action 都在进程范围占用自己的 `messageId`。完全相同的 `user`、`answer` 或 `cancel` 重试是幂等的，并返回该命令稳定的原始 receipt；同一 ID 被用于不同 action 或载荷时会被拒绝。幂等记录只保存载荷的 SHA-256 指纹，不保留原始对话或交互回答。
 
-    Choice -- coordinate --> Coordinate["Synapse.coordinate()<br/>LLM 规划临时 persona"]
-    Coordinate --> Workers["静默 worker understand() 调用"]
-    Workers --> Review["静默 reviewer understand() 调用"]
-    Review --> Synthesis["综合 outcomes + review"]
-    Synthesis --> Settle4["Context.settle(evidence)"]
-```
+## IPC
 
-`Context` 是 durable turn owner。`Memory` 不是 transcript；它是从 `Context.brief()` 初始化的、有容量上限的 agent 私有笔记缓存。
-
-## IPC 协议
-
-kernel socket 上每个 packet 都是 8-byte unsigned big-endian JSON body length，加 UTF-8 JSON body：
+socket 上每个数据包都是 8 字节无符号大端正文长度，后接 UTF-8 JSON：
 
 ```txt
 +--------------------------+-------------------------------+
@@ -117,60 +68,45 @@ kernel socket 上每个 packet 都是 8-byte unsigned big-endian JSON body lengt
 +--------------------------+-------------------------------+
 ```
 
-入站 `action: "user"` 或 `action: "answer"` 会变成 agent input。其他入站 action 会派发给 `Controller`；当前 controller action 是 `cwd`，用于更新 `ConfigService.path.cwd`。
+协议严格校验，旧格式会被拒绝：
 
-常见出站 action 是 `open`、`agent`、`streamEnd`、`data`、`ask`、`confirm`、`pause`、`resume`、`error`。
+```ts
+interface IpcEnvelope<A extends string, D> {
+    protocol: 'flyflor.ipc';
+    messageId: string;
+    action: A;
+    data: D;
+}
 
-## 模型边界
-
-`Intelligence` 对外只暴露统一 stream contract：
-
-- `text_delta`：可见输出。
-- `reasoning_delta`：需要在 provider 后续调用中回放的 reasoning。
-- `action_start`、`action_delta`、`action_end`：streaming tool call。
-- `done`：结束原因是 `stop`、`length` 或 `toolUse`。
-
-协议选择来自 `.config/config.jsonc` 里的 active provider。provider 级 `protocols` 覆盖 `model.protocols`；每个 protocol adapter 只负责自己的 wire body 和 stream parser。
-
-## 工具面
-
-当前暴露给模型的工具由 `prompts/tools/config.jsonc` 加载，实现在 `src/plugins/tools`：
-
-- `ask`：请用户从选项中选择；工具会自动补一个 `other` 选项。
-- `confirm`：请求 yes/no 风格确认，并携带 recommended boolean。
-- `filesystem`：`read`、`write`、`edit` 或 file-only `delete`，路径来自显式 `cwd` 或 `ConfigService.path.cwd`。
-- `shell`：运行一个 command + args，有有界 timeout。
-- `execute`：串行或并行运行 `python` / `sh` script tasks，可带 per-task cwd、env、timeout。
-
-`Investigation` 拥有 tool loop。tool request/result replay 只留在 provider messages 里，不写入 `Context.turns`。
-
-## Prompt Runtime
-
-`PromptService` 可加载单个 markdown 文件，也可加载带 `config.jsonc` 的 prompt package 目录。package config 定义普通渲染 sections、editable files、locked files、runtime-ignored files，以及 `soul` route 使用的 XML document view。
-
-canonical runtime prompt source 是英文 `.md` 文件。`.zh.cn.md` 是 human mirror，不能成为运行时 source-of-truth。
-
-## 源码布局
-
-```txt
-src/bootstrap.ts                       process entrypoint
-src/app.module.ts                      root @Module
-src/configuration.ts                   ConfigService 和 runtime config types
-src/core/                              decorators、IOC、base classes、prompt、logger、tool contracts
-src/neural/                            Synapse、IPC socket、packet codec、controller
-src/agent/                             Agent、Brain、Callosum、Context、Memory、Investigation、Intelligence
-src/plugins/                           plugin boundary 和 local tools
-src/entities/                          entity/repository classes；MemoryRepo 当前只返回 SQL statements
-web/                                   本地 browser-to-IPC bridge 和测试页
-prompts/                               prompt packages 和 zh.cn mirrors
-.config/                              runtime config 和 active agent prompt package
-sql/                                   schema files
-pakcages/                              bundled sqlite-vec helper/native assets；不在当前 agent turn path
-scripts/check.script.ts                docs mirror 和 prompt-term checks
+interface UserInput {
+    speakerId: string;
+    text: string;
+    replyTo?: string;
+}
 ```
 
-## 当前边界
+入站 action 为 `user`、`answer`、`cancel`。`open` 返回 `connectionId` 和协议版本。每个被接受的入站命令都会返回 `event` receipt。公共 `attention` 只包含状态和队列深度。正文增量使用 `{ focusId, revision, chunk }`；焦点合并会发送 `responseReset`。回答、确认、工具事件、错误和最终流只发送给相关焦点参与者。
 
-`MemoryRepo` 和 `sql/001-core-schema.sql` 准备了未来 persistence boundary，但当前 `Agent`、`Context`、`Memory` 路径仍是内存态。config file 也声明了 skills 和 MCP shapes，但当前代码还没有把 runtime MCP client 或 skill loader 接进 turn loop。
+每个 socket 拥有独立 decoder、严格有序的入站队列和带 backpressure 的输出队列，能处理 UTF-8 分片、粘包、坏帧和重叠 data 回调。每连接的待处理输入和输出分别最多容纳两个最大 IPC 包；慢客户端或洪泛客户端会被单独断开，不影响健康连接。一个完整坏帧只产生一条错误，不会丢弃同一 chunk 中排在后面的合法帧。连接断开只移除它在当前焦点中的传输路由，不删除 speaker 身份；重连可以附着新路由，但断线期间产生的流不补发。超大出站包只会在目标连接上转化为错误，不会打断 Agent 执行。
 
-项目规则在 `AGENTS.md`；本 README 只做实现总览。
+Attention 会在分类前把当前刺激投影到 `collective.contextCharLimit`；Context 也会按同一预算为每个 Agent 独立构造输入。完整的进程内事实不被修改，受限模型输入保留首条与最新消息和约束。`collective.contextItemLimit` 是存储硬上限：先淘汰普通条目；只有全部槽位都受保护时，才淘汰最老的非 pinned 保护条目；当前焦点约束仍完整留在 Focus 上。
+
+Inference 会透传外部取消原因，执行 provider/model 的请求总超时和流停滞超时，并在失败或调用方取消读取时终止活动 byte reader。provider 返回的空或重复 tool-call ID 会在交互或 replay 前被规范化为唯一 request ID。Brain 使用 `collective.contextCharLimit` 作为旧 provider-only 工具 replay 的保留预算，只按完整 Thought/Action 周期淘汰旧内容，并始终保留最新完整周期；单条 replay 工具结果最多 12,000 字符。Filesystem 读取最多返回 20,000 个有效 UTF-8 字节。Shell 和 execute 的每个 stdout/stderr 流最多保留 20,000 字符；截断时保留首尾并设置显式标记。Execute 最多接受 64 个任务，有效并发上限为 8。
+
+## 目录
+
+```txt
+src/ipc/                          framing 和多连接 socket 边界
+src/collective/                   AgentManager、Attention、全局 Context
+src/agent/                        固定 Agent、易失 Memory、Brain、Thought、Action
+src/inference/                    模型/provider 基础设施和适配器
+src/plugins/tools/                ask、filesystem、shell、execute 原子工具
+prompts/agents/                   只读固定身份 prompt 包
+prompts/attention/                显著性/焦点 prompt 包
+web/                              浏览器 bridge 和本地 IPC 控制台
+.config/config.jsonc              模型、群体、成员和 socket 配置
+```
+
+运行时 prompt 的规范源是英文 `.md` 文件。所有文档和 prompt 源都有人工维护的 `.zh.cn.md` 镜像；运行时代码不会读取镜像。
+
+应用 class 只能由 IOC container 构造。`@Module`、`@Singleton`、`@Provide`、`@Inject`、`@Scope`、`@Init` 装饰器明确声明生命周期和所有权。

@@ -112,6 +112,8 @@ export interface ShellOutput {
     exitCode: number | null;
     stdout: string;
     stderr: string;
+    stdoutTruncated: boolean;
+    stderrTruncated: boolean;
     timedOut: boolean;
 }
 
@@ -143,6 +145,8 @@ export interface ExecuteTaskResult {
     exitCode: number | null;
     stdout: string;
     stderr: string;
+    stdoutTruncated: boolean;
+    stderrTruncated: boolean;
     timedOut: boolean;
     ok: boolean;
     durationMs: number;
@@ -151,6 +155,7 @@ export interface ExecuteTaskResult {
 export interface ExecuteOutput {
     action: 'execute';
     mode: ExecuteMode;
+    maxConcurrency: number;
     cwd: string;
     total: number;
     success: number;

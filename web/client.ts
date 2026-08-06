@@ -1,6 +1,8 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import type { ServerWebSocket } from 'bun';
+import { MAX_BODY_BYTES } from '../src/ipc/packet';
+import { IPC_PROTOCOL, type IpcEnvelope } from '../src/ipc/types';
 
 /**
  * EN: Browser test bridge configuration.
@@ -17,29 +19,23 @@ export interface IpcClientBridgeConfig {
 }
 
 export enum SocketEvent {
-    Constructor = 'constructor',
     Close = 'close',
     Error = 'error',
     Open = 'open',
-    User = 'user',
+    Attention = 'attention',
     Agent = 'agent',
-    Data = 'data',
+    ResponseReset = 'responseReset',
     StreamEnd = 'streamEnd',
-    Drain = 'drain',
-    Handshake = 'handshake',
-    End = 'end',
-    ConnectError = 'connectError',
-    Timeout = 'timeout',
+    Event = 'event',
+    Ask = 'ask',
+    Confirm = 'confirm',
 }
 
 /**
  * EN: One JSON packet exchanged with the kernel and mirrored to the browser test page.
  * ZH: 与内核交换并镜像到浏览器测试页的一条 JSON packet。
  */
-interface IPCMessage {
-    action: SocketEvent;
-    data: unknown;
-}
+type IPCMessage = IpcEnvelope<SocketEvent, unknown>;
 
 /** EN: WebSocket connection state stored by Bun for each browser client. ZH: Bun 为每个浏览器客户端保存的 WebSocket 连接状态。 */
 interface BrowserSocketData {
@@ -233,6 +229,10 @@ function decodePacketTexts(pending: Buffer<ArrayBufferLike>, data: Uint8Array): 
             return { packets, errors, pending: Buffer.alloc(0) };
         }
         const bodyLength = Number(contentLength);
+        if (bodyLength > MAX_BODY_BYTES) {
+            errors.push(PACKET_LENGTH_INVALID_MESSAGE);
+            return { packets, errors, pending: Buffer.alloc(0) };
+        }
         const packetLength = PACKET_LENGTH_HEADER_BYTES + bodyLength;
         if (buffer.byteLength < packetLength) {
             break;
@@ -259,7 +259,12 @@ function encodeBrowserMessage(message: string | Buffer): Buffer {
     if (typeof message !== 'string') {
         throw Error(BROWSER_JSON_ONLY_MESSAGE);
     }
-    const parsed = JSON.parse(message) as { action?: unknown };
+    const parsed = JSON.parse(message) as Partial<IpcEnvelope>;
+    if (parsed.protocol !== IPC_PROTOCOL) throw Error(`Unsupported IPC protocol: ${String(parsed.protocol)}`);
+    if (typeof parsed.messageId !== 'string' || parsed.messageId.trim().length === 0) throw Error('IPC messageId is required');
+    if (parsed.action !== 'user' && parsed.action !== 'answer' && parsed.action !== 'cancel') {
+        throw Error(`Unsupported IPC action: ${String(parsed.action)}`);
+    }
     debugBridge('browser.in.json', {
         action: typeof parsed?.action === 'string' ? parsed.action : undefined,
         chars: message.length,
@@ -293,7 +298,12 @@ function sendBrowserError(browser: ServerWebSocket<BrowserSocketData>, message: 
  * ZH: 向浏览器客户端发送一条 bridge packet。
  */
 function sendBrowserPacket(browser: ServerWebSocket<BrowserSocketData>, action: SocketEvent, data: unknown) {
-    browser.send(JSON.stringify({ action, data } satisfies IPCMessage));
+    browser.send(JSON.stringify({
+        protocol: IPC_PROTOCOL,
+        messageId: crypto.randomUUID(),
+        action,
+        data,
+    } satisfies IPCMessage));
 }
 
 /**

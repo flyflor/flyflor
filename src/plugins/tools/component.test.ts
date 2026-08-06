@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { ConfigService } from '@/configuration';
 import { FToolAtom, useContainer } from '@/core';
-import { Context } from '@/agent/context';
 import { Ask, Execute, Filesystem, Shell, ToolComponent } from '@/plugins';
 
 async function component(): Promise<ToolComponent> {
@@ -24,25 +23,6 @@ describe('ToolComponent', () => {
         other = mkdtempSync(join(tmpdir(), 'flyflor-tools-other-'));
         ConfigService.path = { ...ConfigService.path, cwd: root };
         process.chdir(other);
-        const context = new Context();
-        context.prompt = { section: () => 'system placeholder' } as never;
-        context.intelligence = {
-            completeText: async (messages: Array<{ role: string; content: string }>) => {
-                const user = messages.find((m) => m.role === 'user')?.content ?? '';
-                const match = /cwd=([^\s,"}]+)/.exec(user);
-                return JSON.stringify({
-                    intent: 'research',
-                    goal: user,
-                    cwd: match?.[1],
-                    constraints: [],
-                    refs: [],
-                    done: [],
-                    open: [],
-                    investigate: true,
-                });
-            },
-        } as never;
-        await context.ingest({ text: `调查当前环境 cwd=${other}` });
     });
 
     afterEach(() => {
@@ -57,6 +37,12 @@ describe('ToolComponent', () => {
 
         expect(definitions.map((definition) => definition.name)).toEqual(['ask', 'filesystem', 'shell', 'execute']);
         expect(definitions.find((definition) => definition.name === 'filesystem')?.parameters.required).toEqual(['action', 'path']);
+        expect(definitions.find((definition) => definition.name === 'filesystem')?.parameters).toMatchObject({
+            properties: { limitBytes: { minimum: 0, maximum: 20000 } },
+        });
+        expect(definitions.find((definition) => definition.name === 'execute')?.parameters).toMatchObject({
+            properties: { maxConcurrency: { minimum: 1, maximum: 8 }, tasks: { maxItems: 64 } },
+        });
         expect(definitions.find((definition) => definition.name === 'task')).toBeUndefined();
         expect(definitions.find((definition) => definition.name === 'ask')?.description).toContain('Ask the user');
         const shell = definitions.find((definition) => definition.name === 'shell');
@@ -134,6 +120,21 @@ describe('ToolComponent', () => {
         rmSync(target, { force: true });
     });
 
+    test('filesystem enforces its byte limit without splitting UTF-8 characters', async () => {
+        writeFileSync(join(root, 'unicode.txt'), '你'.repeat(10000), 'utf-8');
+        const tools = await component();
+
+        const narrow = await tools.run({ id: 'read_narrow', name: 'filesystem', arguments: { action: 'read', path: 'unicode.txt', limitBytes: 5 } });
+        const clamped = await tools.run({ id: 'read_clamped', name: 'filesystem', arguments: { action: 'read', path: 'unicode.txt', limitBytes: 1000000 } });
+
+        expect(narrow.data).toMatchObject({ action: 'read', content: '你', bytes: 3, truncated: true });
+        const data = clamped.data as { content: string; bytes: number; truncated: boolean };
+        expect(data.bytes).toBeLessThanOrEqual(20000);
+        expect(Buffer.byteLength(data.content, 'utf-8')).toBe(data.bytes);
+        expect(data.content).not.toContain('�');
+        expect(data.truncated).toBe(true);
+    });
+
     test('filesystem rejects list and directory deletion', async () => {
         const tools = await component();
         mkdirSync(join(root, 'dir'), { recursive: true });
@@ -181,6 +182,27 @@ describe('ToolComponent', () => {
         expect(ConfigService.path.cwd).toBe(root);
     });
 
+    test('shell bounds stdout and stderr while preserving both edges', async () => {
+        const stdout = `${'H'.repeat(12000)}${'M'.repeat(12000)}${'T'.repeat(12000)}`;
+        const stderr = `${'E'.repeat(12000)}${'X'.repeat(12000)}${'R'.repeat(12000)}`;
+        const result = await (await component()).run({
+            id: 'shell_large',
+            name: 'shell',
+            arguments: {
+                command: process.execPath,
+                args: ['-e', `process.stdout.write(${JSON.stringify(stdout)});process.stderr.write(${JSON.stringify(stderr)})`],
+            },
+        });
+
+        expect(result.ok).toBe(true);
+        const data = result.data as { stdout: string; stderr: string; stdoutTruncated: boolean; stderrTruncated: boolean };
+        expect(data).toMatchObject({ stdoutTruncated: true, stderrTruncated: true });
+        expect(data.stdout).toHaveLength(20000);
+        expect(data.stdout).toBe(`${'H'.repeat(10000)}${'T'.repeat(10000)}`);
+        expect(data.stderr).toHaveLength(20000);
+        expect(data.stderr).toBe(`${'E'.repeat(10000)}${'R'.repeat(10000)}`);
+    });
+
     test('execute runs script batches from config cwd and keeps serial order', async () => {
         writeFileSync(join(root, 'one.sh'), 'printf "one:%s\\n" "$PWD"\n', 'utf-8');
         writeFileSync(join(root, 'two.sh'), 'printf "two:%s\\n" "$PWD"\n', 'utf-8');
@@ -223,12 +245,52 @@ describe('ToolComponent', () => {
         });
 
         expect(result.ok).toBe(true);
-        expect(result.data).toMatchObject({ action: 'execute', mode: 'parallel', cwd: root, total: 2, success: 1, failed: 1 });
+        expect(result.data).toMatchObject({ action: 'execute', mode: 'parallel', maxConcurrency: 2, cwd: root, total: 2, success: 1, failed: 1 });
         const results = (result.data as { results: Array<{ id?: string; cwd: string; timedOut: boolean; ok: boolean; stdout: string }> }).results;
         expect(results.find((item) => item.id === 'slow')).toMatchObject({ cwd: root, timedOut: true, ok: false });
         const nested = results.find((item) => item.id === 'nested');
         expect(nested).toMatchObject({ cwd: resolve(root, 'sub'), timedOut: false, ok: true });
         expect(nested?.stdout).toBe(`nested:${realpathSync(nested!.cwd)}\n`);
+    });
+
+    test('execute bounds each task output independently', async () => {
+        const stdout = `${'A'.repeat(12000)}${'B'.repeat(12000)}${'C'.repeat(12000)}`;
+        const stderr = `${'D'.repeat(12000)}${'E'.repeat(12000)}${'F'.repeat(12000)}`;
+        writeFileSync(join(root, 'large.sh'), `printf '%s' '${stdout}'\nprintf '%s' '${stderr}' >&2\n`, 'utf-8');
+
+        const result = await (await component()).run({
+            id: 'execute_large',
+            name: 'execute',
+            arguments: { tasks: [{ runtime: 'sh', path: 'large.sh' }] },
+        });
+
+        expect(result.ok).toBe(true);
+        const task = (result.data as { results: Array<{ stdout: string; stderr: string; stdoutTruncated: boolean; stderrTruncated: boolean }> }).results[0]!;
+        expect(task).toMatchObject({ stdoutTruncated: true, stderrTruncated: true });
+        expect(task.stdout).toBe(`${'A'.repeat(10000)}${'C'.repeat(10000)}`);
+        expect(task.stderr).toBe(`${'D'.repeat(10000)}${'F'.repeat(10000)}`);
+    });
+
+    test('execute caps task count and effective parallelism', async () => {
+        writeFileSync(join(root, 'noop.sh'), 'exit 0\n', 'utf-8');
+        const tools = await component();
+        const oversized = await tools.run({
+            id: 'execute_oversized',
+            name: 'execute',
+            arguments: { tasks: Array.from({ length: 65 }, () => ({ runtime: 'sh', path: 'noop.sh' })) },
+        });
+        const bounded = await tools.run({
+            id: 'execute_bounded',
+            name: 'execute',
+            arguments: {
+                mode: 'parallel',
+                maxConcurrency: 100,
+                tasks: Array.from({ length: 9 }, (_, index) => ({ id: String(index), runtime: 'sh', path: 'noop.sh' })),
+            },
+        });
+
+        expect(oversized.error?.message).toBe('tasks exceeds 64 items');
+        expect(bounded.data).toMatchObject({ action: 'execute', mode: 'parallel', maxConcurrency: 8, total: 9, success: 9 });
     });
 
     test('filesystem and execute ignore process cwd changes when config cwd is fixed', async () => {

@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "description": "Read-only identity for the fixed research specialist.",
+  "prompt": { "sections": ["IDENTITY", "RULES", "CAPABILITIES"] }
+}

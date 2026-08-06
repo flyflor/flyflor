@@ -1,13 +1,14 @@
 import { FModule, Module } from '@/core';
 import { PluginModule } from '@/plugins';
-import { Synapse } from '@/neural';
+import { AgentManager } from '@/collective';
+import { IPCModule } from '@/ipc';
 
 /**
  * The root Flyflor module.
  * Imports the runtime transport layer and the external capability boundary used by the active agent.
  */
 @Module({
-    imports: [Synapse, PluginModule],
+    imports: [PluginModule, AgentManager, IPCModule],
 })
 /**
  * EN: AppModule class declaration.

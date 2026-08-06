@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "description": "Dialogue history compression for the collective's short-term memory.",
+  "prompt": {
+    "sections": ["COMPACT"]
+  }
+}

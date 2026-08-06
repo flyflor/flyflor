@@ -3,6 +3,15 @@ import { Config, FToolAtom, Tool } from '@/core';
 import { spawn } from 'node:child_process';
 import type { ShellInput, ShellOutput } from './types';
 
+const OUTPUT_CHAR_LIMIT = 20000;
+const OUTPUT_EDGE_CHAR_LIMIT = OUTPUT_CHAR_LIMIT / 2;
+
+interface CapturedOutput {
+    head: string;
+    tail: string;
+    truncated: boolean;
+}
+
 @Tool()
 /**
  * EN: Shell class declaration.
@@ -25,11 +34,11 @@ export class Shell extends FToolAtom<ShellInput, ShellOutput> {
             cwd,
             stdio: ['ignore', 'pipe', 'pipe'],
         });
-        let stdout = '';
-        let stderr = '';
+        const stdout = this.capture();
+        const stderr = this.capture();
         let timedOut = false;
-        proc.stdout.on('data', (chunk) => { stdout += String(chunk); });
-        proc.stderr.on('data', (chunk) => { stderr += String(chunk); });
+        proc.stdout.on('data', (chunk) => { this.append(stdout, String(chunk)); });
+        proc.stderr.on('data', (chunk) => { this.append(stderr, String(chunk)); });
         const timer = setTimeout(() => {
             timedOut = true;
             proc.kill();
@@ -42,7 +51,18 @@ export class Shell extends FToolAtom<ShellInput, ShellOutput> {
             });
             return {
                 ok: true,
-                data: { action: 'shell', cwd, command, args, exitCode, stdout, stderr, timedOut },
+                data: {
+                    action: 'shell',
+                    cwd,
+                    command,
+                    args,
+                    exitCode,
+                    stdout: this.output(stdout),
+                    stderr: this.output(stderr),
+                    stdoutTruncated: stdout.truncated,
+                    stderrTruncated: stderr.truncated,
+                    timedOut,
+                },
                 effects: [{ type: 'execute' }],
             } as const;
         } finally {
@@ -81,5 +101,28 @@ export class Shell extends FToolAtom<ShellInput, ShellOutput> {
         if (value === undefined) return 30000;
         if (typeof value !== 'number' || !Number.isFinite(value)) throw Error('timeoutMs must be a number');
         return Math.min(120000, Math.max(1000, Math.floor(value)));
+    }
+
+    private capture(): CapturedOutput {
+        return { head: '', tail: '', truncated: false };
+    }
+
+    private append(output: CapturedOutput, chunk: string): void {
+        if (output.truncated) {
+            output.tail = `${output.tail}${chunk}`.slice(-OUTPUT_EDGE_CHAR_LIMIT);
+            return;
+        }
+        const combined = `${output.head}${chunk}`;
+        if (combined.length <= OUTPUT_CHAR_LIMIT) {
+            output.head = combined;
+            return;
+        }
+        output.head = combined.slice(0, OUTPUT_EDGE_CHAR_LIMIT);
+        output.tail = combined.slice(-OUTPUT_EDGE_CHAR_LIMIT);
+        output.truncated = true;
+    }
+
+    private output(output: CapturedOutput): string {
+        return output.truncated ? `${output.head}${output.tail}` : output.head;
     }
 }

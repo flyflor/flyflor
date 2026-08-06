@@ -4,6 +4,8 @@ import { mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'no
 import { dirname, isAbsolute, resolve } from 'node:path';
 import type { FilesystemInput, FilesystemInputAction, FilesystemOutput } from './types';
 
+const MAX_READ_BYTES = 20000;
+
 @Tool()
 /**
  * EN: Filesystem class declaration.
@@ -29,10 +31,11 @@ export class Filesystem extends FToolAtom<FilesystemInput, FilesystemOutput> {
         const path = this.path(input.path, input.cwd);
         const offsetLines = this.number(input.offsetLines, 'offsetLines', 0);
         const limitLines = this.number(input.limitLines, 'limitLines', 200);
-        const limitBytes = this.number(input.limitBytes, 'limitBytes', 20000);
+        const limitBytes = Math.min(MAX_READ_BYTES, this.number(input.limitBytes, 'limitBytes', MAX_READ_BYTES));
         const content = readFileSync(path, 'utf-8');
         const sliced = content.split(/\r?\n/).slice(offsetLines, offsetLines + limitLines).join('\n');
-        const limited = Buffer.byteLength(sliced) > limitBytes ? sliced.slice(0, limitBytes) : sliced;
+        const source = Buffer.from(sliced, 'utf-8');
+        const limited = source.byteLength > limitBytes ? this.utf8Prefix(source, limitBytes) : sliced;
         return {
             ok: true,
             data: {
@@ -110,5 +113,11 @@ export class Filesystem extends FToolAtom<FilesystemInput, FilesystemOutput> {
         if (value === undefined) return fallback;
         if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) throw Error(`${name} must be a non-negative number`);
         return Math.floor(value);
+    }
+
+    private utf8Prefix(value: Buffer, limit: number): string {
+        let end = Math.min(value.byteLength, limit);
+        while (end > 0 && (value[end]! & 0xc0) === 0x80) end -= 1;
+        return value.subarray(0, end).toString('utf-8');
     }
 }

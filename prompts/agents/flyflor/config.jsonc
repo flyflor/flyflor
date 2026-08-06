@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "description": "Read-only identity for the collective leader.",
+  "prompt": { "sections": ["IDENTITY", "RULES", "CAPABILITIES"] }
+}

@@ -99,20 +99,35 @@ export interface FModelConfiguration {
     maxTokens: number;
 }
 
+export type FAgentRole = 'leader' | 'specialist';
+export type FAgentActionScope = 'full' | 'read';
+
 /**
- * EN: Persistent memory configuration.
- * ZH: 持久记忆配置。
- *
- * EN: It controls agent memory, user profile memory, character budgets, periodic nudges, and flush timing.
- * ZH: 它控制 agent memory、user profile memory、字符预算、周期性提醒和 flush 时机。
+ * EN: Volatile process-local collective configuration.
+ * `historyShare` is the fraction of the model's usable context window reserved for verbatim dialogue history.
+ * ZH: 仅存在于进程生命周期内的群体配置。
+ * `historyShare` 表示模型可用上下文窗口中划给逐字对话历史的比例。
  */
-export interface FMemoryConfiguration {
-    memoryEnabled: boolean;
-    userProfileEnabled: boolean;
-    memoryCharLimit: number;
-    userCharLimit: number;
-    nudgeInterval: number;
-    flushMinTurns: number;
+export interface FCollectiveConfiguration {
+    leader: string;
+    queueLimit: number;
+    contextItemLimit: number;
+    contextCharLimit: number;
+    agentNoteLimit: number;
+    historyShare: number;
+}
+
+/**
+ * EN: Life ledger persistence settings.
+ * `directory` holds one monthly SQLite shard per file; relative paths resolve against the process cwd
+ * so compiled single-file binaries behave exactly like dev runs.
+ * ZH: 生命账本持久化设置。
+ * `directory` 以每文件一个月度 SQLite 分片存放账本；相对路径按进程 cwd 解析，
+ * 使编译后的单文件二进制与开发运行行为一致。
+ */
+export interface FLedgerConfiguration {
+    enabled: boolean;
+    directory: string;
 }
 
 /**
@@ -124,6 +139,10 @@ export interface FMemoryConfiguration {
  */
 export interface FAgentProfileConfiguration {
     name: string;
+    role: FAgentRole;
+    description: string;
+    capabilities: string[];
+    actionScope: FAgentActionScope;
     model: string;
     provider: string;
     contextLength: number;
@@ -136,16 +155,16 @@ export interface FAgentProfileConfiguration {
  * EN: Flyflor's single configuration object.
  * ZH: Flyflor 的单一配置对象。
  *
- * EN: It keeps the fields Flyflor currently needs: model/provider settings, memory, agent profiles, skills,
+ * EN: It keeps the fields Flyflor currently needs: model/provider settings, the volatile collective, agent profiles, skills,
  * MCP servers, and the public IPC socket path.
- * ZH: 它只保存 Flyflor 当前需要的字段：model/provider 设置、memory、agent profiles、skills、MCP servers 和公开 IPC socket path。
+ * ZH: 它只保存 Flyflor 当前需要的字段：model/provider 设置、易失群体、agent profiles、skills、MCP servers 和公开 IPC socket path。
  */
 export interface FConfiguration {
     model: FModelConfiguration;
     providers: Record<string, FProviderConfiguration>;
-    memory: FMemoryConfiguration;
-    agent: string;
+    collective: FCollectiveConfiguration;
     agents: Record<string, FAgentProfileConfiguration>;
+    ledger: FLedgerConfiguration;
     socket: string;
     skills: SkillsConfig;
     mcp: MCPServerConfig;
@@ -215,9 +234,9 @@ export class ConfigService extends FService implements FConfiguration {
 
     public model: FModelConfiguration;
     public providers: Record<string, FProviderConfiguration>;
-    public memory: FMemoryConfiguration;
-    public agent: string;
+    public collective: FCollectiveConfiguration;
     public agents: Record<string, FAgentProfileConfiguration>;
+    public ledger: FLedgerConfiguration;
     public socket: string;
     public skills: SkillsConfig;
     public mcp: MCPServerConfig;
@@ -240,44 +259,58 @@ export class ConfigService extends FService implements FConfiguration {
             maxTokens: 8192,
         };
         this.providers = {};
-        this.memory = {
-            memoryEnabled: true,
-            userProfileEnabled: true,
-            memoryCharLimit: 2200,
-            userCharLimit: 1375,
-            nudgeInterval: 10,
-            flushMinTurns: 6,
+        this.collective = {
+            leader: 'flyflor',
+            queueLimit: 64,
+            contextItemLimit: 128,
+            contextCharLimit: 32000,
+            agentNoteLimit: 24,
+            historyShare: 0.25,
         };
-        this.agent = 'flyflor';
         this.agents = {
             flyflor: {
                 name: 'flyflor',
+                role: 'leader',
+                description: 'The stable public voice and action owner of the collective.',
+                capabilities: ['conversation', 'planning', 'tool execution', 'synthesis'],
+                actionScope: 'full',
                 model: '',
                 provider: '',
                 contextLength: 0,
                 maxTokens: 0,
+                promptPackage: './prompts/agents/flyflor',
             },
-            worker: {
-                name: 'worker',
+            researcher: {
+                name: 'researcher',
+                role: 'specialist',
+                description: 'A fixed evidence and implementation research specialist.',
+                capabilities: ['research', 'code inspection', 'evidence collection'],
+                actionScope: 'read',
                 model: '',
                 provider: '',
                 contextLength: 0,
                 maxTokens: 0,
-                promptPackage: './prompts/agents',
-                promptSections: ['worker'],
+                promptPackage: './prompts/agents/researcher',
             },
             reviewer: {
                 name: 'reviewer',
+                role: 'specialist',
+                description: 'A fixed critic responsible for gaps, contradictions, and risk review.',
+                capabilities: ['review', 'risk analysis', 'contradiction detection'],
+                actionScope: 'read',
                 model: '',
                 provider: '',
                 contextLength: 0,
                 maxTokens: 0,
-                promptPackage: './prompts/agents',
-                promptSections: ['reviewer'],
+                promptPackage: './prompts/agents/reviewer',
             },
         };
         if (process.platform !== 'win32') this.socket = './flyflor.sock';
         else this.socket = `\\\\.\\pipe\\flyflor.sock`;
+        this.ledger = {
+            enabled: true,
+            directory: './.ledger',
+        };
         this.skills = {
             directory: join(this.path.config, 'skills'),
             creationNudgeInterval: 15,

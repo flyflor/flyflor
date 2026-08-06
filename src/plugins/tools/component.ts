@@ -1,5 +1,6 @@
 import { FTool, FToolAtom, Inject, Singleton, type ToolError } from '@/core';
-import type { IntelligenceToolDefinition } from '@/agent/brain/intelligence/types';
+import type { FAgentActionScope } from '@/configuration';
+import type { InferenceToolDefinition } from '@/inference';
 import { Ask } from './ask';
 import { Execute } from './execute';
 import { Filesystem } from './filesystem';
@@ -24,19 +25,22 @@ export class ToolComponent extends FTool {
     @Inject()
     public execute!: Execute;
 
-    public async list(): Promise<IntelligenceToolDefinition[]> {
+    public async list(scope: FAgentActionScope = 'full'): Promise<InferenceToolDefinition[]> {
         const records = await this.records();
-        return records.map(({ description, protocol }) => ({
-            name: protocol.name,
-            description,
-            parameters: protocol.parameters,
-        }));
+        return records
+            .filter(({ protocol }) => scope === 'full' || protocol.risk === 'read' || protocol.name === 'filesystem')
+            .map(({ description, protocol }) => ({
+                name: protocol.name,
+                description,
+                parameters: scope === 'read' && protocol.name === 'filesystem'
+                    ? this.readOnlyParameters(protocol.parameters)
+                    : protocol.parameters,
+            }));
     }
 
     public async requiresConfirm(call: ActionRequest): Promise<boolean> {
         const record = (await this.records()).find(({ protocol }) => protocol.name === call.name);
-        if (!record) throw Error(`Unknown tool: ${call.name}`);
-        return record.atom.confirm(call.arguments);
+        return record?.atom.confirm(call.arguments) ?? false;
     }
 
     public async cwd(name: string): Promise<boolean> {
@@ -44,10 +48,24 @@ export class ToolComponent extends FTool {
         return record?.protocol.cwd === 'inject';
     }
 
-    public async run(call: ActionRequest): Promise<ToolRunResult> {
+    public async allowed(scope: FAgentActionScope, call: ActionRequest): Promise<boolean> {
+        if (scope === 'full') return true;
+        const record = (await this.records()).find(({ protocol }) => protocol.name === call.name);
+        if (!record) return false;
+        if (record.protocol.name === 'filesystem') return call.arguments.action === 'read';
+        return record.protocol.risk === 'read';
+    }
+
+    public async run(call: ActionRequest, start?: () => void): Promise<ToolRunResult> {
+        let record: { atom: FToolAtom<any, any>; protocol: ToolProtocol; description: string } | undefined;
         try {
-            const record = (await this.records()).find(({ protocol }) => protocol.name === call.name);
+            record = (await this.records()).find(({ protocol }) => protocol.name === call.name);
             if (!record) throw Error(`Unknown tool: ${call.name}`);
+        } catch (error) {
+            return { ok: false, name: call.name, error: this.error(error) };
+        }
+        start?.();
+        try {
             const result = await record.atom.execute(call.arguments);
             if (result.ok) return { ok: true, name: call.name, data: result.data };
             return { ok: false, name: call.name, error: result.error };
@@ -75,5 +93,14 @@ export class ToolComponent extends FTool {
 
     private error(error: unknown): ToolError {
         return { code: 'TOOL_ERROR', message: error instanceof Error ? error.message : String(error) };
+    }
+
+    private readOnlyParameters(parameters: Record<string, unknown>): Record<string, unknown> {
+        const copy = structuredClone(parameters) as { properties?: Record<string, unknown> };
+        const action = copy.properties?.action;
+        if (typeof action === 'object' && action !== null) {
+            (action as { enum?: string[] }).enum = ['read'];
+        }
+        return copy;
     }
 }

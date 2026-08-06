@@ -956,7 +956,7 @@
                 <div class="endpoint" aria-label="连接端点">
                     <span>WebSocket bridge</span>
                     <code id="bridgeUrlText">ws://127.0.0.1:17878</code>
-                    <small id="protocolText">send: JSON packet</small>
+                    <small id="protocolText">flyflor.ipc</small>
                 </div>
             </header>
 
@@ -986,12 +986,13 @@
                     </section>
 
                     <section class="side-section actions">
-                        <h2 class="panel-title">会话控制</h2>
+                        <h2 class="panel-title">连接与焦点</h2>
                         <button class="primary" id="connectBtn">连接</button>
                         <div class="button-row">
                             <button id="disconnectBtn" disabled>断开</button>
-                            <button class="danger" id="clearBtn" disabled>清空</button>
+                            <button class="danger" id="cancelBtn" disabled>取消焦点</button>
                         </div>
+                        <button id="clearBtn" disabled>清空本地显示</button>
                     </section>
 
                     <section class="side-section actions">
@@ -1008,7 +1009,7 @@
                         <button class="quick-btn" data-msg="你好自我介绍下">自我介绍</button>
                         <button class="quick-btn" data-msg="解释当前代码库架构">解释架构</button>
                         <button class="quick-btn" data-msg="帮我写一个最小测试">写一个最小测试</button>
-                        <button class="quick-btn" data-msg="以后你叫飞花，我是你的主人。你要乖乖的哦">写入灵魂</button>
+                        <button class="quick-btn" data-msg="审阅当前方案的风险和遗漏">审阅风险</button>
                     </section>
 
                     <section class="side-section">
@@ -1048,16 +1049,21 @@
 
         <script>
             const BRIDGE_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`;
+            const IPC_PROTOCOL = 'flyflor.ipc';
+            const SPEAKER_STORAGE_KEY = 'flyflor.speakerId';
+            const speakerId = localStorage.getItem(SPEAKER_STORAGE_KEY) || crypto.randomUUID();
+            localStorage.setItem(SPEAKER_STORAGE_KEY, speakerId);
             const IPC_DEBUG = true;
 
             let ws = null;
-            let pending = false;
             let kernelConnected = false;
             let currentAgentMessage = null;
             let messageTotal = 0;
             let chunkTotal = 0;
             let packetTotal = 0;
             let errorTotal = 0;
+            let currentFocusId = null;
+            let currentRevision = 0;
 
             const status = document.getElementById('status');
             const statusText = document.getElementById('statusText');
@@ -1068,6 +1074,7 @@
             const connectBtn = document.getElementById('connectBtn');
             const disconnectBtn = document.getElementById('disconnectBtn');
             const clearBtn = document.getElementById('clearBtn');
+            const cancelBtn = document.getElementById('cancelBtn');
             const sendBtn = document.getElementById('sendBtn');
             const messageInput = document.getElementById('messageInput');
             const workingDirectoryInput = document.getElementById('workingDirectoryInput');
@@ -1143,45 +1150,6 @@
                 chat.scrollTop = chat.scrollHeight;
             }
 
-            function normalizeAgentSignal(data) {
-                if (typeof data === 'string') return { type: 'reply', chunk: data, data: undefined };
-                if (!data || typeof data !== 'object') return { type: 'reply', chunk: String(data ?? ''), data: undefined };
-                return {
-                    type: typeof data.type === 'string' ? data.type : 'reply',
-                    chunk: typeof data.chunk === 'string' ? data.chunk : '',
-                    data: 'data' in data ? data.data : undefined,
-                };
-            }
-
-            function renderAgentSignal(data) {
-                const signal = normalizeAgentSignal(data);
-                appendDebugEntry('signal', `signal.${signal.type}`, signal);
-                signalPill.textContent = signal.type;
-                if (signal.type === 'reply') {
-                    appendAgentDelta(signal.chunk);
-                    return;
-                }
-                if (signal.type === 'done') {
-                    finishAgentStream();
-                    return;
-                }
-                if (signal.type === 'tool_start') {
-                    addMessage(`工具开始: ${signal.chunk || 'unknown'}\n${formatDebugDetail(signal.data)}`.trim(), 'system');
-                    return;
-                }
-                if (signal.type === 'tool_result') {
-                    addMessage(`工具结果: ${signal.chunk || 'unknown'}\n${toolResult(signal.data)}`.trim(), 'system');
-                    return;
-                }
-                if (signal.type === 'llm_turn') {
-                    addMessage(`调查轮次: ${signal.chunk || signal.data?.step || 'unknown'}\n${signalDetail(signal)}`.trim(), 'system');
-                    return;
-                }
-                if (signal.chunk.length > 0 || signal.data !== undefined) {
-                    addMessage(`${signal.type}: ${signalDetail(signal) || signal.chunk}`, 'system');
-                }
-            }
-
             function finishAgentStream() {
                 if (currentAgentMessage && currentAgentMessage.textContent.trim().length === 0) {
                     currentAgentMessage.remove();
@@ -1190,7 +1158,6 @@
                 } else if (currentAgentMessage) {
                     currentAgentMessage.classList.remove('pending');
                 }
-                pending = false;
                 currentAgentMessage = null;
                 setStreamState(false);
                 setInputEnabled();
@@ -1205,7 +1172,6 @@
                 } else if (currentAgentMessage) {
                     currentAgentMessage.classList.remove('pending');
                 }
-                pending = false;
                 currentAgentMessage = null;
                 setStreamState(false);
                 setInputEnabled();
@@ -1223,7 +1189,7 @@
             }
 
             function canUseInput() {
-                return Boolean(ws && ws.readyState === WebSocket.OPEN && kernelConnected && !pending);
+                return Boolean(ws && ws.readyState === WebSocket.OPEN && kernelConnected);
             }
 
             function setInputEnabled() {
@@ -1232,6 +1198,7 @@
                 messageInput.disabled = !enabled;
                 workingDirectoryInput.disabled = !enabled;
                 cwdConfirmBtn.disabled = !enabled;
+                cancelBtn.disabled = !enabled || !currentFocusId;
                 document.querySelectorAll('.quick-btn').forEach((button) => {
                     button.disabled = !enabled;
                 });
@@ -1246,15 +1213,25 @@
 
             let interaction = null;
 
+            function envelope(action, data) {
+                return { protocol: IPC_PROTOCOL, messageId: crypto.randomUUID(), action, data };
+            }
+
             function sendAnswer(response) {
                 if (!ws || ws.readyState !== WebSocket.OPEN || !interaction) return;
-                const packet = { action: 'answer', data: { ...interaction, response } };
-                debugIpc('ws.out', { action: packet.action, turnId: interaction.turnId, id: interaction.id });
+                const packet = envelope('answer', { speakerId, ...interaction, response });
+                debugIpc('ws.out', { action: packet.action, focusId: interaction.focusId, requestId: interaction.requestId });
                 ws.send(JSON.stringify(packet));
                 interaction = null;
-                pending = true;
                 setInputEnabled();
                 createPendingAgentMessage();
+            }
+
+            function sendCancel() {
+                if (!ws || ws.readyState !== WebSocket.OPEN || !currentFocusId) return;
+                const packet = envelope('cancel', { speakerId, focusId: currentFocusId });
+                debugIpc('ws.out', { action: packet.action, focusId: currentFocusId });
+                ws.send(JSON.stringify(packet));
             }
 
             function renderAskPrompt(data) {
@@ -1398,27 +1375,55 @@
                 packetTotal += 1;
                 updateStats();
                 appendDebugEntry('packet', `packet.${String(msg.action)}`, msg.data);
-                if (msg.action === 'data') {
-                    renderAgentSignal(msg.data);
-                    return;
-                }
                 if (msg.action === 'streamEnd') {
+                    if (!msg.data?.focusId || msg.data.focusId === currentFocusId) currentFocusId = null;
                     finishAgentStream();
+                    setInputEnabled();
                     return;
                 }
                 if (msg.action === 'agent') {
-                    renderAgentSignal(msg.data);
+                    currentFocusId = msg.data?.focusId ?? currentFocusId;
+                    currentRevision = msg.data?.revision ?? currentRevision;
+                    appendAgentDelta(typeof msg.data?.chunk === 'string' ? msg.data.chunk : '');
+                    return;
+                }
+                if (msg.action === 'responseReset') {
+                    currentFocusId = msg.data?.focusId ?? currentFocusId;
+                    currentRevision = msg.data?.revision ?? currentRevision;
+                    if (currentAgentMessage) currentAgentMessage.textContent = '';
+                    signalPill.textContent = `revision ${currentRevision}`;
+                    return;
+                }
+                if (msg.action === 'attention') {
+                    signalPill.textContent = String(msg.data?.state ?? 'attention');
+                    return;
+                }
+                if (msg.action === 'event' && msg.data?.type === 'receipt') {
+                    const receipt = msg.data.receipt;
+                    if (receipt?.state === 'focused' || receipt?.state === 'merged') {
+                        currentFocusId = receipt.focusId ?? currentFocusId;
+                        currentRevision = receipt.revision ?? currentRevision;
+                    }
+                    signalPill.textContent = String(receipt?.state ?? 'received');
+                    setInputEnabled();
+                    return;
+                }
+                if (msg.action === 'event' && msg.data?.type === 'focus') {
+                    currentFocusId = msg.data.focusId ?? currentFocusId;
+                    currentRevision = msg.data.revision ?? currentRevision;
+                    signalPill.textContent = 'focused';
+                    setInputEnabled();
                     return;
                 }
                 if (msg.action === 'ask') {
-                    interaction = { turnId: msg.data?.turnId, id: msg.data?.id };
+                    interaction = { focusId: msg.data?.focusId, requestId: msg.data?.requestId };
                     cancelPendingMessage();
                     signalPill.textContent = 'ask';
                     renderAskPrompt(msg.data);
                     return;
                 }
                 if (msg.action === 'confirm') {
-                    interaction = { turnId: msg.data?.turnId, id: msg.data?.id };
+                    interaction = { focusId: msg.data?.focusId, requestId: msg.data?.requestId };
                     cancelPendingMessage();
                     signalPill.textContent = 'confirm';
                     renderConfirmPrompt(msg.data);
@@ -1442,11 +1447,9 @@
                 if (msg.action === 'error') {
                     errorTotal += 1;
                     updateStats();
-                    kernelConnected = false;
-                    setStatus(ws && ws.readyState === WebSocket.OPEN ? 'connecting' : 'disconnected', '内核错误');
                     cancelPendingMessage();
                     setInputEnabled();
-                    addMessage(`错误: ${String(msg.data ?? '')}`, 'error');
+                    addMessage(`错误: ${String(msg.data?.message ?? msg.data ?? '')}`, 'error');
                     return;
                 }
                 addMessage(`收到: ${JSON.stringify(msg)}`, 'system');
@@ -1499,30 +1502,6 @@
                 }
             }
 
-            function signalDetail(signal) {
-                const lines = [];
-                if (signal.data !== undefined) lines.push(formatDebugDetail(signal.data));
-                if (signal.chunk.length > 0 && signal.type !== 'reply') lines.unshift(signal.chunk);
-                return lines.filter(Boolean).join('\n');
-            }
-
-            function toolResult(data) {
-                if (!data || typeof data !== 'object') return formatDebugDetail(data);
-                const lines = [`status: ${data.ok ? 'ok' : 'error'}`];
-                if (data.error) lines.push(`error: ${data.error}`);
-                const result = data.data;
-                if (result && typeof result === 'object') {
-                    if ('path' in result) lines.push(`path: ${result.path}`);
-                    if ('bytes' in result) lines.push(`bytes: ${result.bytes}`);
-                    if ('code' in result) lines.push(`code: ${result.code}`);
-                    if (result.stdout) lines.push(`stdout:\n${result.stdout}`);
-                    if (result.stderr) lines.push(`stderr:\n${result.stderr}`);
-                } else if (result !== undefined) {
-                    lines.push(formatDebugDetail(result));
-                }
-                return lines.join('\n');
-            }
-
             async function readSocketMessage(eventData) {
                 if (typeof eventData === 'string') {
                     debugIpc('ws.in', {
@@ -1550,9 +1529,8 @@
 
             function sendUserMessage(text) {
                 if (!text || !canUseInput()) return;
-                pending = true;
                 setInputEnabled();
-                const packet = { action: 'user', data: { text } };
+                const packet = envelope('user', { speakerId, text });
                 debugIpc('ws.out', {
                     action: packet.action,
                     textLength: text.length,
@@ -1569,10 +1547,7 @@
                     addMessage('执行目录为空，未提交', 'error');
                     return;
                 }
-                const packet = { action: 'cwd', data: { path } };
-                debugIpc('ws.out', packet);
-                ws.send(JSON.stringify(packet));
-                addMessage(`执行目录已提交: ${path}`, 'system');
+                sendUserMessage(`Use this working directory for the current focus: ${path}`);
             }
 
             function connect() {
@@ -1623,6 +1598,7 @@
 
             connectBtn.addEventListener('click', connect);
             cwdConfirmBtn.addEventListener('click', sendWorkingDirectory);
+            cancelBtn.addEventListener('click', sendCancel);
 
             disconnectBtn.addEventListener('click', () => {
                 if (ws) ws.close();
@@ -1630,7 +1606,6 @@
 
             clearBtn.addEventListener('click', () => {
                 currentAgentMessage = null;
-                pending = false;
                 messageTotal = 0;
                 chunkTotal = 0;
                 packetTotal = 0;

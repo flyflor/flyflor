@@ -1,4 +1,3 @@
 export * from './brain';
-export * from './callosum';
-export * from './intelligence';
-export * from './investigation';
+export * from './thought';
+export * from './action';

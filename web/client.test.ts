@@ -47,13 +47,24 @@ describe('IpcClientBridge', () => {
         expect(result.errors[0]).toBe(PACKET_PROTOCOL_MISMATCH_MESSAGE);
     });
 
+    test('rejects packet bodies above the kernel limit', () => {
+        const header = Buffer.alloc(8);
+        header.writeBigUInt64BE(BigInt(4 * 1024 * 1024 + 1));
+
+        const result = IpcClientBridge.decodePacketTexts(Buffer.alloc(0), header);
+
+        expect(result.errors).toEqual(['IPC packet body length is invalid']);
+        expect(result.pending.byteLength).toBe(0);
+    });
+
     test('encodes browser JSON messages and rejects binary messages', () => {
-        const text = JSON.stringify({ action: 'user', data: { text: 'hello' } });
+        const text = JSON.stringify({ protocol: 'flyflor.ipc', messageId: 'm1', action: 'user', data: { speakerId: 'speaker-a', text: 'hello' } });
         const encoded = IpcClientBridge.encodeBrowserMessage(text);
 
         expect(encoded.readBigUInt64BE(0)).toBe(BigInt(Buffer.byteLength(text)));
         expect(encoded.subarray(8).toString('utf8')).toBe(text);
         expect(() => IpcClientBridge.encodeBrowserMessage(Buffer.from(text))).toThrow(BROWSER_JSON_ONLY_MESSAGE);
+        expect(() => IpcClientBridge.encodeBrowserMessage(JSON.stringify({ action: 'user', data: { text: 'legacy' } }))).toThrow('Unsupported IPC protocol');
     });
 
     test('keeps the HTML client free of local names and machine-specific paths', () => {
@@ -61,5 +72,8 @@ describe('IpcClientBridge', () => {
 
         expect(html).not.toMatch(/Flyflor|FlyFlor|FLYFLOR/);
         expect(html).not.toContain('/Users/yihuaqing/');
+        expect(html).toContain('flyflor.ipc');
+        expect(html).toContain('flyflor.speakerId');
+        expect(html).toContain("envelope('cancel'");
     });
 });
