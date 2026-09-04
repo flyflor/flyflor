@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { AgentChatRole, type AgentMemory } from '@/agent/types';
 import { createProtocolStreamState } from '../factory';
 import type { InferenceEvent, ProviderMessage } from '../types';
-import { openAIChatCompletionsAdapter } from './openai.chat.completions';
+import { openAIChatCompletionsAdapter } from './openai';
 
 describe('openAIChatCompletionsAdapter', () => {
     test('normalizes streamed tool_calls into action events', () => {

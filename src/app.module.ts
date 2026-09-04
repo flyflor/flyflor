@@ -1,6 +1,6 @@
 import { FModule, Module } from '@/core';
 import { PluginModule } from '@/plugins';
-import { AgentManager } from '@/collective';
+import { Cortex } from '@/collective';
 import { IPCModule } from '@/ipc';
 
 /**
@@ -8,7 +8,7 @@ import { IPCModule } from '@/ipc';
  * Imports the runtime transport layer and the external capability boundary used by the active agent.
  */
 @Module({
-    imports: [PluginModule, AgentManager, IPCModule],
+    imports: [PluginModule, Cortex, IPCModule],
 })
 /**
  * EN: AppModule class declaration.

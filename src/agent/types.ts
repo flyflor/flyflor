@@ -22,7 +22,6 @@ export interface AgentReport {
     agentId: string;
     answer: string;
     evidence: string[];
-    decisions: string[];
     remaining: string[];
     steps: number;
 }

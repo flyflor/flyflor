@@ -38,7 +38,7 @@ const focus = (id: string, text: string): Focus => ({
     updatedAt: 1,
 });
 
-const report = (answer: string): AgentReport => ({ agentId: 'flyflor', answer, evidence: [], decisions: [], remaining: [], steps: 1 });
+const report = (answer: string): AgentReport => ({ agentId: 'flyflor', answer, evidence: [], remaining: [], steps: 1 });
 
 describe('History', () => {
     test('records a completed turn with verbatim user input and the final answer', async () => {

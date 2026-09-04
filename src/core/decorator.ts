@@ -10,7 +10,6 @@ import {
 } from './ioc/types';
 import { defineMetadata, getMetadata, useContainer } from './ioc/container';
 import type { FModule } from './ioc/abstracts';
-import { get } from 'lodash-es';
 
 /**
  * EN: Concrete constructor accepted by decorators and factory helpers.
@@ -66,14 +65,6 @@ export function Service(): ClassDecorator {
 }
 
 /**
- * EN: Provider alias for stateful component classes.
- * ZH: 面向有状态 component 类的 provider 别名。
- */
-export function Component(): ClassDecorator {
-    return (target) => Provide()(target);
-}
-
-/**
  * EN: Marks a class as a tool provider.
  * ZH: 将类标记为工具 provider。
  */
@@ -97,16 +88,6 @@ export function Module<T extends FModule>(metadata: ModuleMetadata = {}): ClassD
     return (target) => {
         Singleton()(target);
         defineMetadata(MODULE_METADATA_KEY, metadata, target);
-    };
-}
-
-/**
- * EN: Marks a controller-style class as a singleton provider.
- * ZH: 将 controller 风格的类标记为 singleton provider。
- */
-export function Controller() {
-    return <T extends Ctor>(target: T) => {
-        Singleton()(target as unknown as Function);
     };
 }
 
@@ -201,30 +182,10 @@ export function Init(): MethodDecorator {
 }
 
 /**
- * EN: Marks a class as a singleton policy/guard provider.
- * ZH: 将类标记为 singleton policy/guard provider。
+ * EN: Injects `ConfigService`.
+ * ZH: 注入 `ConfigService`。
  */
-export function Guard(): ClassDecorator {
-    return (target) => {
-        Singleton()(target);
-    };
-}
-
-/**
- * EN: Marks a class as a singleton sandbox policy provider.
- * ZH: 将类标记为 singleton sandbox policy provider。
- */
-export function SandBox(): ClassDecorator {
-    return (target) => {
-        Guard()(target);
-    };
-}
-
-/**
- * EN: Injects `ConfigService`, optionally exposing one nested config key.
- * ZH: 注入 `ConfigService`，并可选择暴露一个嵌套配置键。
- */
-export function Config(key?: string): PropertyDecorator {
+export function Config(): PropertyDecorator {
     return (target, propertyKey) => {
         const configStorageKey = Symbol(String(propertyKey));
         const data: InjectInstanceMetadata[] = getMetadata(INJECT_METADATA_INSTANCE_KEY, target.constructor) || [];
@@ -240,9 +201,7 @@ export function Config(key?: string): PropertyDecorator {
             configurable: true,
             enumerable: true,
             get() {
-                const config = this[configStorageKey];
-                if (!key) return config;
-                return get(config, key);
+                return this[configStorageKey];
             },
             set(value) {
                 this[configStorageKey] = value;

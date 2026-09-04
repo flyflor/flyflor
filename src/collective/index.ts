@@ -1,4 +1,5 @@
-export * from './module';
+export * from './cortex';
+export * from './scout';
 export * from './types';
 export * from './attention';
 export * from './context';

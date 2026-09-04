@@ -4,8 +4,9 @@ import { Config, FCortex, Init, Inject, Module, useContainer } from '@/core';
 import type { AnswerInput, CancelInput } from '@/ipc/types';
 import { Ledger } from '@/ledger';
 import { createHash } from 'node:crypto';
-import { Attention, type AttentionDecision } from './attention';
+import { Attention } from './attention';
 import { Context, type Focus, type Stimulus } from './context';
+import { Scout, type Spike } from './scout';
 import { CollectiveSignalType, type AttentionReceipt, type CollectiveOutput, type CollectiveSignal, type CommandReceipt, type PendingInteraction } from './types';
 
 interface ReceiptRecord {
@@ -20,17 +21,25 @@ interface CommandRecord {
 }
 
 /**
- * EN: Owns the fixed roster, one-focus scheduler, cancellation revisions, and output routing.
- * It never performs model inference itself.
- * ZH: 持有固定成员、单焦点调度、取消 revision 与输出路由；自身不执行模型推理。
+ * EN: The collective cortex (皮层): the single orchestration hub of the process.
+ * It owns the fixed roster, one-focus scheduling, cancellation revisions, and output
+ * routing, and it discharges typed signals on its bus (Observer/Mediator). The scout's
+ * spike is the cortical firing signal this cortex reacts to; the cortex itself never
+ * performs model inference for a member.
+ * ZH: 群体皮层：进程内唯一的编排中枢。持有固定成员、单焦点调度、取消 revision 与
+ * 输出路由，并在信号总线上释放类型化信号（观察者/中介者）。侦察者的放电信号正是
+ * 皮层反应的皮层放电信号；皮层自身从不替成员执行模型推理。
  */
 @Module()
-export class AgentManager extends FCortex<CollectiveSignal> {
+export class Cortex extends FCortex<CollectiveSignal> {
     @Config()
     public config!: ConfigService;
 
     @Inject()
     public attention!: Attention;
+
+    @Inject()
+    public scout!: Scout;
 
     @Inject()
     public context!: Context;
@@ -56,6 +65,7 @@ export class AgentManager extends FCortex<CollectiveSignal> {
         }
         if (!this.agents[this.config.collective.leader]) throw Error('Collective leader is missing');
         this.on(CollectiveSignalType.AgentEvent, (signal) => this.forwardAgentEvent(signal.data as AgentRuntimeEvent));
+        this.on(CollectiveSignalType.Spike, (signal) => this.forwardSpike(signal.data as Spike));
     }
 
     public receive(stimulus: Stimulus): Promise<AttentionReceipt> {
@@ -92,17 +102,19 @@ export class AgentManager extends FCortex<CollectiveSignal> {
         }
         this.ledger.recordStimulus(stimulus);
         try {
-            const { active, decision } = await this.currentDecision(stimulus);
+            const { active, spike } = await this.currentSpike(stimulus);
+            // EN: The scout's finding becomes a cortical discharge on the bus. ZH: 侦察者的发现成为总线上的皮层放电。
+            this.emit(CollectiveSignalType.Spike, spike);
             if (!active) {
-                const focus = this.context.open(stimulus, decision.consultants);
+                const focus = this.context.open(stimulus, spike.consultants);
                 const receipt = this.receipt(stimulus.messageId, 'focused', focus);
                 this.remember(stimulus, receipt);
                 this.status('focused', focus);
                 this.start();
                 return receipt;
             }
-            if (decision.disposition === 'merge') {
-                const focus = this.context.merge(stimulus, decision.consultants);
+            if (spike.disposition === 'merge') {
+                const focus = this.context.merge(stimulus, spike.consultants);
                 const receipt = this.receipt(stimulus.messageId, 'merged', focus);
                 this.remember(stimulus, receipt);
                 this.output('responseReset', { focusId: focus.id, revision: focus.revision }, this.context.targets(focus.id));
@@ -110,7 +122,7 @@ export class AgentManager extends FCortex<CollectiveSignal> {
                 this.controller?.abort(Error('Focus revised'));
                 return receipt;
             }
-            this.attention.enqueue(stimulus, decision);
+            this.attention.enqueue(stimulus, spike);
             const receipt: AttentionReceipt = {
                 messageId: stimulus.messageId,
                 state: 'queued',
@@ -251,11 +263,11 @@ export class AgentManager extends FCortex<CollectiveSignal> {
                 }
                 if (active.id === focus.id && active.revision !== focus.revision) continue;
                 const targets = this.context.targets(active.id);
+                this.log.error('cortex.focusFailed', { focusId: active.id, revision: active.revision, error: this.message(error) });
                 await this.context.complete(active.id, {
                     agentId: this.config.collective.leader,
                     answer: '',
                     evidence: [],
-                    decisions: [],
                     remaining: [this.message(error)],
                     steps: 0,
                 });
@@ -287,14 +299,16 @@ export class AgentManager extends FCortex<CollectiveSignal> {
                     agentId: agent.agentConfig.name,
                     answer: '',
                     evidence: [],
-                    decisions: [],
                     remaining: [`Specialist failed: ${this.message(error)}`],
                     steps: 0,
                 };
             }
         }));
         this.ensureRevision(focus, control.signal);
-        for (const report of reports) this.context.observe(focus.id, report);
+        for (const report of reports) {
+            this.context.observe(focus.id, report);
+            this.logReportNotes(focus, report);
+        }
 
         const leader = this.agents[this.config.collective.leader]!;
         const report = await leader.run(this.context.forAgent(leader.agentConfig.name, leader.memory(), this.contextCapacity(leader.agentConfig)), {
@@ -310,6 +324,7 @@ export class AgentManager extends FCortex<CollectiveSignal> {
         this.ensureRevision(focus, control.signal);
         const targets = this.context.targets(focus.id);
         await this.context.complete(focus.id, report);
+        this.logReportNotes(focus, report);
         this.lastSpeakerId = focus.ownerSpeakerId;
         this.output('streamEnd', { focusId: focus.id, revision: focus.revision, cancelled: false }, targets);
         this.status('completed');
@@ -317,6 +332,16 @@ export class AgentManager extends FCortex<CollectiveSignal> {
 
     private ensureRevision(focus: Focus, signal: AbortSignal): void {
         if (signal.aborted || !this.currentRevision(focus)) throw signal.reason ?? Error('Focus revision is obsolete');
+    }
+
+    /**
+     * EN: Records one report's unfinished notes in the log so degraded completions stay observable in `.logs`.
+     * ZH: 把单个报告的未完成备注写入日志，让降级完成在 `.logs` 中保持可观测。
+     */
+    private logReportNotes(focus: Focus, report: AgentReport): void {
+        for (const note of report.remaining) {
+            this.log.warn('cortex.reportRemaining', { focusId: focus.id, revision: focus.revision, agentId: report.agentId, note });
+        }
     }
 
     private currentRevision(focus: Focus): boolean {
@@ -343,6 +368,15 @@ export class AgentManager extends FCortex<CollectiveSignal> {
         }));
     }
 
+    /**
+     * EN: Broadcasts one scout spike to every connection so the cortical firing
+     * signal stays observable end to end.
+     * ZH: 把一次侦察者放电广播给所有连接，让皮层放电信号端到端可观测。
+     */
+    private forwardSpike(spike: Spike): void {
+        this.output('event', { type: 'spike', spike });
+    }
+
     private forwardAgentEvent(event: AgentRuntimeEvent): void {
         this.ledger.recordAgentEvent(event);
         const focus = this.context.active();
@@ -365,16 +399,16 @@ export class AgentManager extends FCortex<CollectiveSignal> {
         return { messageId, state, focusId: focus.id, revision: focus.revision, queueDepth: this.attention.size() };
     }
 
-    private async currentDecision(stimulus: Stimulus): Promise<{ active: Focus | undefined; decision: AttentionDecision }> {
+    private async currentSpike(stimulus: Stimulus): Promise<{ active: Focus | undefined; spike: Spike }> {
         for (let attempt = 0; attempt < 2; attempt += 1) {
             const active = this.context.active();
-            const decision = await this.attention.decide(stimulus, active, this.profiles());
-            if (this.sameFocus(active, this.context.active())) return { active, decision };
+            const spike = await this.scout.detect(stimulus, active, this.profiles());
+            if (this.sameFocus(active, this.context.active())) return { active, spike };
         }
         const active = this.context.active();
         return {
             active,
-            decision: { disposition: active ? 'queue' : 'focus', salience: 0.5, consultants: [] },
+            spike: { disposition: active ? 'queue' : 'focus', salience: 0.5, consultants: [] },
         };
     }
 

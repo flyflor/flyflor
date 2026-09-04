@@ -2,7 +2,7 @@ import { AgentChatRole, type AgentReport } from '@/agent/types';
 import type { Focus } from '@/collective/context/types';
 import type { ConfigService } from '@/configuration';
 import { Config, FComponent, Inject, Prompt, PromptService, Singleton } from '@/core';
-import { Inference } from '@/inference';
+import { Inference, Model } from '@/inference';
 import type { DialogueTurn, DialogueTurnMessage } from './types';
 
 const MAX_TURN_CHARS = 6000;
@@ -21,7 +21,7 @@ export class History extends FComponent {
     @Config()
     public config!: ConfigService;
 
-    @Inject(() => [undefined])
+    @Model()
     public inference!: Inference;
 
     @Prompt('prompts/history')

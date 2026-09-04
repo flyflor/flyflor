@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "description": "Global context workspace compression for the collective's shared memory.",
+  "prompt": {
+    "sections": ["COMPACT"]
+  }
+}

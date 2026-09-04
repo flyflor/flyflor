@@ -2,13 +2,13 @@ import { type FAgentActionScope, ConfigService } from '@/configuration';
 import type { AgentContext } from '@/collective/context';
 import type { AgentReport, AgentRunControl } from '@/agent/types';
 import { Memory } from '@/agent/memory';
-import { Config, FAgentAtom, Scope, Provide } from '@/core';
+import { Config, FAgent, Scope, Provide } from '@/core';
 import { AgentChatRole } from '@/agent/types';
 import type { ProviderActionRequestMessage, ProviderActionResultMessage, ProviderMessage } from '@/inference';
 import { Action } from './action';
 import { Thought } from './thought';
 
-const MAX_THOUGHT_STEPS = 16;
+const DEFAULT_THOUGHT_STEP_LIMIT = 24;
 const MAX_PROVIDER_ACTION_RESULT_CHARS = 12000;
 
 /**
@@ -16,7 +16,7 @@ const MAX_PROVIDER_ACTION_RESULT_CHARS = 12000;
  * ZH: 一个固定成员的认知闭环：Thought 提议，Action 观察，Thought 继续。
  */
 @Provide()
-export class Brain extends FAgentAtom {
+export class Brain extends FAgent {
     @Config()
     public config!: ConfigService;
 
@@ -33,9 +33,11 @@ export class Brain extends FAgentAtom {
         const baseMessages = this.memoryMessages(context);
         const replayCycles: ProviderMessage[][] = [];
         const evidence: string[] = [];
+        const stepLimit = Math.max(1, this.config.collective.thoughtStepLimit ?? DEFAULT_THOUGHT_STEP_LIMIT);
         let answer = '';
+        let lastText = '';
         let steps = 0;
-        while (steps < MAX_THOUGHT_STEPS) {
+        while (steps < stepLimit) {
             steps += 1;
             const visible = (chunk: string) => {
                 answer += chunk;
@@ -47,12 +49,12 @@ export class Brain extends FAgentAtom {
                 visible,
                 control.signal,
             );
+            lastText = result.text;
             if (result.actionRequests.length === 0) {
                 return {
                     agentId: this.agentConfig.name,
                     answer: answer || result.text,
                     evidence,
-                    decisions: [],
                     remaining: [],
                     steps,
                 };
@@ -84,7 +86,13 @@ export class Brain extends FAgentAtom {
             }
             replayCycles.push(replayCycle);
         }
-        throw Error(`Thought step limit exceeded: ${this.agentConfig.name}`);
+        return {
+            agentId: this.agentConfig.name,
+            answer: answer || lastText,
+            evidence,
+            remaining: [`Thought step limit exceeded: ${this.agentConfig.name}`],
+            steps,
+        };
     }
 
     public memorySnapshot() {

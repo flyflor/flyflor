@@ -7,10 +7,10 @@ This file contains only Flyflor-specific additions. If the project-local skill a
 ## Flyflor Code Rules
 
 1. Code is the source of truth. Documentation describes implemented behavior or clearly marks planned work.
-2. Runtime code is OOP-first. Business behavior belongs on classes extending the correct core base class: `FModule`, `FService`, `FComponent`, `FRepo`, `FGuard`, `FSandBox`, `FAgent`, or `FCortex`.
+2. Runtime code is OOP-first. Business behavior belongs on classes extending the correct core base class: `FModule`, `FService`, `FComponent`, `FRepo`, `FAgent`, `FToolAtom`, or `FCortex`.
 3. Composition-style exported functions are allowed only at explicit boundaries: decorators, factories, bootstrap, scripts, protocol adapters, and low-level framework helpers.
 4. Method bodies have a 300-line soft limit and a 500-line hard limit. Do not extract helpers under 500 lines unless the extraction names a real object action, isolates a side effect, enables reuse, or reduces actual complexity.
-5. Directory names are semantic nouns. File names are local roles such as `index.ts`, `service.ts`, `types.ts`, `constants.ts`, `decorator.ts`, `factory.ts`, `container.ts`, `abstracts.ts`, `socket.ts`, `module.ts`, `entity.ts`, `repository.ts`, and `*.test.ts`.
+5. Naming is convention over configuration: the highest convention is `[single word]/[single word]*/[single word].[suffix]`. Directory names are single semantic nouns; file basenames are single-word local roles such as `index.ts`, `service.ts`, `types.ts`, `constants.ts`, `decorator.ts`, `factory.ts`, `container.ts`, `abstracts.ts`, `socket.ts`, `module.ts`, `cortex.ts`, `scout.ts`, `repository.ts`, and `*.test.ts`. Never re-encode the domain into a dotted basename (no `thing.service.ts`, `openai.chat.ts`).
 6. `index.ts` is a barrel only. It re-exports local module surfaces and must not own behavior.
 7. Do not introduce generic `utils`, `manager`, `parser`, `compiler`, or `diagnostic` files unless a real object boundary and sustained size justify that object.
 8. Use `@/*` imports for cross-domain source imports. Relative imports are preferred inside the same directory boundary.

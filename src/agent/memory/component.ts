@@ -1,7 +1,7 @@
 import type { AgentContext } from '@/collective/context';
 import type { ConfigService } from '@/configuration';
 import { AgentChatRole, type AgentMemory } from '@/agent/types';
-import { Config, FAgentAtom, Prompt, PromptService, Provide, type PromptPackageData } from '@/core';
+import { Config, FAgent, Prompt, PromptService, Provide } from '@/core';
 import type { MemoryNote, MemoryNoteSource } from './types';
 
 const MAX_MEMORY_NOTE_CHARS = 4000;
@@ -11,12 +11,12 @@ const MAX_MEMORY_NOTE_CHARS = 4000;
  * ZH: 固定 Agent 的易失局部工作记忆；它永远不拥有对话历史。
  */
 @Provide()
-export class Memory extends FAgentAtom {
+export class Memory extends FAgent {
     @Config()
     public config!: ConfigService;
 
     @Prompt((memory: Memory) => memory.agentConfig.promptPackage ?? `./prompts/agents/${memory.agentConfig.name}`)
-    public prompt!: PromptService<string> & PromptPackageData<string>;
+    public prompt!: PromptService;
 
     private sequence = 0;
     private readonly notes: MemoryNote[] = [];
@@ -55,15 +55,7 @@ export class Memory extends FAgentAtom {
         messages.push({
             role: AgentChatRole.User,
             content: JSON.stringify({
-                focus: {
-                    id: context.focus.id,
-                    revision: context.focus.revision,
-                    ownerSpeakerId: context.focus.ownerSpeakerId,
-                    messages: context.focus.messages,
-                    goal: context.focus.goal,
-                    constraints: context.focus.constraints,
-                    references: context.focus.references,
-                },
+                focus: context.focus,
                 history: context.history,
                 globalWorkspace: context.items,
                 localMemory: context.localMemory,

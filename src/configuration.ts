@@ -105,16 +105,20 @@ export type FAgentActionScope = 'full' | 'read';
 /**
  * EN: Volatile process-local collective configuration.
  * `historyShare` is the fraction of the model's usable context window reserved for verbatim dialogue history.
+ * `thoughtStepLimit` caps one agent's Thought→Action loop; on exhaustion the loop settles with a partial report.
  * ZH: 仅存在于进程生命周期内的群体配置。
  * `historyShare` 表示模型可用上下文窗口中划给逐字对话历史的比例。
+ * `thoughtStepLimit` 限制单个 agent 的 Thought→Action 循环；耗尽时以部分报告结算。
  */
 export interface FCollectiveConfiguration {
     leader: string;
     queueLimit: number;
     contextItemLimit: number;
+    contextCompressItemLimit?: number;
     contextCharLimit: number;
     agentNoteLimit: number;
     historyShare: number;
+    thoughtStepLimit?: number;
 }
 
 /**
@@ -155,9 +159,9 @@ export interface FAgentProfileConfiguration {
  * EN: Flyflor's single configuration object.
  * ZH: Flyflor 的单一配置对象。
  *
- * EN: It keeps the fields Flyflor currently needs: model/provider settings, the volatile collective, agent profiles, skills,
- * MCP servers, and the public IPC socket path.
- * ZH: 它只保存 Flyflor 当前需要的字段：model/provider 设置、易失群体、agent profiles、skills、MCP servers 和公开 IPC socket path。
+ * EN: It keeps the fields Flyflor currently needs: model/provider settings, the volatile collective,
+ * agent profiles, and the public IPC socket path.
+ * ZH: 它只保存 Flyflor 当前需要的字段：model/provider 设置、易失群体、agent profiles 和公开 IPC socket path。
  */
 export interface FConfiguration {
     model: FModelConfiguration;
@@ -166,36 +170,6 @@ export interface FConfiguration {
     agents: Record<string, FAgentProfileConfiguration>;
     ledger: FLedgerConfiguration;
     socket: string;
-    skills: SkillsConfig;
-    mcp: MCPServerConfig;
-}
-
-/**
- * EN: Skill loading and discovery settings.
- * ZH: skill 加载与发现配置。
- */
-export interface SkillsConfig {
-    directory: string;
-    creationNudgeInterval: number;
-    externalDirs: string[];
-}
-
-/**
- * EN: One MCP server registry block.
- * ZH: 一组 MCP server 注册配置。
- */
-export interface MCPServerConfig {
-    servers?: { [mcpName: string]: MCPConfig };
-}
-/**
- * EN: One MCP server launch or remote endpoint definition.
- * ZH: 单个 MCP server 的启动或远端端点定义。
- */
-export interface MCPConfig {
-    command?: string;
-    args?: string[];
-    env?: Record<string, string>;
-    url?: string;
 }
 
 /**
@@ -238,8 +212,6 @@ export class ConfigService extends FService implements FConfiguration {
     public agents: Record<string, FAgentProfileConfiguration>;
     public ledger: FLedgerConfiguration;
     public socket: string;
-    public skills: SkillsConfig;
-    public mcp: MCPServerConfig;
 
     /**
      * EN: Loads config defaults, merges `.config/config.jsonc`, and resolves active model protocols.
@@ -263,9 +235,11 @@ export class ConfigService extends FService implements FConfiguration {
             leader: 'flyflor',
             queueLimit: 64,
             contextItemLimit: 128,
+            contextCompressItemLimit: 96,
             contextCharLimit: 32000,
             agentNoteLimit: 24,
             historyShare: 0.25,
+            thoughtStepLimit: 24,
         };
         this.agents = {
             flyflor: {
@@ -311,12 +285,6 @@ export class ConfigService extends FService implements FConfiguration {
             enabled: true,
             directory: './.ledger',
         };
-        this.skills = {
-            directory: join(this.path.config, 'skills'),
-            creationNudgeInterval: 15,
-            externalDirs: [],
-        };
-        this.mcp = {};
         Object.assign(this, JSON5.parse(readFileSync(join(this.path.config, 'config.jsonc'), 'utf-8')));
         this.path.socket = this.socket;
         this.model.protocols = this.resolveModelProtocols();

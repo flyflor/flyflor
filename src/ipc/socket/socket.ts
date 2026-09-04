@@ -1,6 +1,6 @@
 import type { Socket, UnixSocketListener } from 'bun';
 import { rm } from 'node:fs/promises';
-import { AgentManager, CollectiveSignalType, type CollectiveOutput } from '@/collective';
+import { CollectiveSignalType, Cortex, type CollectiveOutput } from '@/collective';
 import type { ConfigService } from '@/configuration';
 import { Config, FComponent, Init, Inject, Singleton, useContainer } from '@/core';
 import { IPCPacket } from '../packet';
@@ -17,7 +17,7 @@ export class FSocket extends FComponent {
     public packet!: IPCPacket;
 
     @Inject()
-    public manager!: AgentManager;
+    public cortex!: Cortex;
 
     public service?: UnixSocketListener<object>;
     public readonly connections = new Map<string, SocketConnection>();
@@ -25,7 +25,7 @@ export class FSocket extends FComponent {
 
     @Init()
     public async init(): Promise<void> {
-        this.manager.on(CollectiveSignalType.Output, (signal) => this.deliver(signal.data as CollectiveOutput));
+        this.cortex.on(CollectiveSignalType.Output, (signal) => this.deliver(signal.data as CollectiveOutput));
         await rm(this.config.socket, { force: true });
         this.service = Bun.listen({
             unix: this.config.socket,
@@ -54,7 +54,7 @@ export class FSocket extends FComponent {
         connection.close();
         this.connections.delete(connection.id);
         this.socketIds.delete(socket);
-        this.manager.disconnect(connection.id);
+        this.cortex.disconnect(connection.id);
         this.log.info('ipc.close', { connectionId: connection.id, error: error?.message });
     }
 
@@ -83,7 +83,7 @@ export class FSocket extends FComponent {
 
     private async dispatch(connection: SocketConnection, envelope: InboundIpcEnvelope): Promise<void> {
         if (envelope.action === 'user') {
-            const receipt = await this.manager.receive({
+            const receipt = await this.cortex.receive({
                 messageId: envelope.messageId,
                 speakerId: envelope.data.speakerId,
                 connectionId: connection.id,
@@ -95,11 +95,11 @@ export class FSocket extends FComponent {
             return;
         }
         if (envelope.action === 'answer') {
-            const receipt = this.manager.answer(envelope.data, connection.id, envelope.messageId);
+            const receipt = this.cortex.answer(envelope.data, connection.id, envelope.messageId);
             this.write(connection, 'event', { type: 'receipt', receipt });
             return;
         }
-        const receipt = this.manager.cancel(envelope.data, connection.id, envelope.messageId);
+        const receipt = this.cortex.cancel(envelope.data, connection.id, envelope.messageId);
         this.write(connection, 'event', { type: 'receipt', receipt });
     }
 

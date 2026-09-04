@@ -1,5 +1,5 @@
 import { Service } from '@/core/decorator';
-import { FService, useContainer } from '@/core/ioc';
+import { FService } from '@/core/ioc';
 import { JSON5 } from 'bun';
 import { basename, extname, join } from 'node:path';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -21,24 +21,24 @@ export interface PromptRender<TSection extends string = string> {
     separator?: string;
 }
 
-export type PromptPackageData<TSection extends string> = Partial<Record<TSection, PromptService<string, string>>>;
-
 /**
  * EN: Read-only loader for one prompt file or an ordered prompt package.
+ * A file loads as a plain string; a package loads as section-name → text.
  * ZH: 面向单个 prompt 文件或有序 prompt package 的只读加载器。
+ * 文件加载为纯字符串；package 加载为 section 名 → 文本映射。
  */
 @Service()
-export class PromptService<TSection extends string = string, TData = PromptPackageData<TSection>> extends FService {
+export class PromptService<TSection extends string = string> extends FService {
     public config?: IPromptConfig<TSection>;
-    public data!: TData;
+    public data!: string | Partial<Record<TSection, string>>;
 
     constructor(public readonly path: string) {
         super();
         if (!statSync(path).isDirectory()) {
-            this.data = readFileSync(path, 'utf-8') as TData;
+            this.data = readFileSync(path, 'utf-8');
             return;
         }
-        this.data = {} as TData;
+        const sections: Partial<Record<TSection, string>> = {};
         const entries = readdirSync(path);
         for (const entry of entries) {
             if (!entry.endsWith('.jsonc')) continue;
@@ -48,10 +48,9 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
             if (entry.endsWith('.jsonc') || entry.endsWith('.zh.cn.md')) continue;
             const promptPath = join(path, entry);
             const name = basename(promptPath, extname(promptPath)) as TSection;
-            const prompt = useContainer().create(PromptService, promptPath) as PromptService<string, string>;
-            (this as unknown as PromptPackageData<TSection>)[name] = prompt;
-            this.data = { ...(this.data as PromptPackageData<TSection>), [name]: prompt } as TData;
+            sections[name] = readFileSync(promptPath, 'utf-8');
         }
+        this.data = sections;
     }
 
     public render(shape: PromptRender<TSection>): string {
@@ -63,6 +62,7 @@ export class PromptService<TSection extends string = string, TData = PromptPacka
     }
 
     public section(key: TSection): string {
-        return String((this.data as PromptPackageData<TSection>)[key]?.data ?? '').trim();
+        const source = typeof this.data === 'string' ? undefined : this.data[key];
+        return String(source ?? '').trim();
     }
 }

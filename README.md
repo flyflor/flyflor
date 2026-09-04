@@ -28,8 +28,9 @@ Secrets remain environment variables. Restarting the process intentionally clear
 ```mermaid
 flowchart LR
     IPC["IPCModule"] --> Socket["Socket\nper-connection decoder + write queue"]
-    Socket --> Manager["AgentManager\nfixed roster + scheduling"]
-    Manager --> Attention["Attention\nfocus, merge, queue, fairness"]
+    Socket --> Cortex["Cortex\nroster + focus scheduling + signal hub"]
+    Cortex --> Scout["Scout\nsalience detection"]
+    Scout --> Attention["Attention\nbounded fair queue"]
     Attention --> Context["Context\none global workspace"]
     Context --> Agents["Fixed Agents\nleader + specialists"]
     Agents --> Brain["Brain"]
@@ -38,23 +39,25 @@ flowchart LR
     Action --> Thought
     Action --> Tools["Plugin tools"]
     Thought --> Inference["Inference + protocol adapters"]
+    Scout -. spike: cortical discharge .-> Cortex
 ```
 
 The boundaries are deliberately object-led:
 
 - `IPC → Socket` owns framing, validation, connection identity, and backpressure.
-- `AgentManager` owns fixed member construction, one active focus, cancellation, revision checks, and output routing. It does not generate answers.
-- `Attention` acts as the salience gate. Related stimuli merge into the active focus; unrelated stimuli enter a bounded fair queue.
-- `Context` is the only owner of dialogue facts. It stores the current focus, constraints, decisions, evidence, unresolved items, and sourced summaries.
+- `Cortex` (皮层) is the single orchestration hub: fixed member construction, one active focus, cancellation, revision checks, output routing, and a typed signal bus. It does not generate answers.
+- `Scout` (侦察者) is the salience detector. Every inbound stimulus is reconnoitered here and discharged as a `spike` — the cortical firing signal the Cortex reacts to. Detection is a Chain of Responsibility: waiting gate, explicit reply chain, model classification, deterministic fallback.
+- `Attention` is the gate and the bounded fair queue. The Cortex merges into the active focus or queues here according to each spike.
+- `Context` is the only owner of dialogue facts. It stores the current focus, constraints, facts, unresolved items, and sourced summaries.
 - Each fixed `Agent` owns a volatile local `Memory` for observations and reflections. It never owns an independent dialogue transcript.
 - `Brain` runs the same loop for every member: `Thought → Action/Observation → Thought` until a report is ready. Hidden provider reasoning and replay buffers stay inside the current inference call.
 - Only the configured leader may use side-effecting tools. Specialists are forced to read-only scope and run in parallel before the leader synthesizes the answer.
 
 ## Focus and continuity
 
-There is at most one external focus at a time. When the process is idle, the first stimulus opens it. While it is working, a message with an explicit `replyTo` is merged first; otherwise Attention evaluates semantic relation. A merge increments `revision`, emits `responseReset`, aborts cancellable model work, and causes the leader to rethink from the new Context. An action becomes started only after its tool atom has resolved and the current revision has been checked immediately before execution. A side effect that has actually started is allowed to finish and is recorded as compact evidence.
+There is at most one external focus at a time. When the process is idle, the first stimulus opens it. While it is working, a message with an explicit `replyTo` is merged first; otherwise the Scout evaluates semantic relation. A merge increments `revision`, emits `responseReset`, aborts cancellable model work, and causes the leader to rethink from the new Context. An action becomes started only after its tool atom has resolved and the current revision has been checked immediately before execution. A side effect that has actually started is allowed to finish and is recorded as compact evidence.
 
-While an `ask` or `confirm` interaction is pending, ordinary user input is queued. Only an answer matching `focusId` + `requestId` from the focus owner, or an owner `cancel`, releases the hard gate. Ask answers must also match the pending question count, order, and text. A reconnected owner connection is attached when it answers or cancels. Ask answers become sourced constraints in Context, and confirmations become sourced decisions. A merged focus sends its final stream to every participating connection, while confirmation authority remains with the owner who opened the focus. Cancellation is reported immediately, but an already-started side effect is allowed to finish and record a compact observation before the focus is released.
+While an `ask` or `confirm` interaction is pending, ordinary user input is queued. Only an answer matching `focusId` + `requestId` from the focus owner, or an owner `cancel`, releases the hard gate. Ask answers must also match the pending question count, order, and text. A reconnected owner connection is attached when it answers or cancels. Ask answers and confirmations become sourced constraints in Context. A merged focus sends its final stream to every participating connection, while confirmation authority remains with the owner who opened the focus. Cancellation is reported immediately, but an already-started side effect is allowed to finish and record a compact observation before the focus is released.
 
 The queue is bounded by `collective.queueLimit`. It scores salience, wait age, and speaker fairness; when full it rejects the newest message explicitly. When a queued root becomes active, its explicit `replyTo` chain is absorbed before inference starts, so related queued speakers receive one focus and one final revision. Every inbound action reserves its `messageId` process-wide. An exact `user`, `answer`, or `cancel` retry is idempotent and returns the stable receipt for that command. Reusing an ID for another action or payload is rejected. Idempotency records retain SHA-256 payload fingerprints rather than raw dialogue or interaction answers.
 
@@ -85,11 +88,13 @@ interface UserInput {
 }
 ```
 
-Inbound actions are `user`, `answer`, and `cancel`. `open` returns `connectionId` and the protocol. Every accepted inbound command returns an `event` receipt. Public `attention` packets contain only state and queue depth. Chunks use `{ focusId, revision, chunk }`; a revision merge emits `responseReset`. Answers, confirmations, tool events, errors, and final streams are targeted to the relevant focus participants.
+Inbound actions are `user`, `answer`, and `cancel`. `open` returns `connectionId` and the protocol. Every accepted inbound command returns an `event` receipt. Public `attention` packets contain only state and queue depth. Each scout discharge is broadcast as `event { type: 'spike', spike }` so the cortical firing signal stays observable. Chunks use `{ focusId, revision, chunk }`; a revision merge emits `responseReset`. Answers, confirmations, tool events, errors, and final streams are targeted to the relevant focus participants.
 
 Each socket has an independent decoder, ordered intake, and backpressure output queue. Split UTF-8 bytes, coalesced packets, malformed frames, overlapping data callbacks, and one client disconnect cannot reset or reorder another connection. Per-connection pending input and output are each capped at two maximum-size IPC packets; a slow or flooding client is disconnected without disturbing healthy clients. A malformed complete frame emits an error without dropping valid frames that follow it in the same chunk. Disconnecting removes that connection's active routing entry without deleting its speaker identity; reconnecting can attach a new route, but missed output is not replayed. An oversized outbound packet is isolated as an error on its target connection instead of interrupting Agent execution.
 
-Attention projects active stimuli into `collective.contextCharLimit` before classification. Context applies the same budget independently for each Agent, preserving full process-local truth while keeping the first and latest messages and constraints in bounded model input. `collective.contextItemLimit` is a hard store limit: ordinary items are evicted first, then the oldest non-pinned protected item only when every slot is protected; current focus constraints remain on the Focus itself.
+The Scout projects active stimuli into `collective.contextCharLimit` before classification. Context applies the same budget independently for each Agent, preserving full process-local truth while keeping the first and latest messages and constraints in bounded model input. `collective.contextItemLimit` is a hard store limit: ordinary items are evicted first, then the oldest non-pinned protected item only when every slot is protected; current focus constraints remain on the Focus itself.
+
+Dynamic compression keeps the workspace dense instead of dropping knowledge: once ordinary items pass the `collective.contextCompressItemLimit` soft threshold (default 96), the oldest, least salient items are folded in the background into one `digest` item that keeps the union of source metadata. Protected kinds and items referenced by the current focus never enter a batch. Model compression uses the `prompts/context` package and falls back to a deterministic tagged merge when the model is unavailable; the hard cap with emergency eviction remains the final backstop, and the life ledger is never involved.
 
 Inference propagates external abort reasons, enforces provider/model total-request and stale-stream timeouts, and cancels the active byte reader on failure or consumer cancellation. Missing or duplicate provider tool-call IDs are normalized into unique request IDs before interaction or replay. Inside Brain, the retention budget for old provider-only tool replay uses `collective.contextCharLimit`; eviction removes only whole old Thought/Action cycles and always retains the newest complete cycle. A single replayed tool result is capped at 12,000 characters. Filesystem reads return at most 20,000 valid UTF-8 bytes. Shell and execute each retain at most 20,000 characters per stdout/stderr stream; truncated streams preserve both edges and set explicit flags. Execute accepts at most 64 tasks with effective concurrency capped at 8.
 
@@ -97,12 +102,12 @@ Inference propagates external abort reasons, enforces provider/model total-reque
 
 ```txt
 src/ipc/                          framing and multi-connection socket boundary
-src/collective/                   AgentManager, Attention, and the global Context
+src/collective/                   Cortex, Scout, Attention, and the global Context
 src/agent/                        fixed Agent, volatile Memory, Brain, Thought, Action
 src/inference/                    model/provider infrastructure and adapters
 src/plugins/tools/                ask, filesystem, shell, and execute atoms
 prompts/agents/                   read-only fixed identity packages
-prompts/attention/                salience/focus prompt package
+prompts/scout/                   salience/focus prompt package (scout discharge)
 web/                              browser bridge and local IPC console
 .config/config.jsonc              model, collective, roster, and socket configuration
 ```

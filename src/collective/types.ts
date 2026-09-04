@@ -1,8 +1,14 @@
-import type { AgentInteractionRequest } from '@/agent/types';
+import type { AgentInteractionRequest, AgentRuntimeEvent } from '@/agent/types';
 import type { OutboundIpcAction } from '@/ipc/types';
-import type { CortexSignal } from '@/core';
+import type { Signal } from '@/core';
+import type { Spike } from './scout';
 
+/**
+ * EN: Typed signals routed through the Cortex bus (cortical discharges).
+ * ZH: 经皮层信号总线路由的类型化信号（皮层放电）。
+ */
 export enum CollectiveSignalType {
+    Spike = 'spike',
     Output = 'output',
     AgentEvent = 'agent_event',
 }
@@ -13,9 +19,7 @@ export interface CollectiveOutput {
     targets?: string[];
 }
 
-export interface CollectiveSignal extends CortexSignal<string> {
-    data: CollectiveOutput | unknown;
-}
+export type CollectiveSignal = Signal<CollectiveSignalType, Spike | CollectiveOutput | AgentRuntimeEvent>;
 
 export type AttentionReceiptState = 'focused' | 'merged' | 'queued' | 'rejected';
 

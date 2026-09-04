@@ -70,7 +70,7 @@ const focus = (id: string): Focus => ({
     updatedAt: 2,
 });
 
-const report = (answer: string): AgentReport => ({ agentId: 'flyflor', answer, evidence: [], decisions: [], remaining: [], steps: 1 });
+const report = (answer: string): AgentReport => ({ agentId: 'flyflor', answer, evidence: [], remaining: [], steps: 1 });
 
 describe('Ledger', () => {
     test('records every conversation lifecycle event with verbatim payloads', () => {

@@ -250,8 +250,14 @@
         "leader": "flyflor",
         "queueLimit": 64,
         "contextItemLimit": 128,
+        // 动态压缩软阈值:普通条目超过此数量时,后台把最老/最低显著性的条目折叠成 digest
+        // 条目(模型压缩,失败回退确定性合并)。受保护类型与被引用条目永不压缩;
+        // contextItemLimit 硬上限与紧急淘汰仍是最后防线。
+        "contextCompressItemLimit": 96,
         "contextCharLimit": 32000,
         "agentNoteLimit": 24,
+        // 单个 agent 的 Thought→Action 循环步数硬上限；耗尽时按已积累的部分答案与证据结算，不再抛错。
+        "thoughtStepLimit": 24,
     },
     // 固定成员列表。role/capabilities 用于注意力选人，actionScope 限制执行权限。
     "agents": {

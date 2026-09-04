@@ -4,9 +4,10 @@ import type { FAgentProfileConfiguration, ConfigService } from '@/configuration'
 import { useContainer } from '@/core';
 import { Ledger } from '@/ledger';
 import { Attention } from './attention';
+import { Scout } from './scout';
 import { Context } from './context';
 import { History } from './history';
-import { AgentManager } from './module';
+import { Cortex } from './cortex';
 import { CollectiveSignalType, type CollectiveOutput } from './types';
 import type { Stimulus } from './context';
 
@@ -24,7 +25,7 @@ const stimulus = (messageId: string, speakerId = 'speaker-a', replyTo?: string):
     messageId, speakerId, connectionId: `connection-${speakerId}`, text: messageId, replyTo, receivedAt: Date.now(),
 });
 
-const report = (agentId: string, answer: string): AgentReport => ({ agentId, answer, evidence: [`${agentId} evidence`], decisions: [], remaining: [], steps: 1 });
+const report = (agentId: string, answer: string): AgentReport => ({ agentId, answer, evidence: [`${agentId} evidence`], remaining: [], steps: 1 });
 
 const fakeAgent = (name: string, run: (context: unknown, control: any) => Promise<AgentReport>): Agent => ({
     agentConfig: profile(name, name === 'flyflor' ? 'leader' : 'specialist', name === 'flyflor' ? 'full' : 'read'),
@@ -38,8 +39,8 @@ const ledger = (): Ledger => {
     return value;
 };
 
-const manager = (): { value: AgentManager; context: Context; attention: Attention; outputs: CollectiveOutput[] } => {
-    const value = useContainer().create(AgentManager);
+const manager = (): { value: Cortex; context: Context; attention: Attention; scout: Scout; outputs: CollectiveOutput[] } => {
+    const value = useContainer().create(Cortex);
     const context = useContainer().create(Context);
     context.config = config();
     const history = useContainer().create(History);
@@ -50,20 +51,23 @@ const manager = (): { value: AgentManager; context: Context; attention: Attentio
     context.ledger = ledger();
     const attention = useContainer().create(Attention);
     attention.config = config();
+    const scout = useContainer().create(Scout);
+    scout.config = config();
     value.config = config();
     value.context = context;
     value.attention = attention;
+    value.scout = scout;
     value.ledger = ledger();
     const outputs: CollectiveOutput[] = [];
     value.on(CollectiveSignalType.Output, (signal) => { outputs.push(signal.data as CollectiveOutput); });
-    return { value, context, attention, outputs };
+    return { value, context, attention, scout, outputs };
 };
 
-describe('AgentManager', () => {
+describe('Cortex', () => {
     test('runs fixed specialists in parallel, then gives the leader one unified voice', async () => {
-        const { value, attention, outputs } = manager();
+        const { value, scout, attention, outputs } = manager();
         const order: string[] = [];
-        attention.decide = async () => ({ disposition: 'focus', salience: 1, consultants: ['researcher', 'reviewer'] });
+        scout.detect = async () => ({ disposition: 'focus', salience: 1, consultants: ['researcher', 'reviewer'] });
         value.agents.researcher = fakeAgent('researcher', async () => {
             order.push('researcher');
             return report('researcher', 'research report');
@@ -96,8 +100,8 @@ describe('AgentManager', () => {
     });
 
     test('feeds the leader verbatim history from earlier completed turns', async () => {
-        const { value, attention } = manager();
-        attention.decide = async () => ({ disposition: 'focus', salience: 1, consultants: [] });
+        const { value, scout, attention } = manager();
+        scout.detect = async () => ({ disposition: 'focus', salience: 1, consultants: [] });
         const seen: unknown[] = [];
         value.agents.flyflor = fakeAgent('flyflor', async (input) => {
             seen.push((input as { history: unknown[] }).history);
@@ -115,8 +119,8 @@ describe('AgentManager', () => {
     });
 
     test('degrades one specialist failure into an observation for the leader', async () => {
-        const { value, attention, outputs } = manager();
-        attention.decide = async () => ({ disposition: 'focus', salience: 1, consultants: ['researcher'] });
+        const { value, scout, attention, outputs } = manager();
+        scout.detect = async () => ({ disposition: 'focus', salience: 1, consultants: ['researcher'] });
         value.agents.researcher = fakeAgent('researcher', async () => { throw Error('research unavailable'); });
         value.agents.flyflor = fakeAgent('flyflor', async (input, control) => {
             expect((input as { items: Array<{ content: string }> }).items.map((item) => item.content)).toContain('Specialist failed: research unavailable');
@@ -135,11 +139,11 @@ describe('AgentManager', () => {
     });
 
     test('releases attention after leader failure and continues with the queued focus', async () => {
-        const { value, context, attention, outputs } = manager();
+        const { value, context, scout, attention, outputs } = manager();
         let releaseFailure!: () => void;
         const failureGate = new Promise<void>((resolve) => { releaseFailure = resolve; });
         let runs = 0;
-        attention.decide = async (_incoming, active) => active
+        scout.detect = async (_incoming, active) => active
             ? { disposition: 'queue', salience: 0.5, consultants: [] }
             : { disposition: 'focus', salience: 1, consultants: [] };
         value.agents.flyflor = fakeAgent('flyflor', async (_input, control) => {
@@ -170,10 +174,10 @@ describe('AgentManager', () => {
     });
 
     test('is idempotent for a repeated message id and queues unrelated input', async () => {
-        const { value, attention, outputs } = manager();
+        const { value, scout, attention, outputs } = manager();
         let release!: () => void;
         const blocker = new Promise<void>((resolve) => { release = resolve; });
-        attention.decide = async (_stimulus, active) => active
+        scout.detect = async (_stimulus, active) => active
             ? { disposition: 'queue', salience: 0.5, consultants: [] }
             : { disposition: 'focus', salience: 1, consultants: [] };
         value.agents.flyflor = fakeAgent('flyflor', async () => {
@@ -204,11 +208,11 @@ describe('AgentManager', () => {
     });
 
     test('activates a queued explicit reply chain as one shared focus', async () => {
-        const { value, attention, outputs } = manager();
+        const { value, scout, attention, outputs } = manager();
         let release!: () => void;
         const blocker = new Promise<void>((resolve) => { release = resolve; });
         let runs = 0;
-        attention.decide = async (_incoming, active) => active
+        scout.detect = async (_incoming, active) => active
             ? { disposition: 'queue', salience: 0.5, consultants: [] }
             : { disposition: 'focus', salience: 1, consultants: [] };
         value.agents.flyflor = fakeAgent('flyflor', async (_input, control) => {
@@ -236,9 +240,9 @@ describe('AgentManager', () => {
     });
 
     test('keeps only an irreversible payload fingerprint for user idempotency', async () => {
-        const { value, attention } = manager();
+        const { value, scout, attention } = manager();
         const rawText = 'private raw dialogue that must be released';
-        attention.decide = async () => ({ disposition: 'focus', salience: 1, consultants: [] });
+        scout.detect = async () => ({ disposition: 'focus', salience: 1, consultants: [] });
         value.agents.flyflor = fakeAgent('flyflor', async () => report('flyflor', 'semantic summary'));
 
         await value.receive({ ...stimulus('m1'), text: rawText });
@@ -250,13 +254,13 @@ describe('AgentManager', () => {
     });
 
     test('serializes simultaneous intake so only one message observes an idle workspace', async () => {
-        const { value, attention } = manager();
+        const { value, scout, attention } = manager();
         let releaseDecision!: () => void;
         let releaseLeader!: () => void;
         const decisionGate = new Promise<void>((resolve) => { releaseDecision = resolve; });
         const leaderGate = new Promise<void>((resolve) => { releaseLeader = resolve; });
         let decisions = 0;
-        attention.decide = async (_stimulus, active) => {
+        scout.detect = async (_stimulus, active) => {
             decisions += 1;
             if (decisions === 1) await decisionGate;
             return active
@@ -279,12 +283,12 @@ describe('AgentManager', () => {
     });
 
     test('reserves a user message id while attention classification is pending', async () => {
-        const { value, attention } = manager();
+        const { value, scout, attention } = manager();
         let releaseDecision!: () => void;
         let markDecisionStarted!: () => void;
         const decisionGate = new Promise<void>((resolve) => { releaseDecision = resolve; });
         const decisionStarted = new Promise<void>((resolve) => { markDecisionStarted = resolve; });
-        attention.decide = async () => {
+        scout.detect = async () => {
             markDecisionStarted();
             await decisionGate;
             return { disposition: 'focus', salience: 1, consultants: [] };
@@ -301,7 +305,7 @@ describe('AgentManager', () => {
     });
 
     test('re-evaluates attention when the active focus completes during classification', async () => {
-        const { value, attention } = manager();
+        const { value, scout, attention } = manager();
         let releaseLeader!: () => void;
         let releaseAttention!: () => void;
         let attentionStarted!: () => void;
@@ -310,7 +314,7 @@ describe('AgentManager', () => {
         const started = new Promise<void>((resolve) => { attentionStarted = resolve; });
         let delayed = false;
         let runs = 0;
-        attention.decide = async (incoming, active) => {
+        scout.detect = async (incoming, active) => {
             if (incoming.messageId === 'm2' && active && !delayed) {
                 delayed = true;
                 attentionStarted();
@@ -339,11 +343,11 @@ describe('AgentManager', () => {
     });
 
     test('merges a second speaker into the focus and resets the obsolete revision', async () => {
-        const { value, attention, outputs } = manager();
+        const { value, scout, attention, outputs } = manager();
         let started!: () => void;
         const firstStarted = new Promise<void>((resolve) => { started = resolve; });
         let calls = 0;
-        attention.decide = async (_stimulus, active) => active
+        scout.detect = async (_stimulus, active) => active
             ? { disposition: 'merge', salience: 1, consultants: [] }
             : { disposition: 'focus', salience: 1, consultants: [] };
         value.agents.flyflor = fakeAgent('flyflor', async (_input, control) => {
@@ -375,14 +379,14 @@ describe('AgentManager', () => {
     });
 
     test('keeps one consciousness across merge, queue, revision reset, and reconnect', async () => {
-        const { value, context, attention, outputs } = manager();
+        const { value, context, scout, attention, outputs } = manager();
         let markFirstStarted!: () => void;
         let markRevisedStarted!: () => void;
         let releaseRevised!: () => void;
         const firstStarted = new Promise<void>((resolve) => { markFirstStarted = resolve; });
         const revisedStarted = new Promise<void>((resolve) => { markRevisedStarted = resolve; });
         const revisedGate = new Promise<void>((resolve) => { releaseRevised = resolve; });
-        attention.decide = async (incoming, active) => {
+        scout.detect = async (incoming, active) => {
             if (!active) return { disposition: 'focus', salience: 1, consultants: [] };
             if (incoming.messageId === 'm2') return { disposition: 'merge', salience: 1, consultants: [] };
             return { disposition: 'queue', salience: 0.5, consultants: [] };
@@ -437,9 +441,9 @@ describe('AgentManager', () => {
     });
 
     test('holds a hard interaction gate for the owner while ordinary input queues', async () => {
-        const { value, context, attention, outputs } = manager();
+        const { value, context, scout, attention, outputs } = manager();
         let runs = 0;
-        attention.decide = async (_stimulus, active) => active?.state === 'waiting'
+        scout.detect = async (_stimulus, active) => active?.state === 'waiting'
             ? { disposition: 'queue', salience: 0.5, consultants: [] }
             : { disposition: 'focus', salience: 1, consultants: [] };
         value.agents.flyflor = fakeAgent('flyflor', async (input) => {
@@ -471,7 +475,7 @@ describe('AgentManager', () => {
         expect(answerReceipt).toEqual({ messageId: 'answer-1', action: 'answer', state: 'accepted' });
         expect(() => value.answer({ ...confirmation, response: { kind: 'confirm', approved: false } }, undefined, 'answer-1')).toThrow('messageId is already bound to another payload');
         expect(context.snapshot()).toContainEqual(expect.objectContaining({
-            kind: 'decision',
+            kind: 'constraint',
             content: 'Tool confirmation approved',
             sourceMessageIds: ['answer-1'],
             speakerIds: ['speaker-a'],
@@ -588,9 +592,24 @@ describe('AgentManager', () => {
         expect(context.active()).toBeUndefined();
     });
 
+    test('broadcasts the scout spike as an observable cortical discharge', async () => {
+        const { value, scout, outputs } = manager();
+        await value.init();
+        scout.detect = async () => ({ disposition: 'focus', salience: 1, consultants: [] });
+        value.agents.flyflor = fakeAgent('flyflor', async () => report('flyflor', 'done'));
+
+        await value.receive(stimulus('m1'));
+        await value.whenIdle();
+
+        expect(outputs).toContainEqual(expect.objectContaining({
+            action: 'event',
+            data: { type: 'spike', spike: { disposition: 'focus', salience: 1, consultants: [] } },
+        }));
+    });
+
     test('keeps the roster fixed and forces non-leaders to read scope', async () => {
-        const first = await useContainer().getAsync(AgentManager);
-        const second = await useContainer().getAsync(AgentManager);
+        const first = await useContainer().getAsync(Cortex);
+        const second = await useContainer().getAsync(Cortex);
 
         expect(second).toBe(first);
         expect(Object.keys(first.agents).sort()).toEqual(['flyflor', 'researcher', 'reviewer']);

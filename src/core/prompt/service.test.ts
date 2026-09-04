@@ -32,6 +32,6 @@ describe('PromptService', () => {
         const file = join(root, 'RULES.md');
         writeFileSync(file, 'one rule');
 
-        expect(new PromptService<string, string>(file).data).toBe('one rule');
+        expect(new PromptService(file).data).toBe('one rule');
     });
 });

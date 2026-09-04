@@ -1,6 +1,6 @@
 import type { FAgentActionScope } from '@/configuration';
 import type { AgentInteractionResponse } from '@/agent/types';
-import { FAgentAtom, Inject, Provide } from '@/core';
+import { FAgent, Inject, Provide } from '@/core';
 import { type ActionRequest, ToolComponent, type ToolRunResult } from '@/plugins';
 import type { ActionObservation } from './types';
 
@@ -17,7 +17,7 @@ interface ActionControl {
  * ZH: 在权限、确认和取消闸门之后执行一次模型请求动作。
  */
 @Provide()
-export class Action extends FAgentAtom {
+export class Action extends FAgent {
     @Inject()
     public tools!: ToolComponent;
 

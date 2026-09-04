@@ -7,10 +7,10 @@ Flyflor 默认使用项目内 `.agents/skills/oop-code-redlines/SKILL.md` skill 
 ## Flyflor 代码规则
 
 1. 代码是事实源。文档只能描述已经实现的行为，或者明确标注为计划。
-2. 运行时代码以 OOP 为主。业务行为必须归属到继承正确核心基类的 class 上：`FModule`、`FService`、`FComponent`、`FRepo`、`FGuard`、`FSandBox`、`FAgent` 或 `FCortex`。
+2. 运行时代码以 OOP 为主。业务行为必须归属到继承正确核心基类的 class 上：`FModule`、`FService`、`FComponent`、`FRepo`、`FAgent`、`FToolAtom` 或 `FCortex`。
 3. Composition 风格的 exported function 只允许出现在明确边界：decorator、factory、bootstrap、scripts、protocol adapter 和低层 framework helper。
 4. 方法体 300 行是软上限，500 行是硬上限。500 行以内不要乱抽 helper；只有当拆分能命名真实对象动作、隔离副作用、形成复用或降低真实复杂度时才拆。
-5. 目录名表达语义名词。文件名表达目录内角色，例如 `index.ts`、`service.ts`、`types.ts`、`constants.ts`、`decorator.ts`、`factory.ts`、`container.ts`、`abstracts.ts`、`socket.ts`、`module.ts`、`entity.ts`、`repository.ts` 和 `*.test.ts`。
+5. 命名约定大于配置：最高约定是 `[单个单词]/[单个单词]*/[单个单词].[后缀]`。目录名是单个语义名词；文件 basename 是单个单词的目录内角色，例如 `index.ts`、`service.ts`、`types.ts`、`constants.ts`、`decorator.ts`、`factory.ts`、`container.ts`、`abstracts.ts`、`socket.ts`、`module.ts`、`cortex.ts`、`scout.ts`、`repository.ts` 和 `*.test.ts`。禁止把 domain 重新编码进带点的 basename（不要 `thing.service.ts`、`openai.chat.ts` 这类名字）。
 6. `index.ts` 只能做 barrel re-export，不能承载行为。
 7. 不要新增泛化的 `utils`、`manager`、`parser`、`compiler` 或 `diagnostic` 文件，除非真的出现对象边界并且代码规模持续需要。
 8. 跨 source domain import 使用 `@/*`。同一目录边界内优先使用相对 import。

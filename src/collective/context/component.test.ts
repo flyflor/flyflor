@@ -20,9 +20,20 @@ const ledger = (): Ledger => {
     return value;
 };
 
-const context = (itemLimit = 128): Context => {
+const context = (
+    itemLimit = 128,
+    softLimit?: number,
+    completeText: () => Promise<string> = async () => 'condensed digest',
+): Context => {
     const value = useContainer().create(Context);
-    value.config = { collective: { contextItemLimit: itemLimit, contextCharLimit: 32000, historyShare: 0.25 } } as ConfigService;
+    value.config = {
+        collective: {
+            contextItemLimit: itemLimit,
+            contextCompressItemLimit: softLimit,
+            contextCharLimit: 32000,
+            historyShare: 0.25,
+        },
+    } as ConfigService;
     const history = useContainer().create(History);
     history.config = {
         collective: { leader: 'flyflor', contextCharLimit: 32000, historyShare: 0.25 },
@@ -33,6 +44,8 @@ const context = (itemLimit = 128): Context => {
     history.prompt = { section: () => 'compress' } as never;
     value.history = history;
     value.ledger = ledger();
+    value.inference = { completeText } as never;
+    value.prompt = { section: () => 'compress' } as never;
     return value;
 };
 
@@ -71,7 +84,6 @@ describe('Context', () => {
             agentId: 'researcher',
             answer: 'Relevant finding',
             evidence: ['evidence metadata'],
-            decisions: [],
             remaining: [],
             steps: 1,
         });
@@ -81,7 +93,6 @@ describe('Context', () => {
             agentId: 'flyflor',
             answer: 'Final semantic summary',
             evidence: [],
-            decisions: [],
             remaining: [],
             steps: 1,
         });
@@ -90,14 +101,14 @@ describe('Context', () => {
         expect(input.items.map((item) => item.content)).toContain('Relevant finding');
         expect(value.active()).toBeUndefined();
         expect(JSON.stringify(value.snapshot())).not.toContain('message m1');
-        expect(value.snapshot().filter((item) => item.content === 'Final semantic summary').map((item) => item.kind)).toEqual(['summary']);
+        expect(value.snapshot().filter((item) => item.content === 'Final semantic summary').map((item) => item.kind)).toEqual(['fact']);
         expect(context().snapshot()).toEqual([]);
     });
 
     test('records completed turns and injects them verbatim into later agent input', async () => {
         const value = context();
         const first = value.open(stimulus('m1'), []);
-        await value.complete(first.id, { agentId: 'flyflor', answer: 'first answer', evidence: [], decisions: [], remaining: [], steps: 1 });
+        await value.complete(first.id, { agentId: 'flyflor', answer: 'first answer', evidence: [], remaining: [], steps: 1 });
         value.open(stimulus('m2'), []);
 
         const input = value.forAgent('flyflor', []);
@@ -110,7 +121,7 @@ describe('Context', () => {
     test('excludes verbatim history that exceeds its share of a tight budget', async () => {
         const value = context();
         const first = value.open(stimulus('m1'), []);
-        await value.complete(first.id, { agentId: 'flyflor', answer: 'first answer', evidence: [], decisions: [], remaining: [], steps: 1 });
+        await value.complete(first.id, { agentId: 'flyflor', answer: 'first answer', evidence: [], remaining: [], steps: 1 });
         value.open(stimulus('m2'), []);
 
         const input = value.forAgent('flyflor', [], 400);
@@ -118,7 +129,8 @@ describe('Context', () => {
         expect(input.history).toEqual([]);
     });
 
-    test('absorbs ask answers as constraints and confirmations as sourced decisions', () => {        const value = context();
+    test('absorbs ask answers and confirmations as sourced constraints', () => {
+        const value = context();
         const focus = value.open(stimulus('m1'), []);
 
         value.observeInteraction(focus.id, 'speaker-a', 'answer-1', {
@@ -148,7 +160,7 @@ describe('Context', () => {
                 speakerIds: ['speaker-a'],
             }),
             expect.objectContaining({
-                kind: 'decision',
+                kind: 'constraint',
                 content: 'Tool confirmation rejected',
                 sourceFocusId: focus.id,
                 sourceMessageIds: ['answer-2'],
@@ -157,19 +169,18 @@ describe('Context', () => {
         ]));
     });
 
-    test('evicts ordinary low-salience items before protected decisions and open items', () => {
+    test('evicts ordinary low-salience facts before protected constraints and open items', () => {
         const value = context(2);
         const focus = value.open(stimulus('m1'), []);
         value.observe(focus.id, {
             agentId: 'reviewer',
             answer: 'ordinary fact',
             evidence: ['ordinary evidence'],
-            decisions: ['locked decision'],
             remaining: ['unresolved issue'],
             steps: 1,
         });
 
-        expect(value.snapshot().map((item) => item.content)).toEqual(['locked decision', 'unresolved issue']);
+        expect(value.snapshot().map((item) => item.content)).toEqual(['ordinary evidence', 'unresolved issue']);
     });
 
     test('enforces the hard item cap while retaining full active constraints in Focus', () => {
@@ -191,7 +202,7 @@ describe('Context', () => {
     test('applies the per-agent character budget to global items before local notes', () => {
         const value = context();
         const focus = value.open(stimulus('m1'), []);
-        value.observe(focus.id, { agentId: 'researcher', answer: '', evidence: ['e'], decisions: [], remaining: [], steps: 1 });
+        value.observe(focus.id, { agentId: 'researcher', answer: '', evidence: ['e'], remaining: [], steps: 1 });
         const note = { id: 'note', content: 'n', source: 'reflection' as const, salience: 1, createdAt: 1, lastAccessedAt: 1 };
         const complete = value.forAgent('flyflor', [], 32000);
         const capacity = JSON.stringify({ focus: complete.focus, history: [], globalWorkspace: [], localMemory: [] }).length
@@ -247,7 +258,7 @@ describe('Context', () => {
     test('bounds one semantic item without losing its source metadata', () => {
         const value = context();
         const focus = value.open(stimulus('m1'), []);
-        value.observe(focus.id, { agentId: 'researcher', answer: '', evidence: ['x'.repeat(9000)], decisions: [], remaining: [], steps: 1 });
+        value.observe(focus.id, { agentId: 'researcher', answer: '', evidence: ['x'.repeat(9000)], remaining: [], steps: 1 });
 
         const item = value.snapshot()[0]!;
         expect(item.content.length).toBe(8000);
@@ -258,11 +269,117 @@ describe('Context', () => {
     test('protects evidence referenced by the current focus from ordinary eviction', async () => {
         const value = context(1);
         const first = value.open(stimulus('m1'), []);
-        value.observe(first.id, { agentId: 'researcher', answer: '', evidence: ['referenced evidence'], decisions: [], remaining: [], steps: 1 });
-        await value.complete(first.id, { agentId: 'flyflor', answer: '', evidence: [], decisions: [], remaining: [], steps: 1 });
+        value.observe(first.id, { agentId: 'researcher', answer: '', evidence: ['referenced evidence'], remaining: [], steps: 1 });
+        await value.complete(first.id, { agentId: 'flyflor', answer: '', evidence: [], remaining: [], steps: 1 });
         const second = value.open({ ...stimulus('m2'), replyTo: 'm1' }, []);
-        value.observe(second.id, { agentId: 'researcher', answer: '', evidence: ['new evidence'], decisions: [], remaining: [], steps: 1 });
+        value.observe(second.id, { agentId: 'researcher', answer: '', evidence: ['new evidence'], remaining: [], steps: 1 });
 
         expect(value.snapshot().map((item) => item.content)).toEqual(['referenced evidence']);
+    });
+
+    test('folds ordinary items over the soft threshold into one digest in the background', async () => {
+        const value = context(4, 2, async () => 'folded digest');
+        const focus = value.open(stimulus('m1'), []);
+        value.observe(focus.id, {
+            agentId: 'researcher',
+            answer: 'first fact',
+            evidence: ['evidence a', 'evidence b', 'evidence c'],
+            remaining: [],
+            steps: 1,
+        });
+
+        await value.whenCompact();
+
+        const items = value.snapshot();
+        expect(items.map((item) => item.kind)).toEqual(['fact', 'digest']);
+        const digest = items.find((item) => item.kind === 'digest')!;
+        expect(digest.content).toBe('folded digest');
+        expect(digest.salience).toBe(0.9);
+        expect(digest.sourceMessageIds).toEqual(['m1']);
+        expect(digest.speakerIds).toEqual(['speaker-a']);
+        expect(items.find((item) => item.kind === 'fact')?.content).toBe('evidence c');
+    });
+
+    test('one background pass folds items from different focuses into a union digest', async () => {
+        const value = context(8, 2, async () => 'folded digest');
+        const first = value.open(stimulus('m1'), []);
+        value.observe(first.id, { agentId: 'researcher', answer: '', evidence: ['evidence a'], remaining: [], steps: 1 });
+        await value.complete(first.id, { agentId: 'flyflor', answer: 'summary of first', evidence: [], remaining: [], steps: 1 });
+        const second = value.open(stimulus('m2', 'speaker-b'), []);
+        value.observe(second.id, { agentId: 'researcher', answer: '', evidence: ['evidence b', 'evidence c'], remaining: [], steps: 1 });
+
+        await value.whenCompact();
+
+        const items = value.snapshot();
+        expect(items).toHaveLength(2);
+        const digest = items.find((item) => item.kind === 'digest')!;
+        expect(digest).toBeDefined();
+        expect(digest.content).toBe('folded digest');
+        expect([...digest.sourceMessageIds].sort()).toEqual(['m1', 'm2']);
+        expect([...digest.speakerIds].sort()).toEqual(['speaker-a', 'speaker-b']);
+        expect(digest.salience).toBe(0.9);
+    });
+
+    test('re-folds older digests together with newer ordinary items without losing provenance', async () => {
+        let calls = 0;
+        const value = context(8, 2, async () => (calls += 1) === 1 ? 'first fold' : 'second fold');
+        const first = value.open(stimulus('m1'), []);
+        value.observe(first.id, { agentId: 'researcher', answer: '', evidence: ['evidence a'], remaining: [], steps: 1 });
+        await value.complete(first.id, { agentId: 'flyflor', answer: 'summary of first', evidence: [], remaining: [], steps: 1 });
+        const second = value.open(stimulus('m2', 'speaker-b'), []);
+        value.observe(second.id, { agentId: 'researcher', answer: '', evidence: ['evidence b', 'evidence c'], remaining: [], steps: 1 });
+        await value.whenCompact();
+        value.observe(second.id, { agentId: 'researcher', answer: '', evidence: ['evidence d', 'evidence e', 'evidence f'], remaining: [], steps: 1 });
+
+        await value.whenCompact();
+
+        const items = value.snapshot();
+        expect(items).toHaveLength(2);
+        const digest = items.find((item) => item.kind === 'digest')!;
+        expect(digest.content).toBe('second fold');
+        expect([...digest.sourceMessageIds].sort()).toEqual(['m1', 'm2']);
+        expect([...digest.speakerIds].sort()).toEqual(['speaker-a', 'speaker-b']);
+        expect(digest.salience).toBe(0.9);
+    });
+
+    test('never folds protected kinds, only ordinary items', async () => {
+        const value = context(8, 2, async () => 'folded digest');
+        const focus = value.open(stimulus('m1'), []);
+        value.observeInteraction(focus.id, 'speaker-a', 'answer-1', {
+            kind: 'ask',
+            answers: [
+                { question: 'one', answer: '1' },
+                { question: 'two', answer: '2' },
+            ],
+        });
+        value.observe(focus.id, { agentId: 'researcher', answer: 'fact', evidence: ['evidence'], remaining: [], steps: 1 });
+
+        await value.whenCompact();
+
+        const items = value.snapshot();
+        expect(items.filter((item) => item.kind === 'constraint').map((item) => item.content)).toEqual(['one: 1', 'two: 2']);
+        expect(items.filter((item) => item.kind === 'digest')).toHaveLength(1);
+        expect(items.filter((item) => item.kind === 'constraint')).toHaveLength(2);
+    });
+
+    test('falls back to a deterministic merge when the model is unavailable', async () => {
+        const value = context(4, 2, async () => { throw Error('model down'); });
+        const focus = value.open(stimulus('m1'), []);
+        value.observe(focus.id, {
+            agentId: 'researcher',
+            answer: 'factual statement',
+            evidence: ['evidence detail', 'second evidence'],
+            remaining: [],
+            steps: 1,
+        });
+
+        await value.whenCompact();
+
+        const items = value.snapshot();
+        const digest = items.find((item) => item.kind === 'digest')!;
+        expect(digest).toBeDefined();
+        expect(digest.content).toContain('[fact] factual statement');
+        expect(digest.content).toContain('[fact] evidence detail');
+        expect(items.find((item) => item.kind === 'fact')?.content).toBe('second evidence');
     });
 });

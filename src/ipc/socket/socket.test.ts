@@ -1,7 +1,7 @@
 import type { Socket } from 'bun';
 import { describe, expect, test } from 'bun:test';
 import { useContainer } from '@/core';
-import type { AgentManager } from '@/collective';
+import type { Cortex } from '@/collective';
 import { IPCPacket } from '../packet';
 import { IPC_PROTOCOL } from '../types';
 import { FSocket } from './socket';
@@ -27,9 +27,9 @@ describe('FSocket', () => {
             answer: () => undefined,
             cancel: () => undefined,
             on: () => undefined,
-        } as unknown as AgentManager;
+        } as unknown as Cortex;
         gateway.packet = packet;
-        gateway.manager = manager;
+        gateway.cortex = manager;
         const socket = useContainer().create(TestSocket) as unknown as Socket<SocketConnectionData>;
         gateway.open(socket);
 
@@ -56,10 +56,10 @@ describe('FSocket', () => {
         Object.defineProperty(gateway, 'log', { value: { debug: () => undefined, info: () => undefined, warn: () => undefined, error: () => undefined } });
         gateway.packet = packet;
         const disconnected: string[] = [];
-        gateway.manager = {
+        gateway.cortex = {
             on: () => undefined,
             disconnect: (connectionId: string) => { disconnected.push(connectionId); },
-        } as unknown as AgentManager;
+        } as unknown as Cortex;
         const first = useContainer().create(TestSocket) as unknown as Socket<SocketConnectionData>;
         const second = useContainer().create(TestSocket) as unknown as Socket<SocketConnectionData>;
         gateway.open(first);
@@ -83,7 +83,7 @@ describe('FSocket', () => {
         const gateway = useContainer().create(FSocket);
         Object.defineProperty(gateway, 'log', { value: { debug: () => undefined, info: () => undefined, warn: () => undefined, error: () => undefined } });
         gateway.packet = packet;
-        gateway.manager = { on: () => undefined, disconnect: () => undefined } as unknown as AgentManager;
+        gateway.cortex = { on: () => undefined, disconnect: () => undefined } as unknown as Cortex;
         const socketValue = useContainer().create(TestSocket);
         const socket = socketValue as unknown as Socket<SocketConnectionData>;
         gateway.open(socket);
@@ -102,7 +102,7 @@ describe('FSocket', () => {
         const answers: unknown[][] = [];
         const cancellations: unknown[][] = [];
         gateway.packet = packet;
-        gateway.manager = {
+        gateway.cortex = {
             answer: (...args: unknown[]) => {
                 answers.push(args);
                 return { messageId: args[2], action: 'answer', state: 'accepted' };
@@ -113,7 +113,7 @@ describe('FSocket', () => {
             },
             disconnect: () => undefined,
             on: () => undefined,
-        } as unknown as AgentManager;
+        } as unknown as Cortex;
         const socket = useContainer().create(TestSocket) as unknown as Socket<SocketConnectionData>;
         gateway.open(socket);
         const connection = [...gateway.connections.values()][0]!;
@@ -162,7 +162,7 @@ describe('FSocket', () => {
         const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
         const firstStarted = new Promise<void>((resolve) => { markFirstStarted = resolve; });
         gateway.packet = packet;
-        gateway.manager = {
+        gateway.cortex = {
             receive: async (value: unknown) => {
                 const messageId = (value as { messageId: string }).messageId;
                 received.push(messageId);
@@ -173,7 +173,7 @@ describe('FSocket', () => {
                 return { messageId, state: 'queued', queueDepth: 0 };
             },
             on: () => undefined,
-        } as unknown as AgentManager;
+        } as unknown as Cortex;
         const socket = useContainer().create(TestSocket) as unknown as Socket<SocketConnectionData>;
         gateway.open(socket);
         const first = gateway.data(socket, Buffer.concat([
@@ -198,14 +198,14 @@ describe('FSocket', () => {
         const gateway = useContainer().create(FSocket);
         const received: string[] = [];
         gateway.packet = packet;
-        gateway.manager = {
+        gateway.cortex = {
             receive: async (value: unknown) => {
                 const messageId = (value as { messageId: string }).messageId;
                 received.push(messageId);
                 return { messageId, state: 'focused', focusId: 'focus_1', revision: 1, queueDepth: 0 };
             },
             on: () => undefined,
-        } as unknown as AgentManager;
+        } as unknown as Cortex;
         const socket = useContainer().create(TestSocket) as unknown as Socket<SocketConnectionData>;
         gateway.open(socket);
         const invalidBody = Buffer.from('{invalid json', 'utf8');
@@ -237,7 +237,7 @@ describe('FSocket', () => {
         const gate = new Promise<void>((resolve) => { release = resolve; });
         const started = new Promise<void>((resolve) => { markStarted = resolve; });
         gateway.packet = packet;
-        gateway.manager = {
+        gateway.cortex = {
             receive: async () => {
                 markStarted();
                 await gate;
@@ -245,7 +245,7 @@ describe('FSocket', () => {
             },
             disconnect: () => undefined,
             on: () => undefined,
-        } as unknown as AgentManager;
+        } as unknown as Cortex;
         const socketValue = useContainer().create(TestSocket);
         const socket = socketValue as unknown as Socket<SocketConnectionData>;
         gateway.open(socket);

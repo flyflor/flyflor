@@ -1,4 +1,4 @@
-import { FTool, FToolAtom, Inject, Singleton, type ToolError } from '@/core';
+import { FService, FToolAtom, Inject, Singleton, type ToolError } from '@/core';
 import type { FAgentActionScope } from '@/configuration';
 import type { InferenceToolDefinition } from '@/inference';
 import { Ask } from './ask';
@@ -12,7 +12,7 @@ import type { ActionRequest, ToolPromptConfig, ToolProtocol, ToolRunResult } fro
  * EN: ToolComponent class declaration.
  * ZH: ToolComponent class 声明。
  */
-export class ToolComponent extends FTool {
+export class ToolComponent extends FService {
     @Inject()
     public ask!: Ask;
 
@@ -80,7 +80,7 @@ export class ToolComponent extends FTool {
             const config = prompt.config as unknown as ToolPromptConfig | undefined;
             const protocol = config?.tools.find((tool) => tool.key === atom.key());
             if (!protocol) throw Error(`Tool protocol missing: ${atom.key()}`);
-            const source = prompt.data[atom.key()]?.data;
+            const source = typeof prompt.data === 'string' ? undefined : prompt.data[atom.key()];
             if (typeof source !== 'string') throw Error(`Tool prompt missing: ${protocol.file}`);
             const description = atom instanceof Shell ? atom.description(source) : source.trim();
             return { atom, protocol, description };
